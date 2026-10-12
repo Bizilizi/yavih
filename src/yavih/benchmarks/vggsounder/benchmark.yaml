@@ -1,0 +1,195 @@
+# vggsounder: human docs in README.md, the agent's contracts in setup.md.
+# Values under `manifest`, `upstream` and `budget.clips` are printed by make_manifest.py (`make_manifest.py --check`
+# confirms them); `budget.media_gb` and `curation.short_clips` come from prepare/04_media_facts.py.
+schema_version: 2
+name: vggsounder
+aliases: []
+title: VGGSounder audible / visible / all multilabel probe (VGGSound-train probe, 309 classes)
+readout: clf
+protocol_version: 1
+header:
+  name: VGGSounder
+  title: "VGGSounder: Audio-Visual Evaluations for Foundation Models"
+  venue: "Zverev et al. · ICCV 2025"
+  abstract: >-
+    A re-annotated multi-label test set for VGGSound that separates what is audible from what is visible:
+    each class label of the test clips is marked audible, visible or both, so audio-only, visual-only and
+    audio-visual models are scored on what they can actually perceive, with modality-confusion analysis.
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 8bdd806396d11325fc405415ed6efbb5433296519982537a97943e0e436d9f79
+    input_hash: bc13c858671db9a1aa8cb5b7e66591e6fe43b627bcbdc720125390feccf01a80
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://www.robots.ox.ac.uk/~vgg/data/vggsound/
+    - https://github.com/Bizilizi/VGGSounder
+    - https://pypi.org/project/vggsounder/1.0.0/
+  licence: >-
+    VGGSound: CC BY 4.0 (annotations; the media are YouTube clips fetched by the user, subject to
+    YouTube's terms). VGGSounder annotations and package: Apache-2.0 (github.com/Bizilizi/VGGSounder LICENCE).
+  bytes: 407_000_000_000
+  sha256:
+    "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    "vggsounder/data/classes.csv": 90a5cd19345019f50d0c3540629c1f4cde33266f00c57ce0cf67cd69835993c2
+    "vggsounder/data/vggsounder.csv": 400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06
+    "vggsounder/data/vggsounder+background-music.csv": 6279875ac93df11d90b1a9d60da7dee89073ce233b0843759856bc72e00396ba
+  notes: >-
+    Media = the full VGGSound corpus staged as loose files (199 176 mp4 + 199 176 wav, 318 GiB + 61 GiB;
+    `bytes` is that total). The frozen manifest touches 32 008 of them (budget.media_gb).
+    prepare/02_download_vggsound.sh is an illustrative downloader; a re-download is new media (YouTube clips
+    decay and are re-encoded). Labels come from the `vggsounder` PyPI package (bundled CSVs, offline).
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-data-owner
+  how: "VGGSound media from YouTube (clips decay: prefer an existing copy of the corpus), vggsound.csv from the official page; labels from pip vggsounder"
+budget:
+  clips: {train: 20000, test: 12008}
+  media_gb: 67.0
+  extract_min_per_1k_clips_ref: 2.0
+  probe_minutes_ref: {clf: 20}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 998c246d2c37bab4ca7d6285b2039f49e8793deb61b5e21bce7fc4082382438d
+  classes: classes.csv
+  classes_sha256: acbc2fc970d459f851df0f792ea05e936a842db8c15b80b9613b834f02a18b90
+  key: clip_id
+  label:
+    column: label
+    kind: multi_sets
+    sep: ";"
+    class_key: name
+    sets:
+      audible: [labels_a, labels_av]
+      visible: [labels_v, labels_av]
+      all: [labels_a, labels_v, labels_av]
+    train_set: null
+    allow_unknown: false
+    empty_ok: true
+  columns:
+    rel_video: {type: str, role: media, stream: video}
+    rel_audio: {type: str, role: media, stream: audio}
+  upstream:
+    source: "vggsounder 1.0 package data/vggsounder.csv (eval, VGGSounder(background_music=False)) + VGGSound vggsound.csv split == train (train draw)"
+    sha256: 400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06
+    rows: 195738
+    note: >-
+      rows = 12 008 VGGSounder eval rows + 183 730 vggsound.csv train rows. Eval rows are the package's 12 014
+      videos in file order minus 6 whose YouTube id is a VGGSound-train id; their labels_a / labels_v /
+      labels_av equal the package ground truth. Train rows are the seeded class-balanced draw of
+      protocol.train_draw over the 183 730 train rows of vggsound.csv in file order (0 unknown labels);
+      64–65 clips per class.
+    upstream_files:
+      "vggsounder/data/vggsounder.csv": 400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06
+      "vggsounder/data/classes.csv": 90a5cd19345019f50d0c3540629c1f4cde33266f00c57ce0cf67cd69835993c2
+      "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    curation:
+      total_upstream: 195744
+      per_split:
+        train: {listed: 20000, staged: 20000, missing: 0}
+        test: {listed: 12008, staged: 12008, missing: 0}
+      excluded:
+        leakage: 6
+        draw_remainder: 163730
+        train_unknown_label: 0
+      short_clips: 2350   # rows with stored video or audio < 10.0 s (train 995, test 1 355; prepare/04_media_facts.py)
+      leakage_audit: {against: "VGGSound train ytids (vggsound.csv split==train)", excluded: 6}
+
+splits:
+  train: [train]
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:
+  video:
+    kind: video
+    media_column: rel_video
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    kind: audio
+    media_column: rel_audio
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${datasets.vggsound}"
+      description: "VGGSound root: video/<clip_id>.mp4, audio/<clip_id>.wav (16 kHz mono), metadata/vggsound.csv"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the VGGSound mp4 exactly as stored (H.264, native and mixed frame size — about half 720x1280, the
+      rest 360x480/360x640/240x320 and some portrait —, ~10 s at ~30 fps, with its own AAC track);
+      nothing decoded, cut, resized or padded
+    audio: >-
+      the VGGSound wav exactly as stored (16 kHz mono 16-bit PCM, nominal 10 s; ~11 % of eval and ~5 %
+      of train files are shorter, down to ~1 s); nothing resampled, trimmed or padded
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external:
+  - name: vggsounder
+    pip: "pip install --no-deps vggsounder==1.0"
+    version_pin: "1.0"
+    used_for: >-
+      auc_pr / auc_roc against the package's a / v / all ground truth (= audible / visible / all), their
+      floors, and the cross-reading join with mu (report --join vggsounder); needs pandas, scikit-learn
+      and tqdm in the probe env (not installed by --no-deps)
+
+protocol:
+  clip_seconds: 10.0
+  train_draw:
+    cap: 20000
+    seed: 0
+    balance: class
+    drawn_from: "VGGSound vggsound.csv (sha256 ed9fdeed…), the 183 730 split == train rows in file order, class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0"
+  views: none
+
+metrics:
+  headline: auc_pr_all
+  list: [auc_pr_audible, auc_roc_audible, auc_pr_visible, auc_roc_visible, auc_pr_all, auc_roc_all, n_eval]
+  floors: [auc_pr_audible_floor, auc_pr_visible_floor, auc_pr_all_floor]
+  controls: []
+  chance:
+    auc_pr_audible: 0.00775
+    auc_roc_audible: 0.5
+    auc_pr_visible: 0.00615
+    auc_roc_visible: 0.5
+    auc_pr_all: 0.00795
+    auc_roc_all: 0.5
+  ci: {}
+
+readout_params: {}

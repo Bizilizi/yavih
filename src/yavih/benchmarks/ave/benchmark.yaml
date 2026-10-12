@@ -1,0 +1,184 @@
+# yavih benchmark folder — AVE audio-visual event localization (schema 2, seq readout). Rows: make_manifest.py
+# from the public AVE annotation and split files. People: README.md; the agent: setup.md.
+schema_version: 2
+name: ave
+aliases: []
+title: AVE audio-visual event localization (28 events + background, per-second labels)
+readout: seq
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: bef0420a133ba13a9c524f3a3ed1d74b37cb7931ffd957b4fba46adb0dafbd32
+    input_hash: 4417cab577dfc2a4825c38c128af642017e6d3a75cfd86595650b717730edbfd
+    supersedes: []
+
+header:
+  name: AVE
+  title: Audio-Visual Event Localization in Unconstrained Videos
+  venue: "Tian et al. · ECCV 2018"
+  abstract: >-
+    4 143 audio-visual events in 4 097 ten-second YouTube clips from 28 categories, each annotated with the
+    seconds in which the sound source is both audible and visible. The task is to label every one-second
+    segment of a clip with its event category or background.
+
+source:
+  kind: public_url
+  urls:
+    - "https://huggingface.co/datasets/Helios1208/AVE_Dataset/resolve/main/AVE_Datset.tar"
+    - "https://huggingface.co/datasets/Helios1208/AVE_Dataset/resolve/main/Annotations.txt"
+    - "https://github.com/YapengTian/AVE-ECCV18/tree/master/data"
+  licence: >-
+    No licence is recorded for the AVE data on the AVE-ECCV18 GitHub repository or the HF mirror
+    Helios1208/AVE_Dataset; check both before redistribution. Media are YouTube clips (AudioSet
+    segments) subject to YouTube's terms; research use only. Cite Tian et al., "Audio-Visual Event
+    Localization in Unconstrained Videos", ECCV 2018.
+  bytes: 13353737826          # AVE_Datset.tar 13 353 553 920 + Annotations.txt 144 330 + order.h5 28 856 + 5 360 + 5 360
+  sha256:
+    AVE_Datset.tar: 479905dc043ebae0e445c6ed1a109e5295a8f72b65ae959511db0a2bfc3a02c3
+    Annotations.txt: b0aabcea3281abb4c884e19ad4ff90314b199bea4742efe8556585a18f1396e7
+    train_order.h5: a216fcdd02782ba9d10c9ea79116120eb3be467740e58290e1b340d42a590456
+    val_order.h5: 5692aec0efb30e4efa49a867a902c1993b4c88a7d3ec19879349e540e7a5d9ca
+    test_order.h5: f9bb79defc1f784ca5dda9cdd3ee52af6d24ccb399a1cfab6bf0d373f5681076
+  notes: >-
+    One ungated HF tar (upstream filename typo `AVE_Datset.tar` is real) holding 4 097 mp4s
+    (AVE_Dataset/AVE/<ytid>.mp4, both streams in one file, 25–30 fps, 44.1 kHz AAC) plus a STALE
+    Annotations.txt (2 757 rows / 19 categories) — use the HF-ROOT Annotations.txt. Official splits are
+    the three order.h5 files on GitHub. The tar is never extracted: index.json maps members to byte
+    offsets (prepare/03_index_tar.py).
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "one public HF tar (Helios1208/AVE_Dataset, 13.4 GB) + Annotations.txt + the official order.h5 splits from GitHub; prepare/ indexes the tar"
+budget:
+  clips: {train: 2624, test: 316}
+  media_gb: 4.02              # mp4 bytes of the 2 924 distinct train+test videos (index.json sizes); the staged tar is 13.35 GB
+  extract_min_per_1k_clips_ref: 1.5   # 16-frame ViT-B estimate, decode included (decode alone ≈0.7 min/1k clips: 15 workers, 4 frames)
+  probe_minutes_ref: {seq: 5}         # × token scale (capped 24) per seed ≈ 120 min at N=2080, D=768 (3 lr arms × ~55 epochs)
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 4ff303259694f0f7537438ac017976defe3ebdde92786b4616a46d5a22bb5911
+  classes: classes.csv
+  classes_sha256: e664fd38da87b56f94114fe67455c521da3a126ae29e1d0b390c478b464295b6
+  key: clip_id
+  label:
+    column: label
+    kind: segments
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: [video, audio]}
+    event_start: {type: int, role: label_aux}
+    event_end: {type: int, role: label_aux}
+  upstream:
+    source: "AVE Annotations.txt (HF root) split by AVE-ECCV18 {train,val,test}_order.h5; leakage-filtered against VGGSound metadata/vggsound.csv"
+    sha256: b0aabcea3281abb4c884e19ad4ff90314b199bea4742efe8556585a18f1396e7
+    rows: 3248
+    note: >-
+      Upstream = AVE Annotations.txt (HF root, 4 143 event rows over 4 097 videos, 28 categories) split by the
+      official order.h5 files (3 339 / 402 / 402). The freeze drops 886 rows whose ytid is in VGGSound train
+      (715 train / 91 val / 80 test) and 9 eval-side rows whose ytid is also in AVE train (3 val / 6 test).
+      No train draw (uncapped). 16 train videos carry two events (32 rows share media).
+    upstream_files:
+      "AVE/Annotations.txt (HF root)": b0aabcea3281abb4c884e19ad4ff90314b199bea4742efe8556585a18f1396e7
+      "AVE-ECCV18/data/train_order.h5": a216fcdd02782ba9d10c9ea79116120eb3be467740e58290e1b340d42a590456
+      "AVE-ECCV18/data/val_order.h5": 5692aec0efb30e4efa49a867a902c1993b4c88a7d3ec19879349e540e7a5d9ca
+      "AVE-ECCV18/data/test_order.h5": f9bb79defc1f784ca5dda9cdd3ee52af6d24ccb399a1cfab6bf0d373f5681076
+      "AVE_Datset.tar members (index.json, sorted {member: [offset, size]})": 988ac22660af1f4235d61818f005bd22926db301a64135fa8f4ca626a7f06726
+      "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    curation:
+      total_upstream: 4143
+      per_split:
+        train: {listed: 2624, staged: 2624, missing: 0}
+        val: {listed: 308, staged: 308, missing: 0}
+        test: {listed: 316, staged: 316, missing: 0}
+      excluded:
+        leakage_vggsound_train: 886
+        leakage_ave_cross_split: 9
+      short_clips: 74            # rows with a stream < clip_seconds 10.0 (68 audio 9.73–9.99 s, 6 video 9.96–9.99 s; prepare/04_media_census.py) — a fact, nothing is cut or padded
+      leakage_audit: {against: "VGGSound train ytids (metadata/vggsound.csv split==train, all AVE splits) + AVE train ytids (val/test rows)", excluded: 895}
+
+splits:
+  train: [train]
+  eval: [test]
+  floor: []
+  folds: null
+  unused: [val]
+  min_eval_coverage: 0.95
+
+streams:
+  video:
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: tar_index
+    layout_params: {}
+    required: true
+  audio:
+    kind: audio
+    media_column: rel_media
+    root: media_root
+    layout: tar_index
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/ave"
+      description: "AVE_Datset.tar (13.35 GB, never extracted) + index.json (members video/<ytid>.mp4 → [shard, offset, size]) + upstream/{Annotations.txt, *_order.h5}"
+  tar_index: index.json
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: "the AVE mp4 (tar member video/<ytid>.mp4 of AVE_Datset.tar) exactly as stored, read in place; its video track (16-46 fps, 128x96 to 1280x720, 9.96-10.08 s) is described by info; nothing decoded, cut, resized or padded"
+    audio: "the same mp4 bytes as video (one tar member, read once); its AAC audio track (44.1 kHz, mono or stereo, 9.7-10.1 s) is described by info; nothing decoded, resampled, cut or padded"
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: [num_segments, segment_seconds]
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: [t]
+    streams: [video]
+    grid: null
+    t_bins: 8
+
+external: []
+
+protocol:
+  clip_seconds: 10.0
+  train_draw: null
+  views: none
+  num_segments: 10
+  segment_seconds: 1.0
+  segments_scored: 10
+  segment_offset: 0
+  background_index: 28
+
+metrics:
+  headline: seg_acc
+  list: [seg_acc, clip_acc, seg_acc_boundary, n_boundary, n_eval]
+  floors: [seg_acc_floor, seg_acc_boundary_floor]
+  controls: []
+  chance: {seg_acc: 0.034483}
+  ci: {seg_acc: bootstrap_clip, seg_acc_boundary: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params: {T: 10}

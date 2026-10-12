@@ -1,0 +1,167 @@
+# yavih benchmark: ImageNet-1K single-label image classification (schema 2).
+# Frozen by make_manifest.py from the public ILSVRC2012 devkit and train file list; README.md (people),
+# setup.md (agent: obtain, dependencies, input/output contracts, verify).
+schema_version: 2
+name: in1k
+aliases: [imagenet1k, imagenet]
+title: ImageNet-1K image classification (frozen 50/class train draw, full 50k val)
+header:
+  name: ImageNet-1K
+  title: ImageNet Large Scale Visual Recognition Challenge
+  venue: "Russakovsky et al. · IJCV 2015"
+  abstract: >-
+    1.28 million training and 50 000 validation photographs from the ILSVRC2012 challenge, each labelled
+    with one of 1 000 WordNet object categories. The task is to name the object category of a single
+    still image; the standard score is top-1 accuracy on the validation set.
+readout: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: "9e1ea5fa2fc9a18e6748dd9dcee3753ac28d2647e3fd510b97ff9fed3e7544fe"
+    input_hash: "a3d7d52e3618b4395721a89fc19afd8fefe620a595a10c5ce4e893a438f1a34f"
+    supersedes: []
+
+source:
+  kind: manual_portal
+  urls:
+    - "https://image-net.org/challenges/LSVRC/2012/"
+    - "https://image-net.org/download-images.php"
+  licence: >-
+    ImageNet terms of access (non-commercial research and educational use only; an image-net.org account and
+    signed agreement are required; redistribution of the images is not permitted).
+  bytes: 154644969425
+  sha256:
+    ILSVRC2012_img_val.tar: "c7e06a6c0baccf06d8dbeb6577d71efff84673a5dbdd50633ab44f8ea0456ae0"
+    ILSVRC2012_devkit_t12.tar.gz: "b59243268c0d266621fd587d2018f69e906fb22875aca0e295b48cafaa927953"
+    meta.bin: "c0c241b17643e8cd3a3f5028d8bd93be950aec0c84fa9bf42079d2c1199c3db3"
+  notes: >-
+    yavih downloads nothing. Obtain ILSVRC2012 from image-net.org under its terms of access. Expected layout: a
+    torchvision.datasets.ImageNet root (the tars, meta.bin, and extracted train/ and val/, val sorted into wnid
+    folders via the devkit). ILSVRC2012_img_train.tar (147 897 477 120 B) has torchvision md5
+    1d675b47d978889d74fa0da5fadfb00e (val tar md5 29b22e2961454d5413ddabcf34fc5622). To save disk, stage only
+    the 100 000 frozen files (prepare step 03, 12.4 GB).
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-licence
+  how: "request access at image-net.org (account and signed terms of access), then download the ILSVRC2012 tars and devkit"
+budget:
+  clips: {train: 50000, val: 50000}
+  media_gb: 12.43
+  extract_min_per_1k_clips_ref: 0.5
+  probe_minutes_ref: {clf: 15}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: "4e048ce04f03f4cb6ef7d4a0a08c83ab7073485ad250aba42c7e843305c84bc6"
+  classes: classes.csv
+  classes_sha256: "cfc06eb126656c39e4b253bd67f7d90bf5684240771fc39a1349f50becf79e7a"
+  key: clip_id
+  label:
+    column: label
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: image}
+  upstream:
+    source: "ILSVRC2012 devkit (val ground truth, synset map) + ILSVRC2012 train file list"
+    sha256: "858b30e30ec1016a900c9e2e03bba81d7de9e049f6f9e7c8d84afe31a43d6737"
+    rows: 1331167
+    note: >-
+      sha256 is over the sorted train file list (lines train/<wnid>/<file>.JPEG). Train rows are the seeded
+      class-balanced draw of protocol.train_draw over the 1 281 167 train files
+      (yavih.freeze.class_balanced_subsample, torch.Generator seed 0, 50 per class); the 1 231 167 files not
+      drawn are excluded.draw_remainder. Val rows are all 50 000 val images, placed in val/<wnid>/ by the
+      devkit ground truth. clip_id = file stem; label = wnid; rel_media = {train,val}/<wnid>/<file>.JPEG
+      relative to the torchvision root.
+    upstream_files:
+      ILSVRC2012_devkit_t12.tar.gz: "b59243268c0d266621fd587d2018f69e906fb22875aca0e295b48cafaa927953"
+      train file list: "858b30e30ec1016a900c9e2e03bba81d7de9e049f6f9e7c8d84afe31a43d6737"
+    curation:
+      total_upstream: 1331167
+      per_split:
+        train: {listed: 50000, staged: 50000, missing: 0}
+        val: {listed: 50000, staged: 50000, missing: 0}
+      excluded: {draw_remainder: 1231167}
+      short_clips: 0
+      leakage_audit: null
+
+splits:
+  train: [train]
+  eval: [val]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:
+  image:
+    kind: image
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/imagenet"
+      description: >-
+        torchvision.datasets.ImageNet root: train/<wnid>/<wnid>_<n>.JPEG (1000 dirs) and
+        val/<wnid>/ILSVRC2012_val_<8d>.JPEG (1000 dirs × 50).
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    image: >-
+      the ILSVRC2012 file exactly as stored in the torchvision root (train/<wnid>/<wnid>_<n>.JPEG,
+      val/<wnid>/ILSVRC2012_val_<8d>.JPEG; sizes and aspect vary per row; mostly RGB JPEG, a few
+      greyscale or CMYK); nothing decoded, colour-converted, resized or cropped
+  info:
+    image: [width, height, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []
+
+protocol:
+  clip_seconds: null
+  train_draw:
+    cap: 50000
+    seed: 0
+    balance: class
+    drawn_from: "ILSVRC2012 train file list (1 281 167 images, sorted by wnid then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 50 000, seed 0"
+  views: none
+
+metrics:
+  headline: acc
+  list: [acc, n_eval]
+  floors: [acc_floor]
+  controls: []
+  chance: {acc: 0.001}
+  ci: {acc: binomial}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params: {}

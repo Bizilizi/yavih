@@ -1,0 +1,172 @@
+# yavih benchmark folder — FSD50K (schema 2). Rows frozen by make_manifest.py from the official FSD50K
+# ground truth (FSD50K.ground_truth/{dev,eval,vocabulary}.csv).
+schema_version: 2
+name: fsd50k
+aliases: []
+title: FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP)
+header:
+  name: FSD50K
+  title: "FSD50K: An Open Dataset of Human-Labeled Sound Events"
+  venue: "Fonseca et al. · IEEE/ACM TASLP 2022"
+  abstract: >-
+    FSD50K is 51 197 variable-length Freesound clips manually labelled with 200 sound-event classes of the
+    AudioSet Ontology, split into a development and an evaluation set. The task is multi-label tagging: predict
+    every class present in a clip from its audio, scored by macro-averaged precision on the evaluation set.
+readout: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: c23f5bed2978e76b9749d205325b2c0fef00bcca84502c3a93f13758a34ad200
+    input_hash: e30c20ff410c2157d1a9b569c50c42319b2c5c172f1813590a436a07b6aaf954
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - "https://zenodo.org/records/4060432"
+    - "https://zenodo.org/records/4060432/files/FSD50K.ground_truth.zip?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.metadata.zip?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.doc.zip?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.eval_audio.z01?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.eval_audio.zip?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z01?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z02?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z03?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z04?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z05?download=1"
+    - "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.zip?download=1"
+  licence: "Dataset CC BY 4.0 (FSD50K.doc/LICENSE-DATASET); per clip CC0 / CC BY / CC BY-NC / CC Sampling+ as listed in metadata/{dev,eval}_clips_info_FSD50K.json (attribution required for CC BY clips)"
+  bytes: 24678734449          # all 12 Zenodo files (dev 5×3 221 225 472 + 2 306 663 327; eval 3 221 225 472 + 3 037 675 767; small zips)
+  sha256:                     # sha256 of the Zenodo files (Zenodo publishes md5s; those are checked by prepare/01_download.sh)
+    FSD50K.ground_truth.zip: db2396260a7b1fb06feb6ccac71685794fc89917d71c3a8d64a1de85c2cc0ebf
+    FSD50K.metadata.zip: 9a738e032546f9a2c6e3d04566928d04a65fb79b422cc9d78bb781723537bd19
+    FSD50K.doc.zip: a5c314ad2bf93d01b5921aa4270c70c90e28ac9a283ba9f08167490e728deb85
+    FSD50K.eval_audio.z01: a1b776a5a9466a0cf17d0cb9a2a98f641454084f0292f511718aacb48e6c401d
+    FSD50K.eval_audio.zip: e3d78e77115ff8d8df1ff3dae7ca5cd5864924c054561f61ba836764254bf50e
+    FSD50K.dev_audio.z01: db9816d8231ab1e8bf52a87964e6adf263a74394c7b17490a28c92ed8c7ca057
+    FSD50K.dev_audio.z02: d4a583892bc606a95feee473dfe0461bf33fb7f89a5699d9cd65189da4a98f25
+    FSD50K.dev_audio.z03: c1d2581612749502dee929561146b6b54ae4aa8c40547ab40dc0812dea0d1cc2
+    FSD50K.dev_audio.z04: 5791d24ed1fc94abf57de74e84e75e3a134a6a9883d910ca8c58fe9a53540e39
+    FSD50K.dev_audio.z05: 02f12d13a9c667d33a7e308ca40df9197cc4ec9d07fef5eed666b82785ffac48
+    FSD50K.dev_audio.zip: 68a43aae4c1a8bf527c4783fe9987475789b047db5f8041acd8b0ef8e16e0ad4
+  notes: >-
+    Plain HTTP from Zenodo, no account, no agreement. Multi-part zips (.z01… + .zip) must be merged with
+    `zip -s 0` before unzipping. 33 GB / 51 210 files extracted.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "public Zenodo record 4060432 (24.7 GB of multi-part zips, merged with zip -s 0)"
+budget:
+  clips: {train: 20000, eval: 10231}
+  media_gb: 22.9              # PCM bytes of the 30 231 frozen wavs (dev_audio subset 14.6 GB + eval_audio 8.3 GB); the full staged tree is 33 GB
+  extract_min_per_1k_clips_ref: 0.3   # audio-only ViT-B reading ~10 s, decode included
+  probe_minutes_ref: {clf: 5}         # one attentive probe over 20 000 pooled features
+
+manifest:
+  file: manifest.csv.gz
+  sha256: e90a44a6aac640ca51ba66ac42454e952fbb40caf27fa07aa9725944c117338b
+  classes: classes.csv
+  classes_sha256: 9f27f91e44383f191451fcb17034b53c670fe9e3a07e0281cc810d819ca22d06
+  key: clip_id
+  label:
+    column: labels
+    kind: multi
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_path: {type: str, role: media, stream: audio}
+    dev_split: {type: str, role: extra}      # official dev sub-split (train/val) of a frozen train row; empty on eval rows
+    duration_s: {type: float, role: extra}   # WAV duration from the header (frames / 44100), 3 decimals; 0.300–64.133 s
+  upstream:
+    source: "FSD50K.ground_truth/dev.csv + eval.csv (Zenodo 4060432)"
+    sha256: ce4ab5f01baa5a52b0ec892edaf137a7560743fce3a70155f8bf975c197ded1b   # dev.csv, the train-draw population
+    rows: 51197
+    note: "train rows = a first-label-balanced round robin (cap 20 000, seed 0) over the 40 966 dev.csv rows in file order; the 20 966 undrawn dev rows are excluded.draw_remainder; eval = all 10 231 eval.csv rows"
+    upstream_files:
+      FSD50K.ground_truth/vocabulary.csv: 992b6e11422101ee575ab3022d37b79b98e19407b211331c72f5d9fdd16e7174
+      FSD50K.ground_truth/dev.csv: ce4ab5f01baa5a52b0ec892edaf137a7560743fce3a70155f8bf975c197ded1b
+      FSD50K.ground_truth/eval.csv: ef861a4619691783bfceb7f43e1a395dcf969150ba4ad34dcb36b93abd26b3d6
+    curation:
+      total_upstream: 51197
+      per_split:
+        train: {listed: 20000, staged: 20000, missing: 0}
+        eval: {listed: 10231, staged: 10231, missing: 0}
+      excluded: {draw_remainder: 20966}
+      short_clips: 20315        # frozen rows whose 3-decimal duration_s < clip_seconds (10 s): 14 058 train + 6 257 eval; 9 829 are longer (a fact; nothing is cut or padded)
+      leakage_audit: null       # dev and eval share no Freesound uploader by construction (upstream README)
+      # invariant: 20000 + 10231 + 20966 == 51197
+
+splits:
+  train: [train]
+  eval: [eval]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:
+  audio:
+    kind: audio
+    media_column: rel_path
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/fsd50k"
+      description: "dev_audio/<freesound_id>.wav (40 966) + eval_audio/<freesound_id>.wav (10 231), 44.1 kHz mono PCM16; ground_truth/{dev,eval,vocabulary}.csv; metadata/; FSD50K.doc/"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    audio: "the FSD50K wav exactly as stored (RIFF WAV, PCM16, 44.1 kHz, mono; 0.300–64.133 s over the frozen rows); nothing decoded, resampled, cut or padded"
+  info:
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []                    # the authors' baseline repo (github.com/edufonseca/FSD50K_baseline) is training code, not an importable scorer; map is the registry's macro AP
+
+protocol:
+  clip_seconds: 10.0            # reference duration the curation.short_clips fact counts against; FSD50K clips are variable (0.300–64.133 s) — never used to cut or pad
+  train_draw:
+    cap: 20000
+    seed: 0
+    balance: first_label
+    drawn_from: "FSD50K.ground_truth/dev.csv rows (official train+val, 40 966, file order), sha256 ce4ab5f01baa5a52b0ec892edaf137a7560743fce3a70155f8bf975c197ded1b; class-balanced draw (yavih.freeze.class_balanced_subsample) keyed by each row's first label, cap 20 000, seed 0"
+  views: none
+
+metrics:
+  headline: map
+  list: [map, effective_pos_classes, n_eval]
+  floors: [map_floor]
+  controls: []
+  chance: {map: 0.0189}         # macro AP of a random scorer ≈ mean per-class eval prevalence (38 596 label instances / (200 × 10 231))
+  ci: {map: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params: {}

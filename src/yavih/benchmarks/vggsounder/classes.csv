@@ -1,0 +1,310 @@
+index,name,mid
+0,ambulance siren,vgg_0
+1,basketball bounce,vgg_1
+2,"bird chirping, tweeting",vgg_2
+3,chainsawing trees,vgg_3
+4,chicken crowing,vgg_4
+5,"child speech, kid speaking",vgg_5
+6,driving buses,vgg_6
+7,driving motorcycle,vgg_7
+8,"engine accelerating, revving, vroom",vgg_8
+9,female singing,vgg_9
+10,"female speech, woman speaking",vgg_10
+11,fireworks banging,vgg_11
+12,helicopter,vgg_12
+13,male singing,vgg_13
+14,"male speech, man speaking",vgg_14
+15,"motorboat, speedboat acceleration",vgg_15
+16,orchestra,vgg_16
+17,people booing,vgg_17
+18,people crowd,vgg_18
+19,"pigeon, dove cooing",vgg_19
+20,playing accordion,vgg_20
+21,playing acoustic guitar,vgg_21
+22,playing banjo,vgg_22
+23,playing bass guitar,vgg_23
+24,playing bassoon,vgg_24
+25,playing cello,vgg_25
+26,playing cymbal,vgg_26
+27,playing didgeridoo,vgg_27
+28,playing drum kit,vgg_28
+29,playing electric guitar,vgg_29
+30,playing flute,vgg_30
+31,playing harp,vgg_31
+32,"playing marimba, xylophone",vgg_32
+33,playing piano,vgg_33
+34,playing saxophone,vgg_34
+35,playing trombone,vgg_35
+36,"playing violin, fiddle",vgg_36
+37,police car (siren),vgg_37
+38,"race car, auto racing",vgg_38
+39,"railroad car, train wagon",vgg_39
+40,"rowboat, canoe, kayak rowing",vgg_40
+41,singing bowl,vgg_41
+42,tap dancing,vgg_42
+43,toilet flushing,vgg_43
+44,"vehicle horn, car horn, honking",vgg_44
+45,people burping,vgg_45
+46,playing clarinet,vgg_46
+47,playing hammond organ,vgg_47
+48,playing squash,vgg_48
+49,playing table tennis,vgg_49
+50,playing tabla,vgg_50
+51,playing glockenspiel,vgg_51
+52,playing harpsichord,vgg_52
+53,frog croaking,vgg_53
+54,vacuum cleaner cleaning floors,vgg_54
+55,playing theremin,vgg_55
+56,playing badminton,vgg_56
+57,slot machine,vgg_57
+58,"subway, metro, underground",vgg_58
+59,beat boxing,vgg_59
+60,child singing,vgg_60
+61,crow cawing,vgg_61
+62,playing volleyball,vgg_62
+63,car engine knocking,vgg_63
+64,playing snare drum,vgg_64
+65,machine gun shooting,vgg_65
+66,ocean burbling,vgg_66
+67,skiing,vgg_67
+68,civil defense siren,vgg_68
+69,missile launch,vgg_69
+70,playing erhu,vgg_70
+71,tractor digging,vgg_71
+72,bowling impact,vgg_72
+73,rope skipping,vgg_73
+74,airplane flyby,vgg_74
+75,lions roaring,vgg_75
+76,scuba diving,vgg_76
+77,yodelling,vgg_77
+78,playing bagpipes,vgg_78
+79,fire truck siren,vgg_79
+80,police radio chatter,vgg_80
+81,pheasant crowing,vgg_81
+82,arc welding,vgg_82
+83,dog howling,vgg_83
+84,"playing steel guitar, slide guitar",vgg_84
+85,wind noise,vgg_85
+86,playing bongo,vgg_86
+87,skateboarding,vgg_87
+88,playing synthesizer,vgg_88
+89,"electric shaver, electric razor shaving",vgg_89
+90,playing ukulele,vgg_90
+91,skidding,vgg_91
+92,cap gun shooting,vgg_92
+93,people clapping,vgg_93
+94,playing cornet,vgg_94
+95,people sniggering,vgg_95
+96,playing vibraphone,vgg_96
+97,mynah bird singing,vgg_97
+98,people whistling,vgg_98
+99,horse clip-clop,vgg_99
+100,baby laughter,vgg_100
+101,printer printing,vgg_101
+102,playing french horn,vgg_102
+103,playing bass drum,vgg_103
+104,cat purring,vgg_104
+105,playing sitar,vgg_105
+106,lathe spinning,vgg_106
+107,lawn mowing,vgg_107
+108,lighting firecrackers,vgg_108
+109,volcano explosion,vgg_109
+110,playing electronic organ,vgg_110
+111,playing trumpet,vgg_111
+112,dog growling,vgg_112
+113,playing harmonica,vgg_113
+114,playing mandolin,vgg_114
+115,people marching,vgg_115
+116,planing timber,vgg_116
+117,playing tambourine,vgg_117
+118,playing double bass,vgg_118
+119,church bell ringing,vgg_119
+120,gibbon howling,vgg_120
+121,goose honking,vgg_121
+122,tapping guitar,vgg_122
+123,sharpen knife,vgg_123
+124,train horning,vgg_124
+125,dog barking,vgg_125
+126,singing choir,vgg_126
+127,"heart sounds, heartbeat",vgg_127
+128,owl hooting,vgg_128
+129,people whispering,vgg_129
+130,typing on typewriter,vgg_130
+131,woodpecker pecking tree,vgg_131
+132,cattle mooing,vgg_132
+133,people screaming,vgg_133
+134,hail,vgg_134
+135,canary calling,vgg_135
+136,people cheering,vgg_136
+137,cricket chirping,vgg_137
+138,stream burbling,vgg_138
+139,people sneezing,vgg_139
+140,wood thrush calling,vgg_140
+141,roller coaster running,vgg_141
+142,"ice cream truck, ice cream van",vgg_142
+143,people shuffling,vgg_143
+144,baby crying,vgg_144
+145,mouse clicking,vgg_145
+146,francolin calling,vgg_146
+147,turkey gobbling,vgg_147
+148,"cattle, bovinae cowbell",vgg_148
+149,rapping,vgg_149
+150,dinosaurs bellowing,vgg_150
+151,playing timpani,vgg_151
+152,dog bow-wow,vgg_152
+153,using sewing machines,vgg_153
+154,chicken clucking,vgg_154
+155,splashing water,vgg_155
+156,hammering nails,vgg_156
+157,train whistling,vgg_157
+158,driving snowmobile,vgg_158
+159,duck quacking,vgg_159
+160,lions growling,vgg_160
+161,baby babbling,vgg_161
+162,car passing by,vgg_162
+163,parrot talking,vgg_163
+164,sailing,vgg_164
+165,cat meowing,vgg_165
+166,horse neighing,vgg_166
+167,people babbling,vgg_167
+168,playing timbales,vgg_168
+169,sliding door,vgg_169
+170,swimming,vgg_170
+171,wind rustling leaves,vgg_171
+172,people slurping,vgg_172
+173,typing on computer keyboard,vgg_173
+174,people eating noodle,vgg_174
+175,ripping paper,vgg_175
+176,elk bugling,vgg_176
+177,playing gong,vgg_177
+178,playing darts,vgg_178
+179,people farting,vgg_179
+180,"bee, wasp, etc. buzzing",vgg_180
+181,playing oboe,vgg_181
+182,playing zither,vgg_182
+183,eating with cutlery,vgg_183
+184,bouncing on trampoline,vgg_184
+185,people belly laughing,vgg_185
+186,sheep bleating,vgg_186
+187,waterfall burbling,vgg_187
+188,airplane,vgg_188
+189,playing steelpan,vgg_189
+190,fire crackling,vgg_190
+191,car engine starting,vgg_191
+192,coyote howling,vgg_192
+193,reversing beeps,vgg_193
+194,people sobbing,vgg_194
+195,playing guiro,vgg_195
+196,chimpanzee pant-hooting,vgg_196
+197,raining,vgg_197
+198,playing congas,vgg_198
+199,playing tympani,vgg_199
+200,dog whimpering,vgg_200
+201,opening or closing car doors,vgg_201
+202,opening or closing drawers,vgg_202
+203,people coughing,vgg_203
+204,black capped chickadee calling,vgg_204
+205,pig oinking,vgg_205
+206,people eating crisps,vgg_206
+207,playing bugle,vgg_207
+208,"donkey, ass braying",vgg_208
+209,mosquito buzzing,vgg_209
+210,squishing water,vgg_210
+211,mouse pattering,vgg_211
+212,playing djembe,vgg_212
+213,magpie calling,vgg_213
+214,electric grinder grinding,vgg_214
+215,people running,vgg_215
+216,barn swallow calling,vgg_216
+217,underwater bubbling,vgg_217
+218,firing muskets,vgg_218
+219,dog baying,vgg_219
+220,cheetah chirrup,vgg_220
+221,playing hockey,vgg_221
+222,striking pool,vgg_222
+223,people hiccup,vgg_223
+224,people humming,vgg_224
+225,playing tennis,vgg_225
+226,wind chime,vgg_226
+227,cat growling,vgg_227
+228,car engine idling,vgg_228
+229,ice cracking,vgg_229
+230,otter growling,vgg_230
+231,"alligators, crocodiles hissing",vgg_231
+232,fox barking,vgg_232
+233,people eating apple,vgg_233
+234,tornado roaring,vgg_234
+235,bird squawking,vgg_235
+236,hair dryer drying,vgg_236
+237,firing cannon,vgg_237
+238,train wheels squealing,vgg_238
+239,alarm clock ringing,vgg_239
+240,cupboard opening or closing,vgg_240
+241,striking bowling,vgg_241
+242,thunder,vgg_242
+243,bull bellowing,vgg_243
+244,cat hissing,vgg_244
+245,penguins braying,vgg_245
+246,running electric fan,vgg_246
+247,elephant trumpeting,vgg_247
+248,golf driving,vgg_248
+249,people battle cry,vgg_249
+250,snake hissing,vgg_250
+251,playing lacrosse,vgg_251
+252,writing on blackboard with chalk,vgg_252
+253,spraying water,vgg_253
+254,sloshing water,vgg_254
+255,people giggling,vgg_255
+256,cutting hair with electric trimmers,vgg_256
+257,lip smacking,vgg_257
+258,forging swords,vgg_258
+259,plastic bottle crushing,vgg_259
+260,warbler chirping,vgg_260
+261,chipmunk chirping,vgg_261
+262,bird wings flapping,vgg_262
+263,chopping wood,vgg_263
+264,popping popcorn,vgg_264
+265,eagle screaming,vgg_265
+266,footsteps on snow,vgg_266
+267,hedge trimmer running,vgg_267
+268,blowtorch igniting,vgg_268
+269,sea waves,vgg_269
+270,goat bleating,vgg_270
+271,air conditioning noise,vgg_271
+272,mouse squeaking,vgg_272
+273,ferret dooking,vgg_273
+274,cat caterwauling,vgg_274
+275,strike lighter,vgg_275
+276,people nose blowing,vgg_276
+277,people eating,vgg_277
+278,shot football,vgg_278
+279,people gargling,vgg_279
+280,smoke detector beeping,vgg_280
+281,cuckoo bird calling,vgg_281
+282,foghorn,vgg_282
+283,eletric blender running,vgg_283
+284,chinchilla barking,vgg_284
+285,people slapping,vgg_285
+286,sea lion barking,vgg_286
+287,opening or closing car electric windows,vgg_287
+288,children shouting,vgg_288
+289,baltimore oriole calling,vgg_289
+290,bathroom ventilation fan running,vgg_290
+291,cell phone buzzing,vgg_291
+292,chopping food,vgg_292
+293,disc scratching,vgg_293
+294,door slamming,vgg_294
+295,"fly, housefly buzzing",vgg_295
+296,metronome,vgg_296
+297,people finger snapping,vgg_297
+298,playing shofar,vgg_298
+299,playing tuning fork,vgg_299
+300,playing washboard,vgg_300
+301,telephone bell ringing,vgg_301
+302,whale calling,vgg_302
+303,cow lowing,vgg_303
+304,playing castanets,vgg_304
+305,pumping water,vgg_305
+306,snake rattling,vgg_306
+307,zebra braying,vgg_307
+308,air horn,vgg_308

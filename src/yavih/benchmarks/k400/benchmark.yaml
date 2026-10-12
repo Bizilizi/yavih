@@ -1,0 +1,171 @@
+# k400 — schema 2. README.md describes the benchmark, setup.md sets it up.
+# Values under `manifest`, `budget` and `upstream` are produced by make_manifest.py;
+# `make_manifest.py --check` confirms them.
+schema_version: 2
+name: k400
+aliases: []
+title: Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe)
+header:
+  name: Kinetics-400
+  title: The Kinetics Human Action Video Dataset
+  venue: "Kay et al. · arXiv 2017"
+  abstract: >-
+    About 300 000 ten-second YouTube clips, each labelled with one of 400 human action classes, from
+    person-object and person-person interactions to sports and playing instruments. The task is single-label
+    action classification of a clip from its video.
+readout: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 51a569b273617a953c3695dd741c7bfd265e1a4a4d64d07d2bae7ddecd144784
+    input_hash: bf6f39b907e34ea8ea6a1cc26d1023e18e873483c4f1b6d9360c7b5ef10a7c42
+    supersedes: []
+
+source:
+  kind: torrent
+  urls:
+    - https://academictorrents.com/details/184d11318372f70018cf9a72ef867e2fb9ce1d26
+    - magnet:?xt=urn:btih:184d11318372f70018cf9a72ef867e2fb9ce1d26
+    - https://github.com/google-deepmind/kinetics-i3d
+    - https://github.com/cvdfoundation/kinetics-dataset
+  licence: >-
+    Kinetics-400 annotations: CC BY 4.0 (DeepMind). The media are YouTube clips re-encoded by a third party
+    (Academic Torrents upload 2020-11-07, height 256; portrait clips are 256×144, short side 144) and remain subject to YouTube's terms and the
+    uploaders' rights; research use only.
+  bytes: 157312153084
+  sha256:
+    "kinetics400.zip": 335dd19846e60078204b492c725003cfcbbb3f0bbff4dca525916785bd60e30f
+    "kinetics400_validation.zip": 33a69475d026e94b3a2f3ed708152b7beaf04a520b4ee455de0c1c883900483b
+  notes: >-
+    Academic Torrents infohash 184d11318372f70018cf9a72ef867e2fb9ce1d26, two files: kinetics400.zip
+    (144 172 278 021 B, train_256 + test_256) and kinetics400_validation.zip (13 139 875 063 B, val_256);
+    `bytes` is their sum. No web seeds, few seeders. The frozen manifest touches 33 492 of the
+    260 022 staged train+val files (budget.media_gb = 20.2 GB, stat-measured). This is NOT the ~450 GB CVDF
+    release; a CVDF copy is a different media set and would need a new protocol_version.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "Academic Torrents infohash 184d1131… (157 GB, few seeders); not the CVDF release"
+budget:
+  clips: {train: 20000, val: 13492}
+  media_gb: 20.2
+  extract_min_per_1k_clips_ref: 2.0
+  probe_minutes_ref: {clf: 20}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: a384222a0771aff445031cc655ab6688515d7cd15e762f850adfdc9cd263817f
+  classes: classes.csv
+  classes_sha256: aabcc8a9b72ee08dd26da118dd38d90584666bdb64b1032d0eac84e286dc9475
+  key: clip_id
+  label:
+    column: label
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: video}
+  upstream:
+    source: "Academic Torrents 184d11318372f70018cf9a72ef867e2fb9ce1d26 (Kinetics-400 _256 release): file listing of train_256 + val_256"
+    sha256: c9a7dfd4e9119aa4a033a28e14e2be2bfa22a73b4bcbc6bdce5321bb3baf39a5
+    rows: 260022
+    note: >-
+      sha256 of the sorted listing `<split>/<class>/<file>` of all 260 022 train + val files (the staged tree or the
+      zips' central directories; make_manifest.py reads either). Rows are the *.mp4 files (clip_id = file stem,
+      label = class directory), ordered by class (classes.csv) then file name. Train rows are the seeded
+      class-balanced draw of protocol.train_draw over all 240 618 train mp4, 50 per class; val rows are all
+      13 492 val mp4 (11-48 per class). The 5 912 val .mkv/.webm files are excluded. Every frozen row is an
+      annotated clip of its split with the same label in the Kinetics-400 annotation CSVs (upstream_files;
+      `make_manifest.py --annotations`).
+    upstream_files:
+      "annotations/train.csv": a5f585f790f35c080aa13964f14de63171e909575feb843efc1c29bb5cfc6236
+      "annotations/val.csv": 358eaf47e7f80ebf9b17d49eb0635ad5e0fdab98a9cbd75ffdd2ee5d5e5b6944
+    curation:
+      total_upstream: 260022
+      per_split:
+        train: {listed: 20000, staged: 20000, missing: 0}
+        val: {listed: 13492, staged: 13492, missing: 0}
+      excluded:
+        draw_remainder: 220618
+        val_non_mp4_container: 5912
+        train_non_mp4_container: 0
+      short_clips: 4555
+      leakage_audit: {against: "train ytids of the staged K400 train split (raw and torrent-normalized)", excluded: 0}
+
+splits:
+  train: [train]
+  eval: [val]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:
+  video:
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/kinetics400"
+      description: "staged Academic-Torrents K400: {train,val}/<class>/<clip_id>.mp4 (val also holds excluded .mkv/.webm); handed over as stored"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the Kinetics-400 mp4 exactly as stored in the Academic-Torrents _256 release (h264, 256 pixels high,
+      138-1424 wide, 4 013 portrait; 6-60 fps; train ~10 s, val ~12 s, 4 555 frozen clips shorter than 10 s,
+      min 0.53 s); nothing decoded, cut, resized, padded or normalized
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []
+
+protocol:
+  clip_seconds: 10.0
+  train_draw:
+    cap: 20000
+    seed: 0
+    balance: class
+    drawn_from: "all 240 618 train mp4 of the Academic-Torrents Kinetics-400 _256 release (classes.csv class order, then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0"
+  views: none
+
+metrics:
+  headline: acc
+  list: [acc, n_eval]
+  floors: [acc_floor]
+  controls: []
+  chance: {acc: 0.0025}
+  ci: {acc: binomial}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params: {}

@@ -1,0 +1,197 @@
+# yavih benchmark folder — VGG-SS single-box regression (schema 2). Values under `manifest` and `budget` are
+# written by make_manifest.py; `make_manifest.py --check` re-derives them.
+schema_version: 2
+name: vggss_box
+aliases: []
+title: VGG-SS audio-conditioned single-box regression
+header:
+  name: VGG-SS
+  title: Localizing Visual Sounds the Hard Way
+  venue: "Chen et al. · CVPR 2021"
+  abstract: >-
+    VGG-SS annotates 5 158 clips of the VGGSound test split (221 classes) with 1–7 bounding boxes around the
+    visible sound source in the frame at 5 s. The task is to localize the sounding object in the video given its
+    audio; this benchmark regresses one box on the single-box clips and scores mean IoU.
+readout: box
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: b25878ef51ad69a8bb65108bdc584b0c3298e888a70fe10136fbf2a06b12e30f   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: b67bf2de449e26146ee33c37653928d1a846634f1e23d83167a075f5ca14c023
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://raw.githubusercontent.com/hche11/Localizing-Visual-Sounds-the-Hard-Way/master/metadata/vggss.json
+    - https://github.com/hche11/Localizing-Visual-Sounds-the-Hard-Way
+    - https://www.robots.ox.ac.uk/~vgg/research/lvs/
+    - https://www.robots.ox.ac.uk/~vgg/data/vggsound/
+  licence: >-
+    VGG-SS annotations (Chen et al., CVPR 2021) are distributed through the authors' GitHub repository, which
+    states no licence; check it before redistributing the boxes. VGGSound listing: CC BY 4.0; the media are
+    YouTube clips fetched by the user, subject to YouTube's terms.
+  bytes: 10_540_801_003
+  sha256:
+    "vggss/vggss.json": ae300b4a259267e6fe839970d495862edd70bfe3da63d925bcdb34054ed3b15e
+    "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+  notes: >-
+    One 620 306-byte annotation file (vggss.json: 5 158 VGGSound-test clips, 221 classes, 1–7 boxes each at
+    t = 5.0 s; no auth) plus the media of those 5 158 clips, which are VGGSound test clips (VGG-SS has no media
+    download of its own; `bytes` = annotation + the 5 158 mp4 + wav). The frozen rows touch 4 614 of them
+    (budget.media_gb). The media come from a VGGSound copy, obtained as for `vggsounder`.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-data-owner
+  how: "vggss.json is public on GitHub; the 5 158 VGGSound test clips (YouTube, partly no longer available) must come from an existing VGGSound copy"
+budget:
+  clips: {train: 3700, eval: 914}
+  media_gb: 9.35
+  extract_min_per_1k_clips_ref: 2.0
+  probe_minutes_ref: {box: 6}         # per fit × token scale (capped 24) × 2 fits (shuffled_control trains a second full
+                                      # lr-grid fit; yavih.plan.estimate) = 288 min per seed at N=2080, D=768
+
+manifest:
+  file: manifest.csv.gz
+  sha256: fbf93c348d424ed48dc598ce80f512bd1aa8b529c60748624c61011d429898db
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: box
+    kind: box
+    sep: ";"
+    class_key: name
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    class_name: {type: str, role: extra}
+    rel_video: {type: str, role: media, stream: video}
+    rel_audio: {type: str, role: media, stream: audio}
+    frame_w: {type: int, role: extra}
+    frame_h: {type: int, role: extra}
+  upstream:
+    source: "VGG-SS vggss.json + VGGSound vggsound.csv: every non-leaked single-box non-degenerate entry; seeded source-level class-stratified split (entries outside the draw: eval)"
+    sha256: ae300b4a259267e6fe839970d495862edd70bfe3da63d925bcdb34054ed3b15e
+    rows: 5158
+    note: >-
+      Rows = every VGG-SS entry not leaked into VGGSound train (source level) with exactly one box that is not
+      degenerate after the official max(x, 0) sanitisation, in sorted clip_id order. Split: one seeded
+      (random.Random(20260913)) source-level class-stratified 80/20 draw over the 5 135 non-leaked entries
+      (multi-box included) whose video holds a frame at every centre of the 1 s and 0.5 s bucket grids shifted by
+      0.5 s (prepare/video_geometry.json); the 18 single-box entries outside the draw (short videos whose source
+      has no other entry) are eval rows. `box` = the entry's box as x1|y1|x2|y2 fractions of the original frame
+      (max(x, 0) only, 6 decimals = exact); `class_name` = its vggss.json `class`; `frame_w/frame_h` = the native
+      frame size (prepare/frame_sizes.json, checked against the media by prepare/03_geometry_sidecars.sh).
+      2 single-box entries are degenerate (zero extent after max(x, 0)) and excluded.
+    upstream_files:
+      "vggss/vggss.json": ae300b4a259267e6fe839970d495862edd70bfe3da63d925bcdb34054ed3b15e
+      "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+      "prepare/frame_sizes.json": 4ac9cf7250149b2fd39c59c0f01156c59e4c7fa2474099f55c25a21131edb37f
+      "prepare/video_geometry.json": 48cbfb8933225b2c18bce3b6c2b214d75ab062b7a01f6771a478f7feb6896fad
+    curation:
+      total_upstream: 5158
+      per_split:
+        train: {listed: 3700, staged: 3700, missing: 0}
+        eval: {listed: 914, staged: 914, missing: 0}
+      excluded:
+        leakage: 4
+        multi_box: 538
+        degenerate_box: 2
+      short_clips: 565  # rows with audio (487, prepare/audio_shorter_than_clip_seconds.txt) or video (221) shorter than clip_seconds 10 s
+      leakage_audit: {against: "VGGSound train ytids (metadata/vggsound.csv split==train), source level", excluded: 4}
+
+splits:
+  train: [train]
+  eval: [eval]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:
+  video:
+    kind: video
+    media_column: rel_video
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    kind: audio
+    media_column: rel_audio
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${datasets.vggsound}"
+      description: "VGGSound root: video/<clip_id>.mp4, audio/<clip_id>.wav (16 kHz mono); the VGG-SS clips are VGGSound test clips"
+    annotations_root:
+      default: "${data.root}/vggss"
+      prepare_only: true
+      description: >-
+        PREPARE-TIME SOURCE ONLY: the VGG-SS annotation staging directory (vggss.json; prepare/01_annotations_vggss.sh)
+        read by make_manifest.py --staging-dir; the frozen manifest already carries the boxes
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: "the VGGSound mp4 exactly as stored (native size, 1280x720 for 2 231 rows, 182 portrait; ~10 s, 221 rows shorter, min 5.09 s); nothing decoded, cut, cropped or resized"
+    audio: "the VGGSound wav exactly as stored (16 kHz mono PCM, ~10 s, 487 rows shorter, min 4.94 s); nothing decoded, cut, resampled or padded"
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: [annotated_second]
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: full_frame
+  requires:
+    pos: [y, x]
+    streams: [video, audio]
+    grid: {h: 14, w: 14, min_cell_coverage: 0.25}
+    t_bins: null
+    annotated_frame: {fact: annotated_second, stream: video, tol_s: 0.5}  # a video token within 0.5 s of the annotated 5.0 s frame
+
+external: []
+
+protocol:
+  clip_seconds: 10.0
+  train_draw: null
+  views: none
+  box_population: single
+  gt_geometry: full_frame
+  heatmap_grid: 14
+  annotated_second: 5.0
+
+metrics:
+  headline: iou_mean
+  list: [iou_mean, "acc@0.5", "acc@0.3", center_in_gt, n_eval, n_excluded_degenerate]
+  floors: [iou_floor]
+  controls: [iou_shuffled, audio_blind]
+  chance: {}
+  ci:
+    iou_mean: bootstrap_clip
+    "acc@0.5": binomial
+    "acc@0.3": binomial
+    center_in_gt: binomial
+  bootstrap: {samples: 2000, seed: 0}
+
+readout_params:
+  grid: 14
+  visual_stream: video
+  conditioning_stream: audio
+  shuffled_control: true
+  shuffle_seed: 20260913

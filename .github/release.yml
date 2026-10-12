@@ -1,0 +1,18 @@
+# Categories of the release notes GitHub generates (gh release create --generate-notes in workflows/release.yml).
+# A pull request lands in the first category whose labels it carries.
+changelog:
+  exclude:
+    labels: [skip-changelog]
+  categories:
+    - title: Breaking changes
+      labels: [breaking]
+    - title: Benchmarks
+      labels: [benchmark]
+    - title: New features
+      labels: [enhancement, feature]
+    - title: Bug fixes
+      labels: [bug, fix]
+    - title: Documentation
+      labels: [documentation, docs]
+    - title: Other changes
+      labels: ["*"]

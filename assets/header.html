@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yavih header</title>
+<style>
+  :root {
+    --bg0: #070a12;
+    --bg1: #0f172a;
+    --ink: #e5e7eb;
+    --muted: #94a3b8;
+    --line: rgba(148, 163, 184, 0.16);
+    --a: #22d3ee;   /* cyan  */
+    --b: #a78bfa;   /* violet */
+    --c: #f472b6;   /* pink  */
+    --pill: rgba(255, 255, 255, 0.05);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 500px; overflow: hidden; }
+  body {
+    font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", "Liberation Sans", "DejaVu Sans", Arial, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 420px at 18% 10%, rgba(34, 211, 238, 0.16), transparent 60%),
+      radial-gradient(800px 420px at 85% 95%, rgba(167, 139, 250, 0.18), transparent 60%),
+      linear-gradient(135deg, var(--bg0), var(--bg1));
+    position: relative;
+  }
+  /* fine grid */
+  body::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(1200px 500px at 50% 50%, #000 40%, transparent 100%);
+    -webkit-mask-image: radial-gradient(1200px 500px at 50% 50%, #000 40%, transparent 100%);
+  }
+  .wrap { position: relative; height: 100%; padding: 56px 72px 48px; display: flex; flex-direction: column; justify-content: space-between; }
+
+  .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; }
+  .brand { display: flex; flex-direction: column; gap: 18px; }
+  .wordmark {
+    font-size: 148px; line-height: 0.9; font-weight: 800; letter-spacing: -0.045em;
+    background: linear-gradient(90deg, #ffffff 0%, var(--a) 45%, var(--b) 80%, var(--c) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 6px 30px rgba(34, 211, 238, 0.18));
+  }
+  .tagline { font-size: 29px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; max-width: 880px; }
+  .tagline em { font-style: normal; color: var(--muted); }
+
+  /* right-hand "feature card" */
+  .card {
+    margin-top: 10px; flex: 0 0 auto; white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.10); border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+    padding: 22px 26px; font-family: "JetBrains Mono", "Fira Mono", "DejaVu Sans Mono", "Liberation Mono", monospace;
+    font-size: 16px; line-height: 1.6; color: #cbd5e1;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  .card .k { color: var(--a); }
+  .card .s { color: var(--muted); }
+  .card .l { display: inline-block; width: 6.2em; color: var(--muted); }
+  .card .ok { color: #4ade80; }
+  .card .num { color: #fbbf24; }
+
+  .bottom { display: flex; flex-direction: column; gap: 18px; }
+  .pipeline { display: flex; align-items: center; gap: 12px; font-family: "JetBrains Mono", "Fira Mono", "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 19px; }
+  .step {
+    padding: 10px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14);
+    background: var(--pill); color: var(--ink); display: flex; gap: 10px; align-items: baseline;
+  }
+  .step .who { font-size: 13px; color: var(--muted); font-family: Inter, "Segoe UI", Roboto, "Liberation Sans", "DejaVu Sans", sans-serif; letter-spacing: 0.04em; text-transform: uppercase; }
+  .step.agent { border-color: rgba(34, 211, 238, 0.45); }
+  .step.yavih { border-color: rgba(167, 139, 250, 0.55); }
+  .arrow { color: var(--muted); font-size: 20px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px 10px; font-size: 14px; color: var(--muted); }
+  .chip { padding: 4px 11px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+  .chip b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <div class="wordmark">yavih</div>
+      <div class="tagline">Frozen-feature benchmark harness for video &amp; audio models.<br><em>Benchmark controls the input, your model controls the output — an agent writes the bridge.</em></div>
+    </div>
+    <div class="card">
+      <div><span class="s">$</span> <span class="k">yavih</span> probe run runs/k400/mymodel/v --seeds 0,1,2</div>
+      <div><span class="l">validate</span>train ok · val ok · eligible for clf: <span class="ok">yes</span></div>
+      <div><span class="l">seed 0</span><span class="ok">ok</span> · k400/mymodel/v · 13 492 / 13 492 val clips</div>
+      <div><span class="l">acc</span><span class="num">0.574</span> [0.566, 0.582] <span class="s">· floor 0.0036</span></div>
+      <div><span class="l">hashes</span>eval 3f8a1c27e0b5 · input 9c41d7e2a06f</div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="pipeline">
+      <div class="step agent"><span>prepare</span><span class="who">agent</span></div><span class="arrow">→</span>
+      <div class="step agent"><span>extract</span><span class="who">bridge · model env</span></div><span class="arrow">→</span>
+      <div class="step yavih"><span>validate</span><span class="who">yavih</span></div><span class="arrow">→</span>
+      <div class="step yavih"><span>probe</span><span class="who">yavih</span></div><span class="arrow">→</span>
+      <div class="step yavih"><span>report</span><span class="who">yavih</span></div>
+    </div>
+    <div class="chips">
+      <span class="chip">raw media in · your bridge decides · floors &amp; controls on every number · comparability hashes · SLURM-ready units</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

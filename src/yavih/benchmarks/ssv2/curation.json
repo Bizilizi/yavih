@@ -1,0 +1,43 @@
+{
+  "classes_sha256": "cc184f05f25ec403848bbbb3b92cba9c0a103de986d5c7e7396bb49bb9c66552",
+  "curation": {
+    "excluded": {
+      "draw_remainder": 148913
+    },
+    "leakage_audit": null,
+    "per_split": {
+      "train": {
+        "listed": 20000,
+        "missing": 0,
+        "staged": 20000
+      },
+      "val": {
+        "listed": 24777,
+        "missing": 0,
+        "staged": 24777
+      }
+    },
+    "short_clips": 0,
+    "total_upstream": 193690
+  },
+  "manifest_sha256": "80def82d6f17565978e963312f048e92732dcb85fca2626bd26c462cc4ec4777",
+  "rows": {
+    "train": 20000,
+    "val": 24777
+  },
+  "train_draw": {
+    "balance": "class",
+    "cap": 20000,
+    "drawn_from": "official labels/train.json sha256 b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b, class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20000, seed 0",
+    "seed": 0
+  },
+  "train_per_class": {
+    "max": 116,
+    "min": 91
+  },
+  "upstream_files": {
+    "labels/labels.json": "d98d8b657a5d418d7c05dbf630dedd34763025b3d764ceef19bbfd1dc654f54f",
+    "labels/train.json": "b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b",
+    "labels/validation.json": "fbdd69ac72b40b9e3ed3aaf484e1575777152565caed693b0ced2d4959fd3958"
+  }
+}

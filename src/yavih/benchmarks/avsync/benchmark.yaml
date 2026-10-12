@@ -1,0 +1,249 @@
+# yavih benchmark folder — avsync (schema 2). Values under `manifest`, `budget` and `manifest.upstream` are printed by
+# make_manifest.py (`--check` verifies them).
+schema_version: 2
+name: avsync
+aliases: []
+title: AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor)
+header:
+  name: AVSync
+  title: "VGGSound: A Large-scale Audio-Visual Dataset"
+  venue: "Chen, Xie, Vedaldi, Zisserman · ICASSP 2020"
+  abstract: >-
+    Synchronization-offset classification on VGGSound clips: in each 8-second clip, audio and video are shifted
+    against each other by one of nine offsets from −2 to +2 seconds, and the task is to name the offset. Clips
+    are chosen for audible and visible transients; stationary clips, where the offset cannot be read, serve as a
+    validity floor.
+readout: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: cbd868ad2df35f724711b607cf73c7dcdfce6c8fea40fd3d5103eaaaf41bfbe2   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 8174cdffd5c0c3e5781a458ae6c7ce7ba40efc1bef14587c8a963d319cb58d35
+    supersedes: []
+
+source:
+  kind: derived
+  urls:
+    - https://www.robots.ox.ac.uk/~vgg/data/vggsound/
+  licence: >-
+    Derived from VGGSound (annotations CC BY 4.0; media are YouTube clips fetched by the user, subject to
+    YouTube's terms). The offsets and the clip selection are model-free derived data of this benchmark; no new
+    media.
+  bytes: 407_000_000_000
+  sha256:
+    "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+  notes: >-
+    Source media = the VGGSound corpus staged as loose files (same tree as vggsounder; `bytes` is the whole
+    corpus, 318 GiB mp4 + 61 GiB wav). The frozen manifest touches 20 997 distinct source clips (46.3 GB:
+    39.6 GB mp4 + 6.7 GB wav), which are read only by prepare/03_materialize.py; the bridge receives the
+    32 997 materialized mp4s (budget.media_gb). Re-freezing scores every clip of the corpus (make_manifest.py
+    score: audio statistics of all 199 176 clips, video statistics of the 80 175 audio-selected candidates).
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-data-owner
+  how: "needs the VGGSound corpus (YouTube clips decay: prefer an existing copy of the corpus) and the pinned ffmpeg build to materialize the shifted mp4s"
+budget:
+  clips: {train: 24000, test: 3000, stationary: 5997}
+  media_gb: 74.4                 # the materialized mp4s; the 46.3 GB of source media are prepare-only
+  extract_min_per_1k_clips_ref: 2.5
+  probe_minutes_ref: {clf: 25}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 49f1aa5479675856bf8e3e89df1e3b78aaf528d4b392181637ecec571157bde8
+  classes: classes.csv
+  classes_sha256: 4bc1d776213763d59a1cb1050ff85c9eba3fe6129b876bd2059c87dbbf9b9fa7
+  key: clip_id
+  label:
+    column: label
+    kind: single
+    sep: ";"
+    class_key: index
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: [video, audio]}   # materialized mp4 under derived_root (hashed name)
+    rel_video: {type: str, role: extra}        # VGGSound source mp4 under media_root (materialize.source_columns)
+    rel_audio: {type: str, role: extra}        # VGGSound source wav under media_root (materialize.source_columns)
+    offset_bin: {type: int, role: extra}       # == label
+    offset_seconds: {type: float, role: extra} # δ = offsets_seconds[label] (materialize.offset_column); never handed to the bridge
+    arm: {type: str, role: extra}
+  upstream:
+    source: "VGGSound metadata/vggsound.csv + model-free scores of the VGGSound media (make_manifest.py score)"
+    sha256: ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    rows: 32997
+    note: >-
+      Rows are (clip, offset) pairs, clip_id = <vggsound_clip>#<offset_bin>. total_upstream counts
+      candidate rows: the 199 176 VGGSound clips plus the 12 000 second draws of the selected train clips
+      (each probe-train clip appears at two DISTINCT offsets), so 211 176 = 32 997 listed + 178 179
+      excluded clips. Exclusions follow the selection funnel, one reason per clip: short_for_window (audio
+      < 10.0 s), onset_peakiness_gate (audio gate), not_grid_ok (a frame index of some offset falls outside
+      the clip), motion_gate (transient motion < 0.065111), rank_remainder_transient (passed every gate, below
+      the av_corr top-N). The offsets are a balanced draw (floor(N/9) per bin from default_rng(0); surplus by
+      clip-id order).
+    upstream_files:
+      "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    curation:
+      total_upstream: 211176
+      per_split:
+        train: {listed: 24000, staged: 24000, missing: 0}
+        test: {listed: 3000, staged: 3000, missing: 0}
+        stationary: {listed: 5997, staged: 5997, missing: 0}
+      excluded:
+        motion_gate: 18542
+        not_grid_ok: 9
+        onset_peakiness_gate: 105309
+        rank_remainder_transient: 40627
+        short_for_window: 13692
+      short_clips: 0
+      leakage_audit:
+        against: "VGGSound metadata/vggsound.csv split column (train rows ⊂ VGGSound-train; test and stationary rows ⊂ VGGSound-test)"
+        excluded: 0
+
+splits:
+  train: [train]
+  eval: [test]
+  floor: [stationary]
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:
+  video:
+    kind: video
+    media_column: rel_media
+    root: derived_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    kind: audio
+    media_column: rel_media
+    root: derived_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${datasets.vggsound}"
+      prepare_only: true
+      description: >-
+        VGGSound source tree (video/<clip>.mp4, audio/<clip>.wav 16 kHz mono, metadata/vggsound.csv) — the same
+        tree vggsounder reads; read only by prepare/03_materialize.py (materialize.source_columns)
+    derived_root:
+      default: "${data.root}/avsync/materialized"
+      description: >-
+        the materialized per-row mp4s <h[:2]>/<h>.mp4 (rel_media; 32 997 files, prepare/03_materialize.py) plus
+        _materialize/log.jsonl; what the reader hands over
+    curation_root:
+      default: "${data.root}/avsync"
+      prepare_only: true
+      description: >-
+        re-freezing only: <curation_root>/scores holds the per-clip scores written by make_manifest.py score
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the video track of the row's materialized mp4 (prepare/03_materialize.py): the VGGSound source video over
+      [1 + δ/2, 9 + δ/2] s, re-encoded frame-accurately (libx264, native resolution and pixel format, source
+      frame timing kept, times relative to the window start, ≈ 8.0 s); nothing else decoded, cut, resized or
+      padded
+    audio: >-
+      the audio track of the same mp4: the VGGSound 16 kHz mono wav over [1 − δ/2, 9 − δ/2] s, cut
+      sample-exactly (128 000 samples, 8.0 s) and stored losslessly as ALAC (decodes bit-identical to the
+      source PCM); audio and video inside the file are offset by exactly δ, which is the label and is not
+      handed over
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize:   # the pin is the recipe (sha256 feada8d8…, prepare/03_materialize.py recipe_sha256), not the output
+                 # bytes: re-encoded files can differ between hosts with the pinned build, so no per-row sha256 ships
+    kind: av_offset_mux
+    offset_column: offset_seconds
+    source_columns: {video: rel_video, audio: rel_audio}
+    pivot: 1.0
+    length: 8.0
+    video: 0.5
+    audio: -0.5
+    tool:
+      name: ffmpeg
+      version_pin: "4.4.2-0ubuntu0.22.04.1"
+      # command = ["ffmpeg", *video_args, *audio_args, "<out>.mp4"]; placeholders: {video} {audio} = source paths,
+      # {v0} {v1} = video window [pivot + video·δ, v0 + length] s (repr of the float), {a0} {a1} = audio window in
+      # source samples [round((pivot + audio·δ)·sr), a0 + round(length·sr)]. video_args holds the input side and
+      # the video stream's options, audio_args the audio stream's options and the muxer's. `pins`: further builds the
+      # bytes depend on, checked by `yavih doctor --bench avsync` and by prepare/03_materialize.py on its first output
+      # (not recipe arguments: the recipe sha256 of the materialize log leaves them out).
+      video_args: [-nostdin, -hide_banner, -loglevel, error, -y, -copyts, -noautorotate, -i, "{video}", -i, "{audio}",
+                   -map, "0:v:0", -filter:v, "trim=start={v0}:end={v1},setpts=PTS-{v0}/TB", -vsync, passthrough,
+                   "-enc_time_base:v", "-1", -c:v, libx264, -preset, medium, -crf, "18", -pix_fmt, yuv420p,
+                   -threads, "4", "-flags:v", +bitexact]
+      audio_args: [-map, "1:a:0", -filter:a, "atrim=start_sample={a0}:end_sample={a1},asetpts=PTS-STARTPTS",
+                   -c:a, alac, "-flags:a", +bitexact, -map_metadata, "-1", -map_chapters, "-1", -fflags, +bitexact,
+                   -movflags, +faststart]
+      pins:
+        libx264:
+          value: "x264 - core 163 r3060 5db6aa6"
+          probe: ["{tool}", -nostdin, -hide_banner, -loglevel, error, -f, lavfi, -i, "color=c=black:s=64x64:d=0.04",
+                  "-frames:v", "1", -c:v, libx264, -f, h264, "-"]
+          match: "x264 - core \\d+ r\\d+ [0-9a-f]+"
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []
+
+protocol:
+  clip_seconds: 8.0
+  train_draw:
+    cap: 24000
+    seed: 0
+    balance: class
+    drawn_from: "VGGSound metadata/vggsound.csv train split: the 12 000 transient clips with the highest av_corr (motion >= 0.065111) x 2 distinct offset bins, balanced draw floor(N/9) per bin from numpy default_rng(0)"
+  views: rows
+  offsets_seconds: [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+  nominal_window_start: 1.0
+  floor_sigmas: 3.0
+  coarse_grid_seconds: 1.0
+  curation:
+    required_seconds: 10.0
+    min_onset_rate: 0.5
+    top_frac_peakiness: 0.4
+    peakiness_cut: 3.564906
+    motion_quantile: 0.25
+    motion_cut: 0.065111
+    stationary_pool_size: 6000
+    offset_seed: 0
+
+metrics:
+  headline: acc
+  list: [acc, acc_tol1, mae_seconds, acc_coarse5, n_coarse5, n_eval]
+  floors: [acc_floor]
+  controls: [acc_floor_arm, floor_violated]
+  chance:
+    acc: 0.1111
+    acc_tol1: 0.3086
+    mae_seconds: 1.4815
+    acc_coarse5: 0.2
+  ci: {acc: binomial}
+
+readout_params: {}

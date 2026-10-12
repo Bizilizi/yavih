@@ -1,0 +1,30 @@
+# environments
+.venv/
+venv/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# version file written by setuptools-scm at build / install time
+src/yavih/_version.py
+
+# yavih artefacts
+runs/
+results/
+*.tmp
+_stale/
+*.tar
+*.npy
+*.log
+
+# editors / OS / agents
+.DS_Store
+.idea/
+.vscode/
+.claude/

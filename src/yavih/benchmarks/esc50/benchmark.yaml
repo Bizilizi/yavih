@@ -1,0 +1,156 @@
+# yavih benchmark folder — ESC-50 (schema 2).
+schema_version: 2
+name: esc50
+aliases: []
+title: ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy)
+header:
+  name: ESC-50
+  title: "ESC: Dataset for Environmental Sound Classification"
+  venue: "Piczak · ACM Multimedia 2015"
+  abstract: >-
+    2 000 five-second environmental recordings from Freesound in 50 classes (animals, natural
+    soundscapes, human non-speech, domestic and urban sounds), 40 clips per class, prearranged into five
+    source-grouped folds. The task is to predict a clip's single class; the score is mean accuracy over
+    the five cross-validation folds.
+readout: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 0401b8d4ff77e08007370c5318cd471674c4c72574267082021336e253c5b5db   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 94b56cba6e67f9d4a2ef9e6e9fb317b4d9a86eeae46cd8ae76e343a449afc20f
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - "https://github.com/karolpiczak/ESC-50"
+    - "https://github.com/karolpiczak/ESC-50.git"
+    - "https://github.com/karoldvl/ESC-50/archive/master.zip"
+    - "https://dx.doi.org/10.7910/DVN/YDEPUT"
+  licence: "CC BY-NC 3.0 for the dataset as a whole; the ESC-10 subset (esc10 == True, 400 clips) CC BY 3.0; per-clip Freesound attributions in the upstream LICENSE file"
+  bytes: 645520453            # the shallow `git clone --depth 1` pack; master.zip ~600 MB; the staged clone is 1.53 GB / 2 038 files
+  sha256:                     # upstream commit 33c8ce9eb2cf0b1c2f8bcf322eb349b6be34dbb6
+    meta/esc50.csv: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
+    LICENSE: f6aec3a3283a2efdcbb1feff334adad7ab17c097bdec0cbb4eebdb9e16886074
+    audio.sha256sum: 52754b9099c1c48a9fec379bd7dd75dbc6d78387faecc2a9318fc0c43332d398   # sha256 of `cd audio && export LC_ALL=C && sha256sum *.wav` (2 000 lines); prepare/02_verify.sh recomputes it
+  notes: >-
+    Public GitHub repository, no account or agreement. Pinned commit 33c8ce9 (2023-10-13); 2 000 WAV,
+    44.1 kHz mono PCM_16, every clip exactly 220 500 frames (5.000 s). prepare/01_download.sh clones
+    the pinned commit.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "git clone of github.com/karolpiczak/ESC-50 at the pinned commit (0.9 GB, public)"
+budget:
+  clips: {"1": 400, "2": 400, "3": 400, "4": 400, "5": 400}
+  media_gb: 0.88              # PCM bytes of the 2 000 wavs (44 + 2 × 220 500 each); the staged clone incl. .git is 1.53 GB
+  extract_min_per_1k_clips_ref: 0.2   # audio-only ViT-B on a 5 s window
+  probe_minutes_ref: {clf: 3}         # five attentive probes, 1 600 train / 400 eval rows each, pooled features
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 4846c6d167ff53e1caf060ce7e9a45c80fff508e05492ef0073639082ee4079c
+  classes: classes.csv
+  classes_sha256: a614223f2aba50003f58a7a2e8ce95579e493b4635b41bc9e19ff0945e9d06ff
+  key: clip_id
+  label:
+    column: labels
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_path: {type: str, role: media, stream: audio}
+    src_file: {type: str, role: extra}   # upstream Freesound source id (folds are grouped by it; 4 sources span two folds, setup.md "Gotchas")
+    take: {type: str, role: extra}       # upstream take letter (A, B, …) of the clip within its source
+    esc10: {type: str, role: extra}      # "True" for the 400 ESC-10 clips (CC BY licence), else "False"
+  upstream:
+    source: "karolpiczak/ESC-50 @ 33c8ce9 meta/esc50.csv"
+    sha256: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
+    rows: 2000
+    note: "rows = meta/esc50.csv in file order (fold-major, filename order); split = the official fold; no train draw (every training-fold clip is used); src_file/take/esc10 from meta/esc50.csv"
+    upstream_files:
+      ESC-50/meta/esc50.csv: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
+    curation:
+      total_upstream: 2000
+      per_split:
+        "1": {listed: 400, staged: 400, missing: 0}
+        "2": {listed: 400, staged: 400, missing: 0}
+        "3": {listed: 400, staged: 400, missing: 0}
+        "4": {listed: 400, staged: 400, missing: 0}
+        "5": {listed: 400, staged: 400, missing: 0}
+      excluded: {}
+      short_clips: 0              # every wav is exactly 220 500 frames at 44.1 kHz
+      leakage_audit:
+        against: "src_file source-recording groups across the 5 official folds (meta/esc50.csv): 4 groups / 9 clips span two folds, always under different classes; kept"
+        excluded: 0
+      # invariant: 5 × 400 + 0 == 2000
+
+splits:
+  train: []
+  eval: []
+  floor: []
+  folds: ["1", "2", "3", "4", "5"]
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:
+  audio:
+    kind: audio
+    media_column: rel_path
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/esc50"
+      description: "the ESC-50 git clone: audio/{FOLD}-{SRC}-{TAKE}-{TARGET}.wav (2 000, 44.1 kHz mono PCM_16, 5.000 s), meta/esc50.csv, LICENSE"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    audio: "the ESC-50 wav exactly as stored (RIFF PCM_16, 44.1 kHz, mono, 220 500 samples = 5.000 s); nothing decoded, resampled, trimmed or padded"
+  info:
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []                    # accuracy only; the ESC-50 repository ships no scorer (its tests/ check the data)
+
+protocol:
+  clip_seconds: 5.0             # a fact (every stored clip is 220 500 samples at 44.1 kHz); never used to cut or pad
+  train_draw: null              # uncapped: each fold's probe trains on all 1 600 clips of the other four folds
+  views: none
+
+metrics:
+  headline: acc_mean
+  list: [acc_mean, acc_pstd, acc_per_fold, n_folds, n_eval]
+  floors: [acc_floor]
+  controls: []
+  chance: {acc_mean: 0.02}
+  ci: {acc_mean: pooled_binomial}
+  aggregation: {over: folds, report: [mean, pstd, per_fold]}
+
+readout_params: {}

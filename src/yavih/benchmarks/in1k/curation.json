@@ -1,0 +1,38 @@
+{
+  "classes_sha256": "cfc06eb126656c39e4b253bd67f7d90bf5684240771fc39a1349f50becf79e7a",
+  "curation": {
+    "excluded": {
+      "draw_remainder": 1231167
+    },
+    "leakage_audit": null,
+    "per_split": {
+      "train": {
+        "listed": 50000,
+        "missing": 0,
+        "staged": 50000
+      },
+      "val": {
+        "listed": 50000,
+        "missing": 0,
+        "staged": 50000
+      }
+    },
+    "short_clips": 0,
+    "total_upstream": 1331167
+  },
+  "manifest_sha256": "4e048ce04f03f4cb6ef7d4a0a08c83ab7073485ad250aba42c7e843305c84bc6",
+  "rows": {
+    "train": 50000,
+    "val": 50000
+  },
+  "train_draw": {
+    "balance": "class",
+    "cap": 50000,
+    "drawn_from": "ILSVRC2012 train file list (1 281 167 images, sorted by wnid then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 50 000, seed 0",
+    "seed": 0
+  },
+  "upstream_files": {
+    "ILSVRC2012_devkit_t12.tar.gz": "b59243268c0d266621fd587d2018f69e906fb22875aca0e295b48cafaa927953",
+    "train file list": "858b30e30ec1016a900c9e2e03bba81d7de9e049f6f9e7c8d84afe31a43d6737"
+  }
+}

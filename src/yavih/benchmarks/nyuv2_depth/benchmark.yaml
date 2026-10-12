@@ -1,0 +1,211 @@
+# yavih benchmark: NYUv2 dense monocular depth, 14x14 grid readout. Manifest frozen by make_manifest.py; images
+# re-containered as lossless PNG by prepare/recontainer_png.py; targets by prepare/derive_targets.py; see setup.md.
+schema_version: 2
+name: nyuv2_depth
+aliases: []
+title: NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid)
+readout: grid
+protocol_version: 1
+header:
+  name: NYUv2 Depth
+  title: Indoor Segmentation and Support Inference from RGBD Images
+  venue: "Silberman, Hoiem, Kohli, Fergus · ECCV 2012"
+  abstract: >-
+    Kinect RGB-D captures of 464 indoor scenes. The task is dense metric depth from a single RGB frame: train on
+    12 000 frames of the raw captures (GeoNet release), score against raw Kinect depth on the 654 labelled test
+    images, following Probe3D's frozen-feature depth evaluation.
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 8763c99ee6263334970fa565797634160769528160e057258cbf7a81745ba117
+    input_hash: e3f8b3802f1767ab103403aa055254afd75dc428666450293dc6a388d065194a
+    supersedes: []
+
+source:
+  kind: manual_portal
+  urls:
+    - "https://github.com/xjqi/GeoNet"
+    - "http://horatio.cs.nyu.edu/mit/silberman/nyu_depth_v2/nyu_depth_v2_labeled.mat"
+    - "https://dl.fbaipublicfiles.com/fair_self_supervision_benchmark/nyuv2_surfacenormal_metadata.zip"
+    - "https://cs.nyu.edu/~fergus/datasets/nyu_depth_v2.html"
+    - "https://github.com/mbanani/probe3d"
+  licence: >-
+    NYU Depth Dataset V2 (Silberman, Hoiem, Kohli, Fergus, ECCV 2012): no explicit licence is published;
+    distributed for academic research, cite the paper. GeoNet train frames (Qi et al., CVPR 2018, Bansal et
+    al. re-annotation of the NYU raw captures): released via the GeoNet GitHub README links without a data
+    licence. Treat both as research-only, no redistribution of the media.
+  bytes: 145764113482
+  sha256:
+    nyu_depth_v2_labeled.mat: "2d724b0c0ab358aa1ce5df855e5bd14a2279ab7202efe22f32a30d612dcb86aa"
+    test_SN40.json: "2aee4e157046cc7991161ddfea1a8e8f76b5f9883f519615fcb900b168de6b21"
+    train_SN40.json: "694c3ba6a1a2ba712c3a9df59a6fc29e93f39438e197442d474fbb3f81d341e3"
+  notes: >-
+    Probe3D's data layout: nyu_geonet/ holds GeoNet data1.zip + data2.zip merged (30 916 MATLAB v7 .mat,
+    142 791 955 406 B; manual Google Drive / Baidu links in the GeoNet README) and nyuv2/ the labelled .mat + FAIR
+    SN40 split files. Everything a bridge or probe reads is DERIVED by prepare/: the eval index (prepare/02, from
+    the labelled .mat), the depth targets (prepare/04) and the 12 654 lossless PNGs (prepare/05). A built
+    derived_root (PNGs + targets, 8.2 GB) can be copied instead of the 55 GB of .mat files.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: manual-download
+  how: "a person downloads the GeoNet train frames (143 GB) by hand from the Google Drive / Baidu links in the GeoNet README (not scriptable); the eval set (NYU labelled .mat + FAIR SN40 split files) is a public download; or copy an already built derived_root (8.2 GB)"
+budget:
+  clips: {train: 12000, eval: 654}
+  media_gb: 8.2
+  extract_min_per_1k_clips_ref: 0.7
+  probe_minutes_ref: {grid: 10}       # × token scale 12.25 at N=196, D=768 ≈ 123 min per seed (3 lr arms × 50 epochs)
+
+manifest:
+  file: manifest.csv.gz
+  sha256: "0cbf32db5f6b21cb7899b686f06e1ffddeb67d74243b3181b3347ffb67996ac2"
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: image}
+    source_mat: {type: str, role: extra}
+    eval_row: {type: int, role: extra}
+    labeled_index: {type: int, role: extra}
+    session: {type: str, role: extra}
+    source: {type: str, role: extra}
+  upstream:
+    source: "GeoNet nyu_geonet listing (30 916 .mat names) + eval_meta.json of the eval index (prepare/02, from nyu_depth_v2_labeled.mat and test_SN40.json)"
+    sha256: "247d4ceb29fb39ef55f1dcce2a5739ddab57971787368e55255908a1ccf33ff3"   # the sorted nyu_geonet listing, one name per line
+    rows: 12654
+    note: >-
+      train rows are the seeded session-balanced draw of protocol.train_draw (yavih.freeze.class_balanced_subsample
+      over capture sessions, torch.Generator seed 0) from the 30 067-file pool = 30 916 GeoNet files - 847
+      leakage-excluded (6 label-less sessions sharing a base name with a test session) - 2 Probe3D positional
+      deletes (both files unreadable in full); 342 sessions drawn. eval rows are the 654 labelled test images
+      (test_SN40.json) in ascending labelled index; eval_row = row in eval_rgb.npy. total_upstream counts the
+      30 916 GeoNet files plus the 654 test images. eval_meta.json is pinned without its source_mat path.
+    upstream_files:
+      nyu_geonet listing: "247d4ceb29fb39ef55f1dcce2a5739ddab57971787368e55255908a1ccf33ff3"
+      eval_meta.json (without source_mat): "ff040b99a494dd7eadc874d45bc77b348d39f863fe616e02fe7dcf3f16a260ad"
+    curation:
+      total_upstream: 31570
+      per_split:
+        train: {listed: 12000, staged: 12000, missing: 0}
+        eval: {listed: 654, staged: 654, missing: 0}
+      excluded: {leakage: 847, corrupt: 2, draw_remainder: 18067}
+      short_clips: 0
+      leakage_audit:
+        against: "the 654 labeled NYUv2 test images (test_SN40.json), compared by capture session (rawRgbFilenames), plus a conservative base-name exclusion of 6 label-less GeoNet sessions"
+        excluded: 847
+
+splits:
+  train: [train]
+  eval: [eval]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:
+  image:
+    kind: image
+    media_column: rel_media
+    root: derived_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets:
+  train: {kind: dense_depth, source: derived_file, root: derived_root, file: train_depth_224.npy, sha256: "af4988cbc3f5eefb1e93e5d5a6f6d59793208b49ba2ef8c2156c760df3933b49", index_column: null}
+  eval: {kind: dense_depth, source: derived_file, root: derived_root, file: eval_depth_224.npy, sha256: "08a16cbafc34647b60f30c10669cc6ae507699161bcba108862f3533162a6888", index_column: eval_row}
+
+data:
+  roots:
+    derived_root:
+      default: "${data.root}/nyuv2"
+      description: >-
+        Everything this benchmark reads at extraction and probe time: rgb/{train,eval}/<clip_id>.png (12 654
+        lossless PNGs, 480x640 RGB, prepare/05_recontainer_png.sh) with their listing rgb_png.sha256.csv, and the
+        targets train_depth_224.npy / eval_depth_224.npy (prepare/04_derive_targets.sh); plus the prepare-time
+        eval index eval_rgb.npy / eval_depth.npy / eval_meta.json (prepare/02, source of the eval PNGs and eval
+        targets).
+    geonet_root:
+      default: "${data.root}/probe3d_nyuv2_navi"
+      prepare_only: true
+      description: >-
+        PREPARE-TIME SOURCE ONLY (never read by the reader: the .mat files hold the depth labels). Probe3D data
+        layout: nyu_geonet/<session>_r-<float>-<int>.mat (MATLAB v7; img 481x641x3 float32 mean-subtracted,
+        depth 481x641 float32 metres); only the 12 000 frozen files (manifest source_mat) are read, by
+        prepare/recontainer_png.py and prepare/derive_targets.py.
+  tar_index: null
+  derived:
+    rgb_png.sha256.csv: "02639980f22166fea9092decf943e6a6f9e0380e4cc68c381286f9a7a4c4f95e"
+    eval_rgb.npy: "019589449649ab4a1e5602854f65746a70b326a4ea84f72a3e6a2dc08d732a39"
+    eval_depth.npy: "fdbc9659f04c11274b2a72bf8e79ac8069df2559603b181103d237583a401fe5"
+    eval_depth_224.npy: "08a16cbafc34647b60f30c10669cc6ae507699161bcba108862f3533162a6888"
+    train_depth_224.npy: "af4988cbc3f5eefb1e93e5d5a6f6d59793208b49ba2ef8c2156c760df3933b49"
+
+input_contract:
+  handed_over:
+    image: >-
+      a lossless PNG (8-bit RGB, 640x480, no ancillary chunks) holding exactly the upstream RGB pixels of the
+      frame, re-containered at prepare time because both upstream containers also hold the depth labels: train =
+      the GeoNet .mat img truncated to 480x640 with the channel offsets added back and rounded (exact uint8);
+      eval = images[i] of nyu_depth_v2_labeled.mat. Nothing cropped, resized or normalised; the depth never
+      reaches the bridge
+  info:
+    image: [width, height, container, bytes]
+  facts: [target_region]
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: full_frame
+  requires:
+    pos: [y, x]
+    streams: [image]
+    grid: {h: 14, w: 14, min_cell_coverage: 0.5}
+    t_bins: null
+
+external:
+  - name: evals
+    pip: "pip install loguru -e git+https://github.com/mbanani/probe3d.git@a1f14640076e38b8bc07b66d0fe2d01d15691e9d#egg=evals"
+    version_pin: "1.0"
+    used_for: >-
+      d1, d2, d3, rmse and the floor d1_floor: Probe3D's evals.utils.metrics.evaluate_depth (El Banani et al.,
+      CVPR 2024; file sha256 39c0c919f0474b1a7b6d09eedba9dccda19abff921381343250c5058a44a34a8 at commit
+      a1f14640), per image, then the mean over images. Editable install only: the package declares
+      packages=["evals"] without an evals/__init__.py, so a non-editable install ships no module
+
+protocol:
+  clip_seconds: null
+  train_draw:
+    cap: 12000
+    seed: 0
+    balance: session
+    drawn_from: "GeoNet nyu_geonet listing (30 916 .mat, sorted names sha256 247d4ceb29fb39ef55f1dcce2a5739ddab57971787368e55255908a1ccf33ff3) minus 847 leakage-excluded and 2 corrupt files = 30 067-file pool; session-balanced draw (yavih.freeze.class_balanced_subsample), cap 12 000, seed 0"
+  views: none
+  max_depth: 10.0
+  target_size: 224
+  depth_param: log
+  source_size: [480, 640]
+  target_region: [0.0, 0.125, 1.0, 0.875]
+
+metrics:
+  headline: d1
+  list: [d1, d2, d3, absrel, rmse, n_eval]
+  floors: [d1_floor]
+  controls: []
+  chance: {}
+  ci: {d1: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params: {h: 14, w: 14, out: 1, visual_stream: image}

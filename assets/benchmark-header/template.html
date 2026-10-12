@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- README header of one benchmark folder. Filled and rendered by `python -m yavih.headers <name>` from the folder's
+     benchmark.yaml `header:` block; the chips are derived from the yaml. Fields are string.Template placeholders. -->
+<html><head><meta charset="utf-8"><style>
+$base_css
+.wrap{position:relative;height:100%;padding:52px 64px 44px 72px;display:flex;gap:48px}
+.left{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:space-between}
+.name{font-size:$name_px;font-weight:800;letter-spacing:-0.045em;line-height:1.0;padding-bottom:0.06em;white-space:nowrap;filter:drop-shadow(0 6px 30px rgba(34,211,238,.18));margin-top:10px}
+.title{font-size:$title_px;font-weight:600;line-height:1.25;margin-top:16px;max-width:760px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.venue{margin-top:10px;font-size:17px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.right{flex:0 0 640px;padding:28px 30px;align-self:center}
+.abstract{font-size:$abstract_px}
+.chips{font-size:14px;gap:8px 8px;flex-wrap:nowrap;white-space:nowrap}
+.chip{padding:5px 10px}
+</style></head><body><div class="wrap">
+<div class="left"><div><div class="kicker"><b>yavih</b> · benchmark · $bench</div><div class="name grad">$name</div>
+<div class="title">$title</div><div class="venue">$venue</div></div>
+<div class="chips">$chips</div></div>
+<div class="right card"><div class="abstract"><span class="lab">Abstract</span>$abstract</div></div>
+</div></body></html>

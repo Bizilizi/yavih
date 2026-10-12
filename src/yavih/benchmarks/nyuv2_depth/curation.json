@@ -1,0 +1,43 @@
+{
+  "curation": {
+    "excluded": {
+      "corrupt": 2,
+      "draw_remainder": 18067,
+      "leakage": 847
+    },
+    "leakage_audit": {
+      "against": "the 654 labeled NYUv2 test images (test_SN40.json), compared by capture session (rawRgbFilenames), plus a conservative base-name exclusion of 6 label-less GeoNet sessions",
+      "excluded": 847
+    },
+    "per_split": {
+      "eval": {
+        "listed": 654,
+        "missing": 0,
+        "staged": 654
+      },
+      "train": {
+        "listed": 12000,
+        "missing": 0,
+        "staged": 12000
+      }
+    },
+    "short_clips": 0,
+    "total_upstream": 31570
+  },
+  "manifest_sha256": "0cbf32db5f6b21cb7899b686f06e1ffddeb67d74243b3181b3347ffb67996ac2",
+  "rows": {
+    "eval": 654,
+    "train": 12000
+  },
+  "train_draw": {
+    "balance": "session",
+    "cap": 12000,
+    "drawn_from": "GeoNet nyu_geonet listing (30 916 .mat, sorted names sha256 247d4ceb29fb39ef55f1dcce2a5739ddab57971787368e55255908a1ccf33ff3) minus 847 leakage-excluded and 2 corrupt files = 30 067-file pool; session-balanced draw (yavih.freeze.class_balanced_subsample), cap 12 000, seed 0",
+    "seed": 0,
+    "sessions_drawn": 342
+  },
+  "upstream_files": {
+    "eval_meta.json (without source_mat)": "ff040b99a494dd7eadc874d45bc77b348d39f863fe616e02fe7dcf3f16a260ad",
+    "nyu_geonet listing": "247d4ceb29fb39ef55f1dcce2a5739ddab57971787368e55255908a1ccf33ff3"
+  }
+}

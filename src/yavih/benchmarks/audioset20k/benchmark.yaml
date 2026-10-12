@@ -1,0 +1,172 @@
+# yavih benchmark folder: AudioSet-20K (balanced) from the published Hugging Face dataset 11hu83/audioset20k.
+# The manifest is frozen by make_manifest.py from the dataset's clips.csv at the pinned revision; classes.csv is
+# AudioSet's class_labels_indices.csv. The reader hands over the original clip mp4 (video and audio in one file, one
+# tar member read once) exactly as published, for every published clip; the 3 clips without an audio track are
+# handed over with audio info has_track: false. Every model-side choice (frames, window, resolution, crop, front
+# end, what to feed for an absent track) is the bridge's, declared in describe().
+schema_version: 2
+name: audioset20k
+aliases: []
+title: AudioSet-20K (balanced) 527-class multi-label audio-visual tagging, published raw clips (macro mAP)
+header:
+  name: AudioSet-20K
+  title: "Audio Set: An ontology and human-labeled dataset for audio events"
+  venue: "Gemmeke et al. · ICASSP 2017"
+  abstract: >-
+    AudioSet labels 10-second YouTube segments with the sound events they contain, drawn from a 527-class
+    ontology. AS-20K trains on the class-balanced list of 22 160 segments and evaluates on the 20 371-segment
+    eval list: every event present in a clip is predicted from its audio, its video or both (multi-label),
+    scored by macro mAP.
+readout: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-10-12"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 4eee199ca9c7b4a47fd524418c8841c9685d02ecf95a9346cbb4dfa000e31109
+    input_hash: c387545ad5ffed1a9225b9f1d1a6a8e2dbf927741d58e8ccff45a79229152ce9
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - "https://huggingface.co/datasets/11hu83/audioset20k"
+  revision: "4a0055b21c183257fd9b65ee8d1cd11f13362f0f"
+  licence: >-
+    AudioSet annotations (labels, segment times): Google, CC BY 4.0. Media: YouTube content that stays its
+    uploaders'; the dataset redistributes it for non-commercial research only (takedown: a discussion on the
+    dataset repository with the clip key). Do not redistribute features keyed to it beyond research use.
+  bytes: 66081637551          # the 65 files SHA256SUMS lists (62 tars + index.json + clips.csv + MISSING.csv); README.md (the card) and SHA256SUMS add 13 kB
+  sha256:                     # the three small release files; each tar's sha256 is in SHA256SUMS (setup.md: sha256sum -c SHA256SUMS)
+    SHA256SUMS: a6f22393b4f813af63e241b4a407771e0d98ade764a8399c4dd70951861b177c
+    index.json: 6976d509de988883a7e00783cec5dc438c1d38517d877518212a7ec88317b441
+    clips.csv: 96e308e4e01647dafded79207663837b82e5e124371dbcf3d752bbfeea99fbad
+  notes: >-
+    62 WebDataset tars audioset20k-train-000000 … -000031 and audioset20k-eval-000000 … -000029, members
+    <key>.mp4 (the clip as downloaded) + <key>.json; index.json maps "<split>/<key>.mp4" to [shard, offset,
+    size] with relative shard names, so the tars are read in place by offset and never extracted.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "hf download 11hu83/audioset20k at the pinned revision (66 GB, public, no account); read in place"
+budget:
+  clips: {train: 17726, eval: 16223}
+  media_gb: 66.0              # 66 013 790 920 B: the mp4 members of the 33 949 frozen rows (index sizes)
+  extract_min_per_1k_clips_ref: 2.0   # a 16-frame ViT-B A+V bridge; decoding (up to 4K, h264/av1/vp9, AAC/Opus) dominates
+  probe_minutes_ref: {clf: 10}        # 17 726 × 527-class BCE attentive probe on pooled features
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 99f47e3ed6aec83ae3e2f695b72ef799859fd2c75c3d87593adab4d31c970140
+  classes: classes.csv
+  classes_sha256: 448831bb9bcc45279894d7328e0cc6bf2e19dccccf954621511375d8c7b7a50b
+  key: clip_id
+  label:
+    column: labels
+    kind: multi
+    sep: ";"
+    class_key: mid
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: [video, audio]}   # index key <split>/<key>.mp4; the media cell of both streams
+    ytid: {type: str, role: extra}                       # YouTube id (provenance; never handed over)
+    start_s: {type: float, role: extra}                  # segment start in the source video, seconds (as published)
+    duration_s: {type: float, role: extra}               # container duration as published in clips.csv; 1.001–63.730 s
+  upstream:
+    source: "https://huggingface.co/datasets/11hu83/audioset20k @ 4a0055b21c183257fd9b65ee8d1cd11f13362f0f: clips.csv"
+    sha256: 96e308e4e01647dafded79207663837b82e5e124371dbcf3d752bbfeea99fbad
+    rows: 33949
+    note: "rows = every clips.csv row (train then eval, each sorted by key); no clip is excluded. Recorded fact, not an exclusion: 3 rows' mp4 has no audio track (train/NlBQ4kLpdzk_0260000, train/d8WgfWSf1VM_0280000, eval/chc33hy6iIU_0510000; make_manifest.py NO_AUDIO_TRACK, re-measured by --rescan; their audio info says has_track: false), none lacks a video track; labels = the clip's mids de-duplicated and sorted by classes.csv index; no draw, no cap."
+    upstream_files:
+      clips.csv: 96e308e4e01647dafded79207663837b82e5e124371dbcf3d752bbfeea99fbad
+      MISSING.csv: bbc4f0320faa852372a9244d07dcf687bfb6d46bbfa7e154a5b81424d20ce457
+      index.json: 6976d509de988883a7e00783cec5dc438c1d38517d877518212a7ec88317b441
+      SHA256SUMS: a6f22393b4f813af63e241b4a407771e0d98ade764a8399c4dd70951861b177c
+    curation:
+      total_upstream: 42531     # 22 160 balanced_train + 20 371 eval segment rows
+      per_split:
+        train: {listed: 17726, staged: 17726, missing: 0}   # every published clip is a frozen row
+        eval: {listed: 16223, staged: 16223, missing: 0}
+      excluded:                 # per split; unavailable = MISSING.csv (gone from YouTube when the dataset was made); nothing else is excluded
+        train_unavailable: 4434
+        eval_unavailable: 4148
+      short_clips: 2463         # frozen rows whose published duration_s is < 9.9 s (a fact; nothing is cut or padded by the reader)
+      leakage_audit: {against: "train/eval ytid overlap of clips.csv (asserted empty)", excluded: 0}
+      # invariant: 17726 + 16223 + (4434 + 4148) == 42531
+      # recorded fact (not an exclusion): no audio track in train/NlBQ4kLpdzk_0260000, train/d8WgfWSf1VM_0280000, eval/chc33hy6iIU_0510000
+
+splits:
+  train: [train]
+  eval: [eval]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+streams:                      # hashed: what is handed over; both streams read the same tar member
+  video:
+    kind: video
+    media_column: rel_media     # index key <split>/<key>.mp4
+    root: media_root
+    layout: tar_index           # one member of a dataset tar, read in place (os.pread at the index offset)
+    layout_params: {}
+    required: true
+  audio:
+    kind: audio
+    media_column: rel_media     # the same mp4 member as video (read once)
+    root: media_root
+    layout: tar_index
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/audioset20k-wds-v1"
+      description: "the dataset as downloaded (hf download 11hu83/audioset20k --revision 4a0055b2… --local-dir): 62 tars audioset20k-{train,eval}-NNNNNN.tar, index.json (relative shard names), clips.csv, MISSING.csv, SHA256SUMS, README.md"
+  tar_index: index.json
+  derived: {}
+
+input_contract:               # hashed; setup.md "## Input contract" ends with a copy
+  handed_over:
+    video: "the original clip mp4 of the Hugging Face dataset 11hu83/audioset20k at revision 4a0055b21c183257fd9b65ee8d1cd11f13362f0f (tar member <split>/<key>.mp4, read in place by offset) exactly as published; its video track (h264, av1 or vp9; 128x120 to 3840x2160, mixed aspect ratios; 6-60 fps; nominal 10 s, 0.73-63.73 s) is described by info; nothing decoded, cut, resized or cropped"
+    audio: "the same mp4 bytes as video (one tar member, read once); its audio track (AAC, Opus or E-AC-3; 48, 44.1 or 32 kHz; 1, 2 or 6 channels; 0.02-10.02 s, its length may differ from the video track's) is described by info; 3 clips' mp4 holds no audio track and is handed over all the same, with info has_track false and the track facts null; nothing decoded, resampled, cut or padded"
+  info:
+    video: [duration_s, fps, n_frames, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:              # hashed; machine-checked by validate; setup.md "## Output contract" ends with a copy
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:                   # clf: any [N, D] (pooled N = 1 or tokens); no positions required
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []                  # macro mAP over the fixed 527 classes is the AudioSet standard; no authors' scorer package exists
+
+protocol:                     # label facts only (hashed); nothing here constrains what the bridge does with the media
+  clip_seconds: 10.0          # nominal segment length (a fact; never used to cut or pad)
+  train_draw: null            # all 17 726 frozen balanced-train clips; no cap
+  views: none
+
+metrics:
+  headline: map
+  list: [map, effective_pos_classes, n_eval]
+  floors: [map_floor]
+  controls: []
+  chance: {map: 0.004855}       # mean per-class eval prevalence = 41 508 label instances / (527 × 16 223) = map_floor
+  ci: {}
+  aggregation: null
+
+readout_params: {}

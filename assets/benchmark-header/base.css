@@ -1,0 +1,39 @@
+:root {
+  --bg0: #070a12; --bg1: #0f172a; --ink: #e5e7eb; --muted: #94a3b8;
+  --line: rgba(148, 163, 184, 0.16); --a: #22d3ee; --b: #a78bfa; --c: #f472b6;
+  --pill: rgba(255, 255, 255, 0.05);
+  --mono: "JetBrains Mono", "Fira Mono", "DejaVu Sans Mono", "Liberation Mono", monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1600px; height: 500px; overflow: hidden; }
+body {
+  font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", "Liberation Sans", "DejaVu Sans", Arial, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(900px 420px at 18% 10%, rgba(34, 211, 238, 0.16), transparent 60%),
+    radial-gradient(800px 420px at 85% 95%, rgba(167, 139, 250, 0.18), transparent 60%),
+    linear-gradient(135deg, var(--bg0), var(--bg1));
+  position: relative;
+}
+body::before {
+  content: ""; position: absolute; inset: 0;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(1200px 500px at 50% 50%, #000 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(1200px 500px at 50% 50%, #000 40%, transparent 100%);
+}
+.grad { background: linear-gradient(90deg, #ffffff 0%, var(--a) 45%, var(--b) 80%, var(--c) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.kicker { font-family: var(--mono); font-size: 16px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.kicker b { color: var(--a); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px 10px; font-size: 15px; color: var(--muted); }
+.chip { padding: 5px 12px; border-radius: 999px; background: var(--pill); border: 1px solid rgba(255,255,255,0.12); font-family: var(--mono); }
+.chip b { color: var(--ink); font-weight: 600; }
+.chip.a { border-color: rgba(34, 211, 238, 0.45); }
+.chip.b { border-color: rgba(167, 139, 250, 0.55); }
+.card { border: 1px solid rgba(255,255,255,0.10); border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+.abstract { color: #cbd5e1; line-height: 1.55; }
+.abstract .lab { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--b); display: block; margin-bottom: 8px; }
+.venue { color: var(--muted); font-size: 18px; }
