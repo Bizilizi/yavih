@@ -910,26 +910,60 @@ def _bench_row(bench: Any) -> dict[str, Any]:
     }
 
 
+def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any]], list[str]]:
+    """``bench list --suite S``: ``(suite, packaged benchmark names in suite order, {name: {capability, readings}},
+    pending names)``."""
+    from yavih.suites import load_suite
+
+    suite = load_suite(suite_ref)
+    facts: dict[str, dict[str, Any]] = {}
+    pending: list[str] = []
+    for cap, e in suite.entries():
+        if e.status != "packaged":
+            pending.append(e.benchmark)
+            continue
+        rec = facts.setdefault(e.benchmark, {"capability": cap, "readings": []})
+        rec["readings"] += [r for r in e.readings if r not in rec["readings"]]
+        if e.join:
+            rec["readings"].append(str(e.join_reading))
+    return suite, list(facts), facts, pending
+
+
 def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench list [--fmt text|md] [--suite S]``: every discoverable benchmark, or with ``--suite`` the
+    suite's packaged benchmarks in suite order with their ``capability`` and ``readings``."""
     rows = []
     warnings = []
+    suite, refs, facts, pending = (None, _bench_refs(), {}, [])
+    if getattr(ns, "suite", None):
+        suite, refs, facts, pending = _suite_refs(ns.suite)
     if getattr(ns, "fmt", "text") == "md":
         # the generated table of the docs (yavih.doctables), from each folder's benchmark.yaml; no data scan
         from yavih.benchmark import resolve_folder
         from yavih.doctables import render
 
-        folders = {ref: f for ref in _bench_refs() if (f := resolve_folder(ref)) is not None}
+        folders = {ref: f for ref in refs if (f := resolve_folder(ref)) is not None}
         return Envelope(data={"names": list(folders)}, text=render("readme", folders) + "\n")
-    for ref in _bench_refs():
+    for ref in refs:
         try:
-            rows.append(_bench_row(_load_bench(ref)))
+            row = _bench_row(_load_bench(ref))
         except Exception as e:  # noqa: BLE001 - one broken folder must not hide the others
             warnings.append(_finding("W_BENCH_LOAD", f"{ref}: {e.__class__.__name__}: {e}", where=ref))
-    lines = [f"{'name':<16}{'readout':<8}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
+            continue
+        if suite is not None:
+            row.update(facts[ref])
+        rows.append(row)
+    head = f"{'capability':<14}{'readings':<16}" if suite is not None else ""
+    lines = [f"{head}{'name':<16}{'readout':<8}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
     for r in rows:
         clips = ", ".join(f"{k}={v}" for k, v in r["clips"].items())
         tier = (r.get("obtain") or {}).get("tier") or "-"
-        lines.append(f"{r['name']:<16}{str(r['readout']):<8}{clips:<28}{str(r['media_gb']):>9}  {str(r['source_kind']):<15}{tier:<17}{r['status']}")
+        pre = f"{r['capability']:<14}{','.join(r['readings']):<16}" if suite is not None else ""
+        lines.append(f"{pre}{r['name']:<16}{str(r['readout']):<8}{clips:<28}{str(r['media_gb']):>9}  {str(r['source_kind']):<15}{tier:<17}{r['status']}")
+    if suite is not None:
+        lines.insert(0, f"suite {suite.name} ({suite.origin}): {suite.description}")
+        if pending:
+            lines.append(f"pending (no packaged folder yet): {', '.join(pending)}")
     lines.append("obtain: auto = fetchable unattended; manual-download = a person downloads it from an official portal; "
                  "needs-licence = a human signs a licence for their account; needs-data-owner = ask the person who "
                  "holds it; site-only = staged at the origin site only (`yavih bench info <name>` says how)")
@@ -1451,7 +1485,8 @@ def cmd_report_build(ns: argparse.Namespace) -> Envelope:
         kind, *pairs = ns.join
         join = {kind: _kv_pairs(pairs)}
     rep = report(ns.globs, fmt=ns.fmt, seeds=ns.seeds, allow_coverage_diff=ns.allow_coverage_diff, join=join, detail=ns.detail,
-                 results_root=getattr(ns, "results", None), merge_results=bool(getattr(ns, "merge_results", False)))
+                 results_root=getattr(ns, "results", None), merge_results=bool(getattr(ns, "merge_results", False)),
+                 **({"suite": ns.suite} if getattr(ns, "suite", None) else {}))
     paths: dict[str, Any] = {}
     if rep.merged:
         paths["merged"] = list(rep.merged)
@@ -1495,6 +1530,28 @@ def cmd_plan_build(ns: argparse.Namespace) -> Envelope:
     records = [u.to_json() for u in units]
     text = "" if ns.out else "".join(json.dumps(_jsonable(r), sort_keys=True) + "\n" for r in records)
     return Envelope(data=records, paths=paths, text=text or f"wrote {len(units)} unit(s) to {ns.out}\n")
+
+
+def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
+    """``yavih plan init --suite S --model M --launcher L [--out matrix.yaml] [--bridges-dir DIR] [--force]``: one
+    bridge file per suite benchmark (``yavih.shipped.bridge_new``; an existing one is kept) and a ``matrix.yaml``
+    skeleton with one entry per suite ``(benchmark, reading)`` (``yavih.plan.skeleton``). The text lists the
+    ``bridge check`` command of every entry, then the ``plan build`` command."""
+    from yavih.plan.skeleton import plan_init
+
+    rec = plan_init(ns.suite, model=ns.model, launcher=ns.launcher, out=ns.out, bridges_dir=ns.bridges_dir, force=bool(ns.force))
+    lines = [f"wrote {rec['path']}: suite {rec['suite']}, model {rec['model']}, {len(rec['entries'])} entries"]
+    for b in rec["bridges"]:
+        lines.append(f"  bridge {b['path']} " + ("(exists, kept)" if b["action"] == "kept" else f"(created from {b['benchmark']}'s bridge_template.py)"))
+    for p in rec["pending"]:
+        lines.append(f"  pending {p['benchmark']} [{', '.join(p['readings'])}] ({p['capability']}): no packaged folder, not planned")
+    lines.append("next: fill every TODO in each bridge (`yavih bench show <benchmark> setup` has the contract), then on the staged data:")
+    lines += [f"  {c}" for c in rec["next"]]
+    for j in rec["joins"]:
+        lines.append(f"after probing: `yavih suite missing {rec['suite']} --model {rec['model']}` prints the "
+                     f"`yavih report build --join {j['benchmark']} ...` command that scores {j['benchmark']}:{j['reading']}")
+    paths = {"matrix": rec["path"], "bridges": [b["path"] for b in rec["bridges"]]}
+    return Envelope(data=rec, paths=paths, text="\n".join(lines) + "\n")
 
 
 def cmd_plan_status(ns: argparse.Namespace) -> Envelope:
@@ -1547,6 +1604,83 @@ def cmd_exec(ns: argparse.Namespace) -> Envelope:
     exit_code = int(last.get("exit_code", EXIT_OK))
     errors = [] if env_status != "error" else [_finding(f"E_UNIT_{status.upper()}", f"unit {last.get('id')} ended with status {status} (exit {exit_code})")]
     return Envelope(status=env_status, data=last, errors=errors, exit_code=exit_code, text=json.dumps(_jsonable(last), indent=2, sort_keys=True) + "\n")
+
+
+# ----------------------------------------------------------------------------- suites
+
+
+def cmd_suite_list(ns: argparse.Namespace) -> Envelope:
+    """``yavih suite list``: every suite (shipped, and project ones from ``yavih.suites.project_suites_dir``), each
+    with its ``origin``; a project suite of a shipped name ``shadows`` it; an invalid file is listed with its error
+    (``W_SUITE_INVALID``)."""
+    from yavih.suites import list_suites, project_suites_dir
+
+    recs = list_suites()
+    warnings = [_finding("W_SUITE_INVALID", r["error"], where=r["path"]) for r in recs if r.get("error")]
+    lines = [f"{'name':<16}{'origin':<10}description"]
+    for r in recs:
+        desc = r["description"] or f"INVALID: {r['error']}"
+        lines.append(f"{r['name']:<16}{r['origin'] + ('*' if r['shadows'] else ''):<10}{desc}")
+    lines.append(f"project suites: {project_suites_dir()} (* = shadows the shipped suite of that name)")
+    return Envelope(data=recs, warnings=warnings, text="\n".join(lines) + "\n")
+
+
+def cmd_suite_show(ns: argparse.Namespace) -> Envelope:
+    """``yavih suite show <name|file.yaml>``: the suite's groups, benchmarks, readings and joins."""
+    from yavih.suites import load_suite
+
+    suite = load_suite(ns.name)
+    lines = [f"suite {suite.name} ({suite.origin}: {suite.path})", f"  {suite.description}"]
+    for g in suite.groups:
+        lines.append(f"  {g.capability}")
+        for e in g.entries:
+            flags = [f for f, on in (("join " + str(e.join_reading), e.join), ("optional", not e.required),
+                                     ("pending", e.status == "pending")) if on]
+            lines.append(f"    {e.benchmark:<14}[{', '.join(e.readings)}]" + (f"  {'; '.join(flags)}" if flags else ""))
+    return Envelope(data=suite.to_json(), paths={"suite": str(suite.path)}, text="\n".join(lines) + "\n")
+
+
+def cmd_suite_new(ns: argparse.Namespace) -> Envelope:
+    """``yavih suite new <name> [--from default] [--out DIR|FILE] [--force]``: a copy of a suite to edit, written to
+    the project suites directory (``yavih.suites.new_suite``)."""
+    from yavih.suites import new_suite
+
+    rec = new_suite(ns.name, from_=ns.from_, out=ns.out, force=bool(ns.force))
+    text = (f"wrote {rec['path']} (a copy of suite {rec['from']}); edit its groups, then `yavih suite show {rec['path']}` "
+            "validates it\n")
+    return Envelope(data=rec, paths={"suite": rec["path"]}, text=text)
+
+
+def cmd_suite_missing(ns: argparse.Namespace) -> Envelope:
+    """``yavih suite missing <name> --model M [<glob>...] [--results DIR]``: per suite ``(benchmark, reading)`` of
+    model M ``done`` / ``missing`` / ``pending``, per join ``done`` / ``join-missing`` / ``join-unknown``, from the
+    DONE-marked results under the globs (default: the runs root) and the results store; exit 0 either way."""
+    from yavih import config as _cfg
+    from yavih.report.index import build_index, runs_root_of
+    from yavih.suites import completeness, completeness_json, load_suite
+
+    suite = load_suite(ns.name)
+    globs = list(ns.globs) or [str(_cfg.runs_root())]
+    records = build_index(globs)
+    live = [r for r in records if not r.get("moved_aside")]
+    root = runs_root_of([Path(r["path"]) for r in live]) or (Path(globs[0]) if not ns.globs else None)
+    results = ns.results
+    if results is None:
+        try:
+            results = _cfg.results_root(root)
+        except _cfg.ConfigError:
+            results = None
+    rows = completeness(suite, records, models=[ns.model], results_root=results, runs_root=root)
+    data = completeness_json(suite, rows, results_root=results)
+    data["model"] = ns.model
+    lines = [f"suite {suite.name} for model {ns.model}: " + ", ".join(f"{k} {v}" for k, v in data["counts"].items())]
+    for r in rows:
+        label = f"{r['benchmark']}:{r['reading']}"
+        note = f" ({r['note']})" if r.get("note") and r["note"] != "join" else ""
+        lines.append(f"  {r['capability']:<14}{label:<24}{r['status']}{note}" + ("" if r.get("required", True) else " [optional]"))
+        if r.get("hint"):
+            lines.append(f"    {r['hint']}")
+    return Envelope(data=data, text="\n".join(lines) + "\n")
 
 
 # ----------------------------------------------------------------------------- parser
@@ -1606,6 +1740,28 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("key", metavar="<bench>.<root>|runs.root|data.root|datasets.<name>|...")
     s.set_defaults(func=cmd_config_get)
 
+    # suite
+    sp = sub.add_parser("suite", parents=[common_r], help="named benchmark sets: list / show / new / missing (yavih.suites)")
+    susub = sp.add_subparsers(dest="subcommand", metavar="<subcommand>")
+    susub.required = True
+    s = susub.add_parser("list", parents=[common_r], help="every suite with its origin (shipped / project)")
+    s.set_defaults(func=cmd_suite_list)
+    s = susub.add_parser("show", parents=[common_r], help="a suite's capabilities, benchmarks, readings and joins")
+    s.add_argument("name", metavar="<name|file.yaml>")
+    s.set_defaults(func=cmd_suite_show)
+    s = susub.add_parser("new", parents=[common_r], help="copy a suite into the project suites directory to edit")
+    s.add_argument("name")
+    s.add_argument("--from", dest="from_", default="default", metavar="SUITE", help="the suite copied (default: default)")
+    s.add_argument("--out", default=None, metavar="DIR|FILE", help="destination (default: <project suites dir>/<name>.yaml)")
+    s.add_argument("--force", action="store_true", help="overwrite an existing destination file")
+    s.set_defaults(func=cmd_suite_new)
+    s = susub.add_parser("missing", parents=[common_nr], help="which suite (benchmark, reading) pairs and joins a model still lacks")
+    s.add_argument("name", metavar="<name|file.yaml>")
+    s.add_argument("globs", nargs="*", metavar="<glob>", help="where the results are (default: the runs root)")
+    s.add_argument("--model", required=True, help="the model NAME (describe()['model'])")
+    s.add_argument("--results", default=None, metavar="DIR", help="results-store root, where joins are found")
+    s.set_defaults(func=cmd_suite_missing)
+
     # skill
     sp = sub.add_parser("skill", parents=[common_r], help="install or show the agent skill")
     ssub = sp.add_subparsers(dest="subcommand", metavar="<subcommand>")
@@ -1628,6 +1784,7 @@ def build_parser() -> argparse.ArgumentParser:
     bsub.required = True
     s = bsub.add_parser("list", parents=[common_r])
     s.add_argument("--fmt", choices=["text", "md"], default="text", help="md: the markdown table the docs embed (no data scan)")
+    s.add_argument("--suite", default=None, metavar="S", help="only the suite's benchmarks, with their capability and readings")
     s.set_defaults(func=cmd_bench_list)
     s = bsub.add_parser("info", parents=[common_r])
     s.add_argument("name")
@@ -1784,12 +1941,21 @@ def build_parser() -> argparse.ArgumentParser:
                    help="call the benchmark folder's probe.py join() over the named readings")
     s.add_argument("--results", default=None, metavar="DIR", help="results-store root for --join / --merge-results")
     s.add_argument("--merge-results", action="store_true", help="merge every model's results_*.json into one results_<timestamp>.json")
+    s.add_argument("--suite", default=None, metavar="S", help="append the suite's completeness per model (done / missing / join-missing)")
     s.set_defaults(func=cmd_report_build)
 
     # plan
     sp = sub.add_parser("plan", parents=[common_r], help="build / status / calibrate / run (--local) unit plans")
     plsub = sp.add_subparsers(dest="subcommand", metavar="<subcommand>")
     plsub.required = True
+    s = plsub.add_parser("init", parents=[common_r], help="write a matrix.yaml skeleton and the bridge stubs for one model on a suite")
+    s.add_argument("--suite", required=True, metavar="S", help="the suite (yavih suite list)")
+    s.add_argument("--model", required=True, help="the model NAME (every bridge of this model uses it; results are filed under it)")
+    s.add_argument("--launcher", required=True, metavar="PYTHON", help="the model environment's python (matrix defaults.launcher)")
+    s.add_argument("--out", default="matrix.yaml", metavar="matrix.yaml", help="the matrix file (default ./matrix.yaml)")
+    s.add_argument("--bridges-dir", default="bridges", metavar="DIR", help="bridge files and profiles, relative to the matrix (default bridges)")
+    s.add_argument("--force", action="store_true", help="overwrite an existing matrix file (bridge files are always kept)")
+    s.set_defaults(func=cmd_plan_init)
     s = plsub.add_parser("build", parents=[common_r])
     s.add_argument("matrix", metavar="<matrix.yaml>")
     s.add_argument("--out", default=None, metavar="plan.jsonl")

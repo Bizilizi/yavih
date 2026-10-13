@@ -4,7 +4,8 @@
 ``(model, reading)`` (``~~value~~`` for greyed rows); csv is the long format of view 2
 (``flag=below_floor``; ``eval_hash``, ``model``, ``reading``, ``describe_sha256`` and
 ``features_fingerprint`` per row); json carries both. ``value (floor)`` and CI per metric; ``mean ± std`` with
-``n_seeds``; ``MISSING`` cells.
+``n_seeds``; ``MISSING`` cells. A suite completeness appendix (``report(suite=...)``) is a trailing md section
+and part of json; csv stays the one long table of view 2 (as for the superseded, join and warning sections).
 stdlib only; renders the duck-typed ``Report`` of :mod:`yavih.report.compare`
 (never imports it, to keep the import graph acyclic)."""
 
@@ -16,8 +17,8 @@ import json
 import math
 from typing import Any
 
-__all__ = ["render", "render_md", "render_csv", "render_json", "render_lm_eval", "LM_EVAL_HEADER", "format_value", "format_number",
-           "format_coverage", "MISSING"]
+__all__ = ["render", "render_md", "render_csv", "render_json", "render_lm_eval", "render_suite_md", "LM_EVAL_HEADER", "format_value",
+           "format_number", "format_coverage", "MISSING"]
 
 #: Columns of the per-model view, in order.
 LM_EVAL_HEADER: tuple[str, ...] = ("benchmark", "reading", "version", "eval_hash", "readout", "metric", "value", "ci95", "floor")
@@ -272,7 +273,44 @@ def render_md(report) -> str:
             where = f" ({w['column']})" if w.get("column") else ""
             out.append(f"- `{w.get('code', 'W')}`{where}: {w.get('message', '')}")
         out.append("")
+    if getattr(report, "suite", None):
+        out.extend(render_suite_md(report.suite))
     return "\n".join(out).rstrip("\n") + "\n"
+
+
+def render_suite_md(suite: dict[str, Any]) -> list[str]:
+    """The trailing ``## Suite completeness: <name>`` section: one row per suite ``(benchmark, reading)`` (a join
+    row reads ``<a+v+av> (join)``), one status column per model, the counts, and the command for every missing
+    join."""
+    out = [f"## Suite completeness: {suite.get('name')}", ""]
+    if suite.get("description"):
+        out += [_md_escape(str(suite["description"])) + f" ({suite.get('origin')})", ""]
+    rows = list(suite.get("rows") or [])
+    models = list(dict.fromkeys(r["model"] for r in rows))
+    if not models:
+        return out + ["_no model in the report_", ""]
+    cells: dict[tuple[str, str, str], dict[str, str]] = {}
+    for r in rows:
+        key = (str(r["capability"]), str(r["benchmark"]), str(r["reading"]))
+        cells.setdefault(key, {})[r["model"]] = str(r["status"]) + (f" ({r['note']})" if r.get("note") and r.get("note") != "join" else "")
+    optional = {(str(r["benchmark"]), str(r["reading"])) for r in rows if not r.get("required", True)}
+    joins = {(str(r["benchmark"]), str(r["reading"])) for r in rows if r.get("note") == "join"}
+    header = ["capability", "benchmark", "reading", *models]
+    out.append("| " + " | ".join(_md_escape(h) for h in header) + " |")
+    out.append("|" + "---|" * len(header))
+    for (cap, bench, rd), by_model in cells.items():
+        label = rd + (" (join)" if (bench, rd) in joins else "") + (" (optional)" if (bench, rd) in optional else "")
+        out.append("| " + " | ".join(_md_escape(c) for c in [cap, bench, label, *(by_model.get(m, "") for m in models)]) + " |")
+    out.append("")
+    counts = suite.get("counts") or {}
+    if counts:
+        out += ["counts: " + ", ".join(f"{k} {v}" for k, v in counts.items()), ""]
+    hints = [(r["model"], r["benchmark"], r["reading"], r["hint"]) for r in rows if r.get("hint")]
+    for model, bench, rd, hint in hints:
+        out.append(f"- {_md_escape(model)} {bench} {rd}: `{hint}`")
+    if hints:
+        out.append("")
+    return out
 
 
 def _render_row_detail(row_key: str, d: dict[str, Any]) -> list[str]:

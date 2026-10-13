@@ -72,7 +72,7 @@ def test_raw_stream_fields_are_read_only(tmp_path):
 def test_cli_help_lists_the_full_command_tree(capsys):
     parser = cli.build_parser()
     sub = next(a for a in parser._actions if a.dest == "command")
-    assert set(sub.choices) == {"doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec", "config"}
+    assert set(sub.choices) == {"doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec", "config", "suite"}
 
     def subs(name):
         p = sub.choices[name]
@@ -87,7 +87,8 @@ def test_cli_help_lists_the_full_command_tree(capsys):
     assert subs("probe") == {"run"}
     assert subs("report") == {"build"}
     assert subs("config") == {"show", "get"}
-    assert subs("plan") == {"build", "status", "calibrate", "run"}  # run --local
+    assert subs("plan") == {"init", "build", "status", "calibrate", "run"}  # run --local
+    assert subs("suite") == {"list", "show", "new", "missing"}
     assert cli.main(["--help"]) == 0
     out = capsys.readouterr().out
     for cmd in ["doctor", "bench", "features", "probe", "report", "plan", "exec"]:

@@ -48,7 +48,7 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih bench list` | every discoverable benchmark: aliases, readout, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan) |
+| `yavih bench list` | every discoverable benchmark: aliases, readout, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their `capability` and `readings` |
 | `yavih bench info` | a benchmark's README plus its hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
 | `yavih bench path` | print the benchmark folder, or the absolute path of one shipped file | `<name> [<what>]` (`what` as for `bench show`) |
 | `yavih bench files` | every shipped file of a folder with absolute path, kind and size | `<name>` |
@@ -62,6 +62,20 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 The folder contract, `benchmark.yaml` and the lint checks are described in
 [benchmark-folder](benchmark-folder.md); writing a new folder in
 [adding-a-benchmark](adding-a-benchmark.md).
+
+## Suites
+
+A suite is a named set of benchmarks and readings grouped by capability; `minimal` and `default` ship with
+yavih ([suites](suites.md)).
+
+| command | purpose | important flags |
+|---|---|---|
+| `yavih suite list` | every suite with its `origin` (`shipped`, `project`; a project suite of a shipped name shadows it) and description | an invalid project file is listed with its error (`W_SUITE_INVALID`) |
+| `yavih suite show` | a suite's capabilities, benchmarks, readings and joins | `<name\|file.yaml>` |
+| `yavih suite new` | copy a suite into the project suites directory to edit | `<name>`; `--from S` (default `default`); `--out DIR\|FILE`; `--force` overwrites |
+| `yavih suite missing` | per suite `(benchmark, reading)` of one model `done`, `missing` or `pending`; per join `done`, `join-missing` (with the `report build --join` command) or `join-unknown`; exit 0 | `<name> [<glob>...] --model M` (globs before the options; default: the runs root); `--results DIR` (where joins are found) |
+
+An unknown suite or a file that does not validate is `E_SUITE` (exit 1).
 
 ## Bridges
 
@@ -93,7 +107,7 @@ feature format is in [features](features.md), the validation codes and waivers i
 | command | purpose | important flags |
 |---|---|---|
 | `yavih probe run` | train and score the benchmark's standardized readout on a run directory; writes `result.json`, `DONE` and the results-store file | `<run_dir>`; `--seeds 0,1,2` (default `0`); `--deadline …`; `--scratch DIR`; `--allow-low-coverage`; `--loader-workers N`; `--bench REF` (when `_meta.json`'s name does not resolve); `--no-validate`; `--waive CODE=reason`; `--log-samples`; `--out DIR` (probe a read-only feature set); `--device cpu\|cuda\|cuda:N`; `--results DIR` or `--no-results` |
-| `yavih report build` | comparability-checked tables with floors | `<glob>...`; `--fmt md\|csv\|json`; `--out PATH`; `--seeds aggregate\|list`; `--allow-coverage-diff`; `--detail`; `--join BENCH READING=RUN ...`; `--results DIR`; `--merge-results` |
+| `yavih report build` | comparability-checked tables with floors | `<glob>...`; `--fmt md\|csv\|json`; `--out PATH`; `--seeds aggregate\|list`; `--allow-coverage-diff`; `--detail`; `--join BENCH READING=RUN ...`; `--results DIR`; `--merge-results`; `--suite S` (a completeness appendix per model, md and json) |
 
 `probe run` first validates every split (skip with `--no-validate`). Its `<run_dir>` is
 `<runs root>/<bench>/<model>/<reading>`; any other layout needs `--results` or a configured results
@@ -103,6 +117,7 @@ root, else `E_RESULTS_ROOT` (exit 1). See [readouts](readouts.md) and [results](
 
 | command | purpose | important flags |
 |---|---|---|
+| `yavih plan init` | write a `matrix.yaml` skeleton (one entry per suite `(benchmark, reading)`) and one bridge stub per benchmark for one model; prints the `bridge check` command of every entry, then `plan build` | `--suite S --model M --launcher PYTHON`; `--out matrix.yaml`; `--bridges-dir bridges` (relative to the matrix); `--force` overwrites the matrix (bridge files are always kept) |
 | `yavih plan build` | turn a `matrix.yaml` into unit records (`plan.jsonl`) | `<matrix.yaml>`; `--out plan.jsonl` (else JSONL on stdout); `--pending` (only units whose DONE is missing or stale); `--kind extract\|probe\|report`; `--shard-minutes M`; `--format jsonl\|count` |
 | `yavih plan status` | count units by status and list those that need attention | `<plan.jsonl>`; `--root DIR` |
 | `yavih plan run` | run every pending unit of a plan on this machine, dependencies first | `<plan.jsonl> --local` (required); `--slots K` (default 1); `--deadline …`; `--deadline-margin 900`; `--root DIR`; `--cpus N`; `--deps plan.jsonl` |
@@ -169,7 +184,7 @@ All commands use the same codes; a scheduler or driver loop can act on them with
 | code | meaning | action |
 |---|---|---|
 | 0 | done, skipped, or `not_applicable` recorded; also `--help` and `--version` | none |
-| 1 | usage or configuration error: bad arguments, an invalid config, unknown `--arg`, bad `matrix.yaml` or profile, bad `--deadline`, a unit from a plan older than the split's frozen layout (`E_LAYOUT`); `exec` status `misconfigured` | fix, then resubmit |
+| 1 | usage or configuration error: bad arguments, an invalid config, unknown `--arg`, bad `matrix.yaml`, profile or suite file, bad `--deadline`, a unit from a plan older than the split's frozen layout (`E_LAYOUT`); `exec` status `misconfigured` | fix, then resubmit |
 | 2 | contract violation: validation errors, hash mismatch, describe schema, a failed invariance check, lint errors | fix the bridge or the data |
 | 3 | not ready: data missing, a dependency's DONE missing, decoder or external package missing, scratch too small, the shard claimed by another live task (`E_SHARD_CLAIMED`) | resubmit later |
 | 4 | deadline reached, SIGTERM / SIGUSR1 / SIGINT received, or the shard's claim taken over while writing (`E_CLAIM_LOST`); nothing partial left behind; resumable | resubmit |
@@ -216,6 +231,8 @@ Codes of plans and execution:
 
 | code | exit | meaning |
 |---|---|---|
+| `E_SUITE` | 1 | an unknown suite, or a suite file that does not parse or validate ([suites](suites.md)) |
+| `E_EXISTS` | 1 | `plan init` / `suite new` / `bridge new`: the destination exists (pass `--force`) |
 | `E_MATRIX` | 1 | malformed `matrix.yaml` (unknown key, wrong type, missing entry key) |
 | `E_PROFILE` | 1 | a profile missing, malformed, disagreeing with its entry or without passed hard checks |
 | `E_PLAN` | 1 | a plan cannot be built or read (two entries on one run directory, a frozen layout contradicting a `shards` pin, an older or newer plan schema, duplicate ids) |
