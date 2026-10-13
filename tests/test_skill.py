@@ -22,7 +22,7 @@ SKILL_MD = SKILL_ROOT / "SKILL.md"
 REFERENCES = ("bridge", "data", "readouts", "slurm", "cli")
 # the skill's step table: "<i> <step>" in the first column
 STEPS = ("install", "setup.md", "prepare", "bridge", "smoke", "extract", "validate", "probe", "report")
-GROUPS = ("doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec")
+GROUPS = ("doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec", "suite")
 # the operational rules that follow the guardrail checklist, carried verbatim (whitespace-normalized)
 OPERATIONAL_RULES = (
     "Install with `--no-deps`; never let pip touch the model env's torch; install original-author packages "
@@ -195,15 +195,31 @@ def test_shipped_skill_cites_nothing_an_installed_user_cannot_open():
             if "github.com/Bizilizi/yavih" not in line:
                 assert not UNOPENABLE.search(line), f"{name}: {line.strip()[:140]!r}"
 
+def test_contributing_hook_links_the_doc():
+    """SKILL.md "Contributing a benchmark": at most six lines naming the clone, ``yavih bench new``, the contributing
+    guide and the required trial run, both by GitHub URL (the wheel ships no docs/), and both pages exist."""
+    section = _section(SKILL_MD.read_text(encoding="utf-8"), "Contributing a benchmark")
+    lines = [ln for ln in section.splitlines() if ln.strip()]
+    assert 1 <= len(lines) <= 6, lines
+    text = _norm(section)
+    url = "https://github.com/Bizilizi/yavih/blob/main/"
+    for page in ("docs/contributing-a-benchmark.md", "docs/trial-run.md"):
+        assert url + page in text, page
+        assert (REPO / page).is_file() or not (REPO / "docs").is_dir(), page
+    for n in ("https://github.com/Bizilizi/yavih ", "yavih bench new", "required"):
+        assert n in text, n
+    assert "## Contributing a benchmark" in SKILL_MD.read_text(encoding="utf-8").split("## References", 1)[0]
+
+
 def test_exploring_a_benchmark_block_runs():
     """Every command of the "Exploring a benchmark" block works on a packaged benchmark (no checkout needed)."""
     skill = SKILL_MD.read_text(encoding="utf-8")
     block = skill[skill.index("Exploring a benchmark:"):]
     block = block[block.index("```bash") + 7: block.index("```", block.index("```bash") + 7)]
-    for cmd in ("bench list", "bench files <b>", "bench show <b> setup", "bench show <b> readme|yaml|probe",
+    for cmd in ("suite list", "bench list", "bench files <b>", "bench show <b> setup", "bench show <b> readme|yaml|probe",
                 "bench show <b> prepare/<file>", "bench prepare <b> [<step>]", "bench path <b> [<file>]", "skill show --ref"):
         assert f"yavih {cmd}" in block, cmd
-    for argv in (["bench", "list"], ["bench", "files", "esc50"], ["bench", "show", "esc50", "setup"],
+    for argv in (["suite", "list"], ["bench", "list"], ["bench", "files", "esc50"], ["bench", "show", "esc50", "setup"],
                  ["bench", "show", "esc50", "readme"], ["bench", "show", "esc50", "yaml"], ["bench", "show", "avsync", "probe"],
                  ["bench", "show", "esc50", "prepare/01_download.sh"], ["bench", "prepare", "esc50"],
                  ["bench", "path", "esc50", "prepare/01_download.sh"], ["skill", "show", "--ref", "bridge"]):
@@ -454,12 +470,13 @@ def _yaml_blocks(text: str) -> list[str]:
     return re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
 
 
-@pytest.mark.parametrize("doc", ["SKILL.md", "README.md"])
+@pytest.mark.parametrize("doc", ["references/slurm.md", "README.md"])
 def test_matrix_examples_parse_with_plan_build(tmp_path, doc):
-    """The ``matrix.yaml`` examples of SKILL.md and README.md are accepted by ``plan build``'s parser."""
+    """The ``matrix.yaml`` examples of the skill (``references/slurm.md`` "matrix.yaml", which SKILL.md points to) and
+    README.md are accepted by ``plan build``'s parser."""
     from yavih.plan.matrix import load_matrix
 
-    path = SKILL_MD if doc == "SKILL.md" else REPO / "README.md"
+    path = SKILL_ROOT / doc if doc.startswith("references/") else REPO / doc
     if not path.is_file():
         pytest.skip(f"{doc} not available")
     blocks = [b for b in _yaml_blocks(path.read_text(encoding="utf-8")) if "schema_version" in b and "bridges:" in b]
