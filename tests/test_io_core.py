@@ -348,6 +348,22 @@ def test_tar_is_deterministic_and_stock_readable(tmp_path):
     assert {n.split(".")[0] for n in names} == {f"{r:09d}" for r in range(8)}
 
 
+def test_writer_tar_bytes_identical_with_large_copybuf(tmp_path, monkeypatch):
+    """The 8 MiB file buffer and tar copy buffer change how the bytes reach the file, never which bytes: a member
+    larger than the buffer (copied in several chunks) gives the same tar as stdlib-default buffers."""
+    from yavih.io import writer as writer_mod
+
+    D = (9 << 20) // 2 + 3  # fp16: one member is 9 MiB + 6 B, more than one copy buffer
+    big = write_split(tmp_path / "big", n_rows=2, n_shards=1, N=1, D=D)
+    monkeypatch.setattr(writer_mod, "WRITE_BUFFER_BYTES", io.DEFAULT_BUFFER_SIZE)
+    small = write_split(tmp_path / "small", n_rows=2, n_shards=1, N=1, D=D)
+    ta, tb = (big / "shard-000000.tar").read_bytes(), (small / "shard-000000.tar").read_bytes()
+    assert len(ta) > writer_mod.WRITE_BUFFER_BYTES
+    assert hashlib.sha256(ta).hexdigest() == hashlib.sha256(tb).hexdigest()
+    sa, sb = read_sidecar(big / "shard-000000.json"), read_sidecar(small / "shard-000000.json")
+    assert sa["tar"] == sb["tar"] and sa["members"] == sb["members"]
+
+
 def test_sidecar_fields_present_and_offsets_memmappable(tmp_path):
     split_dir = write_split(tmp_path / "run", n_rows=10, n_shards=2, missing={3}, canaries=2, bench=FakeBench(data_status_ok=True))
     sc = read_sidecar(split_dir / "shard-000001.json")

@@ -58,6 +58,10 @@ __all__ = ["FeatureWriter", "FP16_MAX_ABS", "split_dir_for"]
 #: float16 saturation guard: a value above this is refused with a hint to use float32.
 FP16_MAX_ABS: float = 1e4
 
+#: Write buffer of the tmp tar and the tar's member copy buffer (bytes): a large clip's ``.feat.npy`` reaches the
+#: file in a few large writes instead of 16 KiB ones. Buffering never changes the bytes written.
+WRITE_BUFFER_BYTES: int = 8 << 20
+
 
 def split_dir_for(out_dir: str | os.PathLike, split: str) -> Path:
     """``<out_dir>/features/<split>`` — unless ``out_dir`` already IS that split directory
@@ -192,11 +196,11 @@ class FeatureWriter:
         # file, and neither can rename the other's partial tar into place
         self.tmp_path = self.split_dir / writer_tmp_name(self.tar_path.name)
         self.split_dir.mkdir(parents=True, exist_ok=True)
-        self._raw = open(self.tmp_path, "xb")
+        self._raw = open(self.tmp_path, "xb", buffering=WRITE_BUFFER_BYTES)
         self._hf = _HashingFile(self._raw)
         # USTAR: fixed 512-byte headers, names < 100 chars, sizes < 8 GiB — the most portable and the
         # most predictable layout (every member's data starts exactly one block after its header).
-        self._tar = tarfile.open(fileobj=self._hf, mode="w", format=tarfile.USTAR_FORMAT)
+        self._tar = tarfile.open(fileobj=self._hf, mode="w", format=tarfile.USTAR_FORMAT, copybufsize=WRITE_BUFFER_BYTES)
 
     # ------------------------------------------------------------------ members
 
