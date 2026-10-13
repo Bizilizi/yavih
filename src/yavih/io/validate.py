@@ -8,7 +8,9 @@ The validator reads the tars itself with stdlib ``tarfile`` instead of going thr
 validation is to check that trust (member set, offsets, shapes, dtype, finiteness) before any
 probe memmaps the shards. Streaming one pass over every member is what makes ``E_FINITE`` and the
 per-member rule checks "over all members" affordable; the sampled checks (dead rows, duplicates,
-eligibility) use one seeded draw so verdicts are reproducible on every host.
+eligibility) use one seeded draw so verdicts are reproducible on every host. Shards are scanned concurrently
+(``YAVIH_VALIDATE_WORKERS``), each on private state, and merged in shard order: the report is the same whatever
+the number of workers.
 
 Token positions are in MEDIA coordinates (``t`` = fraction of the stream's duration, ``(y, x)``
 = fraction of the ORIGINAL frame). Each ``.json`` member carries the media facts (``media``, copied
@@ -24,6 +26,7 @@ null media fact kept from being evaluated; ``W_WEIGHTS_UNFINGERPRINTED`` records
 
 from __future__ import annotations
 
+import collections
 import hashlib
 import io
 import json
@@ -34,6 +37,7 @@ import socket
 import tarfile
 import time
 from collections.abc import Iterator, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,6 +101,8 @@ __all__ = [
     "rules_line",
     "custom_rules",
     "custom_rule_message",
+    "validate_workers",
+    "VALIDATE_WORKERS_ENV",
 ]
 
 LEVELS: frozenset[str] = frozenset({"error", "warning", "note"})
@@ -141,6 +147,8 @@ CODES: dict[str, str] = {
     "W_SOURCE_SHA": "warning",  # sidecars of one split were written by different bridge FILES (same describe)
 }
 
+#: Threads scanning shards concurrently (``validate_workers``); ``1`` = one shard after the other.
+VALIDATE_WORKERS_ENV = "YAVIH_VALIDATE_WORKERS"
 #: ``.tmp`` older than this is ``W_STALE_TMP``, younger counts as "in progress".
 STALE_TMP_SECONDS: float = 36 * 3600.0
 #: ``E_DEAD_ROWS``: variance below this fraction of the mean token variance.
@@ -938,15 +946,23 @@ class _EligSpec:
 
 class _Stats:
     """Accumulators of the single streaming pass (the checks that need every member or the
-    seeded sample). All tensors are ``[N, D]`` float64 so fp16 inputs do not lose the variance."""
+    seeded sample). All tensors are ``[N, D]`` float64 so fp16 inputs do not lose the variance.
 
-    def __init__(self, N: int, D: int, sampled: set[int], elig: _EligSpec) -> None:
+    ``deferred=True`` is a shard's partial (``_scan_shard_isolated``): the order-sensitive accumulations (the
+    float64 ``sum`` / ``sumsq`` over sampled rows, the per-row eligibility) are queued and run by :meth:`merge` into
+    the split's accumulator in shard order, so a parallel scan accumulates exactly what a serial one does, in the same
+    order, bit for bit."""
+
+    def __init__(self, N: int, D: int, sampled: set[int] | frozenset[int], elig: _EligSpec, *, deferred: bool = False) -> None:
         self.N, self.D = N, D
         self.sampled = sampled
         self.elig = elig
+        self.deferred = deferred
         self.n_sampled_seen = 0
-        self.sum = np.zeros((N, D), dtype=np.float64)
-        self.sumsq = np.zeros((N, D), dtype=np.float64)
+        self.sum: np.ndarray | None = None if deferred else np.zeros((N, D), dtype=np.float64)
+        self.sumsq: np.ndarray | None = None if deferred else np.zeros((N, D), dtype=np.float64)
+        self._sampled_queue: list[np.ndarray] = []  # deferred: sampled rows in scan order (stored dtype)
+        self._elig_queue: list[tuple[int, Mapping[str, Any], np.ndarray]] = []  # deferred: row_eligibility calls
         self.max_abs = 0.0
         self.n_values = 0
         self.n_zero = 0
@@ -971,16 +987,46 @@ class _Stats:
         self.n_values += arr.size
         self.n_zero += int(np.count_nonzero(arr == 0))
         if arr.size:
-            self.max_abs = max(self.max_abs, float(np.abs(arr.astype(np.float32, copy=False)).max()))
+            # |x| and max are exact in the stored dtype (fp16 included): no float32 copy
+            self.max_abs = max(self.max_abs, float(np.abs(arr).max()))
             # "all tokens identical" is only informative with N > 1; an all-zero clip always is.
             if (arr.shape[0] > 1 and bool((arr == arr[0]).all())) or not bool(arr.any()):
                 self.constant_clips.append((row, clip_id, media_key))
         if row in self.sampled:
-            f64 = arr.astype(np.float64)
-            self.sum += f64
-            self.sumsq += f64 * f64
-            self.n_sampled_seen += 1
+            if self.deferred:
+                self._sampled_queue.append(arr)
+            else:
+                self._accumulate(arr)
             self.dup_hash[row] = (hashlib.sha256(arr.tobytes()).hexdigest(), media_key)
+
+    def _accumulate(self, arr: np.ndarray) -> None:
+        assert self.sum is not None and self.sumsq is not None
+        f64 = arr.astype(np.float64)
+        self.sum += f64
+        self.sumsq += f64 * f64
+        self.n_sampled_seen += 1
+
+    def merge(self, part: _Stats) -> None:
+        """Fold a shard's deferred partial into this (split) accumulator. Called in shard order, it reproduces the
+        serial pass: lists extend, sets union, ``max_abs`` max (exact), ``dup_hash`` update (a later shard's
+        duplicate row overwrites, as in one pass), counts add, and the queued sampled rows and eligibility calls run
+        here in their scan order."""
+        self.present_rows.extend(part.present_rows)
+        self.clip_ids.extend(part.clip_ids)
+        self.bytes += part.bytes
+        self.n_values += part.n_values
+        self.n_zero += part.n_zero
+        self.max_abs = max(self.max_abs, part.max_abs)
+        self.constant_clips.extend(part.constant_clips)
+        for arr in part._sampled_queue:
+            self._accumulate(arr)
+        self.dup_hash.update(part.dup_hash)
+        self.canary_pairs.extend(part.canary_pairs)
+        self.canary_mismatch.extend(part.canary_mismatch)
+        self.pos_streams |= part.pos_streams
+        self.pos_axes |= part.pos_axes
+        for row, meta, p in part._elig_queue:
+            self.row_eligibility(row, meta, p)
 
     def pos_summary(self, p: np.ndarray) -> None:
         s = p[:, 0]
@@ -992,7 +1038,12 @@ class _Stats:
 
     def row_eligibility(self, row: int, meta: Mapping[str, Any], p: np.ndarray) -> None:
         """Per sampled row: grid/box cell coverage of the target region and seq scored seconds."""
-        if row not in self.sampled or row in self._elig_rows or not (p.ndim == 2 and p.shape[1] == 4):
+        if row not in self.sampled or not (p.ndim == 2 and p.shape[1] == 4):
+            return
+        if self.deferred:
+            self._elig_queue.append((row, meta, p))  # run by merge(), where a row seen in an earlier shard is skipped
+            return
+        if row in self._elig_rows:
             return
         self._elig_rows.add(row)
         self.pos_summary(p)
@@ -1050,7 +1101,7 @@ def _sha256_file(path: Path) -> str:
 class _ScanCtx:
     """Fixed per-split inputs of ``_scan_shard``."""
 
-    fx: _Findings
+    fx: _Findings | _Recorder
     N: int
     D: int
     dtype: np.dtype
@@ -1061,6 +1112,119 @@ class _ScanCtx:
     verify_sha: bool
     pos_blobs: dict[int, tuple[str, str]]
     unchecked: dict[str, int] = field(default_factory=dict)  # stream -> members whose checkable rule needed a null fact
+
+
+class _Recorder:
+    """A shard scan's findings, recorded in ``add`` order and replayed into the split's ``_Findings`` (caps,
+    waivers) in shard order by :func:`_merge_scan`."""
+
+    def __init__(self) -> None:
+        self.findings: list[tuple[str, str, str | None]] = []
+
+    def add(self, code: str, message: str, where: str | None = None) -> None:
+        self.findings.append((code, message, where))
+
+
+@dataclass(frozen=True)
+class _ScanStatic:
+    """The split-level, read-only inputs of one shard scan (shared by every scan of the split; picklable)."""
+
+    N: int
+    D: int
+    dtype: np.dtype
+    pos_mode: str
+    describe: dict
+    kinds: dict[str, str]
+    verify_sha: bool
+    sampled: frozenset[int]
+    elig: _EligSpec
+
+
+@dataclass
+class _ShardScan:
+    """What one shard's scan produced: the recorded findings, the deferred ``_Stats`` partial, the constant-pos blob
+    shas and the per-stream unchecked-rule counts."""
+
+    index: int
+    findings: list[tuple[str, str, str | None]]
+    stats: _Stats
+    pos_blob: tuple[str, str] | None
+    unchecked: dict[str, int]
+
+
+def _scan_shard_isolated(sh: _Shard, static: _ScanStatic) -> _ShardScan:
+    """``_scan_shard`` on private state: a pure function of the shard's files and ``static``, safe to run for several
+    shards at once (threads; inputs and result are picklable). :func:`_merge_scan` folds the results into the split's
+    findings and stats in shard order."""
+    rec = _Recorder()
+    part = _Stats(static.N, static.D, static.sampled, static.elig, deferred=True)
+    blobs: dict[int, tuple[str, str]] = {}
+    unchecked: dict[str, int] = {}
+    ctx = _ScanCtx(fx=rec, N=static.N, D=static.D, dtype=static.dtype, pos_mode=static.pos_mode, describe=static.describe,
+                   kinds=static.kinds, stats=part, verify_sha=static.verify_sha, pos_blobs=blobs, unchecked=unchecked)
+    _scan_shard(sh, ctx)
+    return _ShardScan(index=sh.index, findings=rec.findings, stats=part, pos_blob=blobs.get(sh.index), unchecked=unchecked)
+
+
+def _merge_scan(scan: _ShardScan, fx: _Findings, stats: _Stats, pos_blobs: dict[int, tuple[str, str]], unchecked: dict[str, int]) -> None:
+    """Replay one shard's findings into ``fx`` (in their order: caps and waivers apply as in one pass) and fold its
+    stats, pos blob and unchecked counts into the split's."""
+    for code, message, where in scan.findings:
+        fx.add(code, message, where)
+    stats.merge(scan.stats)
+    if scan.pos_blob is not None:
+        pos_blobs[scan.index] = scan.pos_blob
+    for sname, k in scan.unchecked.items():
+        unchecked[sname] = unchecked.get(sname, 0) + k
+
+
+def validate_workers(shards: list[_Shard] | None = None, env: Mapping[str, str] | None = None) -> int:
+    """Threads scanning shards concurrently: ``YAVIH_VALIDATE_WORKERS`` (``1`` = one shard after the other), else
+    ``min(n_shards, CPUs, RAM budget // largest shard tar)`` (a shard scan holds its tar's features in memory; CPUs as
+    ``yavih.resources`` derives them: SLURM, affinity, cgroup). The report never depends on it."""
+    from yavih import resources
+
+    e = os.environ if env is None else env
+    raw = e.get(VALIDATE_WORKERS_ENV)
+    if raw is not None and str(raw).strip() != "":
+        try:
+            n = int(str(raw).strip())
+        except ValueError as err:
+            raise ValueError(f"{VALIDATE_WORKERS_ENV}={raw!r} is not an integer") from err
+        if n < 1:
+            raise ValueError(f"{VALIDATE_WORKERS_ENV}={raw!r} must be >= 1")
+        return n
+    shards = shards or []
+    n = min(max(1, len(shards)), resources.available_cpus(env))
+    largest = max((int((s.sidecar.get("tar") or {}).get("bytes") or 0) for s in shards), default=0)
+    if largest > 0:
+        n = min(n, max(1, resources.ram_budget_bytes(env) // largest))
+    return max(1, n)
+
+
+def _scan_shards(shards: list[_Shard], static: _ScanStatic, workers: int, fx: _Findings, stats: _Stats,
+                 pos_blobs: dict[int, tuple[str, str]], unchecked: dict[str, int]) -> None:
+    """Scan ``shards`` (``workers`` at a time) and merge each result in shard order; at most ``2 × workers`` results
+    wait for their merge. ``workers == 1`` scans inline. Both paths run the same isolate-then-merge steps, so the
+    report is identical whatever ``workers`` is."""
+    todo = [sh for sh in shards if sh.tar_path is not None]
+    if workers <= 1 or len(todo) <= 1:
+        for sh in todo:
+            _merge_scan(_scan_shard_isolated(sh, static), fx, stats, pos_blobs, unchecked)
+        return
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="yavih-validate") as pool:
+        ahead: collections.deque = collections.deque()
+        nxt = 0
+        try:
+            while nxt < len(todo) or ahead:
+                while nxt < len(todo) and len(ahead) < 2 * workers:
+                    ahead.append(pool.submit(_scan_shard_isolated, todo[nxt], static))
+                    nxt += 1
+                _merge_scan(ahead.popleft().result(), fx, stats, pos_blobs, unchecked)
+        except BaseException:
+            for fut in ahead:
+                fut.cancel()
+            raise
 
 
 def _scan_shard(sh: _Shard, ctx: _ScanCtx) -> None:
@@ -1837,11 +2001,9 @@ def validate_features(
     pos_blobs: dict[int, tuple[str, str]] = {}
     unchecked_rows: dict[str, int] = {}
     if N >= 1 and D >= 1:
-        ctx = _ScanCtx(fx=fx, N=N, D=D, dtype=np.dtype(dtype_name), pos_mode=pos_mode, describe=describe, kinds=kinds,
-                       stats=stats, verify_sha=verify_sha, pos_blobs=pos_blobs, unchecked=unchecked_rows)
-        for sh in shards:
-            if sh.tar_path is not None:
-                _scan_shard(sh, ctx)
+        static = _ScanStatic(N=N, D=D, dtype=np.dtype(dtype_name), pos_mode=pos_mode, describe=describe, kinds=kinds,
+                             verify_sha=verify_sha, sampled=frozenset(sampled), elig=espec)
+        _scan_shards(shards, static, validate_workers(shards), fx, stats, pos_blobs, unchecked_rows)
     # a declared checkable rule that could not be evaluated on some rows (a fact it needs is null there)
     for sname, k_rows in sorted(unchecked_rows.items()):
         if sname in rc:

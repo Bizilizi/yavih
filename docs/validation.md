@@ -82,6 +82,7 @@ neither). At most 20 findings per code are kept; the 21st becomes one "further f
 10. **Cheap re-run** on a finalized split (see below); when it applies, validation stops here.
 11. **Streaming pass** over every tar: `E_TAR_SHA` (with `verify_sha`), `E_MEMBERS`, `E_ROWS`,
     `E_TIMES_OUT_OF_MEDIA`, `E_RULE_MISMATCH`, `E_FINITE`, `E_POS_SHAPE`, `E_POS_RANGE`, and the canary pairs.
+    Shards are scanned in parallel (below); the findings are reported in shard order.
 12. `W_RULE_UNCHECKED`; `E_ROWS` for rows written in more than one shard; `E_POS_SHAPE` for a `_pos.npy` that
     differs across shards.
 13. **Batch invariance**: `E_BATCH_INVARIANCE` or `N_CANARY_DRIFT`.
@@ -92,6 +93,16 @@ neither). At most 20 findings per code are kept; the 21st becomes one "further f
     the eligibility block whatever its verdict, and only when its content changed. When the split fails and an
     earlier `_meta.json` says `ok`, that file's `validation`, `eligibility` and `waived` blocks are replaced by the
     failing verdict, so the probe refuses the split.
+
+### Parallel scan
+
+The streaming pass scans several shards at once: `YAVIH_VALIDATE_WORKERS` threads, by default
+`min(shards, CPUs, RAM budget / largest shard tar)` (CPUs as SLURM, the affinity mask or the cgroup allow; a shard
+scan holds its tar's features in memory). `YAVIH_VALIDATE_WORKERS=1` scans one shard after the other. Each shard is
+scanned on private state and the results are merged in shard order: findings are replayed in order through the
+per-code cap and the waivers, and the order-sensitive sums (the float64 `sum` / `sumsq` over the sampled rows behind
+`E_DEAD_ROWS`, the per-row eligibility measurements) run during the merge in scan order. The report and `_meta.json`
+are therefore the same, byte for byte, whatever the number of workers.
 
 ### Cheap re-run
 

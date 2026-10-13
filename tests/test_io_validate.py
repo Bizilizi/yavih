@@ -1390,6 +1390,135 @@ def test_W_SOURCE_SHA_when_shards_come_from_different_bridge_files(split_dir: Pa
 # ============================================================================= finalize
 
 
+# ============================================================================= parallel shard scan
+
+
+def _nan_every_fifth(row, cid, N, D):
+    f = default_feat(row, cid, N, D)
+    if row % 5 == 0:
+        f[0, 1] = np.nan
+    return f
+
+
+def _per_row_grid(shard: int, row: int) -> np.ndarray:
+    return grid_pos(1, 4, 4, t_centres=[-1.0], region=(0.0, 0.0, 1.0, 0.3 + 0.7 * ((row % 4) / 3)))
+
+
+_HALF_SHORT = lambda row: {"video": dict(VIDEO_MEDIA, duration_s=5.0 if row % 2 else 10.0)}  # noqa: E731
+_U8 = make_describe(pos_mode="per_sample", inp={"video": video_input(temporal={"rule": "uniform", "n": 8, "span": "full"})})
+_LIN = make_describe(inp={"video": video_input(temporal={"rule": "index_linspace", "n": 4})})
+_BAD_TIMES = lambda row, m: {"video": {"times": [0.0, 1.0, 2.0, 3.0 + 9.0 * (row % 3 == 0)]}}  # noqa: E731
+
+#: (fixture kwargs, bench kwargs, validate kwargs): multi-shard sets with findings past the per-code cap, waivers (describe
+#: and operator), canaries, missing and twice-written rows, constant and per-sample pos, eligibility, unchecked rules.
+_PARALLEL_CASES: dict[str, tuple[dict, dict, dict]] = {
+    "clean_missing_canaries": (dict(n_rows=48, n_shards=4, missing=(3, 17, 30, 47), canaries=1), dict(n_rows={"train": 48}), {}),
+    "capped_findings": (dict(n_rows=96, n_shards=4, feat_fn=_nan_every_fifth, used_fn=_BAD_TIMES), dict(n_rows={"train": 96}), {}),
+    "waived_capped": (dict(n_rows=96, n_shards=5, used_fn=_BAD_TIMES, describe=make_describe(waive={"E_RULE_MISMATCH": "fixed window"})),
+                      dict(n_rows={"train": 96}), dict(waive={"E_TIMES_OUT_OF_MEDIA": "reads past the end"})),
+    "canary_drift_f32": (dict(n_rows=48, n_shards=3, canaries=2, canary_noise=1e-7, dtype="float32", describe=make_describe(dtype="float32")),
+                         dict(n_rows={"train": 48}), {}),
+    "canary_errors": (dict(n_rows=48, n_shards=3, canaries=2, canary_noise=0.1,
+                           canary_used_fn=lambda row, used: {"video": {"times": [t + 0.04 for t in used["video"]["times"]]}}),
+                      dict(n_rows={"train": 48}), {}),
+    "duplicates_constant": (dict(n_rows=40, n_shards=4, feat_fn=lambda row, cid, N, D: default_feat(row % 3, "x", N, D) * (row % 7 != 0)),
+                            dict(n_rows={"train": 40}), dict(sample_rows=17)),
+    "dead_rows_waived_star": (dict(n_rows=48, n_shards=4, feat_fn=_feat_dead, describe=make_describe(waive={"*": "register tokens"})),
+                              dict(n_rows={"train": 48}), {}),
+    "fp16_range": (dict(n_rows=36, n_shards=3, feat_fn=lambda row, cid, N, D: default_feat(row, cid, N, D) * (1000.0 + row * 37.0)),
+                   dict(n_rows={"train": 36}), {}),
+    "rows_twice_and_missing": (dict(n_rows=32, n_shards=4, duplicate_rows=(5, 21), missing=(9,)), dict(n_rows={"train": 32}), {}),
+    "const_pos_differs": (dict(n_rows=32, n_shards=4, pos=lambda shard, row: grid_pos(1, 2, 2) * (1.0 if shard % 2 == 0 else 0.5)),
+                          dict(n_rows={"train": 32}), {}),
+    "seq_per_sample_pos": (dict(n_rows=48, n_shards=4, N=8, pos_mode="per_sample", pos=lambda shard, row: grid_pos(8, 1, 1), describe=_U8,
+                                media_fn=_HALF_SHORT, used_fn=_uniform_used(8)), dict(n_rows={"train": 48}, **SEQ_BENCH), dict(sample_rows=20)),
+    "grid_per_sample_pos": (dict(n_rows=40, n_shards=4, N=16, pos_mode="per_sample", pos=_per_row_grid,
+                                 describe=make_describe(pos_mode="per_sample", streams=("image",), inp=IMG_DESC["input"]),
+                                 media_fn=lambda row: {"image": dict(IMG_MEDIA)}, used_fn=lambda row, m: {"image": {}}),
+                            dict(GRID_BENCH, n_rows={"train": 40}), {}),
+    "unchecked_rule": (dict(n_rows=48, n_shards=4, describe=_LIN, pos=grid_pos(4, 1, 1, t_centres=[0.0, 0.332, 0.664, 0.996]),
+                            media_fn=lambda row: {"video": dict(VIDEO_MEDIA, n_frames=None) if row % 3 else dict(VIDEO_MEDIA)},
+                            used_fn=lambda row, m: {"video": {"times": [0.0, 3.32, 6.64, 9.96]}}), dict(n_rows={"train": 48}), dict(verify_sha=True)),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_PARALLEL_CASES))
+def test_parallel_scan_report_equals_serial(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str) -> None:
+    """Shards scanned by 4 threads give the report of the one-shard-at-a-time scan, byte for byte: every scan runs on
+    private state and is merged in shard order (findings replayed through the caps and waivers, stats folded)."""
+    import threading
+
+    from yavih.io import validate as v
+
+    spec_kw, bench_kw, val_kw = _PARALLEL_CASES[case]
+    split_dir = tmp_path / "run" / "features" / "train"
+    write_features(split_dir, **spec_kw)
+    threads: list[str] = []
+    real = v._scan_shard_isolated
+
+    def spy(sh, static):
+        threads.append(threading.current_thread().name)
+        return real(sh, static)
+
+    monkeypatch.setattr(v, "_scan_shard_isolated", spy)
+    reports = {}
+    for workers in (1, 4):
+        monkeypatch.setenv("YAVIH_VALIDATE_WORKERS", str(workers))
+        threads.clear()
+        reports[workers] = json.dumps(validate_features(split_dir, bench=FakeBench(**bench_kw), write_meta=False, **val_kw).to_json(), sort_keys=True)
+        assert threads and all(t.startswith("yavih-validate") == (workers > 1) for t in threads)
+    assert reports[1] == reports[4]
+    rep = json.loads(reports[4])
+    assert rep["coverage"]["present"] > 0
+
+
+def test_scan_shard_isolated_is_picklable(split_dir: Path) -> None:
+    """A shard scan's inputs and result pickle (a process pool could run it), and the result folds into the split's
+    accumulators exactly like a scan that never left the process."""
+    import pickle
+
+    from yavih.io import validate as v
+
+    write_features(split_dir, n_rows=24, n_shards=2, canaries=1, pos_mode="per_sample", pos=_per_row_grid,
+                   describe=make_describe(pos_mode="per_sample"))
+    sidecars = sorted(split_dir.glob("shard-*.json"))
+    shards = [v._Shard(index=i, sidecar_path=p, sidecar=json.loads(p.read_text()), tar_path=p.with_suffix(".tar")) for i, p in enumerate(sidecars)]
+    describe = shards[0].sidecar["bridge"]["describe"]
+    static = v._ScanStatic(N=4, D=8, dtype=np.dtype("float16"), pos_mode="per_sample", describe=describe, kinds={"video": "video"},
+                           verify_sha=True, sampled=frozenset(range(0, 24, 2)), elig=v._EligSpec(grid_hw=(2, 2)))
+    assert pickle.loads(pickle.dumps(static)) == static
+    scan = v._scan_shard_isolated(shards[1], static)
+    back = pickle.loads(pickle.dumps(scan))
+    assert back.index == 1 and back.findings == scan.findings and back.pos_blob == scan.pos_blob
+
+    def folded(s):
+        fx, st, blobs, unchecked = v._Findings(), v._Stats(4, 8, set(static.sampled), static.elig), {}, {}
+        v._merge_scan(s, fx, st, blobs, unchecked)
+        return ([f.to_json() for f in fx.errors + fx.warnings + fx.notes], st.present_rows, st.clip_ids, st.max_abs, st.n_sampled_seen,
+                st.sum.tolist(), st.sumsq.tolist(), st.dup_hash, st.cell_cov, sorted(st.pos_axes), st.canary_pairs, blobs, unchecked)
+
+    assert folded(back) == folded(scan)
+    assert folded(scan)[4] == len([r for r in range(12, 24) if r % 2 == 0])
+
+
+def test_validate_workers_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    from yavih import resources
+    from yavih.io.validate import VALIDATE_WORKERS_ENV, validate_workers
+
+    sh = lambda nbytes: SimpleNamespace(sidecar={"tar": {"bytes": nbytes}})  # noqa: E731
+    monkeypatch.setattr(resources, "available_cpus", lambda env=None: 8)
+    monkeypatch.setattr(resources, "ram_budget_bytes", lambda env=None: 10 * 2**30)
+    assert validate_workers([sh(1)] * 3, env={}) == 3  # min(n_shards, cpus)
+    assert validate_workers([sh(1)] * 20, env={}) == 8
+    assert validate_workers([sh(4 * 2**30)] * 20, env={}) == 2  # RAM budget // largest shard tar
+    assert validate_workers([], env={}) == 1
+    assert validate_workers([sh(1)] * 20, env={VALIDATE_WORKERS_ENV: "1"}) == 1
+    assert validate_workers([sh(1)] * 2, env={VALIDATE_WORKERS_ENV: "6"}) == 6
+    for bad in ("0", "many"):
+        with pytest.raises(ValueError, match=VALIDATE_WORKERS_ENV):
+            validate_workers([sh(1)], env={VALIDATE_WORKERS_ENV: bad})
+
+
 def test_finalize_rewrites_only_when_changed(tmp_path: Path) -> None:
     d = tmp_path / "s"
     d.mkdir()
@@ -1513,6 +1642,50 @@ def test_stage_features(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     assert validate_features(staged / "train", bench=FakeBench(), write_meta=False).ok
     staged2 = stage_features(root / "val", scratch)
     assert staged2.parent.name.startswith("run.") and (staged2 / "val" / "shard-000000.json").exists()
+
+    # threaded copy: the same tree, byte for byte, copied by up to STAGE_THREADS threads; no tmp left behind
+    import shutil as _shutil
+    import threading
+
+    from yavih.io import stage as stage_mod
+
+    names: set[str] = set()
+    real_copy = _shutil.copyfile
+
+    def tracking_copy(a, b):
+        names.add(threading.current_thread().name)
+        return real_copy(a, b)
+
+    monkeypatch.setattr("yavih.io.stage.shutil.copyfile", tracking_copy)
+    staged3 = stage_features(root, tmp_path / "scratch3", unit_id="t")
+    src_files = sorted(p.relative_to(root) for p in root.rglob("*") if p.is_file() and not p.name.endswith(".tmp"))
+    assert sorted(p.relative_to(staged3) for p in staged3.rglob("*") if p.is_file()) == src_files
+    assert all((staged3 / rel).read_bytes() == (root / rel).read_bytes() for rel in src_files)
+    assert names and all(n.startswith("yavih-stage") for n in names) and stage_mod.STAGE_THREADS == 4
+
+    # a stop request before a later file: E_PREEMPTED, every copy in flight finished, no tmp left
+    polls = {"n": 0}
+
+    def stop_after_two() -> bool:
+        polls["n"] += 1
+        return polls["n"] > 2
+
+    with pytest.raises(StageError) as ei:
+        stage_features(root, tmp_path / "scratch4", unit_id="s", should_stop=stop_after_two)
+    assert ei.value.code == "E_PREEMPTED"
+    assert not list((tmp_path / "scratch4").rglob("*.tmp"))
+
+    # a failing copy is raised (the first failure in file order); files not started are not copied
+    def failing_copy(a, b):
+        if Path(a).name == "shard-000000.tar":
+            raise OSError("disk on fire")
+        return real_copy(a, b)
+
+    monkeypatch.setattr("yavih.io.stage.shutil.copyfile", failing_copy)
+    with pytest.raises(OSError, match="disk on fire"):
+        stage_features(root, tmp_path / "scratch5", unit_id="f")
+    assert not list((tmp_path / "scratch5").rglob("*.tmp"))
+
     monkeypatch.setattr("yavih.io.stage.shutil.disk_usage", lambda p: SimpleNamespace(free=10, total=10, used=0))
     with pytest.raises(StageError) as ei:
         stage_features(root, scratch)

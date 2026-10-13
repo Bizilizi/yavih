@@ -348,6 +348,22 @@ def test_tar_is_deterministic_and_stock_readable(tmp_path):
     assert {n.split(".")[0] for n in names} == {f"{r:09d}" for r in range(8)}
 
 
+def test_writer_tar_bytes_identical_with_large_copybuf(tmp_path, monkeypatch):
+    """The 8 MiB file buffer and tar copy buffer change how the bytes reach the file, never which bytes: a member
+    larger than the buffer (copied in several chunks) gives the same tar as stdlib-default buffers."""
+    from yavih.io import writer as writer_mod
+
+    D = (9 << 20) // 2 + 3  # fp16: one member is 9 MiB + 6 B, more than one copy buffer
+    big = write_split(tmp_path / "big", n_rows=2, n_shards=1, N=1, D=D)
+    monkeypatch.setattr(writer_mod, "WRITE_BUFFER_BYTES", io.DEFAULT_BUFFER_SIZE)
+    small = write_split(tmp_path / "small", n_rows=2, n_shards=1, N=1, D=D)
+    ta, tb = (big / "shard-000000.tar").read_bytes(), (small / "shard-000000.tar").read_bytes()
+    assert len(ta) > writer_mod.WRITE_BUFFER_BYTES
+    assert hashlib.sha256(ta).hexdigest() == hashlib.sha256(tb).hexdigest()
+    sa, sb = read_sidecar(big / "shard-000000.json"), read_sidecar(small / "shard-000000.json")
+    assert sa["tar"] == sb["tar"] and sa["members"] == sb["members"]
+
+
 def test_sidecar_fields_present_and_offsets_memmappable(tmp_path):
     split_dir = write_split(tmp_path / "run", n_rows=10, n_shards=2, missing={3}, canaries=2, bench=FakeBench(data_status_ok=True))
     sc = read_sidecar(split_dir / "shard-000001.json")
@@ -717,6 +733,30 @@ def test_matrix_backends_and_rowview(tmp_path, monkeypatch):
     assert r.matrix().backend == "memmap"
     monkeypatch.setenv("YAVIH_RAM_BUDGET_GB", "1")
     assert r.matrix().backend == "ram"
+
+
+def test_matrix_is_cached_per_reader(tmp_path, monkeypatch):
+    """One RAM array per reader whatever the number of matrix() calls (arms, folds and seeds share the reader);
+    the memmap backend drops it; values never change; gathers are copies of the read-only cache."""
+    split_dir = write_split(tmp_path / "run", n_rows=12, n_shards=3, missing={4})
+    r = FeatureReader(split_dir, require_meta=False)
+    calls = []
+    real_rows = r.rows
+    monkeypatch.setattr(r, "rows", lambda idx: calls.append(len(idx)) or real_rows(idx))
+    a, b = r.matrix(ram_budget_bytes=r.nbytes), r.matrix(ram_budget_bytes=r.nbytes)
+    assert calls == [11] and a._array is b._array and a.backend == b.backend == "ram"
+    assert not a._array.flags.writeable
+    g = a[np.array([0, 3])]
+    assert g.flags.writeable and not np.shares_memory(g, a._array)
+    full = real_rows(r.present_rows)
+    assert np.array_equal(np.asarray(b), full)
+    mm = r.matrix(ram_budget_bytes=r.nbytes - 1)
+    assert mm.backend == "memmap" and r._matrix is None
+    assert np.array_equal(np.asarray(mm), full)
+    c = r.matrix(ram_budget_bytes=r.nbytes)
+    assert c.backend == "ram" and np.array_equal(np.asarray(c), full) and c._array is not a._array
+    r.close()
+    assert r._matrix is None
 
 
 def test_ram_budget_rule():

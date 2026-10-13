@@ -6,8 +6,8 @@ header_len`` offsets without extracting: each shard tar is mapped once (read-onl
 independent streaming path (stdlib ``tarfile`` + ``np.lib.format.read_array``), so the test
 "memmap rows(present_rows) == streamed iter()" cross-checks the two. ``matrix()`` is a contiguous
 RAM array when it fits the budget (``min(16 GiB, 0.45 * SLURM_MEM_PER_NODE)``, env
-``YAVIH_RAM_BUDGET_GB``), else a memmap view.
-Stored fp16 stays fp16 in RAM (the probe upcasts per mini-batch).
+``YAVIH_RAM_BUDGET_GB``), else a memmap view; it is cached per reader (one RAM array per split however many
+fits share the reader). Stored fp16 stays fp16 in RAM (the probe upcasts per mini-batch).
 """
 
 from __future__ import annotations
@@ -182,6 +182,7 @@ class FeatureReader:
         self.sidecars: list[dict] = [read_sidecar(p) for p in list_sidecars(self.features_dir)]
         self._maps: dict[int, _ShardMap] = {}
         self._const_pos: np.ndarray | None = None
+        self._matrix: np.ndarray | None = None  # matrix(): the cached RAM array (one per reader)
         self._closed = False
 
         if self.not_applicable is not None and self.sidecars:
@@ -439,11 +440,20 @@ class FeatureReader:
 
     def matrix(self, *, ram_budget_bytes: int | None = None) -> RowView:
         """Contiguous RAM array when ``nbytes <= budget``, else a memmap view. The values and the
-        row order are identical in both backends (the backend never enters any hash)."""
+        row order are identical in both backends (the backend never enters any hash).
+
+        The RAM array is cached per reader: every lr arm, fold and seed that shares this reader (the probe opens
+        one reader per split) gathers from ONE array instead of re-reading the split. A budget that selects the
+        memmap backend drops it. The cached array is read-only; an array-index gather (``view[idx]``) returns a fresh copy."""
         budget = _default_budget() if ram_budget_bytes is None else int(ram_budget_bytes)
-        if self.nbytes <= budget:
-            return RowView(self, array=self.rows(self.present_rows))
-        return RowView(self, array=None)
+        if self.nbytes > budget:
+            self._matrix = None  # the memmap backend: never keep a RAM array the budget no longer allows
+            return RowView(self, array=None)
+        if self._matrix is None:
+            arr = self.rows(self.present_rows)
+            arr.flags.writeable = False
+            self._matrix = arr
+        return RowView(self, array=self._matrix)
 
     def clip_ids(self) -> list[str]:
         """clip_ids of the present rows, in row order (parallel to ``present_rows``)."""
@@ -498,6 +508,7 @@ class FeatureReader:
         if self._closed:
             return
         self._closed = True
+        self._matrix = None
         for m in self._maps.values():
             m.close()
         self._maps.clear()

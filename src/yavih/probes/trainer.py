@@ -7,12 +7,14 @@ micro-batches.
 
 Features reach the loop through an abstract row gather: any object with ``.shape == (n, N, D)`` and
 ``__getitem__(np.ndarray[int]) -> [k, N, D]`` (``yavih.io.reader.RowView``, ``np.ndarray``, ``np.memmap``,
-``torch.Tensor``). Rows are gathered per mini-batch and upcast to fp32 there;
-the loop never materialises the split.
+``torch.Tensor``). Rows are gathered per mini-batch and upcast to fp32 there (on CUDA after the
+host→device copy, so fp16 features cross the link at half the bytes; fp16→fp32 is exact either way); a
+background thread gathers the next ``PREFETCH_DEPTH`` batches in epoch order. The loop never materialises the split.
 """
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import math
 import os
@@ -53,6 +55,7 @@ __all__ = [
     "to_tensor_targets",
     "CKPT_EVERY_S",
     "ckpt_every_s",
+    "PREFETCH_DEPTH",
 ]
 
 #: Deadline: ``probe_ckpt.pt`` reaches disk at most every this many seconds; between writes the last
@@ -62,6 +65,10 @@ __all__ = [
 #: ``YAVIH_PROBE_CKPT_EVERY_S`` overrides (0 = every epoch). Not hashed: it decides
 #: when the file is written, never what a fit or a resume computes.
 CKPT_EVERY_S: float = 600.0
+
+#: Training batches gathered ahead by the loader thread (``loader_workers >= 1``), consumed in epoch order: the
+#: batch sequence, and therefore every number, is the inline loop's.
+PREFETCH_DEPTH: int = 2
 
 
 class ProbeDeadline(TimeoutError):
@@ -260,8 +267,16 @@ def to_tensor_targets(targets: Any) -> Tensor:
     return t.to(torch.int64)
 
 
-def _gather(features: Any, idx: Tensor) -> Tensor:
-    """``features[idx] -> [k, N, D]`` fp32 CPU tensor through the abstract row gather."""
+def _cast_on_device(device: Any) -> bool:
+    """Whether gathered rows travel in their stored dtype and are upcast after the host→device copy: on CUDA (half
+    the bytes over the link for fp16 features). On CPU the copy is a no-op and the gather upcasts."""
+    return device is not None and torch.device(device).type == "cuda"
+
+
+def _gather(features: Any, idx: Tensor, *, keep_dtype: bool = False) -> Tensor:
+    """``features[idx] -> [k, N, D]`` CPU tensor through the abstract row gather: fp32, or with ``keep_dtype``
+    the stored dtype (pinned when CUDA is available) for the caller's ``.to(device, non_blocking=True).float()``.
+    The fp16→fp32 cast is exact, so both orders give the same fp32 values bit for bit."""
     ix = idx.numpy() if isinstance(idx, Tensor) else np.asarray(idx)
     if isinstance(features, Tensor):
         x = features[torch.as_tensor(ix, dtype=torch.long)]
@@ -269,10 +284,14 @@ def _gather(features: Any, idx: Tensor) -> Tensor:
         x = features[ix]
         if not isinstance(x, Tensor):
             x = torch.from_numpy(np.ascontiguousarray(x))
-    return x.float()
+    if not keep_dtype:
+        return x.float()
+    if x.device.type == "cpu" and torch.cuda.is_available():
+        x = x.pin_memory()
+    return x
 
 
-def _gather_pos(pos: Any, idx: Tensor) -> Tensor | None:
+def _gather_pos(pos: Any, idx: Tensor, *, keep_dtype: bool = False) -> Tensor | None:
     """Constant ``[N, 4]`` pos is passed through; per-sample ``[n, N, 4]`` is gathered like features."""
     if pos is None:
         return None
@@ -280,7 +299,12 @@ def _gather_pos(pos: Any, idx: Tensor) -> Tensor | None:
         return pos.float()
     if not isinstance(pos, Tensor) and getattr(pos, "ndim", len(getattr(pos, "shape", (0, 0, 0)))) == 2:
         return torch.as_tensor(np.asarray(pos), dtype=torch.float32)
-    return _gather(pos, idx)
+    return _gather(pos, idx, keep_dtype=keep_dtype)
+
+
+def _to_device(t: Tensor | None, device: Any) -> Tensor | None:
+    """Host→device copy, then the fp32 upcast (a no-op for rows already gathered as fp32)."""
+    return None if t is None else t.to(device, non_blocking=True).float()
 
 
 def _forward(head: nn.Module, x: Tensor, p: Tensor | None) -> Tensor:
@@ -335,13 +359,13 @@ def predict(head: nn.Module, features: Any, idx: Any, *, pos: Any = None, batch_
     n_tokens = int(features.shape[1])
     chunk = micro_batch_size(batch_size, n_tokens, max_tokens_per_forward)
     outs: list[Tensor] = []
+    defer = _cast_on_device(device)
     head.eval()
     with torch.no_grad(), precision_scope():
         for i in range(0, len(idx_t), chunk):
             sel = idx_t[i : i + chunk]
-            x = _gather(features, sel).to(device)
-            p = _gather_pos(pos, sel)
-            p = p.to(device) if p is not None else None
+            x = _to_device(_gather(features, sel, keep_dtype=defer), device)
+            p = _to_device(_gather_pos(pos, sel, keep_dtype=defer), device)
             outs.append(_forward(head, x, p).float().cpu())
     if not outs:
         return torch.empty(0)
@@ -356,15 +380,16 @@ def accumulate_batch(head: nn.Module, criterion: Callable[[Tensor, Tensor], Tens
     ``sum() / batch`` in every micro-batch: the sums add up to the whole-batch numerator, so the
     accumulated gradient equals the whole-batch gradient exactly (up to fp32 summation order) for every
     loss, not only for batch-mean CE. ``stop_flag`` is polled between micro-batches.
+    ``x`` / ``p`` may be in the stored dtype (fp16): each micro-batch is upcast to fp32 after its copy to ``device``.
     Returns the batch's per-sample loss SUM (for the epoch's train-loss average)."""
     batch = int(x.shape[0])
     total = 0.0
     for j in range(0, batch, micro):
         if _flag_set(stop_flag):
             raise ProbeInterrupted("probe interrupted between micro-batches", on_stop() if on_stop else None)
-        xb = x[j : j + micro].to(device, non_blocking=True)
+        xb = _to_device(x[j : j + micro], device)
         yb = y[j : j + micro].to(device, non_blocking=True)
-        pb = None if p is None else (p if p.dim() == 2 else p[j : j + micro]).to(device)
+        pb = None if p is None else _to_device(p if p.dim() == 2 else p[j : j + micro], device)
         per = criterion(_forward(head, xb, pb).float(), yb)
         (per.sum() / batch).backward()
         total += float(per.detach().sum().item())
@@ -479,7 +504,8 @@ def _train_one(
         stop = "max_epochs"
         if st.patience_left <= 0:
             stop = "patience"  # resumed from the checkpoint of an arm that had already stopped: train nothing more
-        pool = ThreadPoolExecutor(max_workers=1) if loader_workers > 0 else None
+        pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="yavih-loader") if loader_workers > 0 else None
+        defer = _cast_on_device(device)
         try:
             while st.epoch < cfg.max_epochs and st.patience_left > 0:
                 # Deadline between epochs: the checkpoint of the last completed epoch is on disk.
@@ -492,14 +518,23 @@ def _train_one(
 
                 def batch_at(i: int, perm: Tensor = perm) -> tuple[Tensor, Tensor | None, Tensor]:
                     sel = perm[i : i + batch_size]
-                    return _gather(features, sel), _gather_pos(pos, sel), targets[sel]
+                    return _gather(features, sel, keep_dtype=defer), _gather_pos(pos, sel, keep_dtype=defer), targets[sel]
 
                 starts = list(range(0, n_train, batch_size))
-                pending = pool.submit(batch_at, starts[0]) if pool else None
-                for bi, i in enumerate(starts):
-                    if pending is not None:
-                        x, p, y = pending.result()
-                        pending = pool.submit(batch_at, starts[bi + 1]) if bi + 1 < len(starts) else None
+                # One loader thread, up to PREFETCH_DEPTH batches queued ahead, consumed first-in first-out: the
+                # batch order is the inline loop's.
+                ahead: collections.deque = collections.deque()
+                queued = 0
+                if pool is not None:
+                    while queued < len(starts) and len(ahead) < PREFETCH_DEPTH:
+                        ahead.append(pool.submit(batch_at, starts[queued]))
+                        queued += 1
+                for i in starts:
+                    if pool is not None:
+                        x, p, y = ahead.popleft().result()
+                        if queued < len(starts):
+                            ahead.append(pool.submit(batch_at, starts[queued]))
+                            queued += 1
                     else:
                         x, p, y = batch_at(i)
                     batch = int(x.shape[0])
@@ -550,12 +585,12 @@ def _eval_loss(head: nn.Module, features: Any, targets: Tensor, idx: Tensor, *, 
     """Mean per-sample loss over ``idx``, chunked under the same token cap (exact: per-sample sums)."""
     chunk = micro_batch_size(cfg.batch_size, n_tokens, cfg.max_tokens_per_forward)
     total, seen = 0.0, 0
+    defer = _cast_on_device(device)
     with torch.no_grad():
         for i in range(0, len(idx), chunk):
             sel = idx[i : i + chunk]
-            x = _gather(features, sel).to(device)
-            p = _gather_pos(pos, sel)
-            p = p.to(device) if p is not None else None
+            x = _to_device(_gather(features, sel, keep_dtype=defer), device)
+            p = _to_device(_gather_pos(pos, sel, keep_dtype=defer), device)
             total += float(criterion(_forward(head, x, p).float(), targets[sel].to(device)).sum().item())
             seen += int(len(sel))
     return total / max(1, seen)
@@ -575,7 +610,9 @@ def train_head(features: Any, targets: Any, *, build_head, cfg, seed: int, loss:
     ``features``: row gather ``(n, N, D)`` (see module docstring); ``targets``: ``[n, ...]`` (int64 or float
     with NaN = invalid); ``pos``: ``None``, ``[N, 4]`` or a per-sample gather ``(n, N, 4)``; ``build_head(dim)``
     returns the head module (``head(x)`` or ``head(x, pos)``); ``loss`` defaults to ``cfg.loss``; ``deadline``
-    is an absolute ``time.monotonic()`` value; ``ckpt_hashes`` (default ``{probe_hash, seed}``) gate the resume.
+    is an absolute ``time.monotonic()`` value; ``ckpt_hashes`` (default ``{probe_hash, seed}``) gate the resume;
+    ``loader_workers`` ``None`` (default) or ``>= 1`` = one loader thread gathering ``PREFETCH_DEPTH`` batches ahead,
+    ``0`` = gather inline (same numbers either way).
     Raises ``ProbeDeadline`` / ``ProbeInterrupted`` (both ``exit_code 4``, with ``.partial`` set)."""
     if not isinstance(cfg, ProbeConfig):
         raise TypeError("train_head: cfg must be a ProbeConfig")
@@ -590,7 +627,7 @@ def train_head(features: Any, targets: Any, *, build_head, cfg, seed: int, loss:
     hashes = dict(ckpt_hashes) if ckpt_hashes is not None else {}
     hashes.setdefault("probe_hash", probe_hash(cfg))
     hashes.setdefault("seed", int(seed))
-    workers = int(loader_workers) if loader_workers is not None else 0
+    workers = int(loader_workers) if loader_workers is not None else 1
 
     train_idx, val_idx = val_split(n, cfg.val_fraction, seed)
     grid = cfg.lr_grid or (cfg.lr,)
