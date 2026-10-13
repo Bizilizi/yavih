@@ -1681,9 +1681,12 @@ def _cheap_recheck(split_dir: Path, meta: dict, shards: list[_Shard], view: _Ben
             (fx.warnings if level == "warning" else fx.notes).append(Finding.from_json(f))
     feats = meta.get("features") or {}
     n_shards = len(shards)
+    coverage = dict(meta.get("coverage") or {})
+    if isinstance(meta.get("sample"), list):  # a capped run's range (see validate_features)
+        coverage["sample"] = list(meta["sample"])
     return ValidationReport(
         ok=fx.ok, errors=fx.errors, warnings=fx.warnings, notes=fx.notes, split=str(meta.get("split")),
-        coverage=dict(meta.get("coverage") or {}), N=int(feats.get("N", 0)), D=int(feats.get("D", 0)), dtype=str(feats.get("dtype", "")),
+        coverage=coverage, N=int(feats.get("N", 0)), D=int(feats.get("D", 0)), dtype=str(feats.get("dtype", "")),
         pos_mode=str(feats.get("pos_mode", "none")), bytes=int(feats.get("bytes", 0)),
         backend_hint="memmap" if any(w.code == "W_SIZE" for w in fx.warnings) else "ram",
         eligibility=dict(meta.get("eligibility") or {}), missing_shards=[],
@@ -1812,6 +1815,13 @@ def validate_features(
     # set is its INPUT hash: a scoring edit (metric pin, probe.py, readout version) never fails features. A recorded
     # input hash the folder changelog lists under `supersedes_input` stands for the current one (identity_value).
     nominal: int | None = view.n_rows(split_name) if view else None
+    # A capped run (`extract --rows lo:hi`, `plan build --sample N`): the split's _layout.json says `sample: [lo, hi]`;
+    # its one shard tiles [lo, hi) and the nominal row count is hi - lo, not the split's.
+    from yavih.io.layout import layout_sample, read_layout
+
+    sample_range = layout_sample(read_layout(split_dir))
+    if sample_range is not None:
+        nominal = sample_range[1] - sample_range[0]
     if view is not None and view.manifest_hash is not None:
         from yavih.versions import writer_stamp
 
@@ -1836,7 +1846,12 @@ def validate_features(
                 fx.add("E_HASH_INPUT", "input_hash differs across sidecars", sh.where)
 
     # ---- E_RANGE_TILING (only meaningful on a complete, single-n set)
-    if complete:
+    if complete and sample_range is not None:
+        for sh in shards:
+            if (sh.lo, sh.hi) != sample_range:
+                fx.add("E_RANGE_TILING", f"shard.rows [{sh.lo}, {sh.hi}) is not the sampled range [{sample_range[0]}, {sample_range[1]}) "
+                       "of this split's _layout.json", sh.where)
+    elif complete:
         expect_lo = 0
         bad = False
         for sh in sorted(shards, key=lambda s: s.index):
@@ -2092,6 +2107,8 @@ def validate_features(
         nominal = max((s.hi for s in shards), default=present)
     ids_sha = hashlib.sha256("\n".join(sorted(stats.clip_ids)).encode("utf-8")).hexdigest() if stats.clip_ids else None
     coverage = {"nominal": int(nominal), "present": int(present), "missing": int(max(nominal - present, 0)), "ids_sha256": ids_sha}
+    if sample_range is not None:
+        coverage["sample"] = list(sample_range)
     if nominal and present < nominal:
         fx.add("W_COVERAGE", f"present {present} / nominal {nominal} = {present / nominal:.1%} (< 100 %)")
 
@@ -2153,6 +2170,8 @@ def validate_features(
                 dead_rows=dead_rows, pos_sha256=pos_sha256, present_clip_ids=stats.clip_ids, bytes_total=total_bytes, rules_checked=rc,
                 waived=report.waived,
             )
+            if sample_range is not None:  # the probe reads it: a sampled result is never stored, always `partial`
+                meta["sample"] = list(sample_range)
             report.meta_path = str(finalize(split_dir, meta))
         elif meta_path.exists():
             try:

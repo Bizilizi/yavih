@@ -84,6 +84,7 @@ from yavih.waivers import W_WAIVED, waivers_for
 __all__ = [
     "main",
     "run_extract",
+    "parse_rows",
     "bridge_check",
     "load_bridge_class",
     "source_sha256",
@@ -1186,7 +1187,7 @@ def run_extract(
     bench: str | Any,
     bridge: str | type[Bridge],
     split: str,
-    shard: tuple[int, int],
+    shard: tuple[int, int] | None = None,
     out: str | os.PathLike,
     args: dict | Sequence[str] | None = None,
     canaries: int = DEFAULT_CANARIES,
@@ -1197,6 +1198,7 @@ def run_extract(
     expect_profile: str | os.PathLike | None = None,
     data: dict | None = None,
     allow_loopback: bool = False,
+    rows: tuple[int, int] | None = None,
 ) -> dict:
     """Extract one shard (``yavih extract``); returns the sidecar summary with a ``status`` key
     (``ok`` | ``skipped`` | ``not_applicable``). Idempotent: a matching sidecar → skipped; a
@@ -1215,7 +1217,21 @@ def run_extract(
     ``allow_loopback`` (``--allow-loopback``): ``encode`` may connect to the loopback interface (a local
     Triton / vLLM server); every other connect is still ``E_NETWORK``. The opt-in and the loopback addresses used are
     recorded in the sidecar's ``side_effects`` block.
+
+    ``rows=(lo, hi)`` (``--rows lo:hi``, instead of ``shard``): a capped run over manifest rows ``[lo, hi)`` of the split,
+    written as the one shard ``0/1`` of a layout frozen with ``sample: [lo, hi]`` (``yavih.io.layout``). The sample
+    belongs to the layout's identity: a split directory holding a full layout, or a sample of another range, is
+    refused with ``E_LAYOUT`` (exit 1), and so is a full-split unit in a sampled directory.
     """
+    if (shard is None) == (rows is None):
+        raise _ArgError("pass exactly one of --shard i/n and --rows lo:hi")
+    sample: tuple[int, int] | None = None
+    if rows is not None:
+        sample = (int(rows[0]), int(rows[1]))
+        if not (0 <= sample[0] < sample[1]):
+            raise _ArgError(f"--rows lo:hi needs 0 <= lo < hi, got {sample[0]}:{sample[1]}")
+        shard = (0, 1)
+    assert shard is not None
     i, n = int(shard[0]), int(shard[1])
     if not (0 <= i < n):
         raise _ArgError(f"--shard i/n needs 0 <= i < n, got {i}/{n}")
@@ -1232,14 +1248,19 @@ def run_extract(
     # READ-ONLY (peek_shard): the live configuration is not known yet, so nothing may be moved on the profile's word —
     # a shard the live bridge wrote must survive an E_CONFIG_DRIFT refusal. The moving resume runs after _prepare.
     bench_obj = _load_bench(bench, data)
+    if sample is not None and sample[1] > _n_rows(bench_obj, split):
+        raise _ArgError(f"--rows {sample[0]}:{sample[1]}: split {split!r} of {bench_obj.name} has {_n_rows(bench_obj, split)} rows")
     if planned is not None:
         bridge_cls, _, _ = _resolve_bridge(bridge)
         # the split's frozen layout: a unit planned before another host froze it with another
-        # n is refused here, before the model load (E_LAYOUT, exit 1: re-run `plan build`, which reads the layout)
+        # n (or for another sample) is refused here, before the model load (E_LAYOUT, exit 1: re-run `plan build`,
+        # which reads the layout)
         frozen = frozen_layout(split_dir, layout_identity(
             manifest_hash=bench_obj.manifest_hash, input_hash=bench_obj.input_hash, model=planned.model,
-            reading=planned.reading, describe_sha256=planned.describe_sha256), n_rows=_n_rows(bench_obj, split))
+            reading=planned.reading, describe_sha256=planned.describe_sha256, sample=sample), n_rows=_n_rows(bench_obj, split))
         _check_layout(frozen, split_dir, i, n)
+        if sample is not None and frozen is None:
+            frozen = {"ranges": [list(sample)]}  # not frozen yet: the sample's one range is the shard's
         state = peek_shard(
             split_dir, i, manifest_hash=bench_obj.manifest_hash, input_hash=bench_obj.input_hash,
             model=planned.model, reading=planned.reading, describe_sha256=planned.describe_sha256, n=n,
@@ -1279,7 +1300,7 @@ def run_extract(
     if swept is not None:
         _log(f"extract {bench_obj.name} {split}: shards of another configuration moved to {swept}")
     ident = layout_identity(manifest_hash=bench_obj.manifest_hash, input_hash=bench_obj.input_hash, model=prep.model,
-                            reading=prep.reading, describe_sha256=prep.describe_sha256)
+                            reading=prep.reading, describe_sha256=prep.describe_sha256, sample=sample)
     layout = freeze_layout(split_dir, ident, n=n, batch_size=int(bridge_cls.batch_size), n_rows=_n_rows(bench_obj, split))
     _check_layout(layout, split_dir, i, n)
     swept = retire_foreign(split_dir, want, layout=layout)
@@ -1305,7 +1326,11 @@ def run_extract(
         rkw: dict[str, Any] = {}
         if int(layout.get("batch_size") or batch_size) != batch_size:
             rkw["align"] = int(layout["batch_size"])  # the frozen layout's batch alignment fixes the range
-        samples = list(bench_obj.reader(split, shard=(i, n), batch_size=batch_size, canaries=int(canaries), canary_seed=int(canary_seed), **rkw))
+        if sample is not None:  # a capped run reads exactly the sampled range
+            rkw = {"rows": range(lo, hi)}
+        else:
+            rkw["shard"] = (i, n)
+        samples = list(bench_obj.reader(split, batch_size=batch_size, canaries=int(canaries), canary_seed=int(canary_seed), **rkw))
         regular = [s for s in samples if _canary_of(s) is None]
         canary_samples = [s for s in samples if _canary_of(s) is not None]
         rows = [s.row for s in regular]
@@ -2042,7 +2067,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bench", required=True, help="benchmark name, alias or folder")
     p.add_argument("--bridge", required=True, metavar="P", help="bridge .py file (or module:Class)")
     p.add_argument("--split", required=True)
-    p.add_argument("--shard", required=True, metavar="i/n")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--shard", metavar="i/n")
+    g.add_argument("--rows", metavar="lo:hi", help="a capped run over manifest rows [lo, hi) (one shard; plan build --sample)")
     p.add_argument("--out", required=True, metavar="DIR", help="run directory (shards go to DIR/features/<split>/)")
     p.add_argument("--arg", action="append", default=[], metavar="k=v", help="bridge argument (Bridge.ARGS)")
     p.add_argument("--data", action="append", default=[], metavar="root=PATH", help="data root override")
@@ -2070,6 +2097,18 @@ def _parse_shard(text: str) -> tuple[int, int]:
     return i, n
 
 
+def parse_rows(text: str) -> tuple[int, int]:
+    """``--rows lo:hi`` → ``(lo, hi)`` with ``0 <= lo < hi`` (``ArgError``, exit 1, otherwise)."""
+    try:
+        a, b = text.split(":", 1)
+        lo, hi = int(a), int(b)
+    except ValueError as e:
+        raise _ArgError(f"--rows expects lo:hi, got {text!r}") from e
+    if not (0 <= lo < hi):
+        raise _ArgError(f"--rows lo:hi needs 0 <= lo < hi, got {text!r}")
+    return lo, hi
+
+
 def _kv(items: Sequence[str]) -> dict[str, str]:
     out: dict[str, str] = {}
     for item in items:
@@ -2081,7 +2120,7 @@ def _kv(items: Sequence[str]) -> dict[str, str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """``python -m yavih.extract --bench B --bridge P --split S --shard i/n --out DIR [--arg k=v]...
+    """``python -m yavih.extract --bench B --bridge P --split S (--shard i/n | --rows lo:hi) --out DIR [--arg k=v]...
     [--canaries 8] [--decode-workers N] [--read-ahead 2] [--deadline ...] [--expect-profile P]``. Returns the CLI exit code; prints one
     ``[yavih] extract …`` header/footer line on stderr and, with ``--json``, the summary on stdout."""
     from yavih.cli import exit_code_for
@@ -2099,7 +2138,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             bench=ns.bench,
             bridge=ns.bridge,
             split=ns.split,
-            shard=_parse_shard(ns.shard),
+            shard=_parse_shard(ns.shard) if ns.shard is not None else None,
+            rows=parse_rows(ns.rows) if ns.rows is not None else None,
             out=ns.out,
             args=ns.arg,
             canaries=ns.canaries,

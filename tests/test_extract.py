@@ -889,6 +889,49 @@ def test_a_split_without_layout_infers_it_from_the_finished_shards(tmp_path: Pat
     assert read_sidecar(sd / "shard-000000.json")["timing"] == first["timing"]  # untouched
 
 
+def test_rows_sample_is_its_own_layout_and_never_mixes_with_the_full_split(tmp_path: Path):
+    """``--rows lo:hi`` (``plan build --sample N``): one shard over ``[lo, hi)``, a layout frozen with ``sample``;
+    validate measures coverage against ``hi - lo`` and records the sample in ``_meta.json``; a full-split unit or a
+    sample of another range in that directory is refused with ``E_LAYOUT`` before anything moves, and the other way
+    round."""
+    from yavih.extract import parse_rows
+    from yavih.io.finalize import read_meta
+    from yavih.io.layout import LayoutError
+
+    bench = FakeBenchmark(n={"train": 22, "val": 8})
+    summary = run_extract(bench=bench, bridge=NumpyBridge, split="train", rows=(0, 6), out=tmp_path / "run", decode_workers=2, canaries=0)
+    sd = _split_dir(tmp_path)
+    layout = json.loads((sd / "_layout.json").read_text())
+    assert summary["status"] == "ok" and layout["sample"] == [0, 6] and layout["n"] == 1 and layout["ranges"] == [[0, 6]]
+    sc = read_sidecar(sd / "shard-000000.json")
+    assert sc["shard"]["rows"] == [0, 6] and sc["shard"]["n"] == 1 and sc["rows"]["n_written"] == 6
+    assert bench.reader_calls[-1]["rows"] == (0, 6) and bench.reader_calls[-1]["shard"] is None
+    rep = validate_features(sd, bench=bench)
+    assert rep.ok, [f.to_json() for f in rep.errors]
+    assert rep.coverage["nominal"] == rep.coverage["present"] == 6 and rep.coverage["sample"] == [0, 6]
+    assert not {f.code for f in rep.errors + rep.warnings} & {"E_RANGE_TILING", "E_SHARD_SET", "W_COVERAGE"}
+    assert read_meta(sd)["sample"] == [0, 6] and read_meta(sd)["coverage"]["nominal"] == 6
+    again = run_extract(bench=bench, bridge=NumpyBridge, split="train", rows=(0, 6), out=tmp_path / "run", decode_workers=2, canaries=0)
+    assert again["status"] == "skipped"
+    before = _files(sd)
+    for kw in ({"shard": (0, 1)}, {"shard": (0, 1), "expect_profile": str(_profile_of(tmp_path, bench))}, {"rows": (0, 8)}):
+        with pytest.raises(LayoutError) as ei:
+            run_extract(bench=bench, bridge=NumpyBridge, split="train", out=tmp_path / "run", decode_workers=2, canaries=0, **kw)
+        assert ei.value.exit_code == 1 and ei.value.code == "E_LAYOUT" and "sample" in str(ei.value), ei.value
+    assert _files(sd) == before and not (sd / STALE_DIR).exists()
+    # a full split refuses a sample the same way
+    _run(tmp_path, bench=bench, split="val", canaries=0)
+    with pytest.raises(LayoutError, match="the full split"):
+        run_extract(bench=bench, bridge=NumpyBridge, split="val", rows=(0, 4), out=tmp_path / "run", decode_workers=2, canaries=0)
+    for bad in ("4:2", "x:3", "3"):
+        with pytest.raises(ArgError):
+            parse_rows(bad)
+    with pytest.raises(ArgError):  # beyond the split
+        run_extract(bench=bench, bridge=NumpyBridge, split="val", rows=(0, 9), out=tmp_path / "other", decode_workers=2, canaries=0)
+    with pytest.raises(ArgError):  # exactly one of shard / rows
+        run_extract(bench=bench, bridge=NumpyBridge, split="val", shard=(0, 1), rows=(0, 4), out=tmp_path / "other")
+
+
 def test_a_live_claim_is_not_ready_and_a_dead_writers_claim_is_taken_over(tmp_path: Path):
     """One writer per shard. Another live task's claim → E_SHARD_CLAIMED (exit 3), nothing
     touched; a claim without a heartbeat for the lease is taken over, the dead writer's tmp swept, and the sidecar

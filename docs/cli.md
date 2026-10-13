@@ -92,7 +92,7 @@ clip (`E_CONSTANT_FEATURES`) exit 2. The text output names the run directory the
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih extract` | extract one shard into `<out>/features/<split>/` | `--bench B --bridge P --split S --shard i/n --out RUN_DIR`; `--arg k=v`; `--canaries 8`; `--decode-workers N`; `--read-ahead 2`; `--deadline …`; `--expect-profile P` (skip finished shards before loading the model; `E_CONFIG_DRIFT` on drift); `--allow-loopback` |
+| `yavih extract` | extract one shard into `<out>/features/<split>/` | `--bench B --bridge P --split S --shard i/n --out RUN_DIR`, or `--rows lo:hi` instead of `--shard` (a capped run over manifest rows `[lo, hi)` as the one shard `0/1`; `plan build --sample`); `--arg k=v`; `--canaries 8`; `--decode-workers N`; `--read-ahead 2`; `--deadline …`; `--expect-profile P` (skip finished shards before loading the model; `E_CONFIG_DRIFT` on drift); `--allow-loopback` |
 | `yavih features validate` | validate feature sets and write `_meta.json` | `<features_dir or features/>`; `--verify-sha`; `--no-write-meta`; `--waive CODE=reason` (repeatable, `all=reason`) |
 | `yavih features inspect` | per-dimension statistics, near-constant dims, dead rows, position and `used` summaries | `<features_dir>` |
 | `yavih features diff` | compare two feature sets row by row | `<a> <b>`; reports `rows_compared`, `max_abs`, `max_rel_l2`, `verdict` |
@@ -118,14 +118,18 @@ root, else `E_RESULTS_ROOT` (exit 1). See [readouts](readouts.md) and [results](
 | command | purpose | important flags |
 |---|---|---|
 | `yavih plan init` | write a `matrix.yaml` skeleton (one entry per suite `(benchmark, reading)`) and one bridge stub per benchmark for one model; prints the `bridge check` command of every entry, then `plan build` | `--suite S --model M --launcher PYTHON`; `--out matrix.yaml`; `--bridges-dir bridges` (relative to the matrix); `--force` overwrites the matrix (bridge files are always kept) |
-| `yavih plan build` | turn a `matrix.yaml` into unit records (`plan.jsonl`) | `<matrix.yaml>`; `--out plan.jsonl` (else JSONL on stdout); `--pending` (only units whose DONE is missing or stale); `--kind extract\|probe\|report`; `--shard-minutes M`; `--format jsonl\|count` |
+| `yavih plan build` | turn a `matrix.yaml` into unit records (`plan.jsonl`) | `<matrix.yaml>`; `--out plan.jsonl` (else JSONL on stdout); `--pending` (only units whose DONE is missing or stale); `--kind extract\|probe\|report`; `--shard-minutes M`; `--format jsonl\|count`; `--sample N` (a capped trial run, below) |
 | `yavih plan status` | count units by status and list those that need attention | `<plan.jsonl>`; `--root DIR` |
 | `yavih plan run` | run every pending unit of a plan on this machine, dependencies first | `<plan.jsonl> --local` (required); `--slots K` (default 1); `--deadline …`; `--deadline-margin 900`; `--root DIR`; `--cpus N`; `--deps plan.jsonl` |
 | `yavih plan calibrate` | refine resource multipliers from finished units and bump units their deadline stopped; writes `<runs root>/_calibration.json` | `<runs_root>` |
 | `yavih exec` | run one plan unit (or a range, or K units at once) with its dependency, DONE and deadline checks | `<plan.jsonl>`; exactly one of `--index N`, `--id X`, `--range a:b`; `--deps plan.jsonl`; `--deadline …`; `--deadline-margin 900`; `--slots K`; `--root DIR`; `--cpus N`; `--plan-sha HEX` |
 
 `plan build --format count` prints the number of units; with `--out` and `--json`, `data` also holds
-the file's `sha256` (what `exec --plan-sha` checks). `plan run` without `--local` is a usage error:
+the file's `sha256` (what `exec --plan-sha` checks). `plan build --sample N` plans a capped run of the
+matrix: the first `N` rows of every split in manifest order (not class-balanced), one `extract --rows 0:k` unit
+per split, probe units with `--no-results`, all under the separate runs root `<out>-sample<N>`; its results are
+never stored and every report row from them is marked `partial`
+([execution](execution.md#capped-runs-plan-build---sample-n)). `plan run` without `--local` is a usage error:
 yavih never writes or submits scheduler scripts. Everything about plans, units, deadlines, slots and
 SLURM wrapping is in [execution](execution.md).
 

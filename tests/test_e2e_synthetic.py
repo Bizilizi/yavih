@@ -325,6 +325,76 @@ def test_plan_build_exec_report_chain(integration_env, yavih_home, runs_dir, tmp
     assert env["data"]["count"] == 0
 
 
+def test_plan_build_sample_chain(integration_env, yavih_home, runs_dir, tmp_path, monkeypatch):
+    """``plan build --sample 4``: the exec chain of a capped run. One ``--rows 0:4`` extract unit per split (the first
+    rows in manifest order), under ``<out>-sample4`` (its own runs root), with unit ids distinct from the full plan's;
+    the layouts and ``_meta.json`` record ``sample``; the probe writes no results store; the report row is ``partial``
+    in md, csv and json; and a full extract into the sampled run directory is refused (``E_LAYOUT``)."""
+    import yaml
+
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    folder = T.make_synthetic_benchmark(yavih_home / "benchmarks", "clf", n_train=32, n_eval=16, media="tiny")
+    name = folder.name
+    work = tmp_path / "work"
+    (work / "bridges").mkdir(parents=True)
+    bfile = T.write_bridge_file(work / "bridges" / "oracle.py", "oracle", D=16)
+    profile = work / "bridges" / "oracle.profile.json"
+    _ok(_run(["-m", "yavih.cli", "bridge", "check", str(bfile), "--bench", name, "--n", "8", "--out", str(profile)], cwd=work), "bridge check")
+    prof = json.loads(profile.read_text())
+    model, reading = prof["model"], prof["reading"]
+    matrix = {
+        "schema_version": 1, "out": "runs", "seeds": [0], "canaries": 2, "shard_minutes": 30,
+        "defaults": {"launcher": sys.executable, "cpus": 2},
+        "bridges": {"ob": {"script": "bridges/oracle.py", "benchmark": name, "args": {}, "profile": "bridges/oracle.profile.json"}},
+    }
+    (work / "matrix.yaml").write_text(yaml.safe_dump(matrix, sort_keys=False), encoding="utf-8")
+    plan = work / "plan-sample.jsonl"
+    env = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "build", str(work / "matrix.yaml"), "--sample", "4", "--out", str(plan)], cwd=work),
+                    "plan build --sample"))
+    units = env["data"]
+    full = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "build", str(work / "matrix.yaml")], cwd=work), "plan build"))["data"]
+    again = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "build", str(work / "matrix.yaml"), "--sample", "4"], cwd=work), "again"))["data"]
+    assert [u["id"] for u in again] == [u["id"] for u in units] and not {u["id"] for u in units} & {u["id"] for u in full}
+    run_rel = os.path.join("runs-sample4", name, model, reading)
+    extracts = [u for u in units if u["kind"] == "extract"]
+    assert sorted(u["split"] for u in extracts) == ["train", "val"] and all(u["shard"] == [0, 1] for u in extracts)
+    for u in extracts:
+        cmd = u["cmd"]
+        assert cmd[cmd.index("--rows") + 1] == "0:4" and "--shard" not in cmd and cmd[cmd.index("--out") + 1] == run_rel, cmd
+    (probe_u,) = [u for u in units if u["kind"] == "probe"]
+    assert "--no-results" in probe_u["cmd"] and "--results" not in probe_u["cmd"] and probe_u["out"] == run_rel
+    (report_u,) = [u for u in units if u["kind"] == "report"]
+    assert report_u["out"] == os.path.join("runs-sample4", "_report")
+    for i, u in enumerate(units):
+        env = _json(_ok(_run(["-m", "yavih.cli", "--json", "exec", str(plan), "--index", str(i)], cwd=work, timeout=1200), f"exec {i} {u['kind']}"))
+        assert env["status"] == "ok" and env["data"]["status"] == "done", (u["kind"], env["data"])
+    st = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "status", str(plan)], cwd=work), "plan status"))["data"]
+    assert st["done"] == st["total"] == len(units) and st["failed"] == 0, st
+    run_dir = work / run_rel
+    for split in ("train", "val"):
+        sd = run_dir / "features" / split
+        assert json.loads((sd / "_layout.json").read_text())["sample"] == [0, 4]
+        meta = json.loads((sd / "_meta.json").read_text())
+        assert meta["sample"] == [0, 4] and meta["coverage"]["nominal"] == meta["coverage"]["present"] == 4
+    result = json.loads((_unit_path(probe_u, probe_u["done"]).parent / "result.json").read_text())
+    assert result["status"] == "ok" and result["sample"] == {"train": [0, 4], "val": [0, 4]}
+    assert not list(tmp_path.rglob("results_*.json")), "a sampled result must never reach the results store"
+    assert not (work / "runs").exists()  # nothing under the full run's root
+    md = (work / "runs-sample4" / "_report" / "report.md").read_text()
+    assert "(partial)" in md and model in md
+    rep = _json(_ok(_run(["-m", "yavih.cli", "--json", "report", "build", str(work / "runs-sample4" / "*"), "--fmt", "json"]), "report json"))["data"]
+    assert rep["rows"] and all(r["partial"] is True and "partial" in r["flags"] for r in rep["rows"])
+    assert all(r.get("partial") for rows in rep["lm_eval"].values() for r in rows)
+    csv_text = _ok(_run(["-m", "yavih.cli", "report", "build", str(work / "runs-sample4" / "*"), "--fmt", "csv"]), "report csv").stdout
+    header, *lines = csv_text.splitlines()
+    col = header.split(",").index("partial")
+    assert lines and all(ln.split(",")[col] == "true" for ln in lines)
+    # the sampled run directory never takes a full-split shard
+    proc = _run(["-m", "yavih.extract", "--bench", name, "--bridge", str(bfile), "--split", "train", "--shard", "0/1", "--out", str(run_dir),
+                 "--canaries", "0"], cwd=work)
+    assert proc.returncode == 1 and "E_LAYOUT" in proc.stderr and "sample" in proc.stderr, proc.stderr[-2000:]
+
+
 def test_features_validate_ineligible_is_ok_and_probe_records_not_applicable(integration_env, yavih_home, runs_dir, tmp_path):
     """A pooled bridge (``pos_mode: none``) on a dense readout validates ``ok`` with
     ``eligibility.eligible == false`` (exit 0, real benchmark through the CLI), and ``yavih probe run``

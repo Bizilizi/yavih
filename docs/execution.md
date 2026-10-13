@@ -88,6 +88,9 @@ A split without `_layout.json` gets the layout most of its finished shards of th
 current configuration carry (ties: the larger `n`), frozen on first use. Only another configuration
 (another model, reading, `describe_sha256` or benchmark input side) owns another layout: its shards
 and its `_layout.json` are moved to `_stale/<utc>/` together before the new configuration writes.
+A capped run (`extract --rows lo:hi`) freezes one shard over `[lo, hi)` with `sample: [lo, hi]`; the sample is
+part of the layout's identity, so a full-split unit in a sampled split directory, a sample in a full one, or a
+sample of another range is refused with `E_LAYOUT` before anything moves ([capped runs](#capped-runs-plan-build---sample-n)).
 The shard files themselves are described in [features](features.md).
 
 ### One writer per shard: claims
@@ -285,10 +288,30 @@ yavih plan build matrix.yaml --pending --kind extract --format count   # prints 
 `inputs_hash` differs from the unit's. `--kind` filters after that. With `--out`, `--format count
 --json` adds the file's `sha256` for `exec --plan-sha`.
 
+`--sample N` plans a capped run ([below](#capped-runs-plan-build---sample-n)).
+
 `W_NO_CENSUS` (stderr and the `--json` envelope's `warnings`, once per benchmark) means a video stream
 guarantees `n_frames` and this site has no media-info census: every extract unit then probes each
 clip's header before decoding it, a full demuxing pass for webm / mkv. Run `yavih bench verify <b>
 --census` once; the warning never changes a unit.
+
+### Capped runs: `plan build --sample N`
+
+`yavih plan build matrix.yaml --sample N --out plan.jsonl` plans the whole matrix on the first `N` rows of every
+role split, to try the chain (a new model, a new benchmark folder, a cluster) end to end before the full run:
+
+- the rows are the first `min(N, rows)` of each split in manifest order. The sample is not class-balanced or
+  shuffled: on a manifest sorted by class it may hold one class, so its numbers say that the chain runs, not how
+  good the model is;
+- one extract unit per split, `yavih extract … --rows 0:k` (no `--shard`), written as shard `0/1` of a layout
+  frozen with `sample: [0, k]`; `validate` measures coverage against `k` and records `sample` in `_meta.json`;
+- the probe units carry `--no-results`, and the probe writes no results-store file for a sampled feature set
+  whatever its flags; `result.json` records `sample: {split: [lo, hi]}` and every report row from it is marked
+  `partial` ([results](results.md#partial-rows));
+- everything lives under the separate runs root `<out>-sample<N>` (`runs` → `runs-sample4`), with its own
+  `_report/`: a capped run never shares a run directory, a DONE marker, an index or a report with the full run,
+  and the full plan of the same matrix later starts from nothing;
+- unit ids are derived from the full run's ids and `N`: deterministic, and never equal to a full-run id.
 
 ### Resource estimates (`needs`)
 

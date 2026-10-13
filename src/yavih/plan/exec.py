@@ -430,9 +430,11 @@ def _run_probe(unit: Unit, *, deadline: float | None, scratch: str | None) -> No
             from yavih.plan.matrix import load_profile
 
             profile = load_profile(resolve_path(unit, unit.profile))
-        readouts.probe_not_applicable(run_dir, unit=unit.to_json(), profile=profile, seed=seed)
+        readouts.probe_not_applicable(run_dir, unit=unit.to_json(), profile=profile, seed=seed, write_results="--no-results" not in unit.cmd)
         return
     kw: dict[str, Any] = {}
+    if "--no-results" in unit.cmd:  # `plan build --sample N`: no results-store file, as `probe run --no-results`
+        kw["write_results"] = False
     results = _cmd_option(unit.cmd, "--results")
     if results:  # matrix `results` → the probe's results-store root, as `probe run --results` would
         kw["results_root"] = resolve_path(unit, results)
