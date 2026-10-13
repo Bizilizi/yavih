@@ -103,7 +103,7 @@ Not defined yet. Candidates, in order:
 7. RTime
 8. Diving48
 
-Each needs a packaged benchmark folder first ([adding a benchmark](adding-a-benchmark.md)); until then a project
+Each needs a packaged benchmark folder first ([contributing a benchmark](contributing-a-benchmark.md)); until then a project
 suite can list one as `status: pending`.
 
 ## Completeness

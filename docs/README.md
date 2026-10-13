@@ -30,6 +30,9 @@ Normative descriptions of current behaviour.
 ## Developing yavih
 
 - [Development](development.md): repository layout and module map, invariants, testing, conventions.
-- [Adding a benchmark](adding-a-benchmark.md): scaffold, freeze, record hashes, document, lint.
+- [Contributing a benchmark](contributing-a-benchmark.md): the ordered steps from a fork to a merged benchmark
+  pull request: scaffold, protocol, freeze, prepare, docs, bridge template, hashes, tests, header, trials, CI.
+- [Trial run](trial-run.md): the required pre-PR run of a new benchmark by a fresh agent with only the wheel and
+  the skill: protocol, worker prompt, report template, pass criteria.
 - [Adding a readout](adding-a-readout.md): the readout registry, drivers, metrics, entry points.
 - [Releasing](releasing.md): versions from git tags, CI, the release workflow, PyPI trusted publishing.

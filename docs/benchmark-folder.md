@@ -6,7 +6,7 @@ what a folder holds, the `benchmark.yaml` schema, what `Benchmark.load` checks, 
 `Benchmark` API and how a name resolves to a folder, the README.md / setup.md contracts, and what `yavih bench lint`
 checks.
 
-Related pages: [adding-a-benchmark](adding-a-benchmark.md) (the how-to workflow), [bridge](bridge.md) (what a
+Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the steps to a new folder and its pull request), [bridge](bridge.md) (what a
 `Sample` / `RawStream` hands over and the media facts), [hashing](hashing.md) (which keys enter `input_hash` and
 `scoring_hash`), [readouts](readouts.md) (readout parameters and metrics), [validation](validation.md) (how
 `output_contract` is checked), [configuration](configuration.md) (data roots).
@@ -335,14 +335,9 @@ payload, so a folder recording its own digests is not circular.
 | `supersedes_input` | Earlier input hashes whose feature sets stay valid (an input-side edit that hands the bridge exactly the same thing). |
 
 `yavih bench lint` (check `hashes`, code `E_CHANGELOG_HASH`) requires the newest entry to record the computed
-`protocol_hash` and `input_hash`, and forbids an entry listing its own digest under `supersedes` /
-`supersedes_input`; its message names the exact lines to write and whether to bump `protocol_version` or append to
-`supersedes`. `yavih bench new` writes both hashes for the scaffold.
-
-`yavih.hash_history` merges the changelogs of every resolvable folder (packaged, `$YAVIH_HOME/benchmarks`,
-`$YAVIH_BENCH_PATH`, entry-point packs) and of every folder a `Benchmark` was loaded from in the process, and follows
-`supersedes` / `supersedes_input` transitively. There is no central table. How the hashes are computed and how
-migration works: [hashing](hashing.md).
+`protocol_hash` and `input_hash`, and its message names the exact lines to write; `yavih bench new` writes both
+hashes for the scaffold. When to bump `protocol_version` and when to list an old hash under `supersedes`, and how
+`yavih.hash_history` follows these lists across folders: [hashing: migration](hashing.md#migration).
 
 ## Manifest and classes
 

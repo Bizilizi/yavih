@@ -2,7 +2,7 @@
 
 A guide for people who continue to develop yavih itself: where things live, which invariants the code
 keeps, how to test, and the conventions every module follows. The rationale behind the invariants is in
-[design](design.md); task-specific guides are [adding a benchmark](adding-a-benchmark.md),
+[design](design.md); task-specific guides are [contributing a benchmark](contributing-a-benchmark.md),
 [adding a readout](adding-a-readout.md) and [releasing](releasing.md).
 
 ## Setting up
@@ -102,11 +102,9 @@ every folder against the contract. A change to a benchmark is a change to its fo
 
 Any change that can change a number must move a hash, and nothing else may. In practice:
 
-- Editing a hashed part of a folder (see [hashing](hashing.md)) moves its `input_hash` or `scoring_hash`.
-  The newest `changelog` entry in `benchmark.yaml` must record the hashes the folder computes;
-  `yavih bench lint` (`E_CHANGELOG_HASH`) prints the exact lines to write. Bump `protocol_version` when
-  numbers can change; otherwise list the old hash under `supersedes` (and `supersedes_input` when feature
-  sets stay valid).
+- Editing a hashed part of a folder (see [hashing](hashing.md)) moves its `input_hash` or `scoring_hash`,
+  and the folder's `changelog` must record it: [hashing: migration](hashing.md#migration) says when to bump
+  `protocol_version` and when to list the old hash under `supersedes`.
 - `probe.py` and `reader.py` are hashed as normalized syntax trees: comments and docstrings are free to
   edit, but **string literals and code are hashed** (an error message in a folder's `probe.py` is part of the
   scoring hash).

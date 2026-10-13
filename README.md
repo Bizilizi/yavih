@@ -191,7 +191,16 @@ yavih extract --bench vggsounder --bridge bridges/mymodel_vggsounder.py --split 
 yavih extract --bench vggsounder --bridge bridges/mymodel_vggsounder.py --split test  --shard 0/1 --out $RUN --arg ckpt=/ckpts/mymodel.pt
 ```
 
-Cluster: describe models × benchmarks once, let yavih cut it into units, run them as an array.
+Cluster: describe models × benchmarks once, let yavih cut it into units, run them as an array. A suite is a named
+benchmark set (`default` is what "benchmark my model" means, `minimal` a smoke pass; [suites](https://github.com/Bizilizi/yavih/blob/main/docs/suites.md)),
+and `plan init` writes its matrix and one bridge stub per benchmark:
+
+```bash
+yavih suite show default                  # capabilities, benchmarks, readings
+yavih plan init --suite default --model mymodel --launcher /envs/mymodel/bin/python   # -> matrix.yaml + bridges/mymodel_<b>.py
+```
+
+or by hand, one entry per bridge and benchmark:
 
 ```yaml
 # matrix.yaml
@@ -204,9 +213,11 @@ bridges:
 ```
 
 ```bash
+yavih plan build matrix.yaml --sample 32 --out trial.jsonl && yavih plan run trial.jsonl --local   # capped run first: 32 rows per split
 yavih plan build matrix.yaml --out plan.jsonl            # extract shards (GPU) -> probe (CPU/GPU) -> report
 yavih exec plan.jsonl --index $SLURM_ARRAY_TASK_ID --deadline slurm   # one unit; idempotent; exit 4 = resubmit
 yavih plan status plan.jsonl
+yavih suite missing default --model mymodel                 # what the suite still lacks for this model
 ```
 
 ### 5. Validate, probe, report
@@ -230,7 +241,9 @@ yavih skill install --target codex       # or cursor (.cursor/rules/yavih.mdc), 
 
 `SKILL.md` ([`src/yavih/skill/yavih/SKILL.md`](https://github.com/Bizilizi/yavih/blob/main/src/yavih/skill/yavih/SKILL.md)) is the nine-step journey with a stop condition per step (what output must be seen before moving on) and the guardrail checklist; `references/` hold the bridge contract, per-benchmark data notes and SLURM templates. Each benchmark folder's `setup.md` is written for the same reader: an agent that has to download a dataset it has never seen, prepare it, and connect a model to it. What it cannot obtain on its own (files a person must download by hand, a licence a human must accept, data only its owner has: `obtain` in `yavih bench list`) it records as not ready and skips, finishing the other benchmarks and ending with a to-do list for you (SKILL.md "When blocked").
 
-The nine steps (install, setup.md, prepare, bridge, smoke, extract, validate, probe, report) with their exact commands and stop conditions are the table in [`SKILL.md`](https://github.com/Bizilizi/yavih/blob/main/src/yavih/skill/yavih/SKILL.md); this README does not repeat it, so the two cannot drift.
+The nine steps (install, setup.md, prepare, bridge, smoke, extract, validate, probe, report) with their exact commands and stop conditions are the table in [`SKILL.md`](https://github.com/Bizilizi/yavih/blob/main/src/yavih/skill/yavih/SKILL.md); this README does not repeat it, so the two cannot drift. Asked to "benchmark my model", the agent runs the `default` suite (`yavih plan init --suite default`) without asking which benchmarks.
+
+Adding a benchmark is also written for an agent: [contributing a benchmark](https://github.com/Bizilizi/yavih/blob/main/docs/contributing-a-benchmark.md) is one ordered list of steps from a fork to the pull request, each with its commands and a "done when" line. `yavih bench trial <name> --synthetic` runs a new folder's whole pipeline on a generated stand-in, and the required [trial run](https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md) has a fresh agent set the benchmark up from the built wheel and the skill alone before the pull request is opened.
 
 Where to read next: [design](https://github.com/Bizilizi/yavih/blob/main/docs/design.md) (why yavih works this way), the [reference](https://github.com/Bizilizi/yavih/blob/main/docs/README.md#reference) (what exactly it does: benchmark folders, the bridge contract, the feature format, validation codes, readouts, hashing, the CLI), [development](https://github.com/Bizilizi/yavih/blob/main/docs/development.md) (working on yavih itself), and the [releases](https://github.com/Bizilizi/yavih/releases) (what changed).
 
