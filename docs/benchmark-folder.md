@@ -26,7 +26,7 @@ Related pages: [adding-a-benchmark](adding-a-benchmark.md) (the how-to workflow)
   probe.py              optional: folder metrics, targets, the authors' scorer
   reader.py             optional: replaces the generic reader
   tests/test_folder.py  the folder's own facts
-  assets/header.png     the README header image (python -m yavih.headers); never shipped
+  assets/header.png     the README header image (python -m yavih.headers) + header.src.sha256; never shipped
   notes/                optional maintainer notes; never shipped
 ```
 
@@ -43,7 +43,7 @@ Related pages: [adding-a-benchmark](adding-a-benchmark.md) (the how-to workflow)
 | `probe.py` | no | [Hooks](#probepy-hooks) for the scoring side. |
 | `reader.py` | no | [Folder reader](#readerpy) for what the yaml cannot express. |
 | `tests/test_folder.py` | yes | Pins the folder's own facts (row counts, hashes, curation sums, reader smoke on synthetic media, docs). |
-| `assets/header.png` | no | The README header image, rendered from the `header:` block ([header image](#header-image)); excluded from the wheel. |
+| `assets/header.png` | no | The README header image, rendered from the `header:` block, and `assets/header.src.sha256`, the sha256 of the HTML it was rendered from ([header image](#header-image)); excluded from the wheel. |
 | `notes/` | no | Maintainer notes (freeze decisions, provenance); excluded from the wheel. |
 
 A folder is data plus scripts, never a Python package: there is no `__init__.py` in it or in `tests/`. `probe.py`,
@@ -465,6 +465,14 @@ or the train/eval sizes, and the headline metric. The template is `assets/benchm
 repository; rendering needs a headless Chrome or Chromium (`--chrome PATH` or `$CHROME`). The image is a maintainer
 artefact for the repository's README pages: the wheel does not ship it and `bench lint` does not require it.
 
+Every render also writes `assets/header.src.sha256`: the sha256 of the filled HTML the image was rendered from. The
+image and the sha file are committed together. `bench lint` warns `W_HEADER_STALE` when an image exists and its sha
+file is missing or differs from the current HTML (an edited `header:` block, a chip that changed with the yaml or the
+bridge template's readings, an edited template). Pixels differ between machines, the HTML does not, so the HTML is what
+is compared. `--html-only` writes `assets/header.html` (not committed) and the sha file without rendering. On a pull
+request that touches a folder, the `headers` workflow renders every header and a contact sheet as the `headers`
+artifact, and fails when a committed sha file is not current.
+
 ## setup.md contract
 
 The agent's first read, and only about setting the benchmark up. H1 `# <name> — setup` (em dash), then exactly these
@@ -490,8 +498,12 @@ maintainer commands.
 
 `src/yavih/benchmarks/README.md` lists the packaged folders. Its table sits between
 `<!-- yavih:bench-table index begin ... -->` and `<!-- yavih:bench-table index end -->` markers and is generated from
-each folder's `benchmark.yaml` by `python -m yavih.doctables --write` (the same command regenerates the tables of the
-repo README and the skill's `references/data.md`; `--check` exits 1 when a block is stale):
+each folder's `benchmark.yaml` by `python -m yavih.doctables --write`. The same command regenerates every other list
+of the packaged benchmarks, each between `<!-- yavih:bench-table <kind> begin ... -->` / `end` markers: the repo
+README's table (`readme`) and controls bullet (`controls`), the index's `setup.md` links (`setup_links`), the
+[packaged benchmarks](#packaged-benchmarks) table below (`folder`), and in the skill `references/data.md`'s
+obtainability table (`data`) and `prepare_only` roots (`prepare_roots`) and `references/readouts.md`'s benchmarks per
+readout (`readout_groups`). `--check` exits 1 when a block is stale:
 
 ```
 | Benchmark | Description | Readout | Media | Source |
@@ -514,8 +526,9 @@ in one paragraph and a link to each folder's `setup.md`.
   gzip header is reproducible, splits are assigned once, classes are contiguous, the curation sums hold, a reader
   smoke on synthetic media, and the README / setup.md sections (helpers in `yavih.testing.folder`, including
   `assert_lint_clean`).
-- `tests/test_extensibility.py` checks that a `yavih bench new` scaffold of every readout loads and passes the lint,
-  and covers out-of-tree folders (`$YAVIH_BENCH_PATH`, entry-point packs).
+- `tests/test_extensibility.py` checks that a `yavih bench new` scaffold of every readout loads and passes the lint
+  with only `W_TODO` warnings, that its generated `tests/test_folder.py` passes (the tests that need the benchmark's
+  own data skip with a `TODO:` reason), and covers out-of-tree folders (`$YAVIH_BENCH_PATH`, entry-point packs).
 
 ## yavih bench lint
 
@@ -530,7 +543,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `layout` | `E_LAYOUT` | `README.md`, `setup.md`, `benchmark.yaml`, `manifest.csv.gz`, `bridge_template.py`, `make_manifest.py`, `tests/test_folder.py` exist; `prepare/` is non-empty; `classes.csv` exists iff `manifest.classes`; no `__init__.py` in the folder or `tests/`. |
 | `reader` | `E_READER` | An optional `reader.py` loads and its `iter_samples` accepts `shard=`. |
 | `budget` | `E_MANIFEST`, `E_BUDGET`, `E_CURATION` | The manifest reads; `budget.clips` equals the frozen rows per read split; `manifest.upstream.curation` exists, its `per_split.*.listed` equal the frozen rows, and listed plus excluded equals `total_upstream`. |
-| `header` | `E_HEADER` | `benchmark.yaml` has a `header: {name, title, venue, abstract}` block (its content is checked by the loader: non-empty strings, an abstract of at most 60 words). |
+| `header` | `E_HEADER`, `W_HEADER_STALE` (warning) | `benchmark.yaml` has a `header: {name, title, venue, abstract}` block (its content is checked by the loader: non-empty strings, an abstract of at most 60 words). When `assets/header.png` exists and the header template is at hand (a source checkout; skipped for an installed wheel), `assets/header.src.sha256` equals the sha256 of the current header HTML; otherwise the image predates its yaml, chips or template (`W_HEADER_STALE`). |
 | `readme` | `E_README`, `E_README_HASH` | The [README.md contract](#readmemd-contract). |
 | `setup` | `E_SETUP` | The [setup.md contract](#setupmd-contract). |
 | `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |
@@ -538,7 +551,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `template` | `E_TEMPLATE` | `bridge_template.py` has a literal `describe()["model"]` and a `reading` within `a`/`v`/`av`. |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |
 | `imports` | `E_IMPORT` | `reader.py` / `probe.py` import in a fresh interpreter with torch and the `external` packages blocked. |
-| `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `probe.py`, `make_manifest.py`, `classes.csv`. |
+| `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `probe.py`, `make_manifest.py`, `classes.csv`, and `TODO:` markers in `tests/*.py` and `prepare/*` (a folder test may name the bridge template's own `TODO` slots without the colon). |
 
 A path without `benchmark.yaml` yields `E_LAYOUT`; an unknown name or check is a usage error (exit 1).
 
@@ -547,16 +560,18 @@ A path without `benchmark.yaml` yields `E_LAYOUT`; an unknown name or check is a
 The full index with descriptions, media and sources is [src/yavih/benchmarks/README.md](../src/yavih/benchmarks/README.md);
 `yavih bench list` shows the same set with sizes and site status.
 
+<!-- yavih:bench-table folder begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
 | benchmark | readout | label kind | streams | headline | probe.py |
 |---|---|---|---|---|---|
-| audioset20k | clf | multi | video, audio | `map` | |
-| ave | seq | segments | video, audio | `seg_acc` | |
+| audioset20k | clf | multi | video, audio | `map` |  |
+| ave | seq | segments | video, audio | `seg_acc` |  |
 | avsync | clf | single | video, audio (materialized) | `acc` | yes |
-| esc50 | clf (5 folds) | single | audio | `acc_mean` | |
-| fsd50k | clf | multi | audio | `map` | |
-| in1k (aliases `imagenet1k`, `imagenet`) | clf | single | image | `acc` | |
-| k400 | clf | single | video | `acc` | |
+| esc50 | clf (5 folds) | single | audio | `acc_mean` |  |
+| fsd50k | clf | multi | audio | `map` |  |
+| in1k (aliases `imagenet1k`, `imagenet`) | clf | single | image | `acc` |  |
+| k400 | clf | single | video | `acc` |  |
 | nyuv2_depth | grid | none (targets) | image | `d1` | yes, `external` |
-| ssv2 | clf | single | video | `acc` | |
+| ssv2 | clf | single | video | `acc` |  |
 | vggsounder | clf | multi_sets | video, audio | `auc_pr_all` | yes, `external` |
-| vggss_box | box | box | video, audio | `iou_mean` | |
+| vggss_box | box | box | video, audio | `iou_mean` |  |
+<!-- yavih:bench-table folder end -->

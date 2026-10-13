@@ -1,14 +1,17 @@
 """Benchmark tables generated from the folders: the folder is the single source of truth.
 
-Three documents list the packaged benchmarks: the repo ``README.md``, the index ``yavih/benchmarks/README.md`` and
-the skill's ``references/data.md``. Each holds its table between two marker comments::
+Every list of the packaged benchmarks is generated: in the repo ``README.md`` (the table, the controls bullet), the
+"Packaged benchmarks" table of https://github.com/Bizilizi/yavih/blob/main/docs/benchmark-folder.md, the index
+``yavih/benchmarks/README.md`` (the table, the ``setup.md`` links) and the skill's ``references/data.md`` (the
+obtainability table, the ``prepare_only`` roots) and ``references/readouts.md`` (the benchmarks per readout). Each
+holds its block between two marker comments::
 
     <!-- yavih:bench-table index begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
     ...
     <!-- yavih:bench-table index end -->
 
 and this module renders the block from each folder's ``benchmark.yaml`` (read with pyyaml; nothing is loaded or
-scanned), so adding a folder changes no hand-written row. ``python -m yavih.doctables --write`` rewrites the blocks
+scanned; ``probe.py`` is only tested for existence), so adding a folder changes no hand-written row. ``python -m yavih.doctables --write`` rewrites the blocks
 in place; ``--check`` exits 1 when a committed block differs (the repo test does the same). ``yavih bench list
 --fmt md`` prints the ``readme`` table for any set of discoverable folders.
 """
@@ -142,12 +145,79 @@ def _names(folders: Mapping[str, Path]) -> str:
     return ", ".join(f"`{name}`" for name in folders) + "."
 
 
+def _and(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1]
+
+
+def _folder(folders: Mapping[str, Path]) -> str:
+    """The benchmark-folder page's "Packaged benchmarks" table: readout, label kind, streams, headline, ``probe.py``."""
+    rows = []
+    for name, folder in folders.items():
+        y = _yaml(folder)
+        folds = (y.get("splits") or {}).get("folds")
+        label = str((((y.get("manifest") or {}).get("label")) or {}).get("kind"))
+        if label == "none" and y.get("targets"):
+            label += " (targets)"
+        streams = ", ".join(y.get("streams") or {})
+        if ((y.get("input_contract") or {}).get("materialize")) is not None:
+            streams += " (materialized)"
+        probe = "yes" if (folder / "probe.py").is_file() else ""
+        if probe and y.get("external"):
+            probe += ", `external`"
+        rows.append([f"{name}{' (' + _aliases(y)[2:] + ')' if _aliases(y) else ''}",
+                     f"{y.get('readout')}" + (f" ({len(folds)} folds)" if folds else ""), label, streams,
+                     f"`{(y.get('metrics') or {}).get('headline')}`", probe])
+    return _table(["benchmark", "readout", "label kind", "streams", "headline", "probe.py"], rows)
+
+
+def _readout_groups(folders: Mapping[str, Path]) -> str:
+    """Skill ``references/readouts.md``: the packaged benchmarks per readout (registry order, then any other)."""
+    from yavih.readouts import registry
+
+    groups: dict[str, list[str]] = {r: [] for r in registry.names()}
+    for name, folder in folders.items():
+        groups.setdefault(str(_yaml(folder).get("readout")), []).append(name)
+    return "Packaged benchmarks per readout: " + " · ".join(
+        f"`{r}` {', '.join(names)}" for r, names in groups.items() if names) + "."
+
+
+def _prepare_roots(folders: Mapping[str, Path]) -> str:
+    """Skill ``references/data.md``: the ``data.roots`` marked ``prepare_only``, per folder."""
+    out = []
+    for name, folder in folders.items():
+        roots = [f"`{r}`" for r, spec in (((_yaml(folder).get("data") or {}).get("roots")) or {}).items()
+                 if isinstance(spec, dict) and spec.get("prepare_only")]
+        if roots:
+            out.append(f"{name} {_and(roots)}")
+    return ("Roots marked `prepare_only`: " + "; ".join(out) + ".") if out else "No root is marked `prepare_only`."
+
+
+def _controls(folders: Mapping[str, Path]) -> str:
+    """Repo ``README.md`` "What yavih enforces": the folders whose ``metrics.controls`` void a report row."""
+    from yavih.report.compare import _VOIDING_CONTROLS
+
+    names, controls = [], []
+    for name, folder in folders.items():
+        mine = [c for c in ((_yaml(folder).get("metrics") or {}).get("controls") or []) if c in _VOIDING_CONTROLS]
+        if mine:
+            names.append(f"`{name}`")
+            controls += [f"`{c}`" for c in mine if f"`{c}`" not in controls]
+    if not names:
+        return "- No benchmark emits a control that voids a row."
+    return (f"- {_and(names)} emit{'s' if len(names) == 1 else ''} controls ({', '.join(controls)}); the report greys "
+            "out the rows they void.")
+
+
 KINDS: dict[str, Callable[[Mapping[str, Path]], str]] = {
     "names": _names,
     "index": _index,
     "readme": _readme,
     "data": _data,
     "setup_links": _setup_list,
+    "folder": _folder,
+    "readout_groups": _readout_groups,
+    "prepare_roots": _prepare_roots,
+    "controls": _controls,
 }
 
 
@@ -187,13 +257,14 @@ def replace_blocks(text: str, folders: Mapping[str, Path] | None = None) -> str:
 
 
 def repo_documents() -> list[Path]:
-    """The documents with generated blocks: the packaged index and skill reference, plus the repo README when the
-    package runs from a source checkout."""
+    """The documents with generated blocks: the packaged index and skill references, plus the repo README and
+    the benchmark-folder page of the repository's docs when the package runs from a source checkout."""
     pkg = Path(__file__).resolve().parent
-    docs = [pkg / "benchmarks" / "README.md", pkg / "skill" / "yavih" / "references" / "data.md"]
-    readme = pkg.parent.parent / "README.md"
-    if readme.is_file() and (pkg.parent.parent / "pyproject.toml").is_file():
-        docs.insert(0, readme)
+    refs = pkg / "skill" / "yavih" / "references"
+    docs = [pkg / "benchmarks" / "README.md", refs / "data.md", refs / "readouts.md"]
+    repo = pkg.parent.parent
+    if (repo / "pyproject.toml").is_file():
+        docs = [p for p in (repo / "README.md", repo / "docs" / "benchmark-folder.md") if p.is_file()] + docs
     return docs
 
 

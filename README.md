@@ -239,7 +239,10 @@ Where to read next: [design](https://github.com/Bizilizi/yavih/blob/main/docs/de
 - A bridge missing a `describe()` key or an explicit precision block, a torch module left in training mode, or a configuration that drifted from its `bridge check` profile (`E_CONFIG_DRIFT`) is refused before a single clip is encoded. `bridge check` also refuses an unfilled template (`E_TEMPLATE_UNFILLED`) and features that do not change between clips (`E_CONSTANT_FEATURES`). Which guardrail is checked by which code, and which are advisory, is the table in SKILL.md "Guardrails".
 - Features are checked against the manifest: every row exactly once, finite, one `(N, D, dtype, batch size, describe_sha256, model, reading)` across shards; `used` checked against the declared rules (`E_RULE_MISMATCH`, `E_TIMES_OUT_OF_MEDIA`), token positions inside the crop region and the media span consumed, canaries (`E_BATCH_INVARIANCE`), dead token rows, duplicated clips, `pos` ranges.
 - The probe refuses stale hashes, training on an eval split, train ∩ eval ≠ ∅ and eval coverage below the benchmark's threshold. Pooled features on a dense readout become a recorded `not_applicable`, never a number.
-- Every readout emits its floor; `avsync` and `vggss_box` emit controls (`floor_violated`, `audio_blind`). The report greys out rows that do not clear them, and never a row because of a bridge decision (a `custom` rule, unfingerprinted weights).
+- Every readout emits its floor. The report greys out rows that do not clear it, and never a row because of a bridge decision (a `custom` rule, unfingerprinted weights).
+<!-- yavih:bench-table controls begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
+- `avsync` and `vggss_box` emit controls (`floor_violated`, `audio_blind`); the report greys out the rows they void.
+<!-- yavih:bench-table controls end -->
 
 ## Feature format
 

@@ -34,6 +34,13 @@ number. Releases follow semantic versioning for the Python API, the CLI and the 
   torch, and runs `yavih --version`, `yavih bench lint --all` and `yavih bench files esc50` from an empty
   directory.
 
+`.github/workflows/headers.yml` runs on pull requests that touch `src/yavih/benchmarks/`,
+`assets/benchmark-header/` or `src/yavih/headers.py`, and on demand, with read-only permissions: it installs
+`.[media]` and `imagequant`, renders every folder's header image with the runner's Chrome
+(`python -m yavih.headers --all --contact-sheet headers-contact-sheet.png`), uploads the images and the contact sheet
+as the `headers` artifact for review, and fails when a committed `assets/header.src.sha256` is missing or differs
+from the current header HTML (render the image and commit it with its sha file).
+
 ## Cutting a release
 
 1. Make sure `main` is green and the docs describe the code being released.
