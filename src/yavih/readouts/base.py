@@ -84,12 +84,13 @@ __all__ = [
 RESULT_STATUSES: frozenset[str] = frozenset({"ok", "not_applicable", "failed"})
 #: Top-level keys of the ``result.json`` record. ``metrics/floors/controls/ci95`` exist only for ``status == ok``
 #: (metric keys for a non-ok status are ABSENT); ``warnings`` carries probe-time findings
-#: such as ``W_COVERAGE``.
+#: such as ``W_COVERAGE``; ``sample`` (``{split: [lo, hi]}``) exists only on a result of a capped run
+#: (``plan build --sample N``): never stored, every report row from it is ``partial``.
 RESULT_KEYS: frozenset[str] = frozenset(
     {
         "schema_version", "status", "reason", "standard", "eval_hash", "benchmark", "model", "reading", "bridge", "features",
         "probe", "metrics", "ci95", "floors", "controls", "chance", "coverage", "not_applicable",
-        "timing", "env", "created", "warnings", "external", "waived",
+        "timing", "env", "created", "warnings", "external", "waived", "sample",
     }
 )
 _METRIC_BLOCKS: tuple[str, ...] = ("metrics", "floors", "controls", "ci95")
@@ -346,7 +347,7 @@ def check_result(result: Mapping[str, Any], *, expect: Mapping[str, Any] | None 
     unknown = keys - RESULT_KEYS
     if unknown:
         raise ResultSchemaError(f"unknown result keys {sorted(unknown)}")
-    required = RESULT_KEYS - set(_METRIC_BLOCKS) - {"warnings", "chance", "waived"}
+    required = RESULT_KEYS - set(_METRIC_BLOCKS) - {"warnings", "chance", "waived", "sample"}
     missing = required - keys
     if missing:
         raise ResultSchemaError(f"missing result keys {sorted(missing)}")
@@ -383,6 +384,11 @@ def check_result(result: Mapping[str, Any], *, expect: Mapping[str, Any] | None 
     ext = result["external"]
     if not isinstance(ext, Mapping) or not all(isinstance(k, str) and isinstance(v, str) for k, v in ext.items()):
         raise ResultSchemaError("external must be an object {package: version} ({} when none)")
+    if "sample" in result:
+        smp = result["sample"]
+        if not isinstance(smp, Mapping) or not smp or not all(
+                isinstance(v, list) and len(v) == 2 and all(isinstance(x, int) and not isinstance(x, bool) for x in v) for v in smp.values()):
+            raise ResultSchemaError("sample must be a non-empty object {split: [lo, hi]} (a capped run's rows)")
 
     na = result["not_applicable"]
     plan_time = False
@@ -1468,6 +1474,8 @@ def probe(
     ``results_root`` → ``YAVIH_RESULTS`` / config ``[results] root`` → ``results/`` next to the runs root of a
     standard run directory ``<runs root>/<benchmark>/<model>/<reading>``; any other layout is refused
     (``E_RESULTS_ROOT``, exit 1). Every returned ``ProbeResult`` carries ``results_file`` / ``samples_file``.
+    A capped run (``plan build --sample N``: a ``_meta.json`` with ``sample: [lo, hi]``) never writes the store, whatever
+    ``write_results`` says, and needs no results root; its ``result.json`` records ``sample: {split: [lo, hi]}``.
 
     Extra keywords (beyond the documented readout signature): ``bench`` =
     an already-loaded ``Benchmark`` or a folder path/ref (else ``Benchmark.load(<_meta name>)``);
@@ -1494,7 +1502,7 @@ def probe(
         allow_low_coverage=allow_low_coverage, loader_workers=loader_workers, log_samples=log_samples,
         bench=bench, unit=unit, profile=profile, validate_first=validate_first, device=device, state=state,
     )
-    if write_results and results:
+    if write_results and results and not state.get("sample"):  # a capped run's result never reaches the store
         _write_results_store(results, bench=state.get("bench"), results_root=state.get("results_root"), log_samples=log_samples)
     return results
 
@@ -1759,8 +1767,12 @@ def _probe(
             )
     if not isinstance(model, str) or not model or not isinstance(reading, str) or not reading:
         raise ProbeRefused("E_FORMAT", f"{features_root}: the feature set names no model/reading: re-extract with this yavih")
+    # A capped run (`plan build --sample N`: `_meta.json` `sample: [lo, hi]`) is scored like any other but never
+    # reaches the results store; its result records `sample` and every report row from it is `partial`.
+    sample = {s: [int(x) for x in m["sample"]] for s, m in metas.items() if isinstance(m.get("sample"), list)}
+    state["sample"] = sample
     # The results-store root is decided (or refused, exit 1) before anything is trained
-    if state.get("resolve_results") is not None:
+    if state.get("resolve_results") is not None and not sample:
         state["results_root"] = state["resolve_results"](bench, model, reading)
 
     cfg, standard = _standard(cfg, readout, bench)
@@ -1800,6 +1812,7 @@ def _probe(
                 features=features, coverage=coverage, missing=[], reason=reason, decided_by="bridge", started=started,
                 waived=_waived_of(metas),
             )
+            _mark_sample(rec, sample)
             path = write_result(result_dir(run_dir, bench.protocol_hash, qh, seed), rec, features_fingerprint=fingerprint)
             results.append(ProbeResult("not_applicable", seed, path, rec, reason))
         return results
@@ -1830,6 +1843,7 @@ def _probe(
                 features=features, coverage=coverage, missing=missing, reason=reason, decided_by="validate", started=started,
                 waived=_waived_of(metas),
             )
+            _mark_sample(rec, sample)
             path = write_result(result_dir(run_dir, bench.protocol_hash, qh, seed), rec, features_fingerprint=fingerprint)
             results.append(ProbeResult("not_applicable", seed, path, rec, reason))
         return results
@@ -1927,6 +1941,7 @@ def _probe(
                 raise
             except Exception as e:  # noqa: BLE001 - recorded as status failed (no DONE), then re-raised (exit 5)
                 failed = _failed_result(ctx, bridge=bridge, model=model, reading=reading, qh=qh, standard=standard, reason=f"{type(e).__name__}: {e}", started=seed_started)
+                _mark_sample(failed, sample)
                 try:
                     write_result(out, failed, features_fingerprint=fingerprint)
                 except ResultSchemaError:  # pragma: no cover - defensive
@@ -1935,6 +1950,7 @@ def _probe(
             ctx.check_interrupt()
             _record_determinism(ctx, blocks)
             rec = _ok_result(ctx, blocks, bridge=bridge, model=model, reading=reading, qh=qh, standard=standard, started=seed_started)
+            _mark_sample(rec, sample)
             _write_side_outputs(ctx, blocks)
             path = write_result(out, rec, features_fingerprint=fingerprint, expect=expect)
             # Every checkpoint of this seed (main head, folds, the box shuffled control) is spent once
@@ -1968,16 +1984,18 @@ def probe_not_applicable(
     profile: Mapping[str, Any] | str | os.PathLike | None,
     seed: int = 0,
     bench: Any | None = None,
+    write_results: bool = True,
 ) -> list[ProbeResult]:
     """The plan-time ``not_applicable`` probe: ``yavih exec`` calls this for a unit whose
     record carries ``expected_status: not_applicable``. No features exist; the result is built from the
     planned profile and written with DONE. A thin alias of ``probe(run_dir, seeds=(seed,), unit=unit,
-    profile=profile)`` so the plan side needs no second code path."""
+    profile=profile)`` so the plan side needs no second code path; ``write_results=False`` (a unit whose ``cmd`` says
+    ``--no-results``, e.g. one of ``plan build --sample N``) writes no results-store file."""
     rec = dict(unit)
     rec.setdefault("expected_status", "not_applicable")
     if rec.get("expected_status") != "not_applicable":
         raise ProbeRefused("E_USAGE", "probe_not_applicable needs a unit with expected_status == not_applicable", exit_code=1)
-    return probe(run_dir, seeds=(int(seed),), unit=rec, profile=profile, bench=bench)
+    return probe(run_dir, seeds=(int(seed),), unit=rec, profile=profile, bench=bench, write_results=write_results)
 
 
 def _record_determinism(ctx: ReadoutContext, blocks: dict) -> None:
@@ -2052,6 +2070,13 @@ def _ok_result(ctx: ReadoutContext, blocks: Mapping[str, Any], *, bridge: dict, 
         # Validation waivers in force (recorded; the report marks the row, nothing is greyed)
         "waived": _waived_of(ctx.metas),
     }
+
+
+def _mark_sample(rec: dict, sample: Mapping[str, Any]) -> dict:
+    """Record a capped run's ``{split: [lo, hi]}`` on the result (``sample``); a full run's result has no such key."""
+    if sample:
+        rec["sample"] = {str(k): [int(v[0]), int(v[1])] for k, v in sample.items()}
+    return rec
 
 
 def _external_used(base: Mapping[str, Any] | None) -> dict[str, str]:

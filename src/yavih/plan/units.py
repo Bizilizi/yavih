@@ -10,6 +10,12 @@ A split whose shard layout is frozen (``features/<split>/_layout.json``) is plan
 or ``needs``); ``write_plan`` stores ``cwd`` relative to the plan file and ``read_plan(..., root=)`` re-anchors it
 (``exec --root``); ``needs.gpu`` is 0 for a CPU-only profile (``peak_gpu_gb == 0``).
 
+``sample=N`` (``plan build --sample N``) plans a capped run: per role split the first ``min(N, rows)`` manifest rows
+(manifest order, not class-balanced) as ONE extract unit ``--rows 0:rows``, probe units with ``--no-results``, under the
+separate runs root ``<out>-sample<N>`` (:func:`sample_root`), so a capped run never shares a run directory, a DONE
+marker, an index or a report with the full run; unit ids are derived from the full-run ids and ``N``, so they never
+collide with them.
+
 Module scope is stdlib + ``yavih.versions`` + ``yavih.hashing`` (both stdlib). The
 benchmark (``yavih.benchmark``, numpy) and the pinned ``ProbeConfig`` (``yavih.probes.config``,
 torch-free) are reached through ``resolve_benchmark``, a module-level hook, so a controller env
@@ -55,6 +61,7 @@ __all__ = [
     "REPORT_KEY",
     "W_NO_CENSUS",
     "uncensused_frame_streams",
+    "sample_root",
 ]
 
 #: ``plan build`` warning: a video stream guarantees ``n_frames`` and the site has no media-info census.
@@ -498,8 +505,22 @@ def _not_applicable(info: BenchmarkInfo, profile: dict) -> dict | None:
     return {"missing": list(dict.fromkeys(missing)), "reason": "; ".join(reasons), "decided_by": "plan"}
 
 
+def sample_root(out: str, n: int) -> str:
+    """The runs root of ``plan build --sample N``: ``<out>-sample<N>`` beside the matrix ``out`` (a separate tree:
+    its run directories, DONE markers, ``_index.jsonl`` and ``_report/`` never mix with the full run's)."""
+    base = os.path.normpath(out)
+    if os.path.basename(base) in ("", ".", ".."):
+        return os.path.join(base, f"sample{int(n)}")
+    return f"{base}-sample{int(n)}"
+
+
+def _sampled_id(uid: str, n: int | None) -> str:
+    """A capped run's unit id: derived from the full-run id and ``N`` (deterministic, never equal to a full-run id)."""
+    return uid if n is None else hashing.hash12(hashing.sha256_canon({"unit": uid, "sample": int(n)}))
+
+
 def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profile: dict, *,
-                 shard_minutes: int, calibration: dict, ram_budget_bytes: int) -> list[Unit]:
+                 shard_minutes: int, calibration: dict, ram_budget_bytes: int, sample: int | None = None) -> list[Unit]:
     # model and reading come from the profile (checked against its describe by
     # check_profile); nothing bridge-side beyond these two names enters a path, an id or a key.
     model: str = profile["model"]
@@ -512,7 +533,10 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
     cps = float(profile["clips_per_s"])
     gpu = estimate.gpu_for_profile(profile)
     mult = calibration.get("multipliers") or {}
-    run_dir = os.path.join(matrix.out, info.name, model, reading)
+    out_root = sample_root(matrix.out, sample) if sample is not None else matrix.out
+    run_dir = os.path.join(out_root, info.name, model, reading)
+    # the rows each split contributes: all of them, or the first N of a capped run (manifest order)
+    split_rows = {s: (min(int(sample), int(r)) if sample is not None else int(r)) for s, r in info.n_rows.items()}
     ih = info.input_hash or info.protocol_hash  # extract units follow the input side only
     na = _not_applicable(info, profile)
     units: list[Unit] = []
@@ -520,13 +544,16 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
 
     if na is None:
         for split in info.role_splits():
-            rows = info.n_rows[split]
+            rows = split_rows[split]
             out = os.path.join(run_dir, "features", split)
-            n, ranges = _split_layout(matrix, entry, info, profile, split, out, rows=rows, batch_size=batch_size, cps=cps,
-                                      shard_minutes=shard_minutes, bpr=bpr, max_rows_per_shard=matrix.rows_cap(entry))
+            if sample is not None:  # one shard over the first `rows` rows; the layout is frozen with `sample`
+                n, ranges = 1, [(0, rows)]
+            else:
+                n, ranges = _split_layout(matrix, entry, info, profile, split, out, rows=rows, batch_size=batch_size, cps=cps,
+                                          shard_minutes=shard_minutes, bpr=bpr, max_rows_per_shard=matrix.rows_cap(entry))
             for i, (lo, hi) in enumerate(ranges):
-                uid = hashing.unit_id(kind="extract", benchmark=info.name, model=model, reading=reading, split=split,
-                                      shard=[i, n], protocol_hash=None, input_hash=ih, probe_hash=None, seed=None)
+                uid = _sampled_id(hashing.unit_id(kind="extract", benchmark=info.name, model=model, reading=reading, split=split,
+                                                  shard=[i, n], protocol_hash=None, input_hash=ih, probe_hash=None, seed=None), sample)
                 needs = estimate.extract_needs(hi - lo, clips_per_s=cps, cpus=entry.cpus, multipliers=mult, gpu=gpu)
                 needs["minutes"] = int(math.ceil(needs["minutes"] * _unit_factor(calibration, uid)))
                 cmd = [
@@ -535,7 +562,7 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
                     # `--out` is the RUN directory (features land in `<run_dir>/features/<split>`):
                     # `run_extract` lands shards in `<out>/features/<split>/`, so the unit's `done` path
                     # below is reachable only when the run dir, not the runs root, is passed.
-                    "--shard", f"{i}/{n}", "--out", run_dir,
+                    *(["--rows", f"{lo}:{hi}"] if sample is not None else ["--shard", f"{i}/{n}"]), "--out", run_dir,
                     *_arg_tokens(entry.args),
                     "--canaries", str(matrix.canaries),
                     "--decode-workers", str(max(1, entry.cpus - 1)),
@@ -556,12 +583,12 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
                 units.append(u)
                 extract_ids.append(uid)
 
-    bytes_train = 0 if na else sum(info.n_rows.get(s, 0) for s in info.train_splits()) * bpr
+    bytes_train = 0 if na else sum(split_rows.get(s, 0) for s in info.train_splits()) * bpr
     qh = info.probe_hash
     eh = hashing.eval_hash(info.protocol_hash, qh)  # the comparability key names the probe directory
     for seed in matrix.seeds:
-        uid = hashing.unit_id(kind="probe", benchmark=info.name, model=model, reading=reading, split=None, shard=None,
-                              protocol_hash=info.protocol_hash, probe_hash=qh, seed=seed)
+        uid = _sampled_id(hashing.unit_id(kind="probe", benchmark=info.name, model=model, reading=reading, split=None, shard=None,
+                                          protocol_hash=info.protocol_hash, probe_hash=qh, seed=seed), sample)
         if na is None:
             needs = estimate.probe_needs(bytes_train=bytes_train, N=profile["N"], D=profile["D"],
                                          probe_minutes_ref=info.probe_minutes_ref, seeds=1,
@@ -572,7 +599,9 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
             needs = {"gpu": 0, "cpus": 1, "mem_gb": 4, "scratch_gb": 0, "minutes": 5}
         needs["minutes"] = int(math.ceil(needs["minutes"] * _unit_factor(calibration, uid)))
         cmd = ["python", "-m", "yavih.cli", "probe", "run", run_dir, "--seeds", str(seed)]
-        if matrix.results:  # matrix `results`; exec's in-process probe reads it back from cmd
+        if sample is not None:  # a capped run's result never reaches the results store
+            cmd += ["--no-results"]
+        elif matrix.results:  # matrix `results`; exec's in-process probe reads it back from cmd
             cmd += ["--results", matrix.results]
         for code, reason in sorted(entry.waive.items()):  # matrix `waive` → the probe's validate prologue
             cmd += ["--waive", f"{code}={reason}"]
@@ -621,16 +650,17 @@ def _split_layout(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profi
     return n, estimate.shard_ranges(rows, batch_size, n)
 
 
-def _report_unit(matrix: Matrix, probe_ids: list[str], calibration: dict) -> Unit:
+def _report_unit(matrix: Matrix, probe_ids: list[str], calibration: dict, out_root: str | None = None) -> Unit:
     # The probe set is folded into the report's protocol_hash so adding a bridge to the matrix makes the
     # old report stale under --pending (inputs_hash does not cover depends_on).
     ph = hashing.sha256_canon(sorted(probe_ids))
     uid = hashing.unit_id(kind="report", benchmark=REPORT_KEY, model=REPORT_KEY, reading=REPORT_KEY, split=None,
                           shard=None, protocol_hash=ph, probe_hash=None, seed=None)
-    out = os.path.join(matrix.out, "_report")
+    out_root = matrix.out if out_root is None else out_root
+    out = os.path.join(out_root, "_report")
     needs = {"gpu": 0, "cpus": 2, "mem_gb": 8, "scratch_gb": 0, "minutes": 30}
     needs["minutes"] = int(math.ceil(needs["minutes"] * _unit_factor(calibration, uid)))
-    cmd = ["python", "-m", "yavih.cli", "report", "build", os.path.join(matrix.out, "*"), "--fmt", "md",
+    cmd = ["python", "-m", "yavih.cli", "report", "build", os.path.join(out_root, "*"), "--fmt", "md",
            "--out", os.path.join(out, "report.md")]
     u = Unit(
         id=uid, kind="report", benchmark=REPORT_KEY, bridge=REPORT_KEY, model=REPORT_KEY, reading=REPORT_KEY, split=None,
@@ -660,12 +690,15 @@ def _no_census_warning(info: BenchmarkInfo) -> dict:
 
 
 def build_units(matrix: Matrix, *, shard_minutes: int | None = None, ram_budget_bytes: int | None = None,
-                warnings: list[dict] | None = None) -> list[Unit]:
+                warnings: list[dict] | None = None, sample: int | None = None) -> list[Unit]:
     """Every unit of the matrix (no filtering): matrix refusals, unit records, topological order. ``warnings`` (when
-    given) collects ``W_NO_CENSUS`` findings, one per benchmark; they never change a unit."""
+    given) collects ``W_NO_CENSUS`` findings, one per benchmark; they never change a unit. ``sample=N``: the capped
+    run of ``plan build --sample N`` (module docstring)."""
     shard_minutes = int(shard_minutes or matrix.shard_minutes)
     if shard_minutes < 1:
         raise PlanError("--shard-minutes must be >= 1")
+    if sample is not None and (isinstance(sample, bool) or int(sample) < 1):
+        raise PlanError(f"--sample must be >= 1, got {sample!r}")
     if ram_budget_bytes is None:
         ram_budget_bytes = _ram_budget_bytes()
     out_root = matrix.out if os.path.isabs(matrix.out) else os.path.join(matrix.root, matrix.out)
@@ -700,7 +733,7 @@ def build_units(matrix: Matrix, *, shard_minutes: int | None = None, ram_budget_
             )
         seen_runs[run_key] = (entry.key, profile["model"], profile["reading"])
         for u in _entry_units(matrix, entry, info, profile, shard_minutes=shard_minutes,
-                              calibration=calibration, ram_budget_bytes=ram_budget_bytes):
+                              calibration=calibration, ram_budget_bytes=ram_budget_bytes, sample=sample):
             if u.id in seen_ids:
                 raise PlanError(
                     f"entries {seen_ids[u.id]!r} and {entry.key!r} plan the same unit {u.id} "
@@ -709,7 +742,7 @@ def build_units(matrix: Matrix, *, shard_minutes: int | None = None, ram_budget_
             seen_ids[u.id] = entry.key
             units.append(u)
     probe_ids = [u.id for u in units if u.kind == "probe"]
-    units.append(_report_unit(matrix, probe_ids, calibration))
+    units.append(_report_unit(matrix, probe_ids, calibration, out_root=sample_root(matrix.out, sample) if sample is not None else None))
     return _order(units)
 
 
@@ -728,13 +761,14 @@ def plan(
     kind: str | None = None,
     shard_minutes: int | None = None,
     warnings: list[dict] | None = None,
+    sample: int | None = None,
 ) -> list[Unit]:
     """``yavih plan build``. ``pending`` emits only units whose ``done`` is missing or stale. ``warnings`` collects the
-    plan's warnings (``W_NO_CENSUS``)."""
+    plan's warnings (``W_NO_CENSUS``). ``sample=N`` (``--sample N``) plans the capped run under ``<out>-sample<N>``."""
     if kind is not None and kind not in UNIT_KINDS:
         raise PlanError(f"--kind must be one of {sorted(UNIT_KINDS)}, got {kind!r}")
     matrix = load_matrix(matrix_path)
-    units = build_units(matrix, shard_minutes=shard_minutes, warnings=warnings)
+    units = build_units(matrix, shard_minutes=shard_minutes, warnings=warnings, sample=sample)
     if pending:
         units = [u for u in units if check_done(u) is None or is_stale(u)]
     if kind is not None:

@@ -964,6 +964,42 @@ def test_resume_keeps_a_shard_whose_input_hash_is_superseded(tmp_path):
         hash_history.reset()
 
 
+def test_a_sampled_layout_is_another_identity(tmp_path):
+    """``sample: [lo, hi]`` is part of a layout's identity: a full split's layout (no key, also every layout written
+    before samples existed) never serves a sample and the other way round; ``freeze_layout`` refuses the mix with
+    ``E_LAYOUT`` naming both, ``frozen_layout`` too; a sampled layout is never inferred from shards."""
+    from yavih.io.layout import (
+        LayoutError,
+        build_layout,
+        freeze_layout,
+        frozen_layout,
+        infer_layout,
+        layout_identity,
+        layout_matches,
+        layout_sample,
+        read_layout,
+        sample_conflict,
+    )
+
+    base = dict(manifest_hash="m" * 64, input_hash="b" * 64, model="m1", reading="v", describe_sha256="d" * 64)
+    full, s4, s8 = layout_identity(**base), layout_identity(**base, sample=(0, 4)), layout_identity(**base, sample=[0, 8])
+    full_rec = build_layout(full, n=2, batch_size=4, n_rows=16)
+    assert "sample" not in full_rec and layout_sample(full_rec) is None and layout_matches(full_rec, full)
+    assert not layout_matches(full_rec, s4) and "a --rows 0:4 sample" in sample_conflict(full_rec, s4)
+    sd = tmp_path / "features" / "train"
+    rec = freeze_layout(sd, s4, n=7, batch_size=4, n_rows=99)  # n / n_rows are the sample's, not the caller's
+    assert rec["sample"] == [0, 4] and rec["n"] == 1 and rec["ranges"] == [[0, 4]] and rec["n_rows"] == 4
+    assert read_layout(sd) == rec and layout_sample(rec) == (0, 4) and frozen_layout(sd, s4) == rec
+    assert sample_conflict(rec, {**s4, "model": "m2"}) is None  # another configuration: moved aside, not a conflict
+    for other in (full, s8):
+        with pytest.raises(LayoutError) as ei:
+            freeze_layout(sd, other, n=2, batch_size=4, n_rows=16)
+        assert ei.value.code == "E_LAYOUT" and ei.value.exit_code == 1 and "sample" in str(ei.value)
+        with pytest.raises(LayoutError):
+            frozen_layout(sd, other, n_rows=16)
+    assert infer_layout(sd, s4, n_rows=4) is None
+
+
 def test_a_layout_belongs_to_its_configuration_through_supersedes_input():
     """``_layout.json`` keys on ``benchmark.input_hash`` (read through ``supersedes_input``) and the describe digest."""
     from yavih import hash_history

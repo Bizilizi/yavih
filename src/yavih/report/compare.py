@@ -22,6 +22,11 @@ carries ``floor_violated`` / ``audio_blind`` — never because of a bridge decis
 unfingerprinted checkpoint); ``population differs`` marks a column whose eval ``ids_sha256`` disagree;
 superseded ``protocol_version``\\s are listed; readings are grouped by ``model`` with ``MISSING`` cells (only
 for readings whose stream modalities the column's benchmark has).
+
+A result of a capped run (``plan build --sample N``: ``result["sample"]``) is never mixed with a full run's: within a
+row key it forms its own ``partial`` row (view 1 and view 2), marked in every format (``partial: true`` and the flag
+``partial`` in json, the ``(partial)`` suffix on its values in md, the ``partial`` column and flag in csv). Such a
+result never reaches the results store, so ``--merge-results`` never sees it.
 stdlib only (the folder ``join`` is a lazy import).
 """
 
@@ -58,6 +63,7 @@ __all__ = [
     "column_key",
     "floor_name_for",
     "build_report",
+    "is_partial",
     "DEFAULT_MIN_EVAL_COVERAGE",
     "REPORT_DIR",
 ]
@@ -223,6 +229,11 @@ def comparable(a: dict, b: dict, aliases: Mapping[str, str] | None = None) -> bo
 
 
 # --------------------------------------------------------------------------- helpers
+
+
+def is_partial(result: dict) -> bool:
+    """A result of a capped run (``plan build --sample N``): it carries ``sample`` (``{split: [lo, hi]}``)."""
+    return bool(result.get("sample"))
 
 
 def _describe(result: dict) -> dict[str, Any]:
@@ -550,6 +561,9 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         else:
             controls[c] = vals[0]
     flags: list[str] = []
+    partial = is_partial(first)
+    if partial:
+        flags.append("partial")
     if status != "ok":
         flags.append(status)
     if len(ok) == 1 and seed is None:
@@ -599,6 +613,8 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         "flags": flags,
         "greyed": greyed,
         "missing": False,
+        "partial": partial,
+        "sample": first.get("sample") if partial else None,
         "paths": list(paths),
     }
 
@@ -634,6 +650,8 @@ def _missing_row(column: dict[str, Any], model: str, reading: str) -> dict[str, 
         "flags": ["missing"],
         "greyed": False,
         "missing": True,
+        "partial": False,
+        "sample": None,
         "paths": [],
     }
 
@@ -643,7 +661,7 @@ def _sort_key_rows(row: dict[str, Any]) -> tuple:
     cell = row["metrics"].get(h) if h else None
     value = cell.get("value") if isinstance(cell, dict) else None
     v = -float(value) if isinstance(value, (int, float)) else math.inf
-    return (row["model"], row["reading"], row["missing"], v, row["seed"] if row["seed"] is not None else -1)
+    return (row["model"], row["reading"], bool(row.get("partial")), row["missing"], v, row["seed"] if row["seed"] is not None else -1)
 
 
 def _headline_value(results: Sequence[dict], headline: str | None) -> Any:
@@ -695,24 +713,24 @@ def lm_eval_tables(records: Sequence[dict], aliases: Mapping[str, str] | None = 
     from yavih.report.store import metric_info
 
     aliases = _alias_map() if aliases is None else aliases
-    by_model: dict[str, dict[tuple[str, str, str, bool], list[dict]]] = {}
+    by_model: dict[str, dict[tuple[str, str, str, bool, bool], list[dict]]] = {}
     for rec in records:
         if rec.get(MOVED_ASIDE):
             continue  # never a row
         res = rec["result"]
         bench, eh, model, reading = row_key(res, aliases)
-        by_model.setdefault(model, {}).setdefault((bench, reading, eh, bool(res.get("standard"))), []).append(res)
+        by_model.setdefault(model, {}).setdefault((bench, reading, eh, bool(res.get("standard")), is_partial(res)), []).append(res)
     out: dict[str, list[dict[str, Any]]] = {}
     for model in sorted(by_model):
         groups = by_model[model]
         rows: list[dict[str, Any]] = []
 
         def order(kv):
-            (bench, reading, eh, std), rs = kv
+            (bench, reading, eh, std, partial), rs = kv
             pv = (rs[0].get("benchmark") or {}).get("protocol_version")
-            return (bench, reading, not std, -(pv if isinstance(pv, int) else -1), eh)
+            return (bench, reading, partial, not std, -(pv if isinstance(pv, int) else -1), eh)
 
-        for (bench, reading, eh, std), all_results in sorted(groups.items(), key=order):
+        for (bench, reading, eh, std, partial), all_results in sorted(groups.items(), key=order):
             results = select_newest(all_results).shown
             first = results[0]
             bmeta = first.get("benchmark") or {}
@@ -721,6 +739,8 @@ def lm_eval_tables(records: Sequence[dict], aliases: Mapping[str, str] | None = 
             waived = waived_of(results)
             if waived:  # marked († and a footnote), never greyed
                 base["waived"] = waived
+            if partial:  # a capped run: its own row, marked in every format
+                base["partial"] = True
             ok = [r for r in results if r.get("status") == "ok"]
             if not ok:
                 rows.append({**base, "metric": "—", "value": None, "std": None, "n_seeds": len(results), "ci95": None,
@@ -837,10 +857,12 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
         bench, eh = key
         column_id = f"{bench}:{eh[:12]}" + ("" if std else ":nonstandard")
         # rows by (model, reading): newest configuration, newest feature set
-        by_row: dict[tuple[str, str], list[dict]] = {}
+        # a capped run's results (`sample`) form their own row: never selected against, or averaged with, a full run's
+        by_row: dict[tuple[str, str, bool], list[dict]] = {}
         for r in results:
-            by_row.setdefault((_model(r), _reading(r)), []).append(r)
-        selections = {rk: add_moved_aside(select_newest(rs), moved.get((key, std, *rk), [])) for rk, rs in by_row.items()}
+            by_row.setdefault((_model(r), _reading(r), is_partial(r)), []).append(r)
+        selections = {rk: add_moved_aside(select_newest(rs), [] if rk[2] else moved.get((key, std, *rk[:2]), []))
+                      for rk, rs in by_row.items()}
         shown_all = [r for sel in selections.values() for r in sel.shown]
         ok_results = [r for r in shown_all if r.get("status") == "ok"]
         metric_names = _ordered_union([list((r.get("metrics") or {}).keys()) for r in ok_results])
@@ -885,7 +907,7 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
         min_cov = float(meta.get("min_eval_coverage", DEFAULT_MIN_EVAL_COVERAGE))
         row_kw = dict(column_id=column_id, key=key, metric_names=metric_names, control_names=control_names, headline=headline,
                       floor_names=floor_names, min_eval_coverage=min_cov)
-        for (mdl, rd), sel in selections.items():
+        for (mdl, rd, partial), sel in selections.items():
             if len(sel.configs) > 1:
                 shown_d = _describe(sel.configs[0][1][0])
                 keys = _ordered_union(describe_diff(shown_d, _describe(rs[0])).keys() for _d, rs in sel.configs[1:])
@@ -915,17 +937,18 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
                 row["n_configs"], row["n_feature_sets"] = len(sel.configs), len(sel.feature_sets)
             rows.extend(part_rows)
             if detail:
-                rep.detail.setdefault(column_id, {})[f"{mdl}:{rd}"] = _row_detail(sel, headline)
+                rep.detail.setdefault(column_id, {})[f"{mdl}:{rd}" + (":partial" if partial else "")] = _row_detail(sel, headline)
 
-        # population differs: distinct eval ids_sha256 among ok rows
-        ids = {row["coverage"]["eval_ids_sha256"] for row in rows if row["status"] == "ok" and row["coverage"]["eval_ids_sha256"]}
+        # population differs: distinct eval ids_sha256 among ok rows (a partial row is a subset by construction: it is
+        # marked partial, never compared here)
+        full_ok = [row for row in rows if row["status"] == "ok" and not row.get("partial")]
+        ids = {row["coverage"]["eval_ids_sha256"] for row in full_ok if row["coverage"]["eval_ids_sha256"]}
         if len(ids) > 1:
             column["population_differs"] = True
             column["flags"].append("population_differs")
-            for row in rows:
-                if row["status"] == "ok":
-                    row["flags"].append("population_differs")
-            low = [row for row in rows if row["status"] == "ok" and row["coverage"]["eval"] is not None and row["coverage"]["eval"] < min_cov]
+            for row in full_ok:
+                row["flags"].append("population_differs")
+            low = [row for row in full_ok if row["coverage"]["eval"] is not None and row["coverage"]["eval"] < min_cov]
             if low and not allow_coverage_diff:
                 names = ", ".join(sorted({f"{row['model']} {row['reading']}" for row in low}))
                 raise ReportError(

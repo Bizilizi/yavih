@@ -74,7 +74,9 @@ neither). At most 20 findings per code are kept; the 21st becomes one "further f
 4. **Shard set** (`E_SHARD_SET`): one `n`, no index missing or out of range, every sidecar with its tar and every
    tar with its sidecar. Missing indices are listed as `--shard i/n`.
 5. **Identity of the benchmark**: `E_HASH_MANIFEST`, `E_HASH_INPUT`.
-6. **Tiling** (`E_RANGE_TILING`), on a complete shard set only.
+6. **Tiling** (`E_RANGE_TILING`), on a complete shard set only. A capped run (the split's `_layout.json` has
+   `sample: [lo, hi]`, written by `extract --rows lo:hi`) has one shard that must cover exactly `[lo, hi)`; its
+   nominal row count is `hi - lo`, recorded with `sample` in `_meta.json` (and in the report's `coverage`).
 7. **Consistency of the feature set**: `E_DESCRIBE_MISMATCH`, then `W_SOURCE_SHA`.
 8. **Waivers** are assembled (`E_WAIVE_INVALID`) and are in force for every later check.
 9. `E_ARGS_UNCONSUMED`; `E_FORMAT` when `N` or `D` is not an integer of at least 1; `W_WEIGHTS_UNFINGERPRINTED`;
@@ -146,7 +148,7 @@ Every code `validate_features` can report. "waivable" says whether a [waiver](#w
 | `E_NA_AND_SHARDS` | error | no | `NOT_APPLICABLE.json` exists together with shards |
 | `E_SHARD_SET` | error | no | sidecars disagree on `n`; a shard index is missing or not below `n`; a sidecar without its tar or a tar without its sidecar; no sidecar at all |
 | `W_STALE_TMP` | warning | no | a tmp file older than 36 h: a killed task's leftover; delete it or run its shard again |
-| `E_RANGE_TILING` | error | no | on a complete shard set, the `shard.rows` ranges sorted by index do not tile `[0, n_rows)` of the split exactly (empty ranges allowed), or a range's start is not a multiple of `shard.batch_size` |
+| `E_RANGE_TILING` | error | no | on a complete shard set, the `shard.rows` ranges sorted by index do not tile `[0, n_rows)` of the split exactly (empty ranges allowed), or a range's start is not a multiple of `shard.batch_size`; for a capped run (`_layout.json` `sample: [lo, hi]`), a shard's range is not `[lo, hi)` |
 | `E_HASH_MANIFEST` | error | no | a sidecar's `benchmark.manifest_hash` differs from the benchmark's (without a benchmark: differs across sidecars) |
 | `E_HASH_INPUT` | error | no | a sidecar's input hash (read through `identity_value`) differs from the benchmark's `input_hash` (without a benchmark: differs across sidecars). The message names the differing `input_components` and both yavih versions and commits. A difference on the scoring side is never a finding. |
 | `E_DESCRIBE_MISMATCH` | error | no | the shards are not one feature set: `describe_subset(describe)`, `describe_sha256`, `model`, `reading`, `shard.batch_size`, `dtype`, `pos_mode`, `N`, `D` or `pos_sha256` differ across sidecars, or the sidecars name several splits; the stored `describe_sha256` is not the digest of the stored `describe`; `model` or `reading` differ from the `describe()` values. The message names which shards carry which digest; running `yavih extract` for the split moves the other configuration's shards to `_stale/`. |
@@ -169,7 +171,7 @@ Every code `validate_features` can report. "waivable" says whether a [waiver](#w
 | `N_RULE_CUSTOM` | note | no | a stream's declared temporal or spatial rule is `custom`: the bridge opted out of the rule vocabulary, with its description (see [Custom rules](#custom-rules)) |
 | `W_LOOSE_TOLERANCE` | warning | no | the bridge declares `batch_tolerance.rel_l2` above `1e-5`; the declared reason is printed |
 | `W_RULE_UNCHECKED` | warning | no | a declared checkable temporal rule could not be evaluated on `k` rows because a media fact it needs is null there (recorded as `rules_checked[stream].temporal_unchecked_rows`); only the out-of-media, range and position checks applied on those rows |
-| `W_COVERAGE` | warning | no | fewer rows present than the split's nominal rows. The probe refuses an eval split below the benchmark's `min_eval_coverage` (`E_COVERAGE`) unless run with `--allow-low-coverage`. |
+| `W_COVERAGE` | warning | no | fewer rows present than the split's nominal rows (`hi - lo` for a capped run). The probe refuses an eval split below the benchmark's `min_eval_coverage` (`E_COVERAGE`) unless run with `--allow-low-coverage`. |
 | `W_MEDIA_FP` | warning | no | a sidecar's `media_fingerprint` or `media_info_sha256` differs from this site's `data_status.json`: the features were extracted from differently staged media |
 | `W_FP16_RANGE` | warning | no | float16 features whose largest absolute value exceeds `1e3`, or more than half of whose values are zero |
 | `W_CONSTANT_CLIP` | warning | no | clips whose tokens are all identical (with `N > 1`) or all zero; rows sharing a `media_key` are counted once |

@@ -505,6 +505,36 @@ def test_newest_feature_set_is_shown_with_w_features_differ_and_distinct_seeds()
     assert {r["benchmark"] for r in lm} == {"k400"} and [r["n_seeds"] for r in lm if r["metric"] == "acc"] == [2]
 
 
+def test_a_capped_run_is_its_own_partial_row_in_every_format():
+    """A result with ``sample`` (``plan build --sample N``) never displaces, or averages with, the full run of its row
+    key, however new: it is a second row marked ``partial`` (json flag and key, md suffix, csv column), its subset
+    population never makes ``population_differs``, and suite completeness never counts it."""
+    from yavih.suites import completeness
+
+    full = make_result(acc=0.5)
+    part = make_result(acc=0.9, fingerprint=FP2, ids_sha256=IDS2, eval_present=4, eval_nominal=4, created="2026-10-09T14:00:00Z")
+    part["sample"] = {"train": [0, 4], "val": [0, 4]}
+    rep = build_report(_records(full, part), detail=True)
+    full_row, part_row = rep.rows
+    assert (full_row["partial"], part_row["partial"]) == (False, True) and part_row["sample"] == part["sample"]
+    assert full_row["metrics"]["acc"]["value"] == 0.5 and part_row["metrics"]["acc"]["value"] == 0.9
+    assert "partial" in part_row["flags"] and "partial" not in full_row["flags"] and not part_row["greyed"]
+    assert full_row["n_feature_sets"] == 1 and not any(w["code"] in ("W_FEATURES_DIFFER", "W_POPULATION_DIFFERS") for w in rep.warnings)
+    assert not rep.columns[0]["population_differs"] and set(rep.detail[rep.columns[0]["id"]]) == {"vjepa:v", "vjepa:v:partial"}
+    lm = [r for r in rep.lm_eval["vjepa"] if r["metric"] == "acc"]
+    assert [r.get("partial", False) for r in lm] == [False, True]
+    md = tables.render(rep, "md")
+    assert sum("(partial)" in ln for ln in md.splitlines() if ln.startswith("| k400")) == 2  # view 1: acc and n_eval
+    assert any(ln.startswith("| vjepa") and "0.9 (0.1) [0.85, 0.95] (partial)" in ln and "partial" in ln.split("|")[-2] for ln in md.splitlines())
+    csv_lines = tables.render(rep, "csv").splitlines()
+    col = csv_lines[0].split(",").index("partial")
+    assert {ln.split(",")[col] for ln in csv_lines[1:]} == {"true", "false"}
+    rows = completeness("default", [{"result": part}], models=["vjepa"])
+    k400 = next(r for r in rows if r["benchmark"] == "k400")
+    assert k400["status"] == "missing" and "partial only" in k400["note"]
+    assert next(r for r in completeness("default", [{"result": full}], models=["vjepa"]) if r["benchmark"] == "k400")["status"] == "done"
+
+
 # --------------------------------------------------------------------------- floors / greying
 
 

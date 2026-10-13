@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -107,3 +108,45 @@ def test_cli_plan_init_text_lists_next_steps(tmp_path, runs_dir, capsys):
     assert f"yavih plan build {m} --out {tmp_path / 'plan.jsonl'}" in out
     assert "yavih suite missing minimal --model toy" in out
     assert Path(m).is_file()
+
+
+def test_skeleton_composes_with_plan_build_sample(tmp_path, runs_dir, capsys):
+    """``plan init`` → profiles (faked here, as ``bridge check --out`` writes them) → ``plan build --sample 4``: per entry and
+    role split ONE extract unit over the first ``min(4, rows)`` rows (``--rows 0:k``), probe units with ``--no-results``,
+    everything under ``<runs root>-sample4``; ids are deterministic and distinct from the full plan's."""
+    from yavih.benchmark import Benchmark
+    from yavih.plan.units import benchmark_info
+
+    m = tmp_path / "matrix.yaml"
+    plan_init("minimal", model="toy", launcher="python", out=m)
+    matrix = load_matrix(str(m))
+    infos = {}
+    for ent in matrix.entries:
+        bench = Benchmark.load(ent.benchmark)
+        infos[ent.key] = benchmark_info(bench)
+        prof = make_profile(ent.benchmark, model="toy", reading=ent.key.rsplit("-", 1)[1], args=dict(ent.args), streams=list(bench.spec.streams))
+        write_profile(tmp_path, ent.profile, prof)
+    rc, env = _json(capsys, ["plan", "build", str(m), "--sample", "4"])
+    assert rc == 0, env["errors"]
+    units = env["data"]
+    rc, full = _json(capsys, ["plan", "build", str(m)])
+    rc2, again = _json(capsys, ["plan", "build", str(m), "--sample", "4"])
+    assert rc == rc2 == 0 and [u["id"] for u in again["data"]] == [u["id"] for u in units]
+    assert not {u["id"] for u in units} & {u["id"] for u in full["data"]}
+    root = f"{runs_dir}-sample4"
+    for ent in matrix.entries:
+        info = infos[ent.key]
+        mine = [u for u in units if u["bridge"] == ent.key]
+        extracts = {u["split"]: u for u in mine if u["kind"] == "extract"}
+        assert sorted(extracts) == sorted(info.role_splits()), (ent.key, sorted(extracts))
+        for split, u in extracts.items():
+            k = min(4, info.n_rows[split])
+            assert u["shard"] == [0, 1] and u["cmd"][u["cmd"].index("--rows") + 1] == f"0:{k}" and "--shard" not in u["cmd"]
+            assert u["out"].startswith(root + os.sep) and u["done"].endswith(f"{split}{os.sep}shard-000000.json")
+        (probe_u,) = [u for u in mine if u["kind"] == "probe"]
+        assert "--no-results" in probe_u["cmd"] and probe_u["out"].startswith(root + os.sep)
+        assert probe_u["depends_on"] == [u["id"] for u in mine if u["kind"] == "extract"]
+    (report_u,) = [u for u in units if u["kind"] == "report"]
+    assert report_u["out"] == os.path.join(root, "_report")
+    rc, env = _json(capsys, ["plan", "build", str(m), "--sample", "0"])
+    assert rc == 1 and env["errors"][0]["code"] == "E_PLAN"

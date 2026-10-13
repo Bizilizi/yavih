@@ -183,6 +183,12 @@ finished shards.
   before the model is loaded. The plan is older than the layout: run `yavih plan build` again, or move the split
   directory aside to re-shard it.
 - A `_layout.json` of another configuration is moved to `_stale/` with that configuration's shards.
+- A capped run (`yavih extract --rows lo:hi`, planned by `plan build --sample N`) freezes `"n": 1`,
+  `"ranges": [[lo, hi]]`, `"n_rows": hi - lo` and the extra key `"sample": [lo, hi]`; a full split's layout has
+  no `sample` key. `sample` is part of the identity: a full-split unit in a sampled split, a sample in a full split
+  or a sample of another range is refused with `E_LAYOUT` (exit 1) before anything moves, and a sampled layout is
+  never inferred from shards. `plan build --sample N` puts capped runs under their own runs root, so the refusal
+  only meets a hand-run `extract`.
 
 ## `_meta.json`
 
@@ -220,7 +226,7 @@ from it and never re-derives them.
 | `benchmark` | the first shard's `benchmark` block, verbatim |
 | `features.bytes` | bytes of all present features and positions |
 | `shards` | one entry per shard in index order |
-| `coverage` | `nominal` rows of the split, `present` rows written, `missing`, and `ids_sha256 = sha256("\n".join(sorted present clip_ids))` |
+| `coverage` | `nominal` rows of the split (`hi - lo` for a capped run), `present` rows written, `missing`, and `ids_sha256 = sha256("\n".join(sorted present clip_ids))` |
 | `canary` | the worst canary `max_rel_l2` over the split, the number of canary pairs, and the tolerance it was judged against |
 | `rules_checked` | per stream, the temporal rule validation re-evaluated (`"custom"`: the bridge opted out) and whether the spatial rule was checked (`false`: custom; `null`: the stream kind has no spatial rule). `temporal_unchecked_rows: k` is added when the declared rule could not be evaluated on `k` rows. |
 | `dead_rows` | token positions found constant across the validation sample (only non-empty when `E_DEAD_ROWS` was waived) |
@@ -228,6 +234,7 @@ from it and never re-derives them.
 | `fingerprint` | the `features_fingerprint` over format, dtype, `N`, `D`, `pos_mode`, `pos_sha256`, the shards' `[lo, hi, tar sha256]` in row order and the present count: integrity and staleness, never a row key. See [hashing](hashing.md#features_fingerprint). |
 | `eligibility` | the readout's eligibility verdict, decided by validation and nowhere else (see [validation](validation.md#eligibility)) |
 | `validation` | the verdict and the findings |
+| `sample` | only for a capped run (the split's `_layout.json` has `sample`): `[lo, hi]`, the rows extracted. The probe reads it: such a result records `sample`, writes no results-store file and is a `partial` report row ([results](results.md#partial-rows)) |
 
 `_meta.json` is rewritten only when its content changes. `finalized`, `validation.validated` and
 `yavih.finalizer_commit` are ignored for that comparison, so validating an unchanged split again leaves the file

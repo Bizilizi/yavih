@@ -459,7 +459,7 @@ def completeness(suite: Suite | str, records: Iterable[Mapping[str, Any]], *, mo
 
     ``records`` are report index records (``{"path", "result"}``; moved-aside ones are ignored): a pair is ``done``
     when a DONE-marked result of that ``(benchmark after alias, model, reading)`` exists (``note`` says when none is
-    ``ok`` or none is standard). A join row is ``done`` when ``joined`` holds ``(model, benchmark, reading)`` (a
+    ``ok`` or none is standard; a capped-run result, ``sample``, never counts: ``missing`` with the note ``partial only``). A join row is ``done`` when ``joined`` holds ``(model, benchmark, reading)`` (a
     join of this invocation) or the model's results directory under ``results_root`` holds that entry; with no
     ``results_root`` it is ``join-unknown``. ``hint`` names the command that fills a missing join.
     ``models=None``: every model of the records."""
@@ -469,6 +469,7 @@ def completeness(suite: Suite | str, records: Iterable[Mapping[str, Any]], *, mo
     suite = load_suite(suite)
     aliases = _alias_map()
     seen: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
+    partial: set[tuple[str, str, str]] = set()  # pairs with a capped-run result only (`plan build --sample N`)
     for rec in records:
         if rec.get(MOVED_ASIDE):
             continue
@@ -476,9 +477,12 @@ def completeness(suite: Suite | str, records: Iterable[Mapping[str, Any]], *, mo
         if not isinstance(res, Mapping):
             continue
         bench, _eh, mdl, rd = row_key(dict(res), aliases)
+        if res.get("sample"):  # a capped run never completes a pair
+            partial.add((bench, mdl, rd))
+            continue
         seen.setdefault((bench, mdl, rd), []).append(res)
     if models is None:
-        models = sorted({m for (_b, m, _r) in seen if m})
+        models = sorted({m for (_b, m, _r) in (*seen, *partial) if m})
     joined_set = {tuple(map(str, j)) for j in joined}
     store_root = Path(results_root) if results_root is not None else None
     rows: list[dict[str, Any]] = []
@@ -491,7 +495,9 @@ def completeness(suite: Suite | str, records: Iterable[Mapping[str, Any]], *, mo
                 if e.status == "packaged":
                     found = seen.get((e.benchmark, model, r), [])
                     row["status"] = "done" if found else "missing"
-                    if found and not any(x.get("status") == "ok" for x in found):
+                    if not found and (e.benchmark, model, r) in partial:
+                        row["note"] = "partial only (plan build --sample)"
+                    elif found and not any(x.get("status") == "ok" for x in found):
                         row["note"] = ", ".join(sorted({str(x.get("status")) for x in found}))
                     elif found and not any(x.get("standard") for x in found if x.get("status") == "ok"):
                         row["note"] = "non-standard only"

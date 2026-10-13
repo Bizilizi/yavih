@@ -4,7 +4,9 @@
 ``(model, reading)`` (``~~value~~`` for greyed rows); csv is the long format of view 2
 (``flag=below_floor``; ``eval_hash``, ``model``, ``reading``, ``describe_sha256`` and
 ``features_fingerprint`` per row); json carries both. ``value (floor)`` and CI per metric; ``mean ± std`` with
-``n_seeds``; ``MISSING`` cells. A suite completeness appendix (``report(suite=...)``) is a trailing md section
+``n_seeds``; ``MISSING`` cells. A row of a capped run (``plan build --sample N``) is marked ``partial``: the
+``(partial)`` suffix on its values in md (both views; ``partial`` also in view 2's flags), the ``partial`` column and
+flag in csv, ``partial: true`` in json. A suite completeness appendix (``report(suite=...)``) is a trailing md section
 and part of json; csv stays the one long table of view 2 (as for the superseded, join and warning sections).
 stdlib only; renders the duck-typed ``Report`` of :mod:`yavih.report.compare`
 (never imports it, to keep the import graph acyclic)."""
@@ -18,7 +20,7 @@ import math
 from typing import Any
 
 __all__ = ["render", "render_md", "render_csv", "render_json", "render_lm_eval", "render_suite_md", "LM_EVAL_HEADER", "format_value",
-           "format_number", "format_coverage", "MISSING"]
+           "format_number", "format_coverage", "MISSING", "PARTIAL_MARK"]
 
 #: Columns of the per-model view, in order.
 LM_EVAL_HEADER: tuple[str, ...] = ("benchmark", "reading", "version", "eval_hash", "readout", "metric", "value", "ci95", "floor")
@@ -29,8 +31,10 @@ MISSING = "MISSING"
 _CSV_FIELDS = [
     "benchmark", "eval_hash", "protocol_hash", "probe_hash", "model", "reading", "describe_sha256", "features_fingerprint",
     "bridge_name", "status", "seed", "n_seeds", "coverage_train", "coverage_eval", "metric", "kind", "value", "std", "floor",
-    "ci_lo", "ci_hi", "chance", "flag", "waived",
+    "ci_lo", "ci_hi", "chance", "partial", "flag", "waived",
 ]
+#: The suffix on every value of a capped run's row (``plan build --sample N``).
+PARTIAL_MARK = "(partial)"
 #: The mark of a row whose features passed validation with a waived check: shown next to the value with a
 #: footnote naming the codes and reasons; the row is never greyed, excluded or flagged for it.
 WAIVED_MARK = "†"
@@ -156,6 +160,8 @@ def render_lm_eval(lm_eval: dict[str, list[dict[str, Any]]]) -> str:
                 floor = format_number(row["floor"]) if row.get("floor") is not None else _DASH
             if row.get("waived"):
                 value += f" {WAIVED_MARK}"
+            if row.get("partial"):
+                value += f" {PARTIAL_MARK}"
             metric = str(row.get("metric", _DASH))
             if row.get("headline"):
                 metric = f"**{metric}**"
@@ -228,7 +234,8 @@ def render_md(report) -> str:
                 cells += [f"_{row['status']}_" + (f" ({_md_escape(reason)})" if reason else "")] + [""] * (len(metrics) + len(controls) - 1 if metrics or controls else 0)
             else:
                 for m in metrics:
-                    cells.append(_grey(_cell_text((row.get("metrics") or {}).get(m)), greyed))
+                    text = _grey(_cell_text((row.get("metrics") or {}).get(m)), greyed)
+                    cells.append(f"{text} {PARTIAL_MARK}" if text and row.get("partial") else text)
                 for c in controls:
                     cells.append(format_number((row.get("controls") or {}).get(c)))
             cells.append(", ".join(row.get("flags") or []))
@@ -358,6 +365,7 @@ def _csv_row(row: dict[str, Any], **extra: Any) -> dict[str, Any]:
         "metric": "", "kind": "", "value": "", "std": "", "floor": "", "ci_lo": "", "ci_hi": "", "chance": "",
         "flag": ";".join(row.get("flags") or []),
         "waived": ";".join(str(w.get("code")) for w in row.get("waived") or [] if isinstance(w, dict)),
+        "partial": "true" if row.get("partial") else "false",
     }
     base.update(extra)
     return base

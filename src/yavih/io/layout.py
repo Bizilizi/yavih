@@ -9,7 +9,12 @@ directory keeps every finished shard (only another configuration's or manifest's
 with its layout).
 
 For a split without ``_layout.json`` the layout is inferred from the finished shards of the current configuration
-(the ``n`` most of them carry) and frozen on first use. stdlib only.
+(the ``n`` most of them carry) and frozen on first use.
+
+A capped run (``extract --rows lo:hi``, ``plan build --sample N``) freezes a one-shard layout over ``[lo, hi)`` with the
+key ``sample: [lo, hi]``. ``sample`` is part of the identity: a sampled layout never serves a full-split unit or a
+sample of another range, and the other way round (``E_LAYOUT``, exit 1). A sampled layout is never inferred from
+shards. stdlib only.
 """
 
 from __future__ import annotations
@@ -35,19 +40,23 @@ __all__ = [
     "frozen_layout",
     "freeze_layout",
     "build_layout",
+    "layout_sample",
+    "sample_conflict",
 ]
 
 LAYOUT_FILE = "_layout.json"
 LAYOUT_VERSION = 1
 #: The configuration a layout belongs to (dotted keys, as in a sidecar): another manifest, benchmark input side
 #: (``input_hash``), model name, reading or bridge configuration owns other shards and therefore another
-#: layout. Compared through ``yavih.io.sidecar.identity_value``.
+#: layout; ``sample`` (``[lo, hi]`` of a capped run, absent = the full split) separates a sampled layout from a full
+#: one. Compared through ``yavih.io.sidecar.identity_value``.
 LAYOUT_IDENTITY_KEYS: tuple[str, ...] = (
     "benchmark.manifest_hash",
     "benchmark.input_hash",
     "model",
     "reading",
     "bridge.describe_sha256",
+    "sample",
 )
 
 
@@ -68,15 +77,44 @@ def _get(d: Any, dotted: str) -> Any:
 
 
 def layout_identity(*, manifest_hash: str | None, input_hash: str | None, model: str | None, reading: str | None,
-                    describe_sha256: str | None) -> dict[str, Any]:
-    """``{dotted key: value}`` over ``LAYOUT_IDENTITY_KEYS``."""
+                    describe_sha256: str | None, sample: tuple[int, int] | list[int] | None = None) -> dict[str, Any]:
+    """``{dotted key: value}`` over ``LAYOUT_IDENTITY_KEYS``; ``sample`` = ``[lo, hi]`` of a capped run, ``None`` for
+    the full split."""
     return {
         "benchmark.manifest_hash": manifest_hash,
         "benchmark.input_hash": input_hash,
         "model": model,
         "reading": reading,
         "bridge.describe_sha256": describe_sha256,
+        "sample": [int(sample[0]), int(sample[1])] if sample is not None else None,
     }
+
+
+def layout_sample(layout: dict | None) -> tuple[int, int] | None:
+    """``(lo, hi)`` of a sampled layout (``sample: [lo, hi]`` with ``0 <= lo < hi``), else ``None``."""
+    v = layout.get("sample") if isinstance(layout, dict) else None
+    if (isinstance(v, list) and len(v) == 2 and all(isinstance(x, int) and not isinstance(x, bool) for x in v)
+            and 0 <= v[0] < v[1]):
+        return int(v[0]), int(v[1])
+    return None
+
+
+def _describe_sample(sample: Any) -> str:
+    return f"a --rows {sample[0]}:{sample[1]} sample" if isinstance(sample, (list, tuple)) and len(sample) == 2 else "the full split"
+
+
+def sample_conflict(layout: dict | None, ident: dict[str, Any]) -> str | None:
+    """When ``layout`` belongs to ``ident``'s configuration except for ``sample`` (a full split against a capped run,
+    or two row ranges): a sentence naming both, else ``None``."""
+    if layout is None:
+        return None
+    rest = {k: v for k, v in ident.items() if k != "sample"}
+    if not layout_matches(layout, rest) or layout_matches(layout, ident):
+        return None
+    return (f"its layout was frozen for {_describe_sample(layout.get('sample'))}, this unit extracts "
+            f"{_describe_sample(ident.get('sample'))}: a sampled run and a full run (or two samples) never share a split "
+            "directory; give the sampled run its own run directory (`plan build --sample N` does), or move the split "
+            "directory aside")
 
 
 def read_layout(split_dir: str | os.PathLike) -> dict | None:
@@ -127,14 +165,20 @@ def build_layout(ident: dict[str, Any], *, n: int, batch_size: int, n_rows: int,
         "host": socket.gethostname(),
         "inferred_from_shards": bool(inferred),
     }
+    if ident.get("sample") is not None:  # a capped run; a full split's layout has no such key
+        rec["sample"] = [int(ident["sample"][0]), int(ident["sample"][1])]
     return rec
 
 
 def infer_layout(split_dir: str | os.PathLike, ident: dict[str, Any], *, n_rows: int | None = None) -> dict | None:
     """The layout of a split without ``_layout.json``: among the finished shards of configuration ``ident``, the
-    ``(n, batch_size)`` most of them carry (ties: the larger ``n``). ``None`` when there is no such shard."""
+    ``(n, batch_size)`` most of them carry (ties: the larger ``n``). ``None`` when there is no such shard, and always
+    for a sampled ``ident`` (sidecars do not record ``sample``; only ``_layout.json`` does)."""
     from yavih.io.sidecar import identity_value
 
+    if ident.get("sample") is not None:
+        return None
+    ident = {k: v for k, v in ident.items() if k != "sample"}
     votes: Counter[tuple[int, int]] = Counter()
     for side in sorted(Path(split_dir).glob("shard-*.json")):
         try:
@@ -157,25 +201,37 @@ def infer_layout(split_dir: str | os.PathLike, ident: dict[str, Any], *, n_rows:
 
 def frozen_layout(split_dir: str | os.PathLike, ident: dict[str, Any], *, n_rows: int | None = None) -> dict | None:
     """What ``plan`` and ``run_extract`` must follow: ``_layout.json`` when it belongs to ``ident``, else the layout
-    inferred from ``ident``'s finished shards (a split without ``_layout.json``), else ``None`` (nothing frozen yet). Read-only."""
+    inferred from ``ident``'s finished shards (a split without ``_layout.json``), else ``None`` (nothing frozen yet).
+    Read-only. A ``_layout.json`` of ``ident``'s configuration with another ``sample`` raises ``LayoutError``."""
     rec = read_layout(split_dir)
     if layout_matches(rec, ident):
         return rec
+    why = sample_conflict(rec, ident)
+    if why:
+        raise LayoutError(f"{Path(split_dir) / LAYOUT_FILE}: {why}")
     return infer_layout(split_dir, ident, n_rows=n_rows)
 
 
 def freeze_layout(split_dir: str | os.PathLike, ident: dict[str, Any], *, n: int, batch_size: int, n_rows: int) -> dict:
     """Return the split's layout for ``ident``, freezing it first when none is frozen: an existing matching
     ``_layout.json`` wins, then one inferred from ``ident``'s finished shards, then ``(n, batch_size)`` of the caller.
+    A sampled ``ident`` (``sample: [lo, hi]``) freezes one shard over ``[lo, hi)`` (``n`` and ``n_rows`` unused).
     Written with ``O_EXCL`` (two first writers on two hosts: one wins, the other reads the winner's). A
-    ``_layout.json`` of another configuration must have been moved aside first (``retire_foreign``)."""
+    ``_layout.json`` of another configuration must have been moved aside first (``retire_foreign``); one of the same
+    configuration with another ``sample`` is refused here (``E_LAYOUT``)."""
     split_dir = Path(split_dir)
     existing = read_layout(split_dir)
     if existing is not None:
         if layout_matches(existing, ident):
             return existing
-        raise LayoutError(f"{split_dir / LAYOUT_FILE} belongs to another configuration; it must be moved aside first")
-    rec = infer_layout(split_dir, ident, n_rows=n_rows) or build_layout(ident, n=n, batch_size=batch_size, n_rows=n_rows)
+        why = sample_conflict(existing, ident)
+        raise LayoutError(f"{split_dir / LAYOUT_FILE}: {why}" if why else
+                          f"{split_dir / LAYOUT_FILE} belongs to another configuration; it must be moved aside first")
+    if ident.get("sample") is not None:
+        lo, hi = (int(x) for x in ident["sample"])
+        rec = build_layout(ident, n=1, batch_size=batch_size, n_rows=hi - lo, ranges=[[lo, hi]])
+    else:
+        rec = infer_layout(split_dir, ident, n_rows=n_rows) or build_layout(ident, n=n, batch_size=batch_size, n_rows=n_rows)
     split_dir.mkdir(parents=True, exist_ok=True)
     path = split_dir / LAYOUT_FILE
     from yavih.io.sidecar import writer_tmp_name

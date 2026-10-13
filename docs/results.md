@@ -76,6 +76,7 @@ Values are illustrative.
 | `warnings` | probe-time findings `[{code, message, where}]` |
 | `waived` | validation waivers in force over the probe's splits `[{code, reason, source, count, splits}]`, merged per `(code, source)` with counts summed |
 | `created` | UTC timestamp |
+| `sample` | only on a result of a capped run (`plan build --sample N`): `{split: [lo, hi]}`, the rows each split's features cover (the `_meta.json` `sample` keys). Absent on every other result |
 
 Rules:
 
@@ -85,6 +86,8 @@ Rules:
   separate blocks and never named in `metrics.list`.
 - `features.rules_checked` records a bridge's opt-out (`"custom"`); nothing flags it.
 - `waived` is recorded and marked by the report, never part of a key, never a penalty.
+- A result with `sample` never reaches the results store (the probe skips it whatever `--results` says), so
+  `--merge-results` never sees it; the report shows it as a `partial` row ([below](#partial-rows)).
 
 ### Warnings
 
@@ -196,13 +199,25 @@ the value (view 1) and after the model name (view 2) and lists under the table `
 waived <CODE> (<reason>; <source>, <n> finding(s))`; json rows carry `waived`, csv a `waived` column
 (`;`-joined codes). The row is not excluded, flagged or counted against.
 
+### Partial rows
+
+A result of a capped run (`plan build --sample N`, `result.json` `sample`) is scored on the first rows of each
+split, so its numbers are not the benchmark's. Within a row key it never competes with, or is averaged with, the
+full run's results: it is a row of its own, sorted after the full row, and marked in every format: md appends
+`(partial)` to its values (view 1 and view 2) and view 2 lists the flag `partial`; json rows carry
+`"partial": true` (view 2 rows also `sample`) and the flag; csv has a `partial` column (`true` / `false`) and the
+flag. A partial row is never greyed for being partial and takes no part in the `population_differs` check.
+`--detail` keys it `<model>:<reading>:partial`. Capped runs live under their own runs root (`<out>-sample<N>`), so
+they reach a report only when its globs name that root. In `--suite` completeness a pair with partial results only
+is `missing` with the note `partial only`.
+
 ### Formats and detail
 
 - `md`: view 1, then view 2.
 - `csv`: view 2 in long format, one line per (row, metric) plus one per control, with `benchmark`, `eval_hash`,
   `protocol_hash`, `probe_hash`, `model`, `reading`, `describe_sha256`, `features_fingerprint`, `bridge_name`,
   `status`, `seed`, `n_seeds`, coverage, `metric`, `kind`, `value`, `std`, `floor`, `ci_lo`, `ci_hi`,
-  `chance`, `flag` (`;`-joined flags, e.g. `below_floor`) and `waived`.
+  `chance`, `partial` (`true` / `false`), `flag` (`;`-joined flags, e.g. `below_floor`) and `waived`.
 - `json`: `lm_eval` (view 1), `columns`, `rows`, `warnings`, `superseded`, `detail`, `joins`, `merged`, `suite`, `paths`.
 - csv carries view 2 only: the superseded, join, warning and suite completeness sections are in md and json.
 - `--detail`: per row, the shown configuration's `describe()` and `describe_sha256`, `rules_checked`, the
@@ -262,7 +277,8 @@ Decided before any training (`yavih.readouts.base.resolve_results_root`): `probe
 the directory `results` next to the runs root of a standard run directory: the absolute run directory's last
 three components must be `<benchmark or alias>/<model>/<reading>` of the feature set being probed, and the runs
 root is the directory above them. Any other run directory is refused with `E_RESULTS_ROOT` (exit 1, nothing
-trained). `--no-results` needs no root. `report build` uses `--results`, else the same configured root, else
+trained). `--no-results` needs no root, and neither does a capped run's probe (`_meta.json` `sample`), which never
+writes the store. `report build` uses `--results`, else the same configured root, else
 `results` next to the runs root of the indexed results.
 
 ### Layout
