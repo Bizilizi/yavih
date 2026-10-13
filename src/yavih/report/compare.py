@@ -100,11 +100,15 @@ class Report:
     #: std, n_seeds, ci95, floor, status, reason}``
     lm_eval: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     merged: list[str] = field(default_factory=list)
+    #: ``report(suite=...)``: the suite completeness appendix ``{name, description, origin, path, results_root, rows,
+    #: counts}`` with rows ``{capability, benchmark, reading, model, status, required, note, hint}`` (``yavih.suites``)
+    suite: dict[str, Any] | None = None
 
     def to_json(self) -> dict:
         return {
             "lm_eval": self.lm_eval,
             "merged": self.merged,
+            "suite": self.suite,
             "columns": self.columns,
             "rows": self.rows,
             "warnings": self.warnings,
@@ -1003,6 +1007,7 @@ def report(
     merge_results: bool = False,
     runs_root: str | Path | None = None,
     write: bool = True,
+    suite: Any = None,
 ) -> Report:
     """Index → the per-model lm-eval tables + the comparability columns → rendered text;
     writes ``runs/_index.jsonl`` and, when the runs root is known, ``runs/_report/report.<fmt>`` +
@@ -1010,14 +1015,22 @@ def report(
     ``probe.py`` ``join()`` (:func:`yavih.report.join.run_join`; vggsounder: ``a``/``v``/``av``) and writes
     the joined numbers to the model's results directory under ``<benchmark>:a+v+av``. ``merge_results`` merges every model's
     ``results_*.json`` under ``results_root`` (default ``yavih.config.results_root`` of the runs root)
-    into one ``results_<timestamp>.json`` per model."""
+    into one ``results_<timestamp>.json`` per model. ``suite`` (a name, a path or a ``yavih.suites.Suite``) adds the
+    completeness appendix ``rep.suite``: per model of the report and suite ``(benchmark, reading)`` ``done`` /
+    ``missing`` / ``pending``, and per join entry ``done`` / ``join-missing`` (this invocation's joins and the results
+    store under ``results_root``) (:func:`yavih.suites.completeness`)."""
     if isinstance(globs, (str, os.PathLike)):
         globs = [str(globs)]
+    the_suite = None
+    if suite is not None:
+        from yavih.suites import load_suite
+
+        the_suite = load_suite(suite)  # an unknown or invalid suite fails before anything is indexed
     records = build_index(globs, runs_root=runs_root)
     rep = build_report(records, fmt=fmt, seeds=seeds, allow_coverage_diff=allow_coverage_diff, detail=detail)
     records = [r for r in records if not r.get(MOVED_ASIDE)]
     root = Path(runs_root) if runs_root is not None else runs_root_of([Path(r["path"]) for r in records])
-    if results_root is None and (join or merge_results):
+    if results_root is None and (join or merge_results or the_suite is not None):
         from yavih.config import results_root as _results_root
 
         results_root = _results_root(root)
@@ -1037,6 +1050,13 @@ def report(
         rep.merged = [str(p) for p in store.merge_results(results_root, models)]
         if rep.merged:
             rep.paths["merged"] = ";".join(rep.merged)
+    if the_suite is not None:
+        from yavih.suites import completeness, completeness_json
+
+        joined = [(j.get("model"), j.get("benchmark"), j.get("reading")) for j in rep.joins.values() if isinstance(j, dict)]
+        rows = completeness(the_suite, records, results_root=results_root, runs_root=root, joined=joined)
+        rep.suite = completeness_json(the_suite, rows, results_root=results_root)
+        rep.text = tables.render(rep, fmt)
     if write:
         if root is not None:
             try:

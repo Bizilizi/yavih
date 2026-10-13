@@ -205,6 +205,8 @@ def test_wheel_imports_without_torch_and_hashes_match(tmp_path):
         # and no commit here: the copied tree is no git checkout)
         assert not [n for n in names if n.startswith("yavih/benchmarks/") and "/notes/" in n]
         assert "yavih/_version.py" in names
+        # the shipped suites sit next to yavih/suites.py (the module wins the import; the directory is data)
+        assert {"yavih/suites.py", "yavih/suites/minimal.yaml", "yavih/suites/default.yaml"} <= set(names)
         assert any(n.startswith("yavih-0.0.0.dist-info/licenses/LICENSE") for n in names), names[-10:]
         zf.extractall(unpacked)
     from yavih.benchmark import Benchmark
@@ -217,6 +219,7 @@ def test_wheel_imports_without_torch_and_hashes_match(tmp_path):
         f"sys.path.insert(0, {str(unpacked)!r})\n"
         "import yavih; from yavih.benchmark import Benchmark\n"
         f"assert yavih.__file__.startswith({str(unpacked)!r}), yavih.__file__\n"
+        "from yavih.suites import load_suite; assert load_suite('default').origin == 'shipped'\n"
         f"print(json.dumps({{r: Benchmark.load(r).protocol_hash for r in {refs!r}}}))\n"
     )
     proc = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=300,

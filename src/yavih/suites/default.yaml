@@ -1,0 +1,30 @@
+# yavih suite: the default benchmark set for "benchmark my model".
+# Schema: https://github.com/Bizilizi/yavih/blob/main/docs/suites.md
+schema_version: 1
+name: default
+description: "Default set: audio, visual, audio-visual, temporal and spatial capabilities on packaged benchmarks."
+groups:
+  # audio: single-label (ESC-50) and multi-label (FSD50K) sound-event classification
+  - capability: audio
+    entries:
+      - {benchmark: esc50, readings: [a]}
+      - {benchmark: fsd50k, readings: [a]}
+  # visual: motion-centric (SSv2) and appearance-centric (K400) video, still images (ImageNet-1k)
+  - capability: visual
+    entries:
+      - {benchmark: ssv2, readings: [v]}
+      - {benchmark: k400, readings: [v]}
+      - {benchmark: in1k, readings: [v]}
+  # audio-visual: every reading of one model; VGGSounder also scores the three readings together (join)
+  - capability: audio-visual
+    entries:
+      - {benchmark: vggsounder, readings: [a, v, av], join: true}
+      - {benchmark: audioset20k, readings: [a, v, av]}
+  # temporal: audio-visual synchronisation offset
+  - capability: temporal
+    entries:
+      - {benchmark: avsync, readings: [av]}
+  # spatial: sound-source localisation boxes
+  - capability: spatial
+    entries:
+      - {benchmark: vggss_box, readings: [av]}

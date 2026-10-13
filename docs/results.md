@@ -107,11 +107,12 @@ agree (`yavih.report.comparable`; [hashing](hashing.md#eval_hash-and-comparabili
 
 ```python
 def report(globs, *, fmt="md", seeds="aggregate", allow_coverage_diff=False, join=None, detail=False,
-           results_root=None, merge_results=False) -> Report
+           results_root=None, merge_results=False, suite=None) -> Report
 ```
 
 CLI: `yavih report build <glob>... [--fmt md|csv|json] [--out PATH] [--seeds aggregate|list]
-[--allow-coverage-diff] [--detail] [--join BENCH READING=RUN ...] [--results DIR] [--merge-results]`.
+[--allow-coverage-diff] [--detail] [--join BENCH READING=RUN ...] [--results DIR] [--merge-results]
+[--suite S]`.
 
 ### What it reads
 
@@ -202,7 +203,8 @@ waived <CODE> (<reason>; <source>, <n> finding(s))`; json rows carry `waived`, c
   `protocol_hash`, `probe_hash`, `model`, `reading`, `describe_sha256`, `features_fingerprint`, `bridge_name`,
   `status`, `seed`, `n_seeds`, coverage, `metric`, `kind`, `value`, `std`, `floor`, `ci_lo`, `ci_hi`,
   `chance`, `flag` (`;`-joined flags, e.g. `below_floor`) and `waived`.
-- `json`: `lm_eval` (view 1), `columns`, `rows`, `warnings`, `superseded`, `detail`, `joins`, `merged`, `paths`.
+- `json`: `lm_eval` (view 1), `columns`, `rows`, `warnings`, `superseded`, `detail`, `joins`, `merged`, `suite`, `paths`.
+- csv carries view 2 only: the superseded, join, warning and suite completeness sections are in md and json.
 - `--detail`: per row, the shown configuration's `describe()` and `describe_sha256`, `rules_checked`, the
   older configurations and feature sets with their `describe()` diff, seeds and headline values, and the codes
   of the shown results' recorded warnings.
@@ -233,6 +235,23 @@ external packages are checked as in a probe (exit 3). The folder adds its own re
 different or non-standard probe configs). Different non-null `weights_sha256` among the readings are
 `W_JOIN_WEIGHTS`, recorded, never a refusal. The joined numbers are printed and written to the model's results
 directory under the key `<benchmark>:a+v+av`.
+
+### Suite completeness
+
+`--suite S` ([suites](suites.md)) appends a trailing `## Suite completeness: S` section to md and the `suite`
+key to json (`{name, description, origin, path, results_root, rows, counts}`), without changing a column or row
+of either view. It has one row per suite `(capability, benchmark, reading)` and one status column per model of
+the report:
+
+| status | meaning |
+|---|---|
+| `done` | a result of `(benchmark, model, reading)` is in the report (a note when none is `ok` or standard) |
+| `missing` | none is |
+| `pending` | the suite entry has no packaged folder |
+| `join-missing` | a join row (`<a+v+av> (join)`) whose entry is neither computed by this invocation's `--join` nor in the model's results store; the command that computes it is listed under the table |
+
+json rows are `{capability, benchmark, reading, model, status, required, note, hint}`. `yavih suite missing`
+prints the same statuses for one model without building a report.
 
 ## Results store
 

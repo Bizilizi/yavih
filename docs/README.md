@@ -24,7 +24,8 @@ Normative descriptions of current behaviour.
 | [Hashing](hashing.md) | version constants, canonicalization, input / scoring / protocol / describe / probe / eval hashes, unit ids, migration through folder changelogs |
 | [Configuration](configuration.md) | config layers and tables, data roots, sites, environment variables |
 | [CLI](cli.md) | every command and flag, the `--json` envelope, exit codes |
-| [Execution](execution.md) | sharding, read-ahead, `matrix.yaml`, plan units, `yavih exec`, deadlines, slots, DONE markers, local runs, wrapping in SLURM |
+| [Suites](suites.md) | named benchmark sets (`minimal`, `default`), the suite file schema, project suites, completeness (`suite missing`, `report build --suite`) |
+| [Execution](execution.md) | sharding, read-ahead, `plan init`, `matrix.yaml`, plan units, `yavih exec`, deadlines, slots, DONE markers, local runs, wrapping in SLURM |
 
 ## Developing yavih
 

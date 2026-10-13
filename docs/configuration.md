@@ -195,6 +195,7 @@ fixed names: `YAVIH_DATA__<BENCH>__<ROOT>` (one data root) and `YAVIH_DATASETS__
 | `YAVIH_SITE` | the active [site.<id>] table (else the first whose hosts glob matches the hostname) |
 | `YAVIH_LENIENT` | 1 = unknown config keys / YAVIH_* variables / stale benchmark copies warn instead of failing |
 | `YAVIH_BENCH_PATH` | colon-separated directories of out-of-tree benchmark folders (after $YAVIH_HOME/benchmarks and the packaged ones) |
+| `YAVIH_SUITES` | directory of project suites (<name>.yaml; beats suites/ next to the project yavih.toml, else ./suites) |
 | `YAVIH_DATA__ROOT` | the site data root (${data.root}); config [data] root |
 | `YAVIH_RAM_BUDGET_GB` | RAM budget of a probe / validate in GiB; config [resources] ram_budget_gb |
 | `YAVIH_CPUS` | CPUs this process may use (set per slot by `yavih exec --slots`); config [resources] cpus |

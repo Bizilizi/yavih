@@ -1,0 +1,18 @@
+# yavih suite: one benchmark per modality, the smallest run that exercises the a, v and av readings.
+# Schema: https://github.com/Bizilizi/yavih/blob/main/docs/suites.md
+schema_version: 1
+name: minimal
+description: "Smoke set: one benchmark per modality (ESC-50, SSv2, VGGSounder with its a/v/av join)."
+groups:
+  # audio: environmental-sound classification from the audio stream
+  - capability: audio
+    entries:
+      - {benchmark: esc50, readings: [a]}
+  # visual: motion-centric action recognition from the video stream
+  - capability: visual
+    entries:
+      - {benchmark: ssv2, readings: [v]}
+  # audio-visual: the three readings of one model, scored together by the folder's join()
+  - capability: audio-visual
+    entries:
+      - {benchmark: vggsounder, readings: [a, v, av], join: true}
