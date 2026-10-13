@@ -1,9 +1,11 @@
 """``python -m yavih.extract`` (the ``yavih extract`` and ``yavih bridge check`` backend).
 
-args → ``Benchmark.load`` → ``Bridge(bench.view())`` → torch-free byte read-ahead → batching in row
-order → ``encode`` → ``used`` check → canaries → ``FeatureWriter``; ``MediaUndecodable`` retry; the audit
-hook that turns a network connection during ``encode`` into ``E_NETWORK`` and records writes outside the
-run directory; ``bridge check``'s hard rerun / batch / order invariance checks;
+args → ``Benchmark.load`` → ``Bridge(bench.view())`` → torch-free byte read-ahead → ``Bridge.prepare`` in
+a thread pool ahead of ``encode`` (when the bridge defines it) → batching in row order → ``encode`` → ``used``
+check → canaries → ``FeatureWriter``, each batch's stored bytes released once written; ``MediaUndecodable``
+retry; the audit hook that turns a network connection during ``encode`` or ``prepare`` into ``E_NETWORK`` and
+records writes outside the run directory; ``bridge check``'s hard rerun / batch / order invariance checks and
+its ``prepare`` determinism check;
 ``E_TRAIN_MODE`` and precision enforcement when torch is importable in the MODEL env; the
 ``--expect-profile`` configuration-drift check (``E_CONFIG_DRIFT``); deadline and
 SIGTERM/SIGUSR1 handling (exit 4, nothing partial). Core module: torch only if present, imported inside
@@ -1104,8 +1106,7 @@ class _Engine:
             return
         if self.has_prepare:  # prepare threads are audited from their first call
             _install_audit_hook()
-            if self.run_dir is not None:
-                _Audit.run_dir = os.path.abspath(os.fspath(self.run_dir))
+            _Audit.run_dir = os.path.abspath(os.fspath(self.run_dir)) if self.run_dir is not None else None
             _Audit.prepare_loopback = self.allow_loopback
         ra = _sample.ReadAhead(self.workers, depth=self.read_ahead)
         reads = ra.run(queue)
