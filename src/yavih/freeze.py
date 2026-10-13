@@ -15,7 +15,6 @@ core never imports torch).
 
 from __future__ import annotations
 
-import csv
 import gzip
 import io
 import os
@@ -35,12 +34,20 @@ def gzip_bytes(data: bytes) -> bytes:
 
 
 def csv_bytes(header: Sequence[str], rows: Iterable[Sequence[object]]) -> bytes:
-    """``header`` then ``rows`` as UTF-8 CSV, ``csv.writer`` default (minimal) quoting, ``\\n`` line ends."""
-    buf = io.StringIO(newline="")
-    w = csv.writer(buf, lineterminator="\n")
-    w.writerow(header)
-    w.writerows(rows)
-    return buf.getvalue().encode("utf-8")
+    """``header`` then ``rows`` as UTF-8 CSV with minimal quoting and ``\\n`` line ends.
+
+    Written by hand rather than with ``csv.writer``, whose minimal quoting differs across Python versions
+    (3.13 started quoting a lone ``\\r``): a field is quoted iff it contains ``,``, ``"``, ``\\n`` or ``\\r``,
+    with ``"`` doubled; ``None`` is the empty field, everything else is ``str()``.
+    """
+    def field(v: object) -> str:
+        s = "" if v is None else str(v)
+        if any(c in s for c in ',"\n\r'):
+            return '"' + s.replace('"', '""') + '"'
+        return s
+
+    lines = [",".join(field(v) for v in row) for row in (header, *rows)]
+    return ("\n".join(lines) + "\n").encode("utf-8")
 
 
 def write_if_changed(path: Path, data: bytes) -> bool:

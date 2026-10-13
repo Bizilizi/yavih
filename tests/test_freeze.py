@@ -73,7 +73,7 @@ CSV_CASES = [
     (["index", "name"], [["0", "dog"], ["1", "cat"]], b"index,name\n0,dog\n1,cat\n"),
     (["clip_id", "labels", "split"], [["a", "x;y;z", "train"], ["b", "", "eval"]], b"clip_id,labels,split\na,x;y;z,train\nb,,eval\n"),
     (["c"], [["comma, inside"], ['quote " inside'], ["new\nline"], ["carriage\rreturn"], ["crlf\r\nend"], [" lead"]],
-     b'c\n"comma, inside"\n"quote "" inside"\n"new\nline"\ncarriage\rreturn\n"crlf\r\nend"\n lead\n'),
+     b'c\n"comma, inside"\n"quote "" inside"\n"new\nline"\n"carriage\rreturn"\n"crlf\r\nend"\n lead\n'),
     (["n", "f"], [[1, 2.5], [0, -0.125], [None, True]], b"n,f\n1,2.5\n0,-0.125\n,True\n"),
     (["ünï", "名前"], [["café", "犬"], ["\t tab", "trailing "]], "ünï,名前\ncafé,犬\n\t tab,trailing \n".encode()),
 ]
