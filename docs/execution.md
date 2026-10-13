@@ -129,6 +129,26 @@ planned. The count is recorded in the sidecar (`env.decode_workers`, `env.read_a
 `bridge check --decode-workers <cpus − 1>` when the profile is measured elsewhere. Any comparison of
 extraction speed must use equal worker counts.
 
+## `yavih plan init`
+
+`yavih plan init --suite S --model M --launcher PYTHON [--out matrix.yaml] [--bridges-dir bridges] [--force]`
+writes the starting point for running one model on a [suite](suites.md):
+
+- one bridge file per packaged suite benchmark, `<bridges-dir>/<M>_<benchmark>.py` next to the matrix: a copy of
+  the folder's `bridge_template.py` with the model name filled in (`yavih bridge new`). A template that takes the
+  reading as an argument (`vggsounder`, `audioset20k`, `avsync`) serves every reading from that one file. An
+  existing bridge file is kept, never overwritten;
+- `matrix.yaml` in the layout [below](#matrixyaml): `defaults.launcher` = `PYTHON`, `out: null` (the configured
+  runs root), and one entry `<M>-<benchmark>-<reading>` per suite `(benchmark, reading)` with `script`,
+  `benchmark`, `args: {reading: <r>}` for a multi-reading template, `profile:
+  <bridges-dir>/<M>-<benchmark>-<reading>.profile.json` and a commented `waive:` line. A join entry adds a comment
+  with its `report build --join` command; pending suite entries are listed as comments. An existing matrix is
+  refused (`E_EXISTS`, exit 1) unless `--force`.
+
+The output lists what to run next: one `yavih bridge check <script> --bench <benchmark> [--arg reading=<r>] --out
+<profile>` per entry (after the bridge's TODOs are filled, on the staged data), then `yavih plan build
+matrix.yaml --out plan.jsonl`. Until every profile exists `plan build` refuses the matrix (`E_PROFILE`).
+
 ## `matrix.yaml`
 
 ```yaml
