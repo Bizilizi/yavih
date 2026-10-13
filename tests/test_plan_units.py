@@ -491,3 +491,37 @@ def test_plan_refuses_a_profile_without_model_and_reading(tmp_path, monkeypatch,
     rc = cli.main(["--json", "plan", "build", str(mp)])
     env = json.loads(capsys.readouterr().out.strip())
     assert rc == 1 and env["errors"][0]["code"] == "E_PROFILE" and "bridge check" in env["errors"][0]["message"]
+
+
+def test_no_census_is_a_warning_that_changes_no_unit(tmp_path, monkeypatch, capsys):
+    """``W_NO_CENSUS``: a video stream guarantees ``n_frames`` and the site has no census → one warning per benchmark
+    (stderr and the envelope's ``warnings``); the units are those of a site with the census."""
+    import dataclasses
+
+    from test_plan_helpers import make_info
+
+    base = make_info()
+    mp = standard_matrix(tmp_path, monkeypatch, infos={"synth_clf": base})
+    with_census = [u.to_json() for u in plan(str(mp))]
+    install_benchmarks(monkeypatch, {"synth_clf": dataclasses.replace(base, uncensused_frame_streams=("video",))})
+    warnings: list[dict] = []
+    assert [u.to_json() for u in plan(str(mp), warnings=warnings)] == with_census
+    assert [w["code"] for w in warnings] == [U.W_NO_CENSUS] and warnings[0]["where"] == "synth_clf"
+    assert "bench verify synth_clf --census" in warnings[0]["message"]
+    rc = cli.main(["--json", "plan", "build", str(mp)])
+    env = json.loads(capsys.readouterr().out)
+    assert rc == 0 and [w["code"] for w in env["warnings"]] == [U.W_NO_CENSUS]
+
+
+def test_uncensused_frame_streams_of_a_packaged_benchmark(tmp_path, monkeypatch):
+    from yavih.benchmark import Benchmark
+    from yavih.sample import media_info_path
+
+    monkeypatch.setenv("YAVIH_HOME", str(tmp_path / "home"))
+    ssv2, esc50 = Benchmark.load("ssv2"), Benchmark.load("esc50")
+    assert U.uncensused_frame_streams(ssv2) == ("video",)  # webm: n_frames guaranteed, no census here
+    assert U.uncensused_frame_streams(esc50) == ()  # audio only
+    census = media_info_path(ssv2.name, ssv2.manifest_hash)
+    census.parent.mkdir(parents=True)
+    census.write_bytes(b"")
+    assert U.uncensused_frame_streams(ssv2) == ()

@@ -7,7 +7,7 @@ is staged, ``yavih bridge check my_ssv2_bridge.py --bench ssv2 --synthetic`` smo
 media. An unfilled copy fails bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES. A bridge file serves one
 benchmark; each matrix entry (file + args) is one reading of one model.
 
-INPUT CONTRACT (what ``encode`` receives; setup.md "Input contract"). One stream per row::
+INPUT CONTRACT (what ``prepare`` and ``encode`` receive; setup.md "Input contract"). One stream per row::
 
     st = sample.streams["video"]          # RawStream, kind "video": the stored SSv2 webm, byte for byte
     st.path / st.open() / st.bytes()      # the file; nothing decoded, cut, re-timed, resized or cropped
@@ -178,11 +178,18 @@ class Ssv2Bridge(Bridge):
         cells = [f[:, ys[i] : max(ys[i + 1], ys[i] + 1), xs[j] : max(xs[j + 1], xs[j] + 1)].mean(axis=(1, 2)) for i in range(GRID) for j in range(GRID)]
         return np.stack(cells, axis=1).reshape(-1, 3)  # [T' * GRID * GRID, 3], row-major (t, y, x)
 
+    def prepare(self, sample: Any) -> dict:
+        """One clip's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
+        # The stored bytes are released after prepare(), so encode() works from this dict only.
+        frames, pts = self._clip(sample.streams["video"])
+        return {"frames": frames, "pts": pts}
+
     def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
         feats, pos, used = [], [], []
         for s in samples:  # instance-wise: nothing crosses clip boundaries
             st = s.streams["video"]
-            frames, pts = self._clip(st)
+            frames, pts = s.prepared["frames"], s.prepared["pts"]  # what prepare() returned for this sample
             region = crop_region(self.SPATIAL, st.info["width"], st.info["height"])  # the crop, in ORIGINAL-frame fractions
             feats.append(self._tokens(frames, region))
             # media coordinates: a tubelet's time = mean pts of its frames / D; (y, x) = cell centres inside region

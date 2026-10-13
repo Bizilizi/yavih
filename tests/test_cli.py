@@ -850,7 +850,7 @@ def test_plan_and_exec_envelopes(capsys, monkeypatch, tmp_path):
     import yavih.plan.units as U
 
     units = [SimpleNamespace(to_json=lambda i=i: {"id": f"u{i}", "kind": "extract"}) for i in range(3)]
-    monkeypatch.setattr(U, "plan", lambda m, *, pending=False, kind=None, shard_minutes=None: units)
+    monkeypatch.setattr(U, "plan", lambda m, *, pending=False, kind=None, shard_minutes=None, warnings=None: units)
     written = {}
     monkeypatch.setattr(U, "write_plan", lambda us, path: written.update(path=path, n=len(us)))
     rc, env = run_json(capsys, ["plan", "build", "m.yaml", "--out", str(tmp_path / "p.jsonl"), "--pending", "--shard-minutes", "5"])

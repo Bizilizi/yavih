@@ -506,7 +506,7 @@ def test_bridge_template_encodes_synthetic_sample(tmp_path, rows, png):
     tmpl = F.load_module(HERE / "bridge_template.py", "nyuv2_bridge_template")
     br = tmpl.Nyuv2DepthBridge(b.view(), {"layer": -1})
     samples = list(b.reader("train", rows=range(0, 2), batch_size=2, canaries=0))
-    feats, pos, used = br.encode(samples)
+    feats, pos, used = F.encode_prepared(br, samples)
     assert feats.shape[:2] == (2, 196) and pos.shape == (2, 196, 4) and used == [{"image": {}}] * 2
     assert np.all(pos[:, :, 0] == 0) and np.all(pos[:, :, 1] == -1)
     assert _cell_coverage(pos[0, :, 2:4]) == 1.0

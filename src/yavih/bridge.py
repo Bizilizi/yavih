@@ -52,6 +52,7 @@ __all__ = [
     "preprocessing_source_check",
     "batch_tolerance",
     "bridge_label",
+    "has_prepare",
     "check_model_name",
     "check_reading",
     "BRIDGE_NAME_RE",
@@ -148,7 +149,7 @@ class NotApplicable(Exception):
 
 
 class MediaUndecodable(Exception):
-    """Raised by a bridge's ``encode`` when it cannot decode the media of some clips:
+    """Raised by a bridge's ``prepare`` or ``encode`` when it cannot decode the media of some clips:
     ``run_extract`` records those rows as missing and re-encodes the batch without them (exact, by batch
     invariance). ``clip_ids`` names the offending clips; any other exception aborts the shard (exit 5)."""
 
@@ -290,11 +291,13 @@ def stream_kinds(bench: Any) -> dict[str, str]:
 class Bridge:
     """Model → feature adapter, one per ``(model, benchmark)``.
 
-    Subclasses set the class attributes and override ``describe`` and ``encode``. ``__init__``
-    stores the ``BenchmarkView`` and applies ``ARGS`` to ``args`` (types coerced, defaults filled),
-    so ``self.args`` is exactly the dict ``describe()["args"]`` must echo; an unknown key raises
-    ``ArgError`` (exit 1). ``decode_workers`` is set by ``run_extract`` before the first ``encode``:
-    the bridge's CPU budget for its own decoding.
+    Subclasses set the class attributes and override ``describe`` and ``encode`` (and optionally
+    ``prepare``). ``__init__`` stores the ``BenchmarkView`` and applies ``ARGS`` to ``args`` (types coerced,
+    defaults filled), so ``self.args`` is exactly the dict ``describe()["args"]`` must echo; an unknown key
+    raises ``ArgError`` (exit 1). ``decode_workers`` is set by ``run_extract`` before the first ``encode``:
+    the bridge's CPU budget for its own decoding, and the number of threads ``prepare`` runs in.
+    ``keep_bytes`` (default ``False``): whether a Sample's stored bytes stay readable in ``encode`` after
+    ``prepare`` ran; released otherwise. Neither ``prepare`` nor ``keep_bytes`` is part of ``describe()``.
     """
 
     name: ClassVar[str] = ""  # optional label, [A-Za-z0-9_.-]{1,64} when set (default: the class name); never a key
@@ -303,6 +306,7 @@ class Bridge:
     pos_mode: ClassVar[str] = "none"  # "none" | "constant" | "per_sample"
     streams: ClassVar[tuple[str, ...]] = ()  # stream tags used in pos; order = tag index
     ARGS: ClassVar[dict[str, ArgSpec | dict]] = {}  # argparse-like spec of consumed --arg k=v
+    keep_bytes: ClassVar[bool] = False  # True: encode() still reads the stored bytes after prepare()
     decode_workers: int = 1
 
     def __init__(self, bench: BenchmarkView, args: dict | None = None) -> None:
@@ -313,6 +317,17 @@ class Bridge:
         """REQUIRED override. JSON primitives only; MUST contain the ``DESCRIBE_REQUIRED`` keys."""
         raise NotImplementedError("Bridge.describe must be overridden by the bridge")
 
+    def prepare(self, sample: Sample) -> Any:
+        """Optional override: the per-sample CPU work ahead of ``encode`` (decode, cut, resize, normalize).
+
+        Runs in ``decode_workers`` threads while ``encode`` runs on earlier batches; the return value arrives
+        as ``sample.prepared``. MUST be a pure, deterministic function of the one sample (no model or GPU state,
+        no cross-sample state); it may raise ``MediaUndecodable([sample.clip_id], ...)`` or ``MediaMissing`` for
+        a missing row. Unless ``keep_bytes`` is ``True`` the stored bytes are released once it returns, so
+        ``encode`` must use ``sample.prepared`` and never ``bytes()`` / ``open()``. Not overriding it keeps the
+        encode-only path: no prepare threads, bytes kept until the batch is written."""
+        return None
+
     def encode(self, samples: list[Sample]) -> tuple[Any, Any | None, list[dict]]:
         """REQUIRED override. Returns ``(feats [B, N, D], pos None | [N, 4] | [B, N, 4], used)`` with ``used`` a
         list of ``B`` dicts, one entry per stream in ``describe()["input"]``."""
@@ -321,6 +336,12 @@ class Bridge:
     def profile(self) -> dict | None:
         """Optional: ``{"peak_gpu_gb": ...}``."""
         return None
+
+
+def has_prepare(bridge: Bridge | type[Bridge]) -> bool:
+    """``True`` when the bridge (instance or class) overrides ``Bridge.prepare``."""
+    cls = bridge if isinstance(bridge, type) else type(bridge)
+    return getattr(cls, "prepare", Bridge.prepare) is not Bridge.prepare
 
 
 # ----------------------------------------------------------------------------- --arg parsing

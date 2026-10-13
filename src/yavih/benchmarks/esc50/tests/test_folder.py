@@ -306,7 +306,7 @@ def test_bridge_template_output_contract(tmp_path: Path, monkeypatch: pytest.Mon
     cls = type("B", (mod.Esc50Bridge,), {"TEMPORAL": {"rule": "full", "max_s": pad_to_s, "pad_to_s": pad_to_s}})
     bridge = cls(SimpleNamespace(name="esc50"), {})
     samples = [SimpleNamespace(row=k, clip_id=f"c{k}", split="1", streams={"audio": s}, meta={"facts": {}}) for k, s in enumerate(streams)]
-    feats, pos, used = bridge.encode(samples)
+    feats, pos, used = F.encode_prepared(bridge, samples)
     assert pos is None and len(used) == 3 and np.asarray(feats).ndim == 3 and np.asarray(feats).shape[0] == 3
     for s, n, u in zip(streams, lengths, used, strict=True):
         ranges, (pl, pr) = audio_ranges(bridge.TEMPORAL, s.info)
@@ -416,7 +416,7 @@ def test_reader_to_template_end_to_end(isolated: Path):
     bridge = mod.Esc50Bridge(b.view(), {})
     validate_describe(bridge.describe(), bridge, b)
     samples = list(b.reader("2", rows=range(0, 2)))
-    feats, pos, used = bridge.encode(samples)
+    feats, pos, used = F.encode_prepared(bridge, samples)
     assert np.asarray(feats).shape[0] == 2 and pos is None
     assert [u["audio"] for u in used] == [{"samples": [[0, CLIP_SAMPLES]], "pad": [0, 0]}] * 2
 

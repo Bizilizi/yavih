@@ -20,7 +20,8 @@ registers one by binding it to a module-level name (pytest uses that name)::
   :func:`read_rows`, :func:`read_classes`, :func:`site_root`;
 - markdown: :func:`headings`, :func:`section`, :func:`last_yaml_block`, :func:`walk_keys`;
 - shared assertions: :func:`assert_manifest_hashes`, :func:`assert_splits_assigned_once`,
-  :func:`assert_metric_names_resolve`, :func:`assert_lint_clean`.
+  :func:`assert_metric_names_resolve`, :func:`assert_lint_clean`;
+- bridges: :func:`encode_prepared` (``prepare`` then ``encode``, as the extractor calls a template).
 
 Core-only at import time (pytest + pyyaml + stdlib); the benchmark, metrics and lint modules load inside functions.
 """
@@ -44,9 +45,24 @@ import yaml
 __all__ = [
     "folder_of", "load_module", "load_yaml", "read_manifest_bytes", "read_rows", "read_classes", "site_root",
     "headings", "section", "last_yaml_block", "walk_keys", "assert_manifest_hashes",
-    "assert_splits_assigned_once", "assert_metric_names_resolve", "assert_lint_clean",
+    "assert_splits_assigned_once", "assert_metric_names_resolve", "assert_lint_clean", "encode_prepared",
     "isolated_yavih_home", "spec", "manifest_bytes", "rows", "classes", "bench", "mm", "template",
 ]
+
+
+# ----------------------------------------------------------------------------- bridges
+
+
+def encode_prepared(bridge: Any, samples: list) -> Any:
+    """``bridge.encode(samples)`` as the extractor calls it: when the bridge overrides ``Bridge.prepare``, each sample's
+    ``prepared`` is set to ``bridge.prepare(sample)`` first (a ``MediaUndecodable`` from it propagates). Works on reader
+    Samples and on duck-typed stand-ins."""
+    from yavih.bridge import has_prepare
+
+    if has_prepare(bridge):
+        for s in samples:
+            object.__setattr__(s, "prepared", bridge.prepare(s))
+    return bridge.encode(samples)
 
 
 # ----------------------------------------------------------------------------- loaders

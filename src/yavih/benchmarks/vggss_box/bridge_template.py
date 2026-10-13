@@ -15,7 +15,7 @@ and commit; ``describe()["input"]`` below must match it line by line (``bridge c
 
     TODO
 
-What ``encode`` receives per Sample (setup.md "Input contract"):
+What ``prepare`` and ``encode`` receive per Sample (setup.md "Input contract"):
     s.streams["video"]: RawStream over the stored VGGSound mp4 — ``open()`` / ``bytes()`` / ``path``; ``info`` =
         {duration_s, fps, width, height, container, bytes}. Native size (1280×720, 480×360, 640×360, 320×240,
         182 portrait clips …), ~10 s (221 rows shorter, min 5.09 s). NOTHING is decoded, cut or cropped for you.
@@ -137,21 +137,33 @@ class VGGSSBoxBridge(Bridge):
             "args": dict(self.args),  # echoes every consumed --arg with defaults filled
         }
 
+    def prepare(self, sample: Any) -> dict:
+        """One clip's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
+        # The stored bytes are released after prepare(), so encode() works from this dict only.
+        from yavih.media import rules
+
+        v, a = sample.streams["video"], sample.streams["audio"]
+        frames, pts = self._decode.frames_at(v, self.frame_times)  # uint8 [N_FRAMES, H, W, 3], pts float64 [N_FRAMES]
+        ranges, pad = rules.audio_ranges(AUDIO_TEMPORAL, a.info)  # int64 [k, 2] native-rate samples, (left, right) padding
+        wav, sr = self._decode.audio(a, ranges)  # float32 [L, C], 16000
+        # TODO video: the pasted transform exactly (e.g. torchvision Resize(256, antialias=True) +
+        #   CenterCrop(224)), /255, the model's FIXED mean/std → [T, 3, 224, 224], here or in encode().
+        # TODO audio: mono, zero-pad by `pad`, fbank exactly as upstream, the model's FIXED norm.
+        return {"frames": frames, "pts": pts, "wav": wav, "sr": sr, "ranges": ranges, "pad": pad}
+
     def encode(self, samples: list) -> tuple[Any, Any, list[dict]]:
         from yavih.media import rules
 
         feats, pos, used = [], [], []
         for s in samples:  # instance-wise: nothing below may depend on the other samples of the batch
             v, a = s.streams["video"], s.streams["audio"]
-            frames, pts = self._decode.frames_at(v, self.frame_times)  # uint8 [N_FRAMES, H, W, 3], pts float64 [N_FRAMES]
+            p = s.prepared  # what prepare() returned for this sample
+            pts, ranges, pad = p["pts"], p["ranges"], p["pad"]
             region = rules.crop_region(SPATIAL, v.info["width"], v.info["height"])  # (y0, x0, y1, x1) of the ORIGINAL frame
-            ranges, pad = rules.audio_ranges(AUDIO_TEMPORAL, a.info)  # int64 [k, 2] native-rate samples, (left, right) padding
-            wav, sr = self._decode.audio(a, ranges)  # float32 [L, C], 16000
-            # TODO video: the pasted transform exactly (e.g. torchvision Resize(256, antialias=True) +
-            #   CenterCrop(224)), /255, the model's FIXED mean/std, [T, 3, 224, 224] → model → patch tokens
-            #   [T // TUBELET, GRID_H, GRID_W, D] flattened row-major (t, y, x); drop CLS/registers.
-            # TODO audio: mono, zero-pad by `pad`, fbank exactly as upstream, the model's FIXED norm → audio tokens [AUDIO_T, D].
-            _ = (frames, wav, sr)
+            # TODO: video → model → patch tokens [T // TUBELET, GRID_H, GRID_W, D] flattened row-major (t, y, x); drop
+            #   CLS/registers. audio → audio tokens [AUDIO_T, D].
+            _ = (p["frames"], p["wav"], p["sr"])
             vis = np.zeros(((N_FRAMES // TUBELET) * GRID_H * GRID_W, 1), dtype=np.float32)  # placeholder
             aud = np.zeros((AUDIO_T, 1), dtype=np.float32)  # placeholder
             feats.append(np.concatenate([vis, aud], axis=0))

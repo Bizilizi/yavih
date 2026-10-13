@@ -173,7 +173,7 @@ Every code `validate_features` can report. "waivable" says whether a [waiver](#w
 | `W_MEDIA_FP` | warning | no | a sidecar's `media_fingerprint` or `media_info_sha256` differs from this site's `data_status.json`: the features were extracted from differently staged media |
 | `W_FP16_RANGE` | warning | no | float16 features whose largest absolute value exceeds `1e3`, or more than half of whose values are zero |
 | `W_CONSTANT_CLIP` | warning | no | clips whose tokens are all identical (with `N > 1`) or all zero; rows sharing a `media_key` are counted once |
-| `W_SIDE_EFFECT` | warning | no | a sidecar lists writes the bridge made outside the run directory during `encode` |
+| `W_SIDE_EFFECT` | warning | no | a sidecar lists writes the bridge made outside the run directory during `encode` or `prepare` |
 | `W_SIZE` | warning | no | the features exceed the probe's RAM budget: the probe will use the memmap backend; request scratch |
 | `W_WEIGHTS_UNFINGERPRINTED` | warning | no | `describe()["weights_sha256"]` is null: the weights are recorded only by `weights_ref`; nothing is marked, forked or greyed |
 | `W_SOURCE_SHA` | warning | no | the split's shards were written by bridge files with different `source_sha256` under one `describe_sha256` (an edit that left `describe()` unchanged may still change features) |
@@ -207,6 +207,7 @@ the checks below; `yavih extract` raises the run-time ones. Errors end the comma
 | code | level | waivable | meaning |
 |---|---|---|---|
 | `E_RERUN_DRIFT` | error | yes | bridge check: encoding the same batches twice is not bit-identical (or, with `precision.deterministic: false`, differs beyond the tolerance); exit 2. A second bridge instance whose `describe()` differs is also `E_RERUN_DRIFT` and is never waivable. |
+| `E_PREPARE_NONDETERMINISTIC` | error | no | bridge check: `Bridge.prepare` called twice on fresh copies of one smoke sample returned different payloads (prepare must be a pure, deterministic function of the sample); exit 2 |
 | `E_CONSTANT_FEATURES` | error | yes | bridge check: every smoke clip encodes to the same features (the bridge ignores its input); exit 2 |
 | `E_CONFIG_DRIFT` | error | no | extract with `--expect-profile`: the live `model`, `reading` or `describe_sha256` differs from the profile's; the message lists the `describe()` keys that differ; nothing written; exit 2 |
 | `E_TEMPLATE_UNFILLED` | error | no | bridge check: `TODO` left in `model`, `weights_ref` or a stream's `norm.source`, or a null `norm`; exit 2 |
@@ -216,12 +217,12 @@ the checks below; `yavih extract` raises the run-time ones. Errors end the comma
 | `E_PROFILE` | error | no | extract: the `--expect-profile` file is unreadable or lacks `model`, `reading` or `describe_sha256`; exit 1 |
 | `E_USED` | error | no | `encode()` returned a missing or ill-formed `used`; exit 2 |
 | `E_FEATURES` | error | no | `encode()` returned features or positions of the wrong shape for the declared `pos_mode`, or float16 values the writer would refuse; exit 2 |
-| `E_NETWORK` | error | no | the bridge opened a network connection during `encode` (loopback only with `--allow-loopback`); exit 2 |
+| `E_NETWORK` | error | no | the bridge opened a network connection during `encode` or `prepare` (loopback only with `--allow-loopback`); exit 2 |
 | `E_ORACLE` | error | no | bridge check refuses `yavih.testing`'s oracle bridge unless `YAVIH_TESTING=1`; exit 2 |
 | `E_SMOKE` | error | no | bridge check: no present row to encode in the smoke set (data not ready); exit 3 |
 | `E_SYNTHETIC` | error | no | `bridge check --synthetic`: the small stand-in benchmark cannot be built (exit 1, or 3 when a media writer is missing) |
 | `E_LAYOUT` | error | no | extract: `--shard i/n` names another `n` than the split's frozen layout; run `plan build` again; exit 1 |
-| `E_BRIDGE` | error | no | extract: the bridge raised inside `encode` (a bridge bug is not missing coverage), or raised `NotApplicable` after its first encode; exit 5 |
+| `E_BRIDGE` | error | no | extract: the bridge raised inside `encode` or `prepare` (a bridge bug is not missing coverage; a `MediaUndecodable` from `prepare` naming another clip included), or raised `NotApplicable` after its first batch; exit 5 |
 | `E_READER` | error | no | extract: the benchmark reader yielded rows out of order, duplicated, or not the shard's range; exit 5 |
 | `E_READ_INTERNAL` | error | no | extract: reading the stored bytes raised unexpectedly; exit 5 |
 | `E_WRITE` | error | no | extract: the writer could not serialize a row's provenance or features; exit 5 |
@@ -230,6 +231,7 @@ the checks below; `yavih extract` raises the run-time ones. Errors end the comma
 | `W_RERUN_NONDETERMINISTIC` | warning | no | bridge check: the rerun is within tolerance but not bit-identical, accepted because `precision.deterministic` is false |
 | `W_NO_PREPROCESSING_SOURCE` | warning | no | bridge check: the bridge's docstring has no filled `Preprocessing source:` slot |
 | `W_MISSING_ROWS` | warning | no | bridge check: some sampled rows had missing or undecodable media |
+| `W_NO_CENSUS` | warning | no | plan build: a video stream guarantees `n_frames` and the site has no media-info census, so every extract unit probes each clip's header first (a demuxing pass per webm / mkv); run `yavih bench verify <b> --census` once. The plan is unchanged |
 
 `bridge check` also reports `W_WEIGHTS_UNFINGERPRINTED`, `W_LOOSE_TOLERANCE`, `W_RULE_UNCHECKED`, `W_SIDE_EFFECT`,
 `W_FP16_RANGE` and `N_RULE_CUSTOM` as in the table above, and records them in the profile. See [bridge](bridge.md)

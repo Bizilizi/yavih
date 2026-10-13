@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from yavih import hashing
+from yavih.plan.estimate import MAX_ROWS_PER_SHARD
 from yavih.waivers import WaiveError, check_waive, describe_waivers
 
 __all__ = [
@@ -75,12 +76,13 @@ DESCRIBE_REQUIRED: dict[str, tuple[type, ...]] = {
 PRECISION_KEYS: tuple[str, ...] = ("autocast", "matmul_precision", "allow_tf32", "deterministic")
 
 #: Top-level matrix keys; ``results`` is the results-store root (``null`` = the usual resolution).
-_TOP_KEYS = {"schema_version", "out", "results", "seeds", "shard_minutes", "canaries", "defaults", "bridges"}
+_TOP_KEYS = {"schema_version", "out", "results", "seeds", "shard_minutes", "max_rows_per_shard", "canaries", "defaults", "bridges"}
 _DEFAULT_KEYS = {"launcher", "env", "cpus", "args", "allow_loopback"}
 #: ``shards`` (an int or ``{split: int}``) pins the shard count of a split that has no frozen layout yet;
-#: ``allow_loopback`` passes ``--allow-loopback`` to the entry's extract units; ``waive``
+#: ``max_rows_per_shard`` overrides the matrix-wide rows cap of the shard-count estimate; ``allow_loopback`` passes ``--allow-loopback`` to the entry's extract units; ``waive``
 #: (``{CODE: reason}``, yavih.waivers) passes ``--waive CODE=reason`` to its probe units' validate prologue.
-_ENTRY_KEYS = {"script", "benchmark", "args", "profile", "launcher", "env", "cpus", "shards", "allow_loopback", "waive"}
+_ENTRY_KEYS = {"script", "benchmark", "args", "profile", "launcher", "env", "cpus", "shards", "max_rows_per_shard", "allow_loopback",
+               "waive"}
 _BENCH_NAME = re.compile(r"^[a-z0-9_]+$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -111,6 +113,8 @@ class MatrixEntry:
     cpus: int = 8
     #: pinned shard count: ``None``, an int for every split, or ``{split: int}`` (a frozen layout wins over it)
     shards: int | dict[str, int] | None = None
+    #: rows cap of the shard-count estimate for this entry; ``None`` = the matrix's ``max_rows_per_shard``
+    max_rows_per_shard: int | None = None
     allow_loopback: bool = False
     #: an operator's validation waivers for the entry's features ``{code: reason}`` (expanded, validated)
     waive: dict[str, str] = field(default_factory=dict)
@@ -134,6 +138,12 @@ class Matrix:
     #: ``results``: results-store root for the probe units (``probe run --results``); ``None`` = the
     #: usual resolution (``YAVIH_RESULTS`` / config ``[results] root`` / sibling ``results`` of the runs root).
     results: str | None = None
+    #: rows cap of the shard-count estimate (``estimate.n_shards_for``); an entry's own key wins
+    max_rows_per_shard: int = MAX_ROWS_PER_SHARD
+
+    def rows_cap(self, entry: MatrixEntry) -> int:
+        """The rows cap of ``entry``'s shard-count estimate: its own ``max_rows_per_shard``, else the matrix's."""
+        return int(entry.max_rows_per_shard if entry.max_rows_per_shard is not None else self.max_rows_per_shard)
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -187,6 +197,11 @@ def _shards(raw: Any, where: str) -> int | dict[str, int] | None:
     return int(raw)
 
 
+def _rows_cap(raw: Any, where: str) -> int:
+    _expect(isinstance(raw, int) and not isinstance(raw, bool) and raw >= 1, f"{where} must be an int >= 1")
+    return int(raw)
+
+
 def _flag(raw: Any, where: str) -> bool:
     _expect(isinstance(raw, bool), f"{where} must be true or false")
     return bool(raw)
@@ -231,6 +246,7 @@ def load_matrix(path: str) -> Matrix:
     shard_minutes = raw.get("shard_minutes", 30)
     _expect(isinstance(shard_minutes, int) and not isinstance(shard_minutes, bool) and shard_minutes >= 1,
             "matrix.shard_minutes must be an int >= 1")
+    max_rows = _rows_cap(raw.get("max_rows_per_shard", MAX_ROWS_PER_SHARD), "matrix.max_rows_per_shard")
     canaries = raw.get("canaries", 8)
     _expect(isinstance(canaries, int) and not isinstance(canaries, bool) and canaries >= 0,
             "matrix.canaries must be an int >= 0")
@@ -276,10 +292,12 @@ def load_matrix(path: str) -> Matrix:
             raise MatrixError(f"{e} (E_WAIVE_INVALID)") from e
         entries.append(MatrixEntry(key=key, script=ent["script"], benchmark=ent["benchmark"],
                                    profile=ent["profile"], args=args, launcher=launcher, env=env, cpus=cpus,
-                                   shards=_shards(ent.get("shards"), where), allow_loopback=loopback, waive=waive))
+                                   shards=_shards(ent.get("shards"), where),
+                                   max_rows_per_shard=_rows_cap(ent["max_rows_per_shard"], f"{where}.max_rows_per_shard") if "max_rows_per_shard" in ent else None,
+                                   allow_loopback=loopback, waive=waive))
 
     return Matrix(out=out, seeds=tuple(seeds), shard_minutes=shard_minutes, canaries=canaries,
-                  entries=tuple(entries), root=os.path.dirname(os.path.abspath(path)), results=results)
+                  entries=tuple(entries), root=os.path.dirname(os.path.abspath(path)), results=results, max_rows_per_shard=max_rows)
 
 
 # ----------------------------------------------------------------------------- profile

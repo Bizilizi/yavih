@@ -1,9 +1,11 @@
 """``python -m yavih.extract`` (the ``yavih extract`` and ``yavih bridge check`` backend).
 
-args → ``Benchmark.load`` → ``Bridge(bench.view())`` → torch-free byte read-ahead → batching in row
-order → ``encode`` → ``used`` check → canaries → ``FeatureWriter``; ``MediaUndecodable`` retry; the audit
-hook that turns a network connection during ``encode`` into ``E_NETWORK`` and records writes outside the
-run directory; ``bridge check``'s hard rerun / batch / order invariance checks;
+args → ``Benchmark.load`` → ``Bridge(bench.view())`` → torch-free byte read-ahead → ``Bridge.prepare`` in
+a thread pool ahead of ``encode`` (when the bridge defines it) → batching in row order → ``encode`` → ``used``
+check → canaries → ``FeatureWriter``, each batch's stored bytes released once written; ``MediaUndecodable``
+retry; the audit hook that turns a network connection during ``encode`` or ``prepare`` into ``E_NETWORK`` and
+records writes outside the run directory; ``bridge check``'s hard rerun / batch / order invariance checks and
+its ``prepare`` determinism check;
 ``E_TRAIN_MODE`` and precision enforcement when torch is importable in the MODEL env; the
 ``--expect-profile`` configuration-drift check (``E_CONFIG_DRIFT``); deadline and
 SIGTERM/SIGUSR1 handling (exit 4, nothing partial). Core module: torch only if present, imported inside
@@ -32,7 +34,9 @@ import sys
 import threading
 import time
 import traceback
+from collections import deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,6 +56,7 @@ from yavih.bridge import (
     args_unconsumed,
     batch_tolerance,
     bridge_label,
+    has_prepare,
     parse_args,
     preprocessing_source_check,
     validate_describe,
@@ -93,6 +98,7 @@ __all__ = [
     "E_USED",
     "E_NETWORK",
     "E_RERUN_DRIFT",
+    "E_PREPARE_NONDETERMINISTIC",
     "E_BATCH_INVARIANCE",
     "E_ORACLE",
     "E_SMOKE",
@@ -123,28 +129,29 @@ E_PRECISION_UNDECLARED = "E_PRECISION_UNDECLARED"  # null precision field other 
 E_CONFIG_DRIFT = "E_CONFIG_DRIFT"  # live describe() drifted from the --expect-profile (model, reading or describe_sha256; exit 2)
 E_PROFILE = "E_PROFILE"  # --expect-profile unreadable or lacking model / reading / describe_sha256 (usage error, exit 1)
 E_USED = "E_USED"  # encode() returned a missing or ill-formed `used` (exit 2)
-E_NETWORK = "E_NETWORK"  # a socket.connect to the network inside encode (exit 2)
+E_NETWORK = "E_NETWORK"  # a socket.connect to the network inside encode or prepare (exit 2)
 E_RERUN_DRIFT = "E_RERUN_DRIFT"  # bridge check: encoding the same batches twice is not bit-identical (exit 2)
+E_PREPARE_NONDETERMINISTIC = "E_PREPARE_NONDETERMINISTIC"  # bridge check: prepare() twice on one sample differs (exit 2)
 E_BATCH_INVARIANCE = "E_BATCH_INVARIANCE"  # bridge check: alone / shuffled pass differs beyond the tolerance (exit 2)
 E_ORACLE = "E_ORACLE"  # bridge check refuses yavih.testing's oracle bridge unless YAVIH_TESTING=1 (exit 2)
 E_SMOKE = "E_SMOKE"  # bridge check: no present row to encode in the smoke set (exit 3, data not ready)
 E_TEMPLATE_UNFILLED = "E_TEMPLATE_UNFILLED"  # bridge check: TODO left in model / weights_ref / norm.source, or a null norm constant (exit 2)
 E_CONSTANT_FEATURES = "E_CONSTANT_FEATURES"  # bridge check: every smoke clip encodes to the same features (exit 2)
 E_SYNTHETIC = "E_SYNTHETIC"  # bridge check --synthetic: the tiny stand-in benchmark cannot be built (exit 1 usage / 3 media writer missing)
-E_BRIDGE = "E_BRIDGE"  # the bridge raised inside encode: a bridge bug is not coverage (exit 5)
+E_BRIDGE = "E_BRIDGE"  # the bridge raised inside encode or prepare: a bridge bug is not coverage (exit 5)
 E_FEATURES = "E_FEATURES"  # encode() returned a wrong shape / pos for the declared pos_mode (exit 2)
 E_PRECISION_DRIFT = "E_PRECISION_DRIFT"  # torch precision flags differ after encode from the enforced declaration (exit 2)
 E_WRITE = "E_WRITE"  # the writer could not serialize a row's provenance/features (exit 5)
 E_DEADLINE = "E_DEADLINE"  # --deadline reached; shard abandoned, nothing partial (exit 4)
 E_PREEMPTED = "E_PREEMPTED"  # SIGTERM/SIGUSR1 received; shard abandoned, nothing partial (exit 4)
-W_SIDE_EFFECT = "W_SIDE_EFFECT"  # writes outside the run directory during encode (warning)
+W_SIDE_EFFECT = "W_SIDE_EFFECT"  # writes outside the run directory during encode or prepare (warning)
 W_NO_PREPROCESSING_SOURCE = "W_NO_PREPROCESSING_SOURCE"  # the bridge's docstring slot for the model's preprocessing source is empty
 W_WEIGHTS_UNFINGERPRINTED = "W_WEIGHTS_UNFINGERPRINTED"  # describe()["weights_sha256"] is null: recorded, nothing gated
 W_RERUN_NONDETERMINISTIC = "W_RERUN_NONDETERMINISTIC"  # bridge check: rerun within tolerance but not bit-identical (deterministic: false)
 N_RULE_CUSTOM = "N_RULE_CUSTOM"  # a custom (opted-out) rule: a note in the profile, never a warning
 
 DEFAULT_CANARIES = 8  # CLI/plan default; the library default is 0
-DEFAULT_READ_AHEAD = 2  # batches read ahead of the one being encoded (--read-ahead)
+DEFAULT_READ_AHEAD = 2  # batches read (and prepared) ahead of the one being encoded (--read-ahead)
 DEFAULT_DEADLINE_MARGIN_S = 900.0  # `--deadline slurm` = SLURM_JOB_END_TIME - margin; > the 600 s sbatch signal lead, = exec's
 FP16_MAX = 1e4  # FeatureWriter's float16 refusal threshold, applied to bridge check's smoke set
 SCRAMBLE_ROW_BASE = 10**9  # bridge check's synthetic row ids
@@ -186,7 +193,8 @@ def default_decode_workers(env: Mapping[str, str] | None = None) -> int:
 
 class _Audit:
     """Process-wide state of the ``sys.addaudithook`` guard. ``sys.addaudithook`` cannot be removed, so the
-    hook is installed once and does nothing unless ``armed`` (only around ``encode``)."""
+    hook is installed once and does nothing unless ``armed`` (only around ``encode``) or the event comes from a
+    ``yavih-prepare`` thread (those run bridge code only, so they are always audited)."""
 
     lock = threading.Lock()
     installed = False
@@ -197,8 +205,11 @@ class _Audit:
     #: ``--allow-loopback`` (opt-in): connects to 127.0.0.0/8, ::1 or ``localhost`` pass and are recorded
     allow_loopback = False
     loopback: list[str] = []
+    #: the same opt-in for the prepare threads, set for the lifetime of an engine run (encode resets ``allow_loopback``)
+    prepare_loopback = False
 
 
+_PREPARE_THREADS = "yavih-prepare"  # thread-name prefix of Bridge.prepare's pool: always audited
 _WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
 _IGNORED_PREFIXES = ("/dev/", "/proc/", "/sys/")
 
@@ -222,18 +233,19 @@ def _is_loopback(addr: Any) -> bool:
 
 
 def _audit_hook(event: str, args: tuple) -> None:
-    if not _Audit.armed:
+    if not _Audit.armed and not threading.current_thread().name.startswith(_PREPARE_THREADS):
         return
     if event == "socket.connect":
         sock = args[0] if args else None
         fam = getattr(sock, "family", None)
         if fam in (socket.AF_INET, getattr(socket, "AF_INET6", -1)):
             addr = args[1] if len(args) > 1 else None
-            if _Audit.allow_loopback and _is_loopback(addr):
+            in_prepare = threading.current_thread().name.startswith(_PREPARE_THREADS)
+            if (_Audit.allow_loopback or (in_prepare and _Audit.prepare_loopback)) and _is_loopback(addr):
                 _Audit.loopback.append(repr(addr))
                 return
             _Audit.network.append(repr(addr))
-            raise ConnectionRefusedError(f"yavih: network access during encode is forbidden: connect to {addr!r}")
+            raise ConnectionRefusedError(f"yavih: network access during encode or prepare is forbidden: connect to {addr!r}")
         return
     if event != "open" or threading.current_thread().name.startswith("yavih-read"):
         return
@@ -799,9 +811,24 @@ def _read_sample(sample: Any) -> float:
     return _sample.fetch(sample)
 
 
+def _release_bytes(sample: Any) -> None:
+    """Drop the cached stored bytes of every stream of ``sample`` (``yavih.sample._Source.release``; a later read
+    reads the store again). Streams without a byte source (duck-typed test samples) are left alone."""
+    for st in (getattr(sample, "streams", None) or {}).values():
+        rel = getattr(getattr(st, "_src", None), "release", None)
+        if rel is not None:
+            rel()
+
+
+def _set_prepared(sample: Any, payload: Any) -> None:
+    """``sample.prepared = payload`` on the frozen ``Sample`` (or a duck-typed stand-in)."""
+    object.__setattr__(sample, "prepared", payload)
+
+
 @dataclass
 class _Stats:
     read_s: float = 0.0
+    prepare_s: float = 0.0
     encode_s: float = 0.0
     n_encoded: int = 0
     batch_times: list[float] = field(default_factory=list)
@@ -828,12 +855,18 @@ class _Out:
 
 
 class _Engine:
-    """Drives the byte read-ahead and the bridge over batches in row order.
+    """Drives the byte read-ahead, the bridge's ``prepare`` (when it has one) and ``encode`` over batches in row order.
 
-    Missing rows (media absent or unreadable in the read-ahead, ``MediaUndecodable`` from the bridge) are
-    reported through ``on_missing`` and never reach the bridge again; any other exception out of
-    ``encode`` is a bridge bug (``E_BRIDGE``, exit 5). A network connection inside ``encode``
-    is ``E_NETWORK`` (exit 2); writes outside ``run_dir`` are collected for ``W_SIDE_EFFECT``.
+    Missing rows (media absent or unreadable in the read-ahead, ``MediaUndecodable`` / ``MediaMissing`` from
+    ``prepare`` or ``encode``) are reported through ``on_missing`` and never reach the bridge again; any other
+    exception out of ``prepare`` or ``encode`` is a bridge bug (``E_BRIDGE``, exit 5). A network connection inside
+    either is ``E_NETWORK`` (exit 2); writes outside ``run_dir`` are collected for ``W_SIDE_EFFECT``.
+
+    A bridge that overrides ``Bridge.prepare`` gets a ``yavih-prepare`` pool of ``decode_workers`` threads that
+    prepares the batches the read-ahead delivered (``read_ahead + 1`` batches in flight) while ``encode`` runs;
+    without ``prepare`` no pool is created. ``release_bytes`` (``run_extract``): the stored bytes of a sample are
+    dropped after its ``prepare`` (unless ``Bridge.keep_bytes``) and, for every bridge, once its batch has been
+    consumed (written); ``bridge check`` keeps them, its passes share the byte sources.
     """
 
     def __init__(
@@ -849,8 +882,13 @@ class _Engine:
         run_dir: str | os.PathLike | None,
         allow_not_applicable: bool = False,
         allow_loopback: bool = False,
+        release_bytes: bool = False,
     ) -> None:
         self.bridge = bridge
+        self.has_prepare = has_prepare(bridge)
+        self.keep_bytes = bool(getattr(bridge, "keep_bytes", False))
+        self.release_bytes = bool(release_bytes)
+        self._net_mark = self._loop_mark = 0
         self.allow_loopback = bool(allow_loopback)
         self.loopback: list[str] = []  # loopback connects the --allow-loopback opt-in let through (recorded)
         self.describe = describe
@@ -865,6 +903,97 @@ class _Engine:
         self.stats = _Stats()
         self.first_encode_done = False
         self.side_effects: set[str] = set()
+
+    def _note_loopback(self, since: int) -> None:
+        for a in _Audit.loopback[since:]:
+            if a not in self.loopback:
+                self.loopback.append(a)
+
+    # -- prepare (decode ahead) -------------------------------------------------------
+    def _prepare_one(self, s: Any) -> tuple[Any, float]:
+        """``bridge.prepare(s)`` in a ``yavih-prepare`` thread under ``torch.inference_mode()``; then the sample's
+        stored bytes are released unless the bridge keeps them. Returns ``(payload, seconds)``."""
+        t0 = time.perf_counter()
+        try:
+            with _inference_ctx(self.torch):
+                payload = self.bridge.prepare(s)
+        finally:
+            if self.release_bytes and not self.keep_bytes:
+                _release_bytes(s)
+        return payload, time.perf_counter() - t0
+
+    def _collect_prepared(self, rb: _sample.ReadBatch, futures: list[Future]) -> _sample.ReadBatch:
+        """Wait for one batch's ``prepare`` calls and set ``sample.prepared``. ``MediaUndecodable`` naming the sample or
+        ``MediaMissing`` → a missing row (added to the batch's ``missing``); ``DecoderMissing`` propagates; a network
+        connect → ``E_NETWORK``; any other exception → ``E_BRIDGE`` (exit 5), first failing row in order."""
+        outcomes: list[tuple[Any, tuple[Any, float] | None, Exception | None]] = []
+        for s, f in zip(rb.samples, futures, strict=True):
+            try:
+                outcomes.append((s, f.result(), None))
+            except Exception as e:  # noqa: BLE001 - classified below, after the network check
+                outcomes.append((s, None, e))
+        self.side_effects |= _Audit.writes
+        self._note_loopback(self._loop_mark)
+        net = _Audit.network[self._net_mark:]
+        if net:
+            raise ExtractError(E_NETWORK, f"the bridge opened network connection(s) during prepare: {net[:3]}; prepare decodes the sample "
+                               "it is handed and nothing else", exit_code=2)
+        present: list[Any] = []
+        missing = list(rb.missing)
+        name = type(self.bridge).__name__
+        for s, res, e in outcomes:
+            if e is None:
+                assert res is not None
+                _set_prepared(s, res[0])
+                self.stats.prepare_s += res[1]
+                present.append(s)
+            elif isinstance(e, ExtractError | DecoderMissing):
+                raise e
+            elif isinstance(e, NotApplicable):
+                if self.allow_not_applicable and not self.first_encode_done:
+                    raise e
+                raise ExtractError(E_BRIDGE, f"NotApplicable raised by prepare after the first encode ({e.reason}); it is only valid from "
+                                   "__init__ or the first batch", exit_code=5) from e
+            elif isinstance(e, MediaMissing) or (isinstance(e, MediaUndecodable) and s.clip_id in e.clip_ids):
+                missing.append((s, e))
+            else:
+                tb = "".join(traceback.format_exception(type(e), e, e.__traceback__)).rstrip()
+                what = (f"MediaUndecodable naming {e.clip_ids[:5]}, not the sample it was handed ({s.clip_id})" if isinstance(e, MediaUndecodable)
+                        else f"{type(e).__name__}: {e}")
+                raise ExtractError(E_BRIDGE, f"bridge {name}.prepare raised {what} on row {s.row} — a bridge bug is not coverage\n{tb}",
+                                   exit_code=5) from e
+        return _sample.ReadBatch(present, missing, rb.read_s)
+
+    def _prepare_ahead(self, reads: Iterator[_sample.ReadBatch]) -> Iterator[_sample.ReadBatch]:
+        """The read-ahead's batches with ``prepare`` run on every present Sample by a ``yavih-prepare`` pool of
+        ``decode_workers`` threads, ``read_ahead + 1`` batches of per-sample futures in flight, in input order."""
+        self._net_mark, self._loop_mark = len(_Audit.network), len(_Audit.loopback)
+        pool = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix=_PREPARE_THREADS)
+        pending: deque[tuple[_sample.ReadBatch, list[Future]]] = deque()
+        exhausted = False
+        try:
+            while True:
+                while not exhausted and len(pending) < self.read_ahead + 1:
+                    try:
+                        rb = next(reads)
+                    except StopIteration:
+                        exhausted = True
+                        break
+                    pending.append((rb, [pool.submit(self._prepare_one, s) for s in rb.samples]))
+                if not pending:
+                    return
+                rb, futures = pending.popleft()
+                yield self._collect_prepared(rb, futures)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+    def _batch_done(self, rb: _sample.ReadBatch) -> None:
+        """After the consumer handled a batch: drop the prepared payloads and, with ``release_bytes``, the stored bytes."""
+        for s in [*rb.samples, *(m for m, _ in rb.missing)]:
+            if self.has_prepare:
+                _set_prepared(s, None)
+            if self.release_bytes:
+                _release_bytes(s)
 
     # -- encode ---------------------------------------------------------------------
     def _check_used(self, samples: list[Any], used: Any) -> list[dict]:
@@ -904,9 +1033,7 @@ class _Engine:
         finally:
             self.stats.encode_s += time.perf_counter() - t0
             self.side_effects |= _Audit.writes
-            for a in _Audit.loopback[n_loop:]:
-                if a not in self.loopback:
-                    self.loopback.append(a)
+            self._note_loopback(n_loop)
             net = _Audit.network[n_net:]
             if net:
                 raise ExtractError(E_NETWORK, f"the bridge opened network connection(s) during encode: {net[:3]}; weights and everything else "
@@ -972,20 +1099,27 @@ class _Engine:
     # -- the batch loop -------------------------------------------------------------
     def run(self, batches: Sequence[list[Any]], deadline: _Deadline | None = None) -> Iterator[_Out]:
         """Yield one ``_Out`` per batch in order while ``read_ahead`` further batches are read by
-        ``yavih.sample.ReadAhead``. The deadline is checked after every batch."""
+        ``yavih.sample.ReadAhead`` (and prepared, for a bridge with ``prepare``). The deadline is checked after every
+        batch; the batch's payloads (and, with ``release_bytes``, its bytes) are dropped once the consumer is done."""
         queue = [list(b) for b in batches]
         if not queue:
             return
+        if self.has_prepare:  # prepare threads are audited from their first call
+            _install_audit_hook()
+            _Audit.run_dir = os.path.abspath(os.fspath(self.run_dir)) if self.run_dir is not None else None
+            _Audit.prepare_loopback = self.allow_loopback
         ra = _sample.ReadAhead(self.workers, depth=self.read_ahead)
+        reads = ra.run(queue)
+        if self.has_prepare:
+            reads = self._prepare_ahead(reads)
         try:
             t0 = time.perf_counter()
-            reads = ra.run(queue)
             while True:
                 try:
                     rb = next(reads)
                 except StopIteration:
                     return
-                except DecoderMissing:
+                except (DecoderMissing, ExtractError, NotApplicable):
                     raise
                 except Exception as e:  # noqa: BLE001 - a reader bug is internal, not coverage
                     raise ExtractError("E_READ_INTERNAL", f"reading the stored bytes raised {_reason(e)}", exit_code=5) from e
@@ -997,10 +1131,13 @@ class _Engine:
                 self.stats.batch_times.append(now - t0)
                 t0 = now
                 yield res
+                self._batch_done(rb)
                 if deadline is not None:
                     deadline.check(self.stats.estimated_batch_s())
         finally:
+            reads.close()
             ra.shutdown(wait=False)
+            _Audit.prepare_loopback = False
 
 
 def _batched(samples: Sequence[Any], batch_size: int) -> list[list[Any]]:
@@ -1189,8 +1326,11 @@ def run_extract(
                 return  # a canary whose media vanished between the two reads: nothing to compare
             writer.record_missing(s.row, s.clip_id, reason)
 
+        # release_bytes: a batch's stored bytes are dropped once it is written (and after prepare); the canaries are
+        # Samples of their own (their own byte sources), read again by the canary pass
         engine = _Engine(prep.bridge, d, decode_workers=workers, read_ahead=read_ahead, torch=prep.torch, on_missing=on_missing,
-                         kinds=prep.view.streams, run_dir=run_dir, allow_not_applicable=True, allow_loopback=allow_loopback)
+                         kinds=prep.view.streams, run_dir=run_dir, allow_not_applicable=True, allow_loopback=allow_loopback,
+                         release_bytes=True)
         canary_stats: dict[str, Any] = {"max_abs_diff": 0.0, "max_rel_l2": 0.0, "n": 0, "tolerance": tol, "mismatch": []}
         try:
             for res in engine.run(_batched(regular, batch_size), dl):
@@ -1241,6 +1381,7 @@ def run_extract(
             "wall_s": round(wall, 3),
             "clips_per_s": round(n_written / wall, 4) if wall > 0 else None,
             "read_s": round(engine.stats.read_s, 3),
+            "prepare_s": round(engine.stats.prepare_s, 3),
             "encode_s": round(engine.stats.encode_s, 3),
         }
         env = _env_block(prep.torch, workers, prep.precision_live, read_ahead=read_ahead)
@@ -1248,7 +1389,7 @@ def run_extract(
         if allow_loopback:  # the --allow-loopback opt-in is provenance: who allowed which local connections
             side_effects.update(allow_loopback=True, loopback_connects=list(engine.loopback))
         if engine.side_effects:
-            _log(f"{W_SIDE_EFFECT}: the bridge wrote outside the run directory during encode: {sorted(engine.side_effects)[:5]}")
+            _log(f"{W_SIDE_EFFECT}: the bridge wrote outside the run directory during encode or prepare: {sorted(engine.side_effects)[:5]}")
         sidecar_path = writer.close(timing=timing, env=env, canary_stats=canary_stats, side_effects=side_effects)
         writer = None
         summary = read_sidecar(sidecar_path)
@@ -1411,6 +1552,64 @@ def _compare(name: str, a: _PassResult, b: _PassResult, samples: list[Any], tol:
         if hashing.canon(ua) != hashing.canon(ub):
             problems.append(f"{samples[j].clip_id}: used differs ({ua} vs {ub})")
     return worst, problems
+
+
+def _payload_diff(a: Any, b: Any, where: str = "prepared") -> str | None:
+    """Where two ``prepare`` payloads differ (``None`` when equal): mappings by key, sequences by position, arrays and
+    tensors by shape, dtype and bytes (``_to_numpy``), anything else by ``==``."""
+    if isinstance(a, Mapping) or isinstance(b, Mapping):
+        if not (isinstance(a, Mapping) and isinstance(b, Mapping)) or set(a) != set(b):
+            return f"{where}: keys {sorted(map(str, a)) if isinstance(a, Mapping) else type(a).__name__} vs " \
+                   f"{sorted(map(str, b)) if isinstance(b, Mapping) else type(b).__name__}"
+        for k in a:
+            d = _payload_diff(a[k], b[k], f"{where}[{k!r}]")
+            if d:
+                return d
+        return None
+    arrayish = (isinstance(a, np.ndarray | np.generic) or hasattr(a, "detach")) and (isinstance(b, np.ndarray | np.generic) or hasattr(b, "detach"))
+    if arrayish:
+        x, y = np.asarray(_to_numpy(a)), np.asarray(_to_numpy(b))
+        if x.shape != y.shape or x.dtype != y.dtype:
+            return f"{where}: {x.dtype}{list(x.shape)} vs {y.dtype}{list(y.shape)}"
+        return None if x.tobytes() == y.tobytes() else f"{where}: values differ"
+    if isinstance(a, list | tuple) and isinstance(b, list | tuple):
+        if len(a) != len(b):
+            return f"{where}: length {len(a)} vs {len(b)}"
+        for k, (x, y) in enumerate(zip(a, b, strict=True)):
+            d = _payload_diff(x, y, f"{where}[{k}]")
+            if d:
+                return d
+        return None
+    try:
+        same = bool(a == b)
+    except Exception:  # noqa: BLE001 - an object without a usable ==: compare its repr
+        same = repr(a) == repr(b)
+    return None if same else f"{where}: {a!r} vs {b!r}"[:200]
+
+
+def _prepare_twice(bridge: Bridge, samples: Sequence[Any], torch: Any = None) -> list[str]:
+    """``bridge check``'s ``prepare`` determinism check: ``prepare`` on two fresh copies of each sample (new opaque
+    paths over the same cached bytes, in a ``yavih-prepare`` thread under ``torch.inference_mode()``); returns the
+    differences (``E_PREPARE_NONDETERMINISTIC``). A call that raises on a sample pass A prepared is a difference too."""
+    problems: list[str] = []
+
+    def twice(k: int, s: Any) -> str | None:
+        out = []
+        for tag in ("1", "2"):
+            copy = _sample.rehandle(s, f"bridge-check-prepare-{tag}")
+            try:
+                with _inference_ctx(torch):
+                    out.append(bridge.prepare(copy))
+            except Exception as e:  # noqa: BLE001 - reported as nondeterminism of this sample
+                return f"{s.clip_id}: call {tag} raised {_reason(e)}"
+        d = _payload_diff(out[0], out[1])
+        return f"{s.clip_id}: {d}" if d else None
+
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix=_PREPARE_THREADS) as ex:
+        for res in ex.map(lambda ks: twice(*ks), enumerate(samples)):
+            if res:
+                problems.append(res)
+    return problems
 
 
 def unfilled_describe(d: Mapping[str, Any]) -> list[str]:
@@ -1679,6 +1878,17 @@ def _bridge_check(
     idx = list(range(len(smoke)))
     try:
         pass_a = _run_pass(engine(), smoke, idx, batch_size)
+        if has_prepare(prep.bridge):
+            # prepare must be a pure function of the sample: twice on fresh copies of every row pass A prepared
+            n_net = len(_Audit.network)
+            prepared = [smoke[j] for j in sorted(pass_a.by_index)]
+            problems = _prepare_twice(prep.bridge, prepared, prep.torch)
+            if _Audit.network[n_net:]:
+                raise ExtractError(E_NETWORK, f"the bridge opened network connection(s) during prepare: {_Audit.network[n_net:][:3]}", exit_code=2)
+            if problems:
+                raise ExtractError(E_PREPARE_NONDETERMINISTIC, f"prepare() on the same sample twice differs: {problems[:4]}; prepare must be a "
+                                   "pure, deterministic function of the one sample (no random crop or jitter, no state kept across calls)",
+                                   exit_code=2)
         # every pass after A gets NEW Samples over the same cached bytes, under fresh opaque paths, so a
         # cache keyed on the path, the stream object or the clip id cannot replay pass A's features
         rerun = _run_pass(engine(), [_sample.rehandle(s, "bridge-check-rerun") for s in smoke], idx, batch_size)

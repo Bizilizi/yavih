@@ -1,6 +1,6 @@
 """Bridge skeleton for **vggsounder**. Copy, rename, fill the TODOs.
 
-Read ``setup.md`` first: its input contract is what ``encode`` receives, its output contract what must
+Read ``setup.md`` first: its input contract is what ``prepare`` and ``encode`` receive, its output contract what must
 come back. ``yavih bridge check <file> --bench vggsounder --synthetic`` smoke-tests it before any data is
 staged; an unfilled copy fails bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES.
 
@@ -16,7 +16,7 @@ W_NO_PREPROCESSING_SOURCE while this slot is empty):
 
     TODO
 
-What ``encode`` receives per Sample (``s.streams``), nothing decoded:
+What ``prepare`` and ``encode`` receive per Sample (``s.streams``), nothing decoded:
     s.streams["video"]  RawStream of the stored mp4 (H.264, native size — about half 720x1280, the rest
                         360x480 / 360x640 / 240x320 and ~5 % portrait —, mostly 25–30 fps, ~10 s; on eval down to
                         1.0 s). ``.path`` / ``.open()`` / ``.bytes()``; ``.info`` = {duration_s, fps,
@@ -168,45 +168,50 @@ class VGGSounderBridge(Bridge):
         }
 
     # ------------------------------------------------------------------ extraction (instance-wise)
+    def prepare(self, sample: Any) -> dict:
+        """One clip's CPU work, ahead of ``encode``: decode and preprocess every stream READ; what this returns arrives
+        as ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
+        # The stored bytes are released after prepare(), so encode() works from this dict only.
+        out: dict[str, Any] = {}
+        try:
+            if "video" in self.streams:
+                out["video"] = self._decode_video(sample.streams["video"])
+            if "audio" in self.streams:
+                out["audio"] = self._decode_audio(sample.streams["audio"])
+        except _Undecodable as exc:  # yavih records the row as missing and encodes the rest of the batch
+            raise MediaUndecodable([sample.clip_id], f"{sample.clip_id}: {exc}") from exc
+        return out
+
     def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
         feats, pos, used = [], [], []
-        bad = []
         for s in samples:
-            try:
-                f, p, u = self._one(s)
-            except _Undecodable as exc:
-                bad.append((s.clip_id, str(exc)))
-                continue
+            f, p, u = self._one(s)
             feats.append(f)
             pos.append(p)
             used.append(u)
-        if (
-            bad
-        ):  # yavih re-encodes the batch without these rows and records them as missing
-            raise MediaUndecodable([c for c, _ in bad], "; ".join(f"{c}: {r}" for c, r in bad))
         return np.stack(feats).astype(self.dtype), np.stack(pos).astype(np.float32), used
 
     def _one(self, s: Any) -> tuple[np.ndarray, np.ndarray, dict]:
         toks, pos, used = [], [], {}
         if "video" in self.streams:
-            t, p, u = self._video(s.streams["video"], self.streams.index("video"))
+            t, p, u = self._video(s.streams["video"], self.streams.index("video"), s.prepared["video"])
             toks.append(t)
             pos.append(p)
             used["video"] = u
         if "audio" in self.streams:
-            t, p, u = self._audio(s.streams["audio"], self.streams.index("audio"))
+            t, p, u = self._audio(s.streams["audio"], self.streams.index("audio"), s.prepared["audio"])
             toks.append(t)
             pos.append(p)
             used["audio"] = u
         return np.concatenate(toks), np.concatenate(pos), used
 
-    def _video(self, rs: Any, tag: int) -> tuple[np.ndarray, np.ndarray, dict]:
+    def _decode_video(self, rs: Any) -> dict:
         # validate evaluates the same rules on the same facts
-        from yavih.media.rules import crop_region, rule_times
+        from yavih.media.rules import rule_times
 
-        info = rs.info
         times = rule_times(
-            VIDEO_RULES["temporal"], info
+            VIDEO_RULES["temporal"], rs.info
         )  # uniform bin centres over [0, duration_s]
         frames, pts = _decode_nearest(rs, times)  # uint8 [n, H, W, 3], the decoded frames' pts
         clip = np.stack([_resize_short_center_crop(f, 256, IMG) for f in frames]).astype(np.float32)
@@ -214,6 +219,13 @@ class VGGSounderBridge(Bridge):
         clip = (clip * n["scale"] - np.asarray(n["mean"], np.float32)) / np.asarray(
             n["std"], np.float32
         )
+        return {"clip": clip, "pts": pts}
+
+    def _video(self, rs: Any, tag: int, prepared: dict) -> tuple[np.ndarray, np.ndarray, dict]:
+        from yavih.media.rules import crop_region
+
+        info = rs.info
+        clip, pts = prepared["clip"], prepared["pts"]
         # TODO: replace the placeholder with the model: clip [T, 224, 224, 3] → tokens [T/tubelet * 14 * 14, D]
         g = IMG // PATCH
         x = clip.reshape(N_FRAMES // TUBELET, TUBELET, g, PATCH, g, PATCH, 3).mean(axis=(1, 3, 5))
@@ -227,14 +239,13 @@ class VGGSounderBridge(Bridge):
         )
         return tokens, p, {"times": [float(t) for t in pts]}
 
-    def _audio(self, rs: Any, tag: int) -> tuple[np.ndarray, np.ndarray, dict]:
+    def _decode_audio(self, rs: Any) -> dict:
         import soundfile
 
         from yavih.media.rules import audio_ranges
 
-        info = rs.info
         ranges, (pad_l, pad_r) = audio_ranges(
-            AUDIO_RULES["temporal"], info
+            AUDIO_RULES["temporal"], rs.info
         )  # [[lo, hi]], zeros after a short file
         lo, hi = (int(v) for v in ranges[0])
         with rs.open() as fh:
@@ -242,6 +253,12 @@ class VGGSounderBridge(Bridge):
         if sr != AUDIO_RULES["front_end"]["sample_rate"]:
             raise _Undecodable(f"sample rate {sr}")
         wav = np.concatenate([np.zeros(pad_l, np.float32), wav[:, 0], np.zeros(pad_r, np.float32)])
+        return {"wav": wav, "sr": sr, "lo": lo, "hi": hi, "pad": (pad_l, pad_r)}
+
+    def _audio(self, rs: Any, tag: int, prepared: dict) -> tuple[np.ndarray, np.ndarray, dict]:
+        info = rs.info
+        wav, sr, lo, hi = prepared["wav"], prepared["sr"], prepared["lo"], prepared["hi"]
+        pad_l, pad_r = prepared["pad"]
         # TODO: replace with the model's front end + encoder: wav [160000] → tokens [AUDIO_T * AUDIO_F, D]
         spec = _log_power_stft(wav, 400, 160)  # [frames, 201]
         tf = (

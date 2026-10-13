@@ -119,7 +119,7 @@ shard 3 of 32 of a 20 000-row split at batch size 32 (rows `[1856, 2496)`):
          "slurm_job_id": "1234567_3", "decode_workers": 7, "read_ahead": 2,
          "precision_live": {"matmul_precision": "highest", "allow_tf32": false, "deterministic": true}},
  "timing": {"started": "2026-10-07T12:00:00Z", "finished": "…", "wall_s": 580.2, "clips_per_s": 1.11,
-            "read_s": 41.3, "encode_s": 532.9},
+            "read_s": 41.3, "prepare_s": 0.0, "encode_s": 532.9},
  "canary_members": [{"row": 1900, "…": "…"}],
  "yavih": {"version": "0.2.0", "commit": "…40 hex…"},
  "claim": {"file": "shard-000003.claim", "token": "…", "lease_s": 900.0, "took_over": null}
@@ -145,7 +145,7 @@ shard 3 of 32 of a 20 000-row split at batch size 32 (rows `[1856, 2496)`):
 | `canary_members[]` | the same entries for the canary members |
 | `canary` | the largest `max_abs_diff` and `max_rel_l2` over the canary pairs (`max_rel_l2` is net of float16 rounding, see [validation](validation.md#thresholds)), `n`, the `tolerance` (the bridge's declared or default batch tolerance), and `mismatch` (rows whose canary reported different `used` or positions; only when non-empty) |
 | `side_effects` | files the bridge wrote outside the run directory during `encode` (`W_SIDE_EFFECT`); with `--allow-loopback`, also the local connections it made |
-| `env`, `timing` | where and how fast the shard was written. `encode_s` includes the bridge's own decoding; `read_s` is the read-ahead's. |
+| `env`, `timing` | where and how fast the shard was written. `read_s` is the read-ahead's; `prepare_s` the time spent in `Bridge.prepare`, summed over samples across the prepare threads (0 for a bridge without `prepare`); `encode_s` includes whatever decoding the bridge does inside `encode`. |
 | `yavih` | the writer's `{version, commit}`; `E_HASH_INPUT` names it next to the reader's |
 | `claim` | the claim the writer held (see [Claims](#claims)) |
 

@@ -37,7 +37,6 @@ streams and are not used here).
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
@@ -140,16 +139,16 @@ class Fsd50kBridge(Bridge):
         out[: hi - lo] = mono
         return out, {"audio": {"samples": [[lo, hi]], "pad": [0, length - (hi - lo)]}}
 
+    def prepare(self, sample: Any) -> dict:
+        """One clip's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode() (soundfile releases the GIL): per-sample decoding only, no
+        # model, no state across samples. The stored bytes are released after prepare(), so encode() works from this dict.
+        wav, used = self._read(sample)
+        return {"wav": wav, "used": used}
+
     def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
-        # Decode in parallel within the CPU budget run_extract grants; soundfile releases the GIL.
-        workers = max(1, int(getattr(self, "decode_workers", 1)))
-        if workers > 1 and len(samples) > 1:
-            with ThreadPoolExecutor(min(workers, len(samples))) as ex:
-                decoded = list(ex.map(self._read, samples))
-        else:
-            decoded = [self._read(s) for s in samples]
-        waves = np.stack([w for w, _ in decoded])          # [B, round(LENGTH_S * 44100)] at 44.1 kHz
-        used = [u for _, u in decoded]
+        waves = np.stack([s.prepared["wav"] for s in samples])  # [B, round(LENGTH_S * 44100)] at 44.1 kHz, from prepare()
+        used = [s.prepared["used"] for s in samples]
         # Gotchas (setup.md):
         #  - resample 44100 -> self.model_sr with a proper filter; never decimate by slicing;
         #  - normalise as the model was pretrained: its own constants; per-clip statistics only when they ARE

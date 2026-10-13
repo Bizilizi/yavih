@@ -15,7 +15,7 @@ by line — ``bridge check`` warns W_NO_PREPROCESSING_SOURCE while this slot hol
     TODO: repo / file / function / commit of the video transform (frame sampling, resize, crop, normalization)
     TODO: repo / file / function / commit of the audio front end (sample rate, resampler, fbank/mel, normalization)
 
-What ``encode`` receives per Sample: ``s.streams["video"]`` and ``s.streams["audio"]``, two RawStreams
+What ``prepare`` and ``encode`` receive per Sample: ``s.streams["video"]`` and ``s.streams["audio"]``, two RawStreams
 of the same materialized mp4 (``path``, ``bytes()``, ``open()``), and ``s.meta == {"facts": {}}``.
     video ``info``: duration_s (≈ 8.0), fps (6–60, mostly 30), width, height (native, mixed: ≈ half 1280x720, the
         rest 640x360 / 320x240, a few portrait), container "mp4", bytes. H.264, yuv420p.
@@ -170,16 +170,44 @@ class AVSyncBridge(Bridge):
 
     # ------------------------------------------------------------------ per clip, instance-wise
 
-    def _video(self, s) -> tuple[np.ndarray, np.ndarray, dict]:
-        """``(tokens [T·H·W, D], pos [T·H·W, 4], used)`` for one clip."""
-        v = s.streams["video"]
-        times = _rule_times(VIDEO_TEMPORAL, v.info)  # (k + 0.5) · 0.5 s for n = 16: identical for every row
-        # or PyAV on v.open(): your own stack, declared in "decoder"
-        from yavih.media.decode import frames_at
+    def prepare(self, sample: Any) -> dict:
+        """One clip's CPU work, ahead of ``encode``: decode every stream READ; what this returns arrives as
+        ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
+        # The stored bytes are released after prepare(), so encode() works from this dict only.
+        out: dict[str, Any] = {}
+        try:
+            if "video" in self.streams:
+                v = sample.streams["video"]
+                times = _rule_times(VIDEO_TEMPORAL, v.info)  # (k + 0.5) · 0.5 s for n = 16: identical for every row
+                # or PyAV on v.open(): your own stack, declared in "decoder"
+                from yavih.media.decode import frames_at
 
-        frames, pts = frames_at(v, times)  # uint8 [n, H, W, 3] (native size), pts float64 [n] of the frames fed
-        # TODO: resize short side → 256 (bilinear, antialias), centre-crop 224, * 1/255, normalize, → model → tokens
-        _ = frames
+                frames, pts = frames_at(v, times)  # uint8 [n, H, W, 3] (native size), pts float64 [n] of the frames fed
+                # TODO: resize short side → 256 (bilinear, antialias), centre-crop 224, * 1/255, normalize (here or in encode)
+                out["video"] = {"frames": frames, "times": times, "pts": pts}
+            if "audio" in self.streams:
+                a = sample.streams["audio"]
+                sr, n = int(a.info["sample_rate"]), int(a.info["n_samples"])
+                lo, hi = 0, min(n, round(AUDIO_TEMPORAL["length_s"] * sr))
+                # or soundfile / torchaudio on a.open()
+                from yavih.media.decode import audio as decode_audio
+
+                wav, rate = decode_audio(a, np.array([[lo, hi]], dtype=np.int64))  # float32 [L, C], native rate
+                # TODO: mono (the file is mono), fbank/mel with the model's front end, normalize with the RECIPE constants
+                out["audio"] = {"wav": wav, "rate": rate, "lo": lo, "hi": hi}
+        except (OSError, ValueError) as exc:  # a corrupt file becomes a missing row, not an aborted shard
+            from yavih import MediaUndecodable
+
+            raise MediaUndecodable([sample.clip_id], f"{type(exc).__name__}: {exc}") from exc
+        return out
+
+    def _video(self, s, p: dict) -> tuple[np.ndarray, np.ndarray, dict]:
+        """``(tokens [T·H·W, D], pos [T·H·W, 4], used)`` for one clip from its prepared frames."""
+        v = s.streams["video"]
+        times, pts = p["times"], p["pts"]
+        # TODO: → model → tokens
+        _ = p["frames"]
         tokens = np.zeros((N_FRAMES // TUBELET * VIDEO_H * VIDEO_W, 1), dtype=np.float32)  # placeholder [T*H*W, D]
         region = _crop_region(VIDEO_SPATIAL, int(v.info["width"]), int(v.info["height"]))
         # t of a tubelet = mean of its frames' RULE times (gotcha 1), as a fraction of the video's duration_s
@@ -187,16 +215,12 @@ class AVSyncBridge(Bridge):
         pos = grid_pos(N_FRAMES // TUBELET, VIDEO_H, VIDEO_W, stream=self.streams.index("video"), t_centres=t_centres.tolist(), region=region)
         return tokens, pos, {"times": [float(t) for t in pts]}
 
-    def _audio(self, s) -> tuple[np.ndarray, np.ndarray, dict]:
+    def _audio(self, s, p: dict) -> tuple[np.ndarray, np.ndarray, dict]:
         a = s.streams["audio"]
-        sr, n = int(a.info["sample_rate"]), int(a.info["n_samples"])
-        lo, hi = 0, min(n, round(AUDIO_TEMPORAL["length_s"] * sr))
-        # or soundfile / torchaudio on a.open()
-        from yavih.media.decode import audio as decode_audio
-
-        wav, rate = decode_audio(a, np.array([[lo, hi]], dtype=np.int64))  # float32 [L, C], native rate
-        # TODO: mono (the file is mono), fbank/mel with the model's front end, normalize with the RECIPE constants
-        _ = (wav, rate)
+        sr = int(a.info["sample_rate"])
+        lo, hi = p["lo"], p["hi"]
+        # TODO: → model → tokens
+        _ = (p["wav"], p["rate"])
         tokens = np.zeros((AUDIO_T * AUDIO_F, 1), dtype=np.float32)  # placeholder [T*F, D]
         # audio tokens carry time only: t = bin centre / duration_s, y = x = -1 (no spatial coordinate)
         t = (np.arange(AUDIO_T) + 0.5) * (hi - lo) / sr / AUDIO_T / float(a.info["duration_s"])
@@ -208,20 +232,16 @@ class AVSyncBridge(Bridge):
     def encode(self, samples: list) -> tuple[Any, Any, list[dict]]:
         feats, poss, used = [], [], []
         for s in samples:  # instance-wise: nothing computed across the batch
+            p = s.prepared  # what prepare() returned for this sample
             toks, ps, u = [], [], {}
-            try:
-                if "video" in self.streams:
-                    t, p, u["video"] = self._video(s)
-                    toks.append(t)
-                    ps.append(p)
-                if "audio" in self.streams:
-                    t, p, u["audio"] = self._audio(s)
-                    toks.append(t)
-                    ps.append(p)
-            except (OSError, ValueError) as exc:  # a corrupt file becomes a missing row, not an aborted shard
-                from yavih import MediaUndecodable
-
-                raise MediaUndecodable([s.clip_id], f"{type(exc).__name__}: {exc}") from exc
+            if "video" in self.streams:
+                t, q, u["video"] = self._video(s, p["video"])
+                toks.append(t)
+                ps.append(q)
+            if "audio" in self.streams:
+                t, q, u["audio"] = self._audio(s, p["audio"])
+                toks.append(t)
+                ps.append(q)
             feats.append(np.concatenate(toks, axis=0))
             poss.append(np.concatenate(ps, axis=0))
             used.append(u)

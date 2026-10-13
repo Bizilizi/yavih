@@ -53,12 +53,15 @@ the time estimate and `plan calibrate` absorb that.
 Before a split's layout is frozen, `plan build` chooses `n` per split as
 
 ```
-n = max(1, ceil(rows / (clips_per_s · 60 · shard_minutes)), ceil(rows · bytes_per_row / 2 GiB))
+n = max(1, ceil(rows / (clips_per_s · 60 · shard_minutes)), ceil(rows · bytes_per_row / 2 GiB),
+           ceil(rows / max_rows_per_shard))
 ```
 
-with `clips_per_s` from the bridge's profile, `shard_minutes` from the matrix (or `--shard-minutes`)
-and `bytes_per_row = N · D · itemsize` (+ `16 · N` for `per_sample` positions). An empty split still
-gets one (empty) shard. A matrix entry's `shards` key pins `n` instead.
+with `clips_per_s` from the bridge's profile, `shard_minutes` from the matrix (or `--shard-minutes`),
+`bytes_per_row = N · D · itemsize` (+ `16 · N` for `per_sample` positions) and `max_rows_per_shard`
+from the matrix entry, else the matrix (default 10 000: it bounds what one unit holds and what a
+preempted unit loses, whatever the measured speed). An empty split still gets one (empty) shard. A
+matrix entry's `shards` key pins `n` instead; a frozen layout wins over both.
 
 ### The frozen layout (`_layout.json`)
 
@@ -108,14 +111,24 @@ clocks within minutes of each other (NTP), or raise the lease.
 
 ## Byte read-ahead and decode workers
 
-Decoding belongs to the bridge ([bridge](bridge.md)); yavih only hides storage latency. While the
-bridge encodes batch `b`, a torch-free thread pool of `--decode-workers` threads reads the stored
-bytes of every stream and frame of batches `b+1 … b+read_ahead` (`--read-ahead`, default 2). A read
-failure (absent file, short read, a header that cannot supply a guaranteed fact) turns that row into
-a missing row before the bridge sees it. Nothing is decoded ahead.
+Decoding belongs to the bridge ([bridge](bridge.md)); yavih hides storage latency and, for a bridge
+with `prepare`, decoding time. While the bridge encodes batch `b`, a torch-free thread pool of
+`--decode-workers` threads reads the stored bytes of every stream and frame of batches
+`b+1 … b+read_ahead` (`--read-ahead`, default 2) and resolves their media facts. A read failure
+(absent file, short read, a header that cannot supply a guaranteed fact) turns that row into a missing
+row before the bridge sees it.
 
-The same count is the bridge's CPU budget: `Bridge.decode_workers` is set before the first `encode`,
-and a bridge may parallelize its own decoding with it. The default is
+A bridge that defines `Bridge.prepare` gets a second pool of `--decode-workers` threads
+(`yavih-prepare-*`): every Sample of a batch the read-ahead delivered is passed to `prepare`, up to
+`read_ahead + 1` batches ahead of `encode`, so decoding and preprocessing overlap the forward pass. A
+bridge without `prepare` decodes inside `encode` and gets no such pool. `run_extract` drops a batch's
+stored bytes once its rows are written, and right after `prepare` unless the bridge sets
+`keep_bytes = True` ([bridge](bridge.md#prepare)), so a shard holds at most the batches in flight.
+The `yavih.media.decode` helpers decode from those bytes in memory, never reading the store twice.
+
+The same count is the bridge's CPU budget: `Bridge.decode_workers` is set before the first `encode`;
+it is the number of prepare threads, and a bridge that decodes inside `encode` may parallelize its own
+decoding with it. The default is
 
 - `YAVIH_DECODE_WORKERS` / `[resources] decode_workers` when set;
 - else `CPUs − 1` when the CPUs are an allocation (`YAVIH_CPUS` / `[resources] cpus`, SLURM, PBS,
@@ -125,7 +138,7 @@ and a bridge may parallelize its own decoding with it. The default is
 A planned extract unit passes `--decode-workers <cpus − 1>` with the matrix entry's `cpus`; `exec`
 rewrites it to `N − 1` under `--cpus N`, a slot's share, or when the process may use fewer CPUs than
 planned. The count is recorded in the sidecar (`env.decode_workers`, `env.read_ahead`,
-`timing.read_s`), and `bridge check` measures `clips_per_s` at the same default, so pass
+`timing.read_s`, `timing.prepare_s`), and `bridge check` measures `clips_per_s` at the same default, so pass
 `bridge check --decode-workers <cpus − 1>` when the profile is measured elsewhere. Any comparison of
 extraction speed must use equal worker counts.
 
@@ -157,6 +170,7 @@ out: runs/                          # runs root; default: the configured runs ro
 results: null                       # results-store root for the probe units; null = the usual resolution
 seeds: [0]                          # one probe unit per seed
 shard_minutes: 30                   # target wall per extract unit (--shard-minutes overrides)
+max_rows_per_shard: 10000           # rows cap of the shard-count estimate
 canaries: 8                         # canary rows re-encoded per shard
 defaults:                           # merged into every entry
   launcher: "/envs/vjepa/bin/python"
@@ -171,6 +185,7 @@ bridges:                            # one entry per (bridge, benchmark)
     args: {layer: 12}
     profile: bridges/vjepa-video-k400.profile.json   # from `yavih bridge check`; required
     # shards: {train: 64}           # pin n for a split with no frozen layout (an int = every split)
+    # max_rows_per_shard: 5000      # this entry's rows cap (default: the matrix's)
     # allow_loopback: true          # extract with --allow-loopback (a local inference server)
     # waive: {E_DUPLICATE_CLIPS: "digitally silent audio"}   # operator waivers for the probe's validate
 ```
@@ -182,9 +197,10 @@ bridges:                            # one entry per (bridge, benchmark)
 | `results` | `null` or a non-empty path; when set, every probe unit gets `--results <path>` |
 | `seeds` | non-empty list of distinct ints (default `[0]`) |
 | `shard_minutes` | int ≥ 1 (default 30) |
+| `max_rows_per_shard` | int ≥ 1 (default 10 000); the rows cap of the shard-count estimate |
 | `canaries` | int ≥ 0 (default 8) |
 | `defaults` | `launcher`, `env`, `cpus`, `args`, `allow_loopback` |
-| `bridges.<key>` | key matches `[A-Za-z0-9_.-]+`; `script`, `benchmark`, `profile` required; also `args`, `launcher`, `env`, `cpus`, `shards`, `allow_loopback`, `waive` |
+| `bridges.<key>` | key matches `[A-Za-z0-9_.-]+`; `script`, `benchmark`, `profile` required; also `args`, `launcher`, `env`, `cpus`, `shards`, `max_rows_per_shard`, `allow_loopback`, `waive` |
 
 Unknown keys are an error (`E_MATRIX`, exit 1). Entry values override `defaults` (`env` and `args`
 are merged key by key). `env` values are coerced to strings. Relative `script`, `profile`, `out` and
@@ -268,6 +284,11 @@ yavih plan build matrix.yaml --pending --kind extract --format count   # prints 
 `--pending` keeps only units whose DONE marker is missing or does not match, or whose last record's
 `inputs_hash` differs from the unit's. `--kind` filters after that. With `--out`, `--format count
 --json` adds the file's `sha256` for `exec --plan-sha`.
+
+`W_NO_CENSUS` (stderr and the `--json` envelope's `warnings`, once per benchmark) means a video stream
+guarantees `n_frames` and this site has no media-info census: every extract unit then probes each
+clip's header before decoding it, a full demuxing pass for webm / mkv. Run `yavih bench verify <b>
+--census` once; the warning never changes a unit.
 
 ### Resource estimates (`needs`)
 

@@ -746,7 +746,7 @@ def test_output_contract_with_template_bridge(synthetic_bench):
     view = bench.view()
     bridge = mod.AVSyncBridge(view, {"reading": "av", "layer": -1})
     samples = list(bench.reader("train", rows=range(0, 2)))
-    feats, pos, used = bridge.encode(samples)
+    feats, pos, used = F.encode_prepared(bridge, samples)
     n_video = mod.N_FRAMES // mod.TUBELET * mod.VIDEO_H * mod.VIDEO_W
     assert feats.shape == (2, n_video + mod.AUDIO_T * mod.AUDIO_F, 1) and pos.shape == (2, feats.shape[1], 4)
     ok = ((pos >= 0) & (pos <= 1)) | (pos == -1)
@@ -761,7 +761,7 @@ def test_output_contract_with_template_bridge(synthetic_bench):
         vy, vx = p[:n_video, 2], p[:n_video, 3]
         assert (vy >= y0 - 1e-6).all() and (vy <= y1 + 1e-6).all() and (vx >= x0 - 1e-6).all() and (vx <= x1 + 1e-6).all()
         assert u["audio"] == {"samples": [[0, 128000]], "pad": [0, 0]}
-    feats2, pos2, used2 = bridge.encode(samples[::-1])  # order invariance on the placeholder pipeline
+    feats2, pos2, used2 = F.encode_prepared(bridge, samples[::-1])  # order invariance on the placeholder pipeline
     assert np.array_equal(feats2[::-1], feats) and np.array_equal(pos2[::-1], pos) and used2[::-1] == used
 
 

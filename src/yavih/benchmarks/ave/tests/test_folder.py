@@ -360,7 +360,7 @@ def test_bridge_template_output_contract_on_stub_media(spec, template, view, mon
     samples = [_StubSample(f"clip{i}#{i}", vi, ai) for i, (vi, ai) in enumerate(infos)]
     b = template.AVEBridge(view, {"reading": "av"})
     d = b.describe()
-    feats, pos, used = b.encode(samples)
+    feats, pos, used = F.encode_prepared(b, samples)
     _check_output_contract(spec, d, feats, pos, used, infos)
     # spatial positions lie in the declared crop region of the ORIGINAL frame (E_RULE_MISMATCH spatial)
     for i, (vi, _) in enumerate(infos):
@@ -373,7 +373,7 @@ def test_bridge_template_output_contract_on_stub_media(spec, template, view, mon
     assert used[0]["audio"]["pad"] == [0, 441000 - 429093] and used[0]["audio"]["samples"] == [[0, 429093]]
     # instance-wise: each clip alone gives the same features, pos and used
     for i, s in enumerate(samples):
-        f1, p1, u1 = b.encode([s])
+        f1, p1, u1 = F.encode_prepared(b, [s])
         np.testing.assert_array_equal(f1[0], feats[i])
         np.testing.assert_array_equal(p1[0], pos[i])
         assert u1[0] == used[i]

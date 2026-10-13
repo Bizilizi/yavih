@@ -685,7 +685,7 @@ def test_bridge_template_output_contract(tmp_path, spec):
     )
     mod = _load("vggsounder_bridge_template_run", HERE / "bridge_template.py")
     b = mod.VGGSounderBridge(view, {"reading": "av"})
-    feats, pos, used = b.encode(samples)
+    feats, pos, used = F.encode_prepared(b, samples)
     feats = np.asarray(feats)
     assert (
         feats.shape == (2, 8 * 14 * 14 + mod.AUDIO_T * mod.AUDIO_F, mod.D)
@@ -724,11 +724,11 @@ def test_bridge_template_output_contract(tmp_path, spec):
     # a centre crop of a tall frame keeps less of its height than of its width (positions stay full-frame)
     assert np.ptp(portrait[:, 2]) < np.ptp(portrait[:, 3]) and portrait[:, 2].min() > 0.25
     for i, s in enumerate(samples):  # instance-wise
-        f1, p1, u1 = b.encode([s])
+        f1, p1, u1 = F.encode_prepared(b, [s])
         assert (
             np.array_equal(np.asarray(f1)[0], feats[i])
             and np.array_equal(p1[0], pos[i])
             and u1[0] == used[i]
         )
-    f2, p2, u2 = b.encode(samples[::-1])  # order-invariant
+    f2, p2, u2 = F.encode_prepared(b, samples[::-1])  # order-invariant
     assert np.array_equal(np.asarray(f2)[::-1], feats) and u2[::-1] == used

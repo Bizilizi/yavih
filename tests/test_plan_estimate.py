@@ -66,3 +66,16 @@ def test_probe_needs_formula_and_floor():
 
 def test_minutes_bucket():
     assert [E.minutes_bucket(m) for m in (1, 15, 16, 30, 31, 60, 100, 1440, 5000)] == [15, 15, 30, 30, 60, 60, 120, 1440, 5000]
+
+
+def test_n_shards_for_rows_cap():
+    # fast and small: time and bytes say 1 shard, the rows cap says ceil(25 000 / 10 000) = 3
+    assert E.MAX_ROWS_PER_SHARD == 10_000
+    assert E.n_shards_for(25_000, clips_per_s=1000.0, shard_minutes=30, bytes_per_row=10) == 3
+    assert E.n_shards_for(25_000, clips_per_s=1000.0, shard_minutes=30, bytes_per_row=10, max_rows_per_shard=5_000) == 5
+    assert E.n_shards_for(25_000, clips_per_s=1000.0, shard_minutes=30, bytes_per_row=10, max_rows_per_shard=None) == 1
+    assert E.n_shards_for(10_000, clips_per_s=1000.0, shard_minutes=30, bytes_per_row=10) == 1  # exactly the cap
+    # the cap never lowers what time or bytes demand
+    assert E.n_shards_for(3600, clips_per_s=1.0, shard_minutes=30, bytes_per_row=1, max_rows_per_shard=10_000) == 2
+    with pytest.raises(ValueError):
+        E.n_shards_for(10, clips_per_s=1.0, shard_minutes=30, bytes_per_row=1, max_rows_per_shard=0)
