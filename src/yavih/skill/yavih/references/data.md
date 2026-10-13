@@ -61,9 +61,14 @@ Resolution (references/cli.md "Configuration"): `Benchmark.load(data=…)` → `
 `benchmark.yaml` default with `${data.root}` from `[data] root` (or `YAVIH_DATA__ROOT`) and
 `${datasets.<name>}` from `[datasets] <name>` (else `${data.root}/<name>`). `yavih config show --bench
 <b>` prints each root with the file:line, env var or default that set it; root names per benchmark are
-also in setup.md. Roots marked `prepare_only` (avsync `media_root` and `curation_root`, vggss_box
-`annotations_root`, nyuv2_depth `geonet_root`) are read only by `prepare/` and `make_manifest.py`;
-`doctor` reports them missing as a note. Every folder script resolves its defaults through the same
+also in setup.md. Roots marked `prepare_only` are read only by `prepare/` and `make_manifest.py`;
+`doctor` reports them missing as a note.
+
+<!-- yavih:bench-table prepare_roots begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
+Roots marked `prepare_only`: avsync `media_root` and `curation_root`; nyuv2_depth `geonet_root`; vggss_box `annotations_root`.
+<!-- yavih:bench-table prepare_roots end -->
+
+Every folder script resolves its defaults through the same
 layers (`yavih.config.folder_root`; shell scripts call `yavih config get <bench>.<root>`), so a flag
 like `--media-root` is only an override. The user file is per user and per site (never edit another
 user's); one shared HOME across several machines uses `[site.<id>]` tables, each selected by its

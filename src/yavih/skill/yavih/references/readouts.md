@@ -17,9 +17,12 @@ full-frame `(y, x)`, where their targets live too. A bridge that cropped leaves 
 not see empty (they get a learned null embedding); a bridge that read 8 frames and one that read 20
 over the same seconds see the same targets.
 
+<!-- yavih:bench-table readout_groups begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
+Packaged benchmarks per readout: `clf` audioset20k, avsync, esc50, fsd50k, in1k, k400, ssv2, vggsounder · `seq` ave · `grid` nyuv2_depth · `box` vggss_box.
+<!-- yavih:bench-table readout_groups end -->
+
 | | `clf` | `seq` | `grid` | `box` |
 |---|---|---|---|---|
-| benchmarks | esc50, audioset20k, fsd50k, vggsounder, in1k, ssv2, k400, avsync | ave | nyuv2_depth | vggss_box |
 | head | attentive probe (3 self-attn + 1 cross-attn, 16 heads, 1 learned query) → `Linear(D, C)` | dense query head, `T = 10` queries (one per scored second), memory tokens + `sincos` of their absolute second | dense query head, 14×14 queries tiling the target region, memory tokens + `sincos` of their region-relative full-frame `(y, x)`; `exp` → bilinear to 224² | dense-av: visual tokens mean-pooled per cell of a 14×14 full-frame grid (empty cell → learned null cell), 2 self-attn over cells, 2 cross-attn cells → conditioning stream, 1 box query → sigmoid `(cx, cy, w, h)` |
 | needs (`output_contract.requires`) | nothing | `pos.t` of `video`; ≥ 8 of the 10 scored seconds hold a timed token | `pos.(y, x)` of `image`; ≥ 50 % of the 14×14 cells of the target region hold a token | `pos.(y, x)` of `video` covering ≥ 25 % of the full frame's 14×14 cells + tokens tagged `audio` |
 | loss | `ce` (single) / `bce` (multi, multi_sets) | `ce_seq` | `l1_log` | `box_l1_giou` (full-frame fractions) |

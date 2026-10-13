@@ -127,7 +127,9 @@ def test_generated_benchmark_tables_are_current():
     from yavih import doctables
 
     docs = doctables.repo_documents()
-    assert any(d.name == "data.md" for d in docs) and any(d.parent.name == "benchmarks" for d in docs)
+    assert {"data.md", "readouts.md"} <= {d.name for d in docs} and any(d.parent.name == "benchmarks" for d in docs)
+    if (packaged_root().parents[2] / "pyproject.toml").is_file():  # a source checkout: the repo docs too
+        assert {"README.md", "benchmark-folder.md"} <= {d.name for d in docs if d.parent.name != "benchmarks"}
     for doc in docs:
         text = doc.read_text(encoding="utf-8")
         assert "<!-- yavih:bench-table" in text, f"{doc}: no generated block"
@@ -143,6 +145,30 @@ def test_doctables_render_any_folder_set(tmp_path):
     assert doctables.replace_blocks(text, folders) == "x\n<!-- yavih:bench-table names begin -->\n`esc50`.\n<!-- yavih:bench-table names end -->\ny\n"
     with pytest.raises(ValueError):
         doctables.replace_blocks("<!-- yavih:bench-table names begin -->\n", folders)
+
+
+def test_doctables_lists_are_derived_from_the_folders():
+    """The lists beside the tables (folder facts, readout groups, ``prepare_only`` roots, voiding controls) follow the
+    folder set they are rendered for: a new folder needs no hand-written line."""
+    from yavih import doctables
+
+    pick = {n: packaged_folder(n) for n in ("avsync", "esc50", "in1k", "nyuv2_depth", "vggss_box")}
+    folder = doctables.render("folder", pick).splitlines()
+    assert folder[0] == "| benchmark | readout | label kind | streams | headline | probe.py |" and len(folder) == 2 + len(pick)
+    rows = {r.split(" | ")[0].strip("| "): r for r in folder[2:]}
+    assert "| clf (5 folds) | single | audio | `acc_mean` |" in rows["esc50"]
+    assert rows["in1k (aliases `imagenet1k`, `imagenet`)"].startswith("| in1k (aliases")
+    assert "video, audio (materialized)" in rows["avsync"] and rows["avsync"].endswith("| yes |")
+    assert "| none (targets) | image | `d1` | yes, `external` |" in rows["nyuv2_depth"]
+    assert doctables.render("readout_groups", pick) == ("Packaged benchmarks per readout: `clf` avsync, esc50, in1k · "
+                                                        "`grid` nyuv2_depth · `box` vggss_box.")
+    assert doctables.render("prepare_roots", pick) == ("Roots marked `prepare_only`: avsync `media_root` and "
+                                                       "`curation_root`; nyuv2_depth `geonet_root`; vggss_box "
+                                                       "`annotations_root`.")
+    assert doctables.render("prepare_roots", {"esc50": pick["esc50"]}) == "No root is marked `prepare_only`."
+    assert doctables.render("controls", pick) == ("- `avsync` and `vggss_box` emit controls (`floor_violated`, "
+                                                  "`audio_blind`); the report greys out the rows they void.")
+    assert doctables.render("controls", {"vggss_box": pick["vggss_box"]}).startswith("- `vggss_box` emits controls (`audio_blind`)")
 
 
 # ===================================================================== obtain

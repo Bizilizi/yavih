@@ -179,3 +179,39 @@ def test_bench_new_refuses_bad_requests(tmp_path, capsys):
     assert cli.main(["bench", "new", "x2", "--dir", str(tmp_path)]) == 1  # neither --readout nor --like
     assert cli.main(["bench", "new", "x3", "--like", "avsync", "--dir", str(tmp_path)]) == 0
     assert cli.main(["bench", "new", "x3", "--like", "avsync", "--dir", str(tmp_path)]) == 1  # exists
+
+
+def test_bench_new_marks_copied_scripts_and_skips_curation(tmp_path):
+    """``--like nyuv2_depth`` copies its probe.py with a ``TODO`` banner as the first line (a ``todo`` finding), never
+    its ``curation.json``; the generated tests and the prepare stub carry ``TODO:`` markers the lint reports."""
+    from yavih.lint import lint_folder
+    from yavih.scaffold import new_benchmark
+
+    folder = new_benchmark("new_depth", like="nyuv2_depth", dir=tmp_path)
+    assert (packaged_folder("nyuv2_depth") / "curation.json").is_file() and not (folder / "curation.json").exists()
+    first = (folder / "probe.py").read_text(encoding="utf-8").splitlines()[0]
+    assert first.startswith("# TODO: copied verbatim from nyuv2_depth by `yavih bench new`")
+    rep = lint_folder(folder)
+    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"}
+    assert {"probe.py", "tests/test_folder.py", "prepare/01_obtain.sh"} <= {f.file for f in rep.warnings}
+
+
+@pytest.mark.parametrize("like", ["esc50", "nyuv2_depth"])
+def test_bench_new_generated_tests_pass_or_skip(tmp_path, like):
+    """The scaffold's ``tests/test_folder.py`` collects and runs on the fresh scaffold: the shared folder checks pass,
+    the tests that need the benchmark's own data skip with a ``TODO:`` reason, nothing fails."""
+    import os
+    import subprocess
+
+    import yavih
+    from yavih.scaffold import new_benchmark
+
+    folder = new_benchmark(f"new_{like}", like=like, dir=tmp_path)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([str(Path(yavih.__file__).resolve().parents[1]), env.get("PYTHONPATH", "")])
+    proc = subprocess.run([sys.executable, "-m", "pytest", str(folder / "tests"), "-q", "-rs", "-p", "no:cacheprovider"],
+                          capture_output=True, text=True, cwd=tmp_path, env=env, timeout=600)
+    assert proc.returncode == 0, proc.stdout[-4000:] + proc.stderr[-2000:]
+    summary = proc.stdout.strip().splitlines()[-1]
+    assert "failed" not in summary and "error" not in summary and " passed" in summary and "2 skipped" in summary, summary
+    assert proc.stdout.count("SKIPPED") == 2 and "TODO: " in proc.stdout
