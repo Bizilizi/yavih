@@ -383,6 +383,67 @@ def test_loader_workers_prefetch_gives_same_result() -> None:
         assert torch.equal(v, b.head.state_dict()[k])
 
 
+class _OrderedView(_RowView):
+    """A ``_RowView`` that records every gathered index array, in call order."""
+
+    def __init__(self, arr: np.ndarray) -> None:
+        super().__init__(arr)
+        self.seen: list[list[int]] = []
+
+    def __getitem__(self, idx):
+        self.seen.append(np.asarray(idx).tolist())
+        return super().__getitem__(idx)
+
+
+def test_prefetch_depth_two_gives_same_result() -> None:
+    """The default loader (one thread, PREFETCH_DEPTH batches ahead) gathers the inline loop's batches in the inline
+    loop's order, and the fit is bit-identical."""
+    from dataclasses import replace
+
+    from yavih.probes import trainer as tr
+
+    assert tr.PREFETCH_DEPTH == 2
+    feats, labels = _oracle_clf(96, 3)
+    cfg = replace(_cfg_clf(3), max_epochs=3, batch_size=8)
+    va, vb = _OrderedView(feats), _OrderedView(feats)
+    a = train_head(va, labels, build_head=build_head_for(cfg), cfg=cfg, seed=0, device="cpu", loader_workers=0)
+    b = train_head(vb, labels, build_head=build_head_for(cfg), cfg=cfg, seed=0, device="cpu")  # default: prefetch
+    assert va.seen == vb.seen and len(va.seen) > 3 * 8
+    assert [h["train_loss"] for h in a.history] == [h["train_loss"] for h in b.history]
+    assert [h["val_loss"] for h in a.history] == [h["val_loss"] for h in b.history]
+    for k, v in a.head.state_dict().items():
+        assert torch.equal(v, b.head.state_dict()[k])
+
+
+def test_gather_fp16_cast_after_h2d_bitwise_equal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CUDA gathers keep the stored fp16 and upcast after the copy; CPU upcasts in the gather. fp16 -> fp32 is exact,
+    so the two orders give the same fp32 rows and the same fit, bit for bit (both orders exercised on CPU)."""
+    from dataclasses import replace
+
+    from yavih.probes import trainer as tr
+
+    feats, labels = _oracle_clf(48, 3)
+    view = _RowView(feats)
+    idx = torch.tensor([5, 0, 47, 5, 12])
+    early = tr._gather(view, idx)
+    stored = tr._gather(view, idx, keep_dtype=True)
+    assert early.dtype == torch.float32 and stored.dtype == torch.float16
+    late = tr._to_device(stored, "cpu")
+    assert late.dtype == torch.float32 and torch.equal(early, late)
+    assert not tr._cast_on_device("cpu") and tr._cast_on_device("cuda:0") and tr._cast_on_device(torch.device("cuda"))
+
+    cfg = replace(_cfg_clf(3), max_epochs=2, batch_size=8)
+    a = train_head(_RowView(feats), labels, build_head=build_head_for(cfg), cfg=cfg, seed=0, device="cpu")
+    pa = predict(a.head, _RowView(feats), np.arange(48), device="cpu")
+    monkeypatch.setattr(tr, "_cast_on_device", lambda device: True)  # the CUDA order, on CPU
+    b = train_head(_RowView(feats), labels, build_head=build_head_for(cfg), cfg=cfg, seed=0, device="cpu")
+    pb = predict(b.head, _RowView(feats), np.arange(48), device="cpu")
+    assert a.history == [dict(h, s=a.history[i]["s"]) for i, h in enumerate(b.history)]
+    for k, v in a.head.state_dict().items():
+        assert torch.equal(v, b.head.state_dict()[k])
+    assert torch.equal(pa, pb)
+
+
 def test_precision_globals_restored() -> None:
     prev = (torch.are_deterministic_algorithms_enabled(), torch.get_float32_matmul_precision(),
             torch.backends.cuda.matmul.allow_tf32)

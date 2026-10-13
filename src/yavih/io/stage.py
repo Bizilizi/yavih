@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 from collections.abc import Callable
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from pathlib import Path
 
 from yavih.io.format import META_FILE, NOT_APPLICABLE_FILE
@@ -22,6 +24,8 @@ __all__ = ["stage_features", "StageError", "staged_name", "STAGE_HEADROOM_BYTES"
 
 #: Free-space headroom kept on the scratch filesystem (local scratch is not RAM-charged, so a few GiB suffice).
 STAGE_HEADROOM_BYTES: int = 1 * 1024**3
+#: Files copied concurrently (network storage serves several streams faster than one).
+STAGE_THREADS: int = 4
 
 
 class StageError(OSError):
@@ -59,9 +63,13 @@ def stage_features(
     """Copy ``<features_dir>/<split>/{shard-*.tar, shard-*.json, _meta.json, NOT_APPLICABLE.json}``
     to ``<scratch>/<staged_name>/features/<split>/``; returns the staged ``features/`` path.
     ``features_dir`` may also be a single split directory. ``.tmp`` files are never copied.
-    ``should_stop`` is polled between files (the probe's SIGTERM flag): a pending stop
+    ``should_stop`` is polled before each file (the probe's SIGTERM flag): a pending stop
     raises ``StageError("E_PREEMPTED")`` so the caller removes the partial copy instead of leaving it
-    to the 36 h sweep."""
+    to the 36 h sweep.
+
+    Up to :data:`STAGE_THREADS` files are copied at once, each to ``<name>.tmp`` then ``os.replace``d (a staged file
+    is complete or absent). The first failure cancels the files not yet started and is raised once the copies in
+    flight have finished, so nothing writes into the staged tree after this returns or raises."""
     src = Path(features_dir)
     if not src.is_dir():
         raise FileNotFoundError(f"{src}: not a directory")
@@ -88,7 +96,11 @@ def stage_features(
         )
 
     dest_root = scratch_root / staged_name(features_root, unit_id) / "features"
-    for split_dir, f in files:
+    failed = threading.Event()
+
+    def copy_one(split_dir: Path, f: Path) -> None:
+        if failed.is_set():
+            return  # another file failed: start nothing new
         if should_stop is not None and should_stop():
             raise StageError("E_PREEMPTED", f"stop requested while staging {f.name}; partial copy under {dest_root.parent}")
         dest_dir = dest_root / split_dir.name
@@ -99,4 +111,24 @@ def stage_features(
             tmp.unlink(missing_ok=True)
             raise StageError("E_SCRATCH_SPACE", f"short copy of {f} to {dest_dir}")
         os.replace(tmp, dest_dir / f.name)
+
+    if not files:
+        return dest_root
+    with ThreadPoolExecutor(max_workers=min(STAGE_THREADS, len(files)), thread_name_prefix="yavih-stage") as pool:
+        futures = [pool.submit(copy_one, split_dir, f) for split_dir, f in files]
+        try:
+            done, _ = wait(futures, return_when=FIRST_EXCEPTION)
+            abort = any(fut.exception() is not None for fut in done)
+        except BaseException:
+            abort = True
+            raise
+        finally:
+            if abort:
+                failed.set()
+                for fut in futures:
+                    fut.cancel()
+    # leaving the pool waited for every copy in flight: raise the first failure in file order
+    for fut in futures:
+        if not fut.cancelled() and fut.exception() is not None:
+            raise fut.exception()  # type: ignore[misc]
     return dest_root

@@ -1513,6 +1513,50 @@ def test_stage_features(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     assert validate_features(staged / "train", bench=FakeBench(), write_meta=False).ok
     staged2 = stage_features(root / "val", scratch)
     assert staged2.parent.name.startswith("run.") and (staged2 / "val" / "shard-000000.json").exists()
+
+    # threaded copy: the same tree, byte for byte, copied by up to STAGE_THREADS threads; no tmp left behind
+    import shutil as _shutil
+    import threading
+
+    from yavih.io import stage as stage_mod
+
+    names: set[str] = set()
+    real_copy = _shutil.copyfile
+
+    def tracking_copy(a, b):
+        names.add(threading.current_thread().name)
+        return real_copy(a, b)
+
+    monkeypatch.setattr("yavih.io.stage.shutil.copyfile", tracking_copy)
+    staged3 = stage_features(root, tmp_path / "scratch3", unit_id="t")
+    src_files = sorted(p.relative_to(root) for p in root.rglob("*") if p.is_file() and not p.name.endswith(".tmp"))
+    assert sorted(p.relative_to(staged3) for p in staged3.rglob("*") if p.is_file()) == src_files
+    assert all((staged3 / rel).read_bytes() == (root / rel).read_bytes() for rel in src_files)
+    assert names and all(n.startswith("yavih-stage") for n in names) and stage_mod.STAGE_THREADS == 4
+
+    # a stop request before a later file: E_PREEMPTED, every copy in flight finished, no tmp left
+    polls = {"n": 0}
+
+    def stop_after_two() -> bool:
+        polls["n"] += 1
+        return polls["n"] > 2
+
+    with pytest.raises(StageError) as ei:
+        stage_features(root, tmp_path / "scratch4", unit_id="s", should_stop=stop_after_two)
+    assert ei.value.code == "E_PREEMPTED"
+    assert not list((tmp_path / "scratch4").rglob("*.tmp"))
+
+    # a failing copy is raised (the first failure in file order); files not started are not copied
+    def failing_copy(a, b):
+        if Path(a).name == "shard-000000.tar":
+            raise OSError("disk on fire")
+        return real_copy(a, b)
+
+    monkeypatch.setattr("yavih.io.stage.shutil.copyfile", failing_copy)
+    with pytest.raises(OSError, match="disk on fire"):
+        stage_features(root, tmp_path / "scratch5", unit_id="f")
+    assert not list((tmp_path / "scratch5").rglob("*.tmp"))
+
     monkeypatch.setattr("yavih.io.stage.shutil.disk_usage", lambda p: SimpleNamespace(free=10, total=10, used=0))
     with pytest.raises(StageError) as ei:
         stage_features(root, scratch)

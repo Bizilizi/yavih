@@ -735,6 +735,30 @@ def test_matrix_backends_and_rowview(tmp_path, monkeypatch):
     assert r.matrix().backend == "ram"
 
 
+def test_matrix_is_cached_per_reader(tmp_path, monkeypatch):
+    """One RAM array per reader whatever the number of matrix() calls (arms, folds and seeds share the reader);
+    the memmap backend drops it; values never change; gathers are copies of the read-only cache."""
+    split_dir = write_split(tmp_path / "run", n_rows=12, n_shards=3, missing={4})
+    r = FeatureReader(split_dir, require_meta=False)
+    calls = []
+    real_rows = r.rows
+    monkeypatch.setattr(r, "rows", lambda idx: calls.append(len(idx)) or real_rows(idx))
+    a, b = r.matrix(ram_budget_bytes=r.nbytes), r.matrix(ram_budget_bytes=r.nbytes)
+    assert calls == [11] and a._array is b._array and a.backend == b.backend == "ram"
+    assert not a._array.flags.writeable
+    g = a[np.array([0, 3])]
+    assert g.flags.writeable and not np.shares_memory(g, a._array)
+    full = real_rows(r.present_rows)
+    assert np.array_equal(np.asarray(b), full)
+    mm = r.matrix(ram_budget_bytes=r.nbytes - 1)
+    assert mm.backend == "memmap" and r._matrix is None
+    assert np.array_equal(np.asarray(mm), full)
+    c = r.matrix(ram_budget_bytes=r.nbytes)
+    assert c.backend == "ram" and np.array_equal(np.asarray(c), full) and c._array is not a._array
+    r.close()
+    assert r._matrix is None
+
+
 def test_ram_budget_rule():
     gib = 1024**3
     assert ram_budget_bytes({}) == DEFAULT_RAM_BUDGET_BYTES == 16 * gib
