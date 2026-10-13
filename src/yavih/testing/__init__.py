@@ -1305,7 +1305,7 @@ class {cls}(_testing.{base}):
     pos_mode = {pos_mode!r}
     dtype = {dtype!r}
     batch_size = {batch_size}
-{seed_lines}'''
+{seed_lines}{folder_lines}'''
 
 
 def write_bridge_file(
@@ -1321,10 +1321,12 @@ def write_bridge_file(
     name: str | None = None,
     model: str | None = None,
     reading: str = "synthetic",
+    bench_folder: str | os.PathLike | None = None,
 ) -> Path:
     """Write a bridge FILE (what ``yavih extract --bridge P`` / ``bridge check`` load) defining the single
     ``Bridge`` subclass ``random_bridge``/``oracle_bridge`` would return; ``kind`` is ``"random"`` or ``"oracle"``.
-    The benchmark is the one the bridge is constructed with (the oracle resolves its folder by name).
+    The benchmark is the one the bridge is constructed with (the oracle resolves its folder by name, or reads
+    ``bench_folder`` when given: a stand-in that shares a packaged folder's name, ``yavih bench trial``).
     ``model`` is ``describe()["model"]`` (default ``yavih-<kind>``), ``reading`` ``describe()["reading"]``,
     ``name`` the optional label (default ``yavih-<kind>``, recorded only)."""
     if kind not in ("random", "oracle"):
@@ -1337,6 +1339,7 @@ def write_bridge_file(
         kind=kind, cls="RandomBridge" if kind == "random" else "OracleBridge", base=base, name=name or f"yavih-{kind}",
         N=int(N), D=int(D), pos_mode=pos_mode, dtype=dtype, batch_size=int(batch_size), seed_lines=seed_lines,
         model=model, reading=reading,
+        folder_lines=f"    _bench_folder = {os.fspath(Path(bench_folder).absolute())!r}\n" if bench_folder is not None else "",
     )
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)

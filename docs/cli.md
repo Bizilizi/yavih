@@ -58,10 +58,39 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 | `yavih bench verify` | presence scan, byte reads of a seeded sample, an optional decode health check, derived / target sha256s, curation sums; writes `data_status.json` | `--census` probes every present file and writes the media-info table; `--decode-sample N` (32); `--fingerprint-sample N` (256) |
 | `yavih bench lint` | check folders against the folder contract | `<name\|path>...`; `--all` every discoverable folder; `--skip CHECK` (repeatable); errors exit 2, `TODO` markers are warnings |
 | `yavih bench new` | scaffold a folder that passes `bench lint`, with `TODO` where facts are needed | `<name>`; `--readout R`; `--like B` (the folder copied); `--dir D` (default: the first `$YAVIH_BENCH_PATH` entry, else `.`) |
+| `yavih bench trial` | run a folder's whole pipeline in process on a tiny synthetic stand-in: stand-in, oracle bridge, `bridge check`, extract, validate, probe, report, headline against its floor; per-stage status | `<name\|folder> --synthetic` (required); `--readout-fast` (the test-only fast `ProbeConfig`; the headline must then clear its floor); `--keep DIR` (work in a new or empty `DIR` and keep it; `paths` names the stand-in, bridge, profile, run directory and report) |
 
 The folder contract, `benchmark.yaml` and the lint checks are described in
 [benchmark-folder](benchmark-folder.md); writing a new folder in
 [adding-a-benchmark](adding-a-benchmark.md).
+
+### `bench trial --synthetic`
+
+`yavih bench trial <name|folder> --synthetic` runs the chain a real run takes, in process, on a stand-in of the
+folder (`yavih.testing.make_synthetic_like`: its name, readout, stream names and kinds, guaranteed media facts and
+label facts over tiny generated media), with the oracle test bridge, whose features encode the label:
+`stand_in`, `bridge`, `bridge_check`, `extract` (every role split in two shards), `validate`, `probe` (no
+results-store file), `report`, `headline`. `data.stages` holds one record per stage (`ok`, `warning`, `failed`,
+`skipped` after a failure; `seconds`; `detail`; `error`), `data.headline` the headline metric, its CI and floor and
+`clears_floor`. Under `--readout-fast` the oracle must clear the floor; without it a miss is the warning
+`W_TRIAL_HEADLINE`, since the pinned schedule may underfit the stand-in's few dozen rows.
+
+The trial never reads or writes the user's runs root, results store, `$YAVIH_HOME` or configuration: while it
+runs, every `YAVIH_*` variable is replaced (home, runs and results under the work directory, no config file,
+`YAVIH_TESTING=1`), the `--config` / `--runs-root` / `--results` / `--data` layer is cleared, and both are restored
+afterwards, also on error. The work directory is temporary unless `--keep DIR`.
+
+What it does not cover: the stand-in is single-label, so a `multi` or `multi_sets` folder trials as single-label
+`acc`; the folder's own `probe.py` hooks and `external` packages are not exercised; speed and numbers on the
+stand-in carry over to nothing. The trial on real data is the fresh-agent trial run,
+`https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md`; without `--synthetic` the command is a usage error
+(exit 1) that points there.
+
+| code | exit | meaning |
+|---|---|---|
+| `E_TRIAL` | 2 | a stage failed a contract (the oracle below its floor under `--readout-fast`, a failed validation or probe); `errors[0].where` names the stage. A stage that was not ready (a decoder missing) exits 3 with its own code |
+| `E_TRIAL_NOT_READY` | 3 | no stand-in can be built: a readout other than `clf`, `seq`, `grid`, `box`, a stream kind other than video, audio, image, or no media writer (PyAV, soundfile, pillow) |
+| `W_TRIAL_HEADLINE` | 0 | without `--readout-fast`, the oracle's headline did not clear its floor |
 
 ## Suites
 

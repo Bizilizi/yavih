@@ -1205,6 +1205,27 @@ def cmd_bench_new(ns: argparse.Namespace) -> Envelope:
                     status="ok" if rep.ok else "error", exit_code=EXIT_OK if rep.ok else EXIT_CONTRACT, text="\n".join(lines) + "\n")
 
 
+def cmd_bench_trial(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench trial <name|folder> --synthetic [--readout-fast] [--keep DIR]``: the whole pipeline of one folder on a
+    tiny synthetic stand-in, in process (``yavih.trial.run_trial``): per-stage status, the headline against its floor
+    and, with ``--keep``, the paths. Exit 2 when a stage fails a contract, 3 when the stand-in cannot be built (or a
+    stage is not ready); without ``--synthetic`` a usage error (the trial on real data is the fresh-agent trial run)."""
+    from yavih.trial import TRIAL_DOC, format_trial, run_trial
+
+    if not ns.synthetic:
+        raise CliError("E_USAGE", "bench trial runs on a synthetic stand-in only: pass --synthetic. A trial on real data is the "
+                       f"fresh-agent trial run, see {TRIAL_DOC}", EXIT_USAGE)
+    rec = run_trial(ns.ref, readout_fast=bool(ns.readout_fast), keep=ns.keep)
+    errors = []
+    if rec.get("failed"):
+        f = rec["failed"]
+        errors.append(_finding(str(f.get("code") or "E_TRIAL"), f"stage {f['stage']}: {f.get('message')}", f["stage"]))
+    warnings = [_finding("W_TRIAL_HEADLINE", s["detail"]["note"], s["stage"]) for s in rec["stages"]
+                if s["status"] == "warning" and isinstance(s.get("detail"), dict) and s["detail"].get("note")]
+    return Envelope(status="ok" if rec["ok"] else "error", data=rec, errors=errors, warnings=warnings, paths=dict(rec.get("paths") or {}),
+                    exit_code=int(rec["exit_code"]), text=format_trial(rec))
+
+
 # ----------------------------------------------------------------------------- bridge check
 
 
@@ -1839,6 +1860,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--like", default=None, metavar="BENCH", help="the folder whose manifest, reader and template are copied (default per readout)")
     s.add_argument("--dir", default=None, metavar="D", help="parent directory (default: the first $YAVIH_BENCH_PATH entry, else .)")
     s.set_defaults(func=cmd_bench_new)
+    s = bsub.add_parser("trial", parents=[common_r],
+                        help="run the whole pipeline of one folder (stand-in, oracle bridge, check, extract, validate, probe, report) on a "
+                             "tiny synthetic stand-in")
+    s.add_argument("ref", metavar="name|folder")
+    s.add_argument("--synthetic", action="store_true", help="required: the trial runs on a generated stand-in, no data staged")
+    s.add_argument("--readout-fast", action="store_true", help="the test-only fast ProbeConfig (non-standard; the headline must clear its floor)")
+    s.add_argument("--keep", default=None, metavar="DIR", help="work in DIR (new or empty) and keep it; default: a temporary directory, removed")
+    s.set_defaults(func=cmd_bench_trial)
 
     # bridge
     sp = sub.add_parser("bridge", parents=[common_r], help="smoke-test a bridge and write its profile")
