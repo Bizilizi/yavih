@@ -410,3 +410,10 @@ old one under `supersedes` (and `supersedes_input` when the input side moved but
 
 A `READOUT_VERSION` bump moves `scoring_hash` of every folder using that readout; whether it changes a folder's
 numbers decides between the two paths above.
+
+### Training order
+
+The train permutation (the order in which each epoch visits the rows, drawn from the seed) is part of the numbers
+but not of `probe_hash`; changing it requires a `PROBE_SCHEMA` bump, so a stored `result.json` and a new one at
+equal `(probe_hash, seed)` never differ. The trainer's loader thread, its prefetch depth and the feature backend
+(RAM or memmap) leave the order unchanged.

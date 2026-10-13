@@ -92,7 +92,7 @@ feature format is in [features](features.md), the validation codes and waivers i
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih probe run` | train and score the benchmark's standardized readout on a run directory; writes `result.json`, `DONE` and the results-store file | `<run_dir>`; `--seeds 0,1,2` (default `0`); `--deadline …`; `--scratch DIR`; `--allow-low-coverage`; `--loader-workers N`; `--bench REF` (when `_meta.json`'s name does not resolve); `--no-validate`; `--waive CODE=reason`; `--log-samples`; `--out DIR` (probe a read-only feature set); `--device cpu\|cuda\|cuda:N`; `--results DIR` or `--no-results` |
+| `yavih probe run` | train and score the benchmark's standardized readout on a run directory; writes `result.json`, `DONE` and the results-store file | `<run_dir>`; `--seeds 0,1,2` (default `0`); `--deadline …`; `--scratch DIR`; `--allow-low-coverage`; `--loader-workers N` (default 1: a background thread gathers the next two training batches; `0` = inline; same numbers); `--bench REF` (when `_meta.json`'s name does not resolve); `--no-validate`; `--waive CODE=reason`; `--log-samples`; `--out DIR` (probe a read-only feature set); `--device cpu\|cuda\|cuda:N`; `--results DIR` or `--no-results` |
 | `yavih report build` | comparability-checked tables with floors | `<glob>...`; `--fmt md\|csv\|json`; `--out PATH`; `--seeds aggregate\|list`; `--allow-coverage-diff`; `--detail`; `--join BENCH READING=RUN ...`; `--results DIR`; `--merge-results` |
 
 `probe run` first validates every split (skip with `--no-validate`). Its `<run_dir>` is

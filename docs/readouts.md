@@ -31,6 +31,7 @@ def probe(run_dir, *, seeds=(0,), readout=None, cfg=None, deadline=None, scratch
 | `deadline` | `--deadline slurm\|<epoch_s>` | checked between epochs; see [execution](execution.md) |
 | `scratch` | `--scratch DIR` | staging root for feature sets above the RAM budget |
 | `allow_low_coverage` | `--allow-low-coverage` | record `W_COVERAGE` instead of refusing `E_COVERAGE` |
+| `loader_workers` | `--loader-workers N` | `None` (default) or `>= 1`: a loader thread gathers the next two training batches; `0` = inline (same numbers; see Training mechanics) |
 | `log_samples` | `--log-samples` | also write a samples file to the results store |
 | `results_root` / `write_results` | `--results DIR` / `--no-results` | the results-store root ([results](results.md#results-store)) |
 | `bench` | `--bench REF\|DIR` | a benchmark not found by the name in `_meta.json` |
@@ -277,12 +278,25 @@ refuses the features ([hashing](hashing.md#scoring-side)). An exception inside t
   nondeterministic_ops, bitwise_reproducible}` and the result gets `W_NONDETERMINISTIC` naming the ops.
 - Precision: training and scoring in fp32, `allow_tf32 = False`, matmul precision `highest`.
 - Micro-batching: token-capped (`max_tokens_per_forward`) with exact per-sample-sum accumulation for every loss.
+- lr arms: the arms of `lr_grid` train one after the other, each with its own passes over the data. Every arm
+  re-forks and re-seeds, so every arm sees the same split, the same initialisation and the same batch order;
+  selection compares their best val losses.
+- Feature access: a split whose stored bytes fit the RAM budget is read once into one RAM array (stored dtype)
+  that every arm, fold and seed of the probe shares; above the budget the rows are gathered from the memmapped
+  shards per batch. The budget is `min(16 GiB, 0.45 × memory limit)` (SLURM's, else the cgroup's), else 16 GiB;
+  `YAVIH_RAM_BUDGET_GB` or `[resources] ram_budget_gb` overrides it. The backend never changes a number.
+- Loader: with `loader_workers` `None` (default) or `>= 1`, one background thread gathers the next two training
+  batches while the current one trains, consumed in epoch order; `0` gathers inline. Either way the batches and the
+  numbers are the same. Rows are upcast to fp32 per batch: on CPU in the gather, on CUDA after the host→device copy
+  (fp16 features cross in their stored dtype from pinned memory); the fp16→fp32 cast is exact, so both give the same
+  values.
 - Deadline and signals: SIGTERM / SIGUSR1 set a flag checked between micro-batches; the deadline is checked
   between epochs. `probe_ckpt.pt` of the last completed epoch is kept in memory and written at most every 600 s
   (`YAVIH_PROBE_CKPT_EVERY_S`, `0` = every epoch), at the end of every lr arm, and always on deadline or signal,
   before exit 4; a rerun resumes when the hashes match. Every checkpoint of a seed is deleted once its result is
   written.
-- Scratch: when the train bytes exceed the RAM budget, the role splits are staged to
+- Scratch: when the train bytes exceed the RAM budget, the role splits are staged (up to four files copied at once,
+  each to a tmp name then renamed) to
   `<scratch>/<unit_id>.<host>.<pid>/` (root: `--scratch`, else `YAVIH_SCRATCH`, `[scratch] root`,
   `SLURM_TMPDIR`) after a free-space preflight; stale siblings (dead pid on this host, or older than 36 h) are
   swept, and the copy is removed on exit, deadline or signal. With no scratch configured the probe records

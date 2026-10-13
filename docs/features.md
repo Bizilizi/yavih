@@ -446,7 +446,8 @@ class FeatureReader:
   memmaps. Values and row order are identical in both backends. A `RowView` supports `len`,
   `view[i]` and `view[array]` (indices are positions into `present_rows`, not manifest rows), `.shape`,
   `.present_rows` and `.backend` (`"ram"` or `"memmap"`). Stored float16 stays float16 in RAM; the probe upcasts
-  per mini-batch.
+  per mini-batch. The RAM array is read once per reader and cached (read-only; `view[array]` returns a copy), so
+  repeated `matrix()` calls share it; a budget that selects memmaps drops it.
 - The default budget is `YAVIH_RAM_BUDGET_GB` (or `[resources] ram_budget_gb`), else
   `min(16 GiB, 0.45 x the job's memory limit)` (SLURM's or the cgroup's), else 16 GiB. See
   [configuration](configuration.md).
