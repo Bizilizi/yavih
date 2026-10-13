@@ -5,6 +5,7 @@ every packaged document, template and prepare script through these commands, fro
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import stat
 import sys
@@ -131,7 +132,10 @@ def test_bench_prepare_runs_a_step_with_folder_and_bench_set(capfd, folder_copy,
     out = capfd.readouterr().out
     assert f"FOLDER={folder_copy.resolve()} BENCH=esc50 ARGS=a --b PWD={tmp_path}" in out
     assert cli.main(["bench", "prepare", str(folder_copy), "py", "--", "x"]) == 0  # by name, python = this interpreter
-    assert f"PY {sys.executable} esc50 ['x']" in capfd.readouterr().out
+    line = next(ln for ln in capfd.readouterr().out.splitlines() if ln.startswith("PY "))
+    _, child_exe, rest = line.split(" ", 2)
+    # the same interpreter, however each process spells its path (symlinks, "..", Python >= 3.11 getpath)
+    assert os.path.samefile(child_exe, sys.executable) and rest == "esc50 ['x']"
     assert cli.main(["bench", "prepare", str(folder_copy), "11_fail.sh"]) == 3  # the step's own exit code
     assert "E_PREPARE_FAILED" in capfd.readouterr().err
     assert cli.main(["bench", "prepare", str(folder_copy), "42"]) == 1
