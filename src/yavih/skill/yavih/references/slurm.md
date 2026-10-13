@@ -1,4 +1,4 @@
-# Execution reference — SLURM arrays, driver loop, preemption; local, Docker and Kubernetes runs
+# Execution reference — matrix.yaml, SLURM arrays, driver loop, preemption; local, Docker and Kubernetes runs
 
 No SLURM? Skip to [Without SLURM](#without-slurm-workstation-docker-kubernetes): `yavih plan run
 plan.jsonl --local` runs a plan on one machine in dependency order. yavih never writes or submits
@@ -29,6 +29,35 @@ Two rules every script below follows:
 
 Partition, account, QoS, paths and container names below are placeholders (`<partition>`,
 `<account>`, `<qos>`, `$PROJECT`, `/path/to/…`); **replace them with your site's**.
+
+## matrix.yaml
+
+`yavih plan init --suite <s> --model <name> --launcher <python>` writes one entry per suite
+`(benchmark, reading)` and the bridge stubs; by hand, one entry per bridge × benchmark:
+
+```yaml
+schema_version: 1
+out: runs/
+seeds: [0, 1, 2]
+shard_minutes: 30            # target wall per extract unit; many small shards, never one unit per GPU
+canaries: 8
+defaults:
+  launcher: "/envs/model/bin/python"       # python → replaces argv[0]; otherwise a prefix (apptainer …)
+  env: {HF_HUB_OFFLINE: "1", OMP_NUM_THREADS: "8"}
+  cpus: 8                                  # decode workers = cpus - 1 = your bridge's decode budget
+bridges:
+  model-k400:
+    script: bridges/model_k400.py
+    benchmark: k400
+    args: {layer: 12}
+    profile: bridges/model-k400.profile.json   # from step 5 with the SAME --arg values
+```
+
+`plan build` exits 1 if `profile.bench != benchmark`, `profile.args` differ from the entry's `args`,
+`profile.describe` fails the schema, or the profile records no passed hard checks. A profile that
+already misses the output contract yields a plan-time `not_applicable` probe unit, no extracts.
+`yavih plan build matrix.yaml --sample N` plans a capped run first (the first `N` rows per split, under
+`<out>-sample<N>`, results never stored, report rows marked partial).
 
 ## Resources per unit → sbatch
 

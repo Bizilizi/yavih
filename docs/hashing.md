@@ -359,7 +359,7 @@ folder). The message names the exact lines to write:
 
 The newest entry's `version` must also equal `protocol_version` (a schema error at load), and entries are newest
 last with strictly increasing versions. `bench new` writes the hashes for a scaffold; see
-[adding a benchmark](adding-a-benchmark.md).
+[contributing a benchmark](contributing-a-benchmark.md).
 
 ### yavih.hash_history
 

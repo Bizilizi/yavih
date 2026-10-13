@@ -61,8 +61,8 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 | `yavih bench trial` | run a folder's whole pipeline in process on a tiny synthetic stand-in: stand-in, oracle bridge, `bridge check`, extract, validate, probe, report, headline against its floor; per-stage status | `<name\|folder> --synthetic` (required); `--readout-fast` (the test-only fast `ProbeConfig`; the headline must then clear its floor); `--keep DIR` (work in a new or empty `DIR` and keep it; `paths` names the stand-in, bridge, profile, run directory and report) |
 
 The folder contract, `benchmark.yaml` and the lint checks are described in
-[benchmark-folder](benchmark-folder.md); writing a new folder in
-[adding-a-benchmark](adding-a-benchmark.md).
+[benchmark-folder](benchmark-folder.md); writing a new folder and opening its pull request in
+[contributing a benchmark](contributing-a-benchmark.md).
 
 ### `bench trial --synthetic`
 
@@ -82,9 +82,8 @@ afterwards, also on error. The work directory is temporary unless `--keep DIR`.
 
 What it does not cover: the stand-in is single-label, so a `multi` or `multi_sets` folder trials as single-label
 `acc`; the folder's own `probe.py` hooks and `external` packages are not exercised; speed and numbers on the
-stand-in carry over to nothing. The trial on real data is the fresh-agent trial run,
-`https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md`; without `--synthetic` the command is a usage error
-(exit 1) that points there.
+stand-in carry over to nothing. The trial on real data is the fresh-agent [trial run](trial-run.md); without
+`--synthetic` the command is a usage error (exit 1) that points there.
 
 | code | exit | meaning |
 |---|---|---|
