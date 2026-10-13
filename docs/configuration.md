@@ -199,6 +199,7 @@ fixed names: `YAVIH_DATA__<BENCH>__<ROOT>` (one data root) and `YAVIH_DATASETS__
 | `YAVIH_RAM_BUDGET_GB` | RAM budget of a probe / validate in GiB; config [resources] ram_budget_gb |
 | `YAVIH_CPUS` | CPUs this process may use (set per slot by `yavih exec --slots`); config [resources] cpus |
 | `YAVIH_DECODE_WORKERS` | default decode workers; config [resources] decode_workers |
+| `YAVIH_VALIDATE_WORKERS` | threads scanning shards in `features validate` (1 = one shard at a time); default min(shards, CPUs, RAM budget / largest shard tar); the report never depends on it |
 | `YAVIH_JSON` | 1 = every command emits one JSON envelope |
 | `YAVIH_TESTING` | 1 = non-pinned ProbeConfig allowed (results get standard: false) |
 | `YAVIH_UNIT_ID` | set by `yavih exec` for the child: the plan unit id |
