@@ -16,7 +16,9 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   ``yavih.sample.iter_samples`` reads the folder.
 - ``budget``: ``budget.clips`` and ``manifest.upstream.curation`` agree with the frozen rows.
 - ``header``: the ``header: {name, title, venue, abstract}`` block the README header image is rendered from
-  (``python -m yavih.headers``; the image itself is not shipped and not required).
+  (``python -m yavih.headers``; the image itself is not shipped and not required). When ``assets/header.png`` exists
+  and the header template is at hand (a source checkout), ``assets/header.src.sha256`` must equal the sha256 of the
+  current header HTML (``W_HEADER_STALE``, a warning: the image predates its yaml, chips or template).
 - ``readme``: the first line is the header image ``![<header.name>](assets/header.png)``, the second paragraph the
   links line (naming ``setup.md``); the ``##`` sections Description, Citation (with a fenced ``bibtex`` block) and
   In yavih in that order; "## In yavih" names ``protocol_version``, the headline metric and the re-freeze
@@ -33,7 +35,9 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   (``*.md``, ``*.yaml``, ``*.py``, ``*.sh`` in the folder, ``prepare/``, ``tests/``) names a ``notes/`` path
   (``E_NOTES_LINK``): a folder may keep maintainer ``notes/``, but they are never packaged.
 - ``imports``: ``reader.py`` / ``probe.py`` import with torch and the folder's external packages blocked.
-- ``todo``: unfilled ``TODO`` markers (a ``yavih bench new`` scaffold) are reported as warnings.
+- ``todo``: unfilled ``TODO`` markers (a ``yavih bench new`` scaffold) are reported as warnings: ``TODO`` in the
+  folder's yaml, docs and scripts, ``TODO:`` in ``tests/*.py`` and ``prepare/*`` (where a test may name the bridge
+  template's own ``TODO`` slots).
 
 Errors fail the lint (exit 2, a contract violation); warnings do not. Stdlib + pyyaml at import time.
 """
@@ -101,6 +105,11 @@ NOTES_LINK = re.compile(r"\bnotes/")
 SHIPPED_DIRS: tuple[str, ...] = (".", "prepare", "tests")
 SHIPPED_TEXT_SUFFIXES: frozenset[str] = frozenset({".md", ".yaml", ".yml", ".py", ".sh", ".txt"})
 _TODO = re.compile(r"\bTODO\b")
+#: The marker in ``tests/*.py`` and ``prepare/*``: ``TODO:`` (a folder test may assert on the template's ``TODO`` slots).
+_TODO_MARK = re.compile(r"\bTODO:")
+#: The folder files ``todo`` reads with ``_TODO`` (the bridge template's TODOs are for the bridge author).
+_TODO_FILES: tuple[str, ...] = ("benchmark.yaml", "README.md", "setup.md", "reader.py", "probe.py", "make_manifest.py",
+                                "classes.csv")
 
 
 # ----------------------------------------------------------------------------- findings
@@ -362,6 +371,24 @@ def _c_header(c: _Ctx) -> Iterator[Finding]:
     if not isinstance(c.raw.get("header"), dict):
         yield _err("header", "E_HEADER", "benchmark.yaml needs `header: {name, title, venue, abstract}` (the README "
                    "header image, `python -m yavih.headers`)", "benchmark.yaml")
+        return
+    if c.bench is None or not (c.folder / HEADER_IMAGE).is_file():
+        return
+    from yavih import headers
+
+    if not (headers.TEMPLATE_DIR / "template.html").is_file():
+        return  # an installed wheel: no template to compare with (and no assets/ shipped)
+    try:
+        want = headers.header_source_sha256(c.bench)
+    except headers.HeaderError:
+        return
+    rel = f"assets/{headers.SOURCE_SHA_FILE}"
+    got = (c.text(rel) or "").strip()
+    if got != want:
+        yield _warn("header", "W_HEADER_STALE", f"{HEADER_IMAGE} was not rendered from the current header ({rel} "
+                    f"{'is missing' if not got else 'records ' + got[:12] + '…'}, the header HTML is {want[:12]}…): "
+                    f"re-render and commit both with `python -m yavih.headers {c.name}` (without Chrome: the PNG from "
+                    "the `headers` CI artifact, the sha file from `--html-only`)", HEADER_IMAGE)
 
 
 def _retired_headings(text: str, f: str, check: str) -> Iterator[Finding]:
@@ -565,13 +592,24 @@ def _c_imports(c: _Ctx) -> Iterator[Finding]:
                    f"packages (assert-import at call time): {tail[0][:300]}", "reader.py")
 
 
+def _todo_scripts(folder: Path) -> list[str]:
+    """``tests/*.py`` and the files of ``prepare/``, folder-relative and sorted."""
+    out = [p for p in (folder / "tests").glob("*.py") if p.is_file()]
+    if (folder / "prepare").is_dir():
+        out += [p for p in (folder / "prepare").iterdir() if p.is_file()]
+    return sorted(p.relative_to(folder).as_posix() for p in out)
+
+
 @_check("todo")
 def _c_todo(c: _Ctx) -> Iterator[Finding]:
-    for rel in ("benchmark.yaml", "README.md", "setup.md", "reader.py", "probe.py", "make_manifest.py", "classes.csv"):  # the bridge template's TODOs are for the bridge author
-        text = c.text(rel)
+    for rel, pattern in [*((r, _TODO) for r in _TODO_FILES), *((r, _TODO_MARK) for r in _todo_scripts(c.folder))]:
+        try:
+            text = c.text(rel)
+        except UnicodeDecodeError:
+            continue  # a binary prepare/ asset holds no marker
         if text is None:
             continue
-        n = len(_TODO.findall(text))
+        n = len(pattern.findall(text))
         if n:
             yield _warn("todo", "W_TODO", f"{n} TODO marker(s) still to fill", rel)
 

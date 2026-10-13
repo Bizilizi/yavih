@@ -22,6 +22,8 @@ _stale/
 *.tar
 *.npy
 *.log
+# python -m yavih.headers --html-only (the committed record is assets/header.src.sha256)
+src/yavih/benchmarks/*/assets/header.html
 
 # editors / OS / agents
 .DS_Store

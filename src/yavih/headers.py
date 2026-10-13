@@ -8,14 +8,21 @@ The template (``template.html`` and ``base.css``) lives in the source repository
 Chromium. Both are maintainer tools: the images are for the repository's README pages and are not shipped in the
 wheel, and ``bench lint`` requires the ``header:`` block, not the image.
 
+Provenance: every render also writes ``assets/header.src.sha256``, the sha256 of the filled HTML
+(``header_source_sha256``), so ``bench lint`` can tell a PNG rendered from an older ``header:`` block, chip set or
+template (``W_HEADER_STALE``, a warning: the pixels are machine-dependent, the HTML is not). The PNG and the sha file
+are committed together; the repository's ``headers`` CI workflow renders every header of a pull request as an
+artifact and fails when a committed sha file differs from the current HTML.
+
 ``--main`` re-renders the repository's own ``assets/header.png`` from ``assets/header.html`` with the same command.
-``--html-only`` writes the filled HTML next to the image instead of rendering it; ``--contact-sheet PATH`` tiles the
-rendered images of the selected folders into one PNG (needs Pillow).
+``--html-only`` writes the filled HTML and the sha file next to the image instead of rendering it;
+``--contact-sheet PATH`` tiles the rendered images of the selected folders into one PNG (needs Pillow).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import os
 import shutil
@@ -25,13 +32,15 @@ import tempfile
 from pathlib import Path
 from string import Template
 
-__all__ = ["CHROME_ARGS", "METRIC_LABELS", "TEMPLATE_DIR", "chips", "contact_sheet", "header_html", "metric_label", "render_folder",
-           "render_html"]
+__all__ = ["CHROME_ARGS", "METRIC_LABELS", "SOURCE_SHA_FILE", "TEMPLATE_DIR", "chips", "contact_sheet", "header_html",
+           "header_source_sha256", "metric_label", "render_folder", "render_html"]
 
 #: ``assets/benchmark-header/`` of the source checkout (not shipped).
 TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "assets" / "benchmark-header"
 #: The page size in CSS px and the device scale of the PNG (3200 x 1000 pixels).
 WIDTH, HEIGHT, SCALE = 1600, 500, 2
+#: ``<folder>/assets/header.src.sha256``: ``header_source_sha256`` of the HTML the committed PNG was rendered from.
+SOURCE_SHA_FILE = "header.src.sha256"
 CHROME_ARGS: tuple[str, ...] = ("--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
                                 f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
                                 "--default-background-color=00000000")
@@ -126,6 +135,12 @@ def header_html(bench) -> str:
     )
 
 
+def header_source_sha256(bench) -> str:
+    """sha256 (hex) of ``header_html(bench)`` encoded as UTF-8: what ``render_folder`` records in
+    ``assets/header.src.sha256`` and ``bench lint`` compares (``HeaderError`` as ``header_html``)."""
+    return hashlib.sha256(header_html(bench).encode("utf-8")).hexdigest()
+
+
 def _chrome(explicit: str | None = None) -> str:
     for c in ([explicit] if explicit else []) + [os.environ.get("CHROME", "")] + list(_CHROMES):
         if c and shutil.which(c):
@@ -159,28 +174,28 @@ def compress_png(path: Path) -> Path:
         q = imagequant.quantize_pil_image(im.convert("RGBA"), dithering_level=1.0, max_colors=256)
     q.save(path, optimize=True)
     return path
-    with Image.open(path) as im:
-        q = im.convert("RGB").quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG)
-    q.save(path, optimize=True)
-    return path
 
 
 def render_folder(name: str, *, chrome: str | None = None, html_only: bool = False) -> Path:
-    """Render ``<folder>/assets/header.png`` of benchmark ``name`` (or write ``header.html`` with ``html_only``)."""
+    """Render ``<folder>/assets/header.png`` of benchmark ``name`` (or write ``header.html`` with ``html_only``) and
+    record the HTML's sha256 in ``<folder>/assets/header.src.sha256`` (after a successful render only)."""
     from yavih.benchmark import Benchmark
 
     bench = Benchmark.load(name)
     out_dir = Path(bench.folder) / "assets"
     out_dir.mkdir(exist_ok=True)
     page = header_html(bench)
+    sha = hashlib.sha256(page.encode("utf-8")).hexdigest() + "\n"
     if html_only:
         target = out_dir / "header.html"
         target.write_text(page, encoding="utf-8")
-        return target
-    with tempfile.TemporaryDirectory() as tmp:
-        src = Path(tmp) / "header.html"
-        src.write_text(page, encoding="utf-8")
-        return render_html(src, out_dir / "header.png", chrome=chrome)
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "header.html"
+            src.write_text(page, encoding="utf-8")
+            target = render_html(src, out_dir / "header.png", chrome=chrome)
+    (out_dir / SOURCE_SHA_FILE).write_text(sha, encoding="utf-8")
+    return target
 
 
 def contact_sheet(images: list[Path], out: Path, *, columns: int = 2, width: int = 1600, gap: int = 24) -> Path:
@@ -205,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("names", nargs="*", help="benchmark names (default with --all: every packaged folder)")
     ap.add_argument("--all", action="store_true", help="every packaged benchmark folder")
     ap.add_argument("--main", action="store_true", help="also re-render assets/header.png from assets/header.html")
-    ap.add_argument("--html-only", action="store_true", help="write <folder>/assets/header.html instead of the PNG")
+    ap.add_argument("--html-only", action="store_true", help="write <folder>/assets/header.html (and the sha file) instead of the PNG")
     ap.add_argument("--chrome", help="Chrome/Chromium executable (default: $CHROME or the first on PATH)")
     ap.add_argument("--contact-sheet", type=Path, help="also tile the rendered images into this PNG")
     a = ap.parse_args(argv)
