@@ -65,6 +65,7 @@ yavih = [
   "benchmarks/*/tests/*",
   "skill/yavih/*",
   "skill/yavih/references/*",
+  "suites/*.yaml",                 # the shipped suites (yavih suite list)
 ]
 
 [tool.setuptools.exclude-package-data]
