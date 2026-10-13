@@ -142,7 +142,27 @@ def render_html(html_path: Path, png_path: Path, *, chrome: str | None = None) -
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if proc.returncode != 0 or not png_path.is_file():
         raise HeaderError(f"chrome failed ({proc.returncode}): {(proc.stderr or '').strip()[-500:]}")
+    compress_png(png_path)
     return png_path
+
+
+def compress_png(path: Path) -> Path:
+    """Re-save ``path`` as a 256-colour palette PNG with libimagequant (``pip install imagequant``,
+    a maintainer-only tool): ~3.5x smaller with no visible change, gradients and accent colours kept. Without it the
+    screenshot is kept as is (Pillow's own quantizers band the background or drop the accent colours)."""
+    try:
+        import imagequant
+        from PIL import Image
+    except ImportError:
+        return path
+    with Image.open(path) as im:
+        q = imagequant.quantize_pil_image(im.convert("RGBA"), dithering_level=1.0, max_colors=256)
+    q.save(path, optimize=True)
+    return path
+    with Image.open(path) as im:
+        q = im.convert("RGB").quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG)
+    q.save(path, optimize=True)
+    return path
 
 
 def render_folder(name: str, *, chrome: str | None = None, html_only: bool = False) -> Path:
