@@ -465,7 +465,7 @@ def test_template_encode_meets_output_contract(template, tmp_path: Path):
     seconds = [0.3, 3.0, 9.9995, 10.0, 12.0, 64.133]
     samples = _fake_samples(tmp_path, seconds)
     br = template.Fsd50kBridge(None, {})
-    feats, pos, used = br.encode(samples)
+    feats, pos, used = F.encode_prepared(br, samples)
     assert pos is None and len(used) == len(samples)
     feats = np.asarray(feats)
     assert feats.ndim == 3 and feats.shape[:2] == (len(samples), template.N_TOKENS) and np.isfinite(feats).all()
@@ -484,16 +484,16 @@ def test_template_encode_meets_output_contract(template, tmp_path: Path):
             ranges, pad = audio_ranges(rule, info)
             assert ranges.tolist() == u["audio"]["samples"] and list(pad) == u["audio"]["pad"]
     # rerun bit-identical; alone and shuffled batches equal (instance-wise extraction)
-    again, _, used2 = br.encode(samples)
+    again, _, used2 = F.encode_prepared(br, samples)
     assert np.array_equal(np.asarray(again), feats) and used2 == used
     for i, s in enumerate(samples):
-        f1, _, u1 = br.encode([s])
+        f1, _, u1 = F.encode_prepared(br, [s])
         assert np.array_equal(np.asarray(f1)[0], feats[i]) and u1[0] == used[i]
     perm = [4, 0, 5, 2, 1, 3]
-    fp, _, up = br.encode([samples[i] for i in perm])
+    fp, _, up = F.encode_prepared(br, [samples[i] for i in perm])
     assert np.array_equal(np.asarray(fp), feats[perm]) and up == [used[i] for i in perm]
-    br.decode_workers = 4  # the parallel decode path gives the same result
-    fw, _, uw = br.encode(samples)
+    br.decode_workers = 4  # the CPU budget (the prepare threads in run_extract) changes nothing
+    fw, _, uw = F.encode_prepared(br, samples)
     assert np.array_equal(np.asarray(fw), feats) and uw == used
 
 
@@ -501,7 +501,7 @@ def test_template_per_sample_pos_in_media_coordinates(template, tmp_path: Path):
     samples = _fake_samples(tmp_path, [3.0, 20.0])
     br = template.Fsd50kBridge(None, {})
     br.pos_mode = "per_sample"
-    _, pos, _ = br.encode(samples)
+    _, pos, _ = F.encode_prepared(br, samples)
     pos = np.asarray(pos)
     assert pos.shape == (2, template.N_TOKENS, 4) and pos.dtype == np.float32
     assert (pos[..., 0] == 0).all() and (pos[..., 2:] == -1).all()  # audio: stream 0, no space
@@ -519,7 +519,7 @@ def test_template_corrupt_media_is_undecodable(template, tmp_path: Path):
     s = _fake_samples(tmp_path, [1.0])[0]
     s.streams["audio"]._data = b"RIFF\x00\x00\x00\x00not a wav at all"
     with pytest.raises(yavih.MediaUndecodable):
-        template.Fsd50kBridge(None, {}).encode([s])
+        F.encode_prepared(template.Fsd50kBridge(None, {}), [s])
 
 
 def test_template_passes_bridge_check(tmp_path: Path):

@@ -159,8 +159,14 @@ class In1kBridge(Bridge):
         """
         raise NotImplementedError("TODO: run the model")
 
+    def prepare(self, sample: Any) -> dict:
+        """One image's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
+        # The stored bytes are released after prepare(), so encode() works from this dict only.
+        return {"x": self.preprocess(sample.streams["image"])}
+
     def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
-        x = np.stack([self.preprocess(s.streams["image"]) for s in samples])
+        x = np.stack([s.prepared["x"] for s in samples])  # what prepare() returned, per sample
         feats = self.forward(x)
         pos = None
         if self.pos_mode == "per_sample":

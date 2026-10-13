@@ -361,7 +361,7 @@ def test_bridge_template_output_contract(tmp_path, spec):
     d = br.describe()
     assert d["views"] == 1 and "decode" not in d and set(d["input"]) == {"video"}
     assert d["input"]["video"]["temporal"] == {"rule": "uniform", "n": mod.N_FRAMES, "span": "full", "edge": "error"}
-    feats, pos, used = br.encode(samples)
+    feats, pos, used = F.encode_prepared(br, samples)
     n_tok = (mod.N_FRAMES // mod.TUBELET) * mod.GRID * mod.GRID
     # shape: fixed [B, N, D]
     feats = np.asarray(feats)
@@ -391,13 +391,13 @@ def test_bridge_template_output_contract(tmp_path, spec):
     # the widths differ, so the regions (and pos) differ per clip → per_sample is required
     assert not np.allclose(pos[0], pos[3])
     # bridge check's hard checks in miniature: rerun bit-identical, alone and shuffled batches equal (instance-wise)
-    f2, p2, u2 = br.encode(samples)
+    f2, p2, u2 = F.encode_prepared(br, samples)
     assert np.array_equal(np.asarray(f2), feats) and np.array_equal(np.asarray(p2), pos) and u2 == used
     for k, s in enumerate(samples):
-        fa, pa, ua = br.encode([s])
+        fa, pa, ua = F.encode_prepared(br, [s])
         assert np.array_equal(np.asarray(fa)[0], feats[k]) and np.array_equal(np.asarray(pa)[0], pos[k]) and ua[0] == used[k]
     order = [2, 0, 3, 1]
-    fs, ps, us = br.encode([samples[i] for i in order])
+    fs, ps, us = F.encode_prepared(br, [samples[i] for i in order])
     assert np.array_equal(np.asarray(fs), feats[order]) and [us[j] for j in np.argsort(order)] == used
 
 

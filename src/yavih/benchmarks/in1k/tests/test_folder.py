@@ -396,13 +396,13 @@ def test_template_output_contract(tmp_path):
     """Output contract on mixed sizes and colour modes: fixed (N, D), finite, `used` per the declared rule, and
     instance-wise (batch vs alone vs reversed order identical, bridge check's hard checks in miniature)."""
     _, br, samples = _template(tmp_path)
-    feats, pos, used = br.encode(samples)
+    feats, pos, used = F.encode_prepared(br, samples)
     assert feats.shape == (4, 196, 3) and np.isfinite(feats).all()
     assert pos is None and used == [{"image": {}}] * 4
-    alone = np.concatenate([br.encode([s])[0] for s in samples])
-    rev = br.encode(samples[::-1])[0][::-1]
+    alone = np.concatenate([F.encode_prepared(br, [s])[0] for s in samples])
+    rev = F.encode_prepared(br, samples[::-1])[0][::-1]
     assert np.array_equal(feats, alone) and np.array_equal(feats, rev)
-    again = br.encode(samples)[0]
+    again = F.encode_prepared(br, samples)[0]
     assert np.array_equal(feats, again)
 
 
@@ -424,7 +424,7 @@ def test_template_positions_in_media_coordinates(tmp_path):
     import yavih.media.rules  # noqa: F401
     _, br, samples = _template(tmp_path)
     br.pos_mode, br.streams = "per_sample", ("image",)
-    _, pos, _ = br.encode(samples)
+    _, pos, _ = F.encode_prepared(br, samples)
     assert pos.shape == (4, 196, 4) and pos.dtype == np.float32
     for s, p in zip(samples, pos, strict=True):
         y0, x0, y1, x1 = _crop_region_ref(s.streams["image"].info["width"], s.streams["image"].info["height"])

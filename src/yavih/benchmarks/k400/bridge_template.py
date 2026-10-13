@@ -13,7 +13,7 @@ commit; ``describe()["input"]`` must match it line by line (``bridge check`` war
 while this slot is empty):
     TODO
 
-What ``encode`` receives per Sample ``s`` (setup.md "## Input contract"):
+What ``prepare`` and ``encode`` receive per Sample ``s`` (setup.md "## Input contract"):
     s.streams["video"]  RawStream, kind "video": the stored mp4, undecoded. ``.path`` (layout dir) or
         ``.open()`` (works for every layout, incl. tar_index) or ``.bytes()``. Decode it yourself — with the
         model's own stack or ``yavih.media.decode`` (``[media]`` extra) — and declare the decoder.
@@ -122,29 +122,36 @@ class K400Bridge(Bridge):
             "args": dict(self.args),  # echoes every consumed --arg with defaults filled
         }
 
-    def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
+    def prepare(self, sample: Any) -> dict:
+        """One clip's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
         from yavih.media.decode import (
             frames_at,  # nearest stored frame by pts; reads through RawStream.open()
         )
         from yavih.media.rules import rule_times
 
+        v = sample.streams["video"]
+        times = rule_times(TEMPORAL, v.info)  # float64 [N_FRAMES] media seconds, the declared rule on this clip
+        try:
+            frames, pts = frames_at(v, times)  # uint8 [N_FRAMES, H, W, 3] at the STORED size, pts float64 [N_FRAMES]
+        except Exception as e:  # noqa: BLE001 — a corrupt file is a missing row, not a bridge bug
+            from yavih import MediaUndecodable
+
+            raise MediaUndecodable([sample.clip_id], f"k400 video decode failed: {e!r}") from e
+        # TODO: resize short side -> 256 (bilinear, antialias), centre-crop 224, * scale, (x - mean) / std here too (CPU,
+        #       per clip); the stored bytes are released after prepare(), so encode() works from this dict only.
+        return {"frames": frames, "pts": pts, "used": {"video": {"times": [float(t) for t in pts]}}}
+
+    def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
         feats, pos, used = [], [], []
         for s in samples:  # instance-wise: each clip is processed exactly as it would be alone
-            v = s.streams["video"]
-            times = rule_times(TEMPORAL, v.info)  # float64 [N_FRAMES] media seconds, the declared rule on this clip
-            try:
-                frames, pts = frames_at(v, times)  # uint8 [N_FRAMES, H, W, 3] at the STORED size, pts float64 [N_FRAMES]
-            except Exception as e:  # noqa: BLE001 — a corrupt file is a missing row, not a bridge bug
-                from yavih import MediaUndecodable
-
-                raise MediaUndecodable([s.clip_id], f"k400 video decode failed: {e!r}") from e
-            # TODO: resize short side -> 256 (bilinear, antialias), centre-crop 224, * scale, (x - mean) / std,
-            #       [C, T, 224, 224] -> model; tap self.args["layer"]; tokens [T_TOK*H_TOK*W_TOK, D] (drop CLS or add a
+            p = s.prepared  # what prepare() returned for this sample
+            # TODO: [C, T, 224, 224] -> model; tap self.args["layer"]; tokens [T_TOK*H_TOK*W_TOK, D] (drop CLS or add a
             #       CLS pos row with grid_pos(..., cls=True)).
-            _ = frames
+            _ = p["frames"]
             feats.append(np.zeros((T_TOK * H_TOK * W_TOK, 1), dtype=np.float32))  # placeholder [N, D]
-            pos.append(self._pos(pts, v.info))
-            used.append({"video": {"times": [float(t) for t in pts]}})
+            pos.append(self._pos(p["pts"], s.streams["video"].info))
+            used.append(p["used"])
         out = np.stack(feats).astype(self.dtype)  # [B, N, D]; the same N for every clip
         return out, (np.stack(pos) if self.pos_mode != "none" else None), used
 

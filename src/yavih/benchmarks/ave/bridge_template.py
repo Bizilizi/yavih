@@ -161,60 +161,78 @@ class AVEBridge(Bridge):
 
     # ------------------------------------------------------------------ extraction (instance-wise)
 
-    def encode(self, samples: list) -> tuple[Any, Any, list[dict]]:
-        """One clip at a time: nothing in a clip's features may depend on the other clips of the batch
-        (bridge check: rerun bit-identity, batch- and order-invariance)."""
+    def prepare(self, sample: Any) -> dict:
+        """One clip's CPU work, ahead of ``encode``: decode and fit every stream READ; what this returns arrives as
+        ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
+        # The stored bytes are released after prepare(), so encode() works from this dict only.
         from yavih.media import decode, rules  # yavih[media]; or decode with the model's own stack
 
         rules_in = self._input()
+        out: dict[str, Any] = {}
+        try:
+            if "video" in self.streams:
+                v = sample.streams["video"]
+                times = rules.rule_times(rules_in["video"]["temporal"], v.info)
+                frames, pts = decode.frames_at(v, times)  # uint8 [n, H, W, 3] native size, decoded pts
+                out["video"] = {"x": _preprocess_video(frames), "pts": pts}  # TODO: the model's transform → model input
+            if "audio" in self.streams:
+                a = sample.streams["audio"]
+                ranges, (pad_l, pad_r) = rules.audio_ranges(rules_in["audio"]["temporal"], a.info)
+                wav, sr = decode.audio(a, ranges)  # float32 [L, C] at the native rate
+                wav = wav.mean(axis=1)  # channels "mean" (declared)
+                # AAC decodes to a few hundred samples more or fewer than the header count in info
+                # (priming/padding; AVE: typically 680 fewer). Fit the decoded audio to the declared
+                # ranges so what is fed matches `used` (declared in front_end["fit"]).
+                want = int(sum(int(hi) - int(lo) for lo, hi in ranges))
+                wav = np.concatenate([wav[:want], np.zeros(max(0, want - len(wav)), np.float32)])
+                wav = np.concatenate([np.zeros(int(pad_l), np.float32), wav, np.zeros(int(pad_r), np.float32)])
+                out["audio"] = {
+                    "wav": wav,
+                    "sr": sr,
+                    "start": (int(ranges[0][0]) - int(pad_l)) / sr,  # media second of the first fed sample
+                    "used": {"samples": [[int(lo), int(hi)] for lo, hi in ranges], "pad": [int(pad_l), int(pad_r)]},
+                }
+        except Exception as exc:  # noqa: BLE001 — TODO: narrow to your decoder's error types
+            if _is_decode_error(exc):  # run_extract records the row as missing and encodes the rest
+                from yavih import MediaUndecodable
+
+                raise MediaUndecodable([sample.clip_id], "decoder failed") from exc
+            raise
+        return out
+
+    def encode(self, samples: list) -> tuple[Any, Any, list[dict]]:
+        """One clip at a time: nothing in a clip's features may depend on the other clips of the batch
+        (bridge check: rerun bit-identity, batch- and order-invariance)."""
+        from yavih.media import rules
+
+        rules_in = self._input()
         feats, pos, used = [], [], []
-        bad: list[str] = []
         for s in samples:
+            p = s.prepared  # what prepare() returned for this sample
             toks, tpos, u = [], [], {}
-            try:
-                if "video" in self.streams:
-                    v = s.streams["video"]
-                    times = rules.rule_times(rules_in["video"]["temporal"], v.info)
-                    frames, pts = decode.frames_at(v, times)  # uint8 [n, H, W, 3] native size, decoded pts
-                    x = _preprocess_video(frames)  # TODO: the model's transform → model input
-                    toks.append(self._video_model(x))  # [T_VIDEO * H_PATCH * W_PATCH, D]
-                    region = rules.crop_region(rules_in["video"]["spatial"], v.info["width"], v.info["height"])
-                    t_c = pts.reshape(T_VIDEO, TUBELET).mean(axis=1) / float(v.info["duration_s"])
-                    tpos.append(grid_pos(T_VIDEO, H_PATCH, W_PATCH, stream=self.streams.index("video"),
-                                         t_centres=np.clip(t_c, 0.0, 1.0), region=region))
-                    u["video"] = {"times": [float(t) for t in pts]}
-                if "audio" in self.streams:
-                    a = s.streams["audio"]
-                    ranges, (pad_l, pad_r) = rules.audio_ranges(rules_in["audio"]["temporal"], a.info)
-                    wav, sr = decode.audio(a, ranges)  # float32 [L, C] at the native rate
-                    wav = wav.mean(axis=1)  # channels "mean" (declared)
-                    # AAC decodes to a few hundred samples more or fewer than the header count in info
-                    # (priming/padding; AVE: typically 680 fewer). Fit the decoded audio to the declared
-                    # ranges so what is fed matches `used` (declared in front_end["fit"]).
-                    want = int(sum(int(hi) - int(lo) for lo, hi in ranges))
-                    wav = np.concatenate([wav[:want], np.zeros(max(0, want - len(wav)), np.float32)])
-                    wav = np.concatenate([np.zeros(int(pad_l), np.float32), wav, np.zeros(int(pad_r), np.float32)])
-                    toks.append(self._audio_model(wav, sr))  # [T_AUDIO, D]
-                    start = (int(ranges[0][0]) - int(pad_l)) / sr  # media second of the first fed sample
-                    centres = start + (np.arange(T_AUDIO) + 0.5) * (len(wav) / sr) / T_AUDIO  # media seconds
-                    dur = float(a.info["duration_s"])
-                    ap = grid_pos(T_AUDIO, 1, 1, stream=self.streams.index("audio"))
-                    ap[:, 1] = np.where((centres >= 0) & (centres < dur), centres / dur, -1.0)  # padding → -1
-                    ap[:, 2:] = -1.0  # a spectrogram patch has no place in the frame
-                    tpos.append(ap)
-                    u["audio"] = {"samples": [[int(lo), int(hi)] for lo, hi in ranges], "pad": [int(pad_l), int(pad_r)]}
-            except Exception as exc:  # noqa: BLE001 — TODO: narrow to your decoder's error types
-                if _is_decode_error(exc):
-                    bad.append(s.clip_id)
-                    continue
-                raise
+            if "video" in self.streams:
+                v, pts = s.streams["video"], p["video"]["pts"]
+                toks.append(self._video_model(p["video"]["x"]))  # [T_VIDEO * H_PATCH * W_PATCH, D]
+                region = rules.crop_region(rules_in["video"]["spatial"], v.info["width"], v.info["height"])
+                t_c = pts.reshape(T_VIDEO, TUBELET).mean(axis=1) / float(v.info["duration_s"])
+                tpos.append(grid_pos(T_VIDEO, H_PATCH, W_PATCH, stream=self.streams.index("video"),
+                                     t_centres=np.clip(t_c, 0.0, 1.0), region=region))
+                u["video"] = {"times": [float(t) for t in pts]}
+            if "audio" in self.streams:
+                q = p["audio"]
+                wav, sr = q["wav"], q["sr"]
+                toks.append(self._audio_model(wav, sr))  # [T_AUDIO, D]
+                centres = q["start"] + (np.arange(T_AUDIO) + 0.5) * (len(wav) / sr) / T_AUDIO  # media seconds
+                dur = float(s.streams["audio"].info["duration_s"])
+                ap = grid_pos(T_AUDIO, 1, 1, stream=self.streams.index("audio"))
+                ap[:, 1] = np.where((centres >= 0) & (centres < dur), centres / dur, -1.0)  # padding → -1
+                ap[:, 2:] = -1.0  # a spectrogram patch has no place in the frame
+                tpos.append(ap)
+                u["audio"] = q["used"]
             feats.append(np.concatenate(toks, axis=0))
             pos.append(np.concatenate(tpos, axis=0).astype(np.float32))
             used.append(u)
-        if bad:  # run_extract re-encodes the batch without these rows and records them missing
-            from yavih import MediaUndecodable
-
-            raise MediaUndecodable(bad, "decoder failed")
         return np.stack(feats).astype(self.dtype), np.stack(pos), used
 
     # ---- TODO: replace both with the model (frozen, under the inference_mode run_extract sets up).

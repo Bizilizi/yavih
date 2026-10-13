@@ -142,17 +142,22 @@ class Esc50Bridge(Bridge):
         used = {"samples": [[int(lo), int(hi)] for lo, hi in ranges.tolist()], "pad": [int(pad_l), int(pad_r)]}
         return wav.astype(np.float32, copy=False), sr, used
 
+    def prepare(self, sample: Any) -> dict:
+        """One clip's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
+        wav, sr, u = self._read(sample.streams["audio"])
+        # TODO: resample sr (44100) -> self.model_sr here too (per clip, deterministic); the stored bytes are released
+        # after prepare(), so encode() works from this dict only.
+        return {"wav": wav, "sr": sr, "used": {"audio": u}}
+
     def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
-        waves, used = [], []
-        for s in samples:
-            wav, sr, u = self._read(s.streams["audio"])
-            # TODO: resample sr (44100) -> self.model_sr per clip (never across the batch).
-            waves.append(wav)
-            used.append({"audio": u})
+        waves = [s.prepared["wav"] for s in samples]   # what prepare() returned, per sample
+        used = [s.prepared["used"] for s in samples]
         # Every clip has the same length here because every stored clip is 220 500 samples; never pad
         # to the batch maximum (instance-wise extraction).
         # TODO: front end, forward (run_extract wraps encode in torch.inference_mode()), take the tap
         # `self.layer`, return tokens [B, N, D] as np.ndarray or a torch tensor; N fixed for every clip.
+        _ = waves
         feats = np.zeros((len(samples), self.n_t * self.n_f, 1), dtype=np.float32)  # TODO replace
         pos = None
         if self.pos_mode == "constant":

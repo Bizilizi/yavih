@@ -136,11 +136,17 @@ class Nyuv2DepthBridge(Bridge):
         x = (x - np.asarray(self.NORM["mean"], np.float32)) / np.asarray(self.NORM["std"], np.float32)
         return x.transpose(2, 0, 1)
 
+    def prepare(self, sample: Any) -> dict:
+        """One image's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
+        # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
+        # The stored bytes are released after prepare(), so encode() works from this dict only.
+        return {"x": self._preprocess(sample.streams["image"])}
+
     def encode(self, samples: list) -> tuple[Any, Any, list[dict]]:
         batch, pos, used = [], [], []
         for s in samples:
             st = s.streams["image"]
-            batch.append(self._preprocess(st))
+            batch.append(s.prepared["x"])  # what prepare() returned for this sample
             # positions of the 14×14 patch centres, mapped back into the ORIGINAL frame through the declared crop
             region = crop_region(self.SPATIAL, st.info["width"], st.info["height"])
             # an image has no time axis: t = -1 (validate refuses t >= 0 on image tokens)

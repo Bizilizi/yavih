@@ -415,7 +415,7 @@ def test_reader_smoke_on_synthetic_tar(tmp_path: Path, monkeypatch: pytest.Monke
         ND = None
         for split in ("train", "eval"):
             s = samples[split]
-            feats, pos, used = br.encode([s])
+            feats, pos, used = F.encode_prepared(br, [s])
             nd = _check_output_contract(br, [s], feats, pos, used)
             ND = ND or nd
             assert nd == ND  # fixed (N, D) across splits
@@ -432,8 +432,8 @@ def test_reader_smoke_on_synthetic_tar(tmp_path: Path, monkeypatch: pytest.Monke
                 else:
                     assert (t >= 0).all()
         # batch invariance (bridge check's alone pass): a batch of both equals each alone
-        f2, p2, u2 = br.encode([samples["train"], samples["eval"]])
-        fa, pa, ua = br.encode([samples["eval"]])
+        f2, p2, u2 = F.encode_prepared(br, [samples["train"], samples["eval"]])
+        fa, pa, ua = F.encode_prepared(br, [samples["eval"]])
         assert np.array_equal(f2[1], fa[0]) and np.array_equal(p2[1], pa[0]) and u2[1] == ua[0]
 
 
@@ -616,7 +616,7 @@ def test_trackless_clip_reader_bridge_validate(tmp_path: Path, monkeypatch: pyte
         br = mod.AudioSet20kBridge(view, {"reading": reading})
         d = br.describe()
         assert set(d["no_track"]) == set(br.streams)
-        feats, pos, used = br.encode(s_eval)
+        feats, pos, used = F.encode_prepared(br, s_eval)
         assert feats.shape[0] == 2 and len(used) == 2
         for s, p, u in zip(s_eval, pos, used, strict=True):
             fx = _Findings()
@@ -659,7 +659,7 @@ def test_reader_smoke_if_media_present(bench, spec):
             assert vi.info["container"] == au.info["container"] == "mp4"
             assert vi.info["n_frames"] and vi.info["fps"] and au.info["sample_rate"] in (32000, 44100, 48000)
             assert s.meta == {"facts": {}}
-        feats, pos, used = br.encode(samples)
+        feats, pos, used = F.encode_prepared(br, samples)
         nd = _check_output_contract(br, samples, feats, pos, used)
         ND = ND or nd
         assert nd == ND
