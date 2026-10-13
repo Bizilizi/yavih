@@ -33,8 +33,18 @@ def _seed(text: str | bytes) -> int:
     return int.from_bytes(hashlib.sha256(b).digest()[:8], "big")
 
 
+class FakeSource:
+    """The byte-source surface the extractor touches (``yavih.sample._Source.release``), with a release counter."""
+
+    def __init__(self) -> None:
+        self.releases = 0
+
+    def release(self) -> None:
+        self.releases += 1
+
+
 class FakeRawStream:
-    """``RawStream``: the stored bytes (here: synthetic, a function of the clip) and ``info``."""
+    """``RawStream``: the stored bytes (here: synthetic, a function of the clip), ``info`` and a ``FakeSource``."""
 
     def __init__(self, name: str, kind: str, payload: bytes, info: dict, *, fail: BaseException | None = None, clip_id: str = "") -> None:
         self.name = name
@@ -45,6 +55,7 @@ class FakeRawStream:
         self._payload = payload
         self._fail = fail
         self.reads = 0
+        self._src = FakeSource()
 
     def bytes(self) -> bytes:
         if self._fail is not None:
@@ -66,6 +77,7 @@ class Sample:
     streams: dict
     meta: dict
     _canary_of: int | None = field(default=None, repr=False, compare=False)
+    prepared: object = field(default=None, init=False, repr=False, compare=False)
 
 
 VIDEO_INFO = {"duration_s": 2.0, "fps": 25.0, "n_frames": 50, "width": 320, "height": 240, "container": "mp4", "bytes": 64,
@@ -256,18 +268,50 @@ class NumpyBridge(Bridge):
         pos = grid_pos(self.T, 1, 1, 0, t_centres=[t / info["duration_s"] for t in times], region=region)
         return feat, pos, {"video": {"times": times}}
 
+    def encode_one(self, s) -> tuple[np.ndarray, np.ndarray, dict]:
+        return self.one(s)
+
     def encode(self, samples):
         self.encode_calls += 1
         feats, poss, used = [], [], []
         for s in samples:
             self.seen_rows.append(s.row)
             self.seen_clip_ids.append(s.clip_id)
-            f, p, u = self.one(s)
+            f, p, u = self.encode_one(s)
             feats.append(f)
             poss.append(p)
             used.append(u)
         pos = np.stack(poss) if self.pos_mode == "per_sample" else (poss[0] if self.pos_mode == "constant" else None)
         return np.stack(feats), pos, used
+
+
+class PrepareBridge(NumpyBridge):
+    """``NumpyBridge`` with the per-sample work moved into ``prepare``: ``encode`` reads only ``s.prepared``.
+    Records the prepare threads, whether ``torch.inference_mode`` was on there, and samples ``encode`` got unprepared."""
+
+    name = "np-prepare"
+
+    def __init__(self, bench, args=None):
+        super().__init__(bench, args)
+        self.prepare_threads: list[str] = []
+        self.prepare_inference: list[bool] = []
+        self.unprepared: list[str] = []
+
+    def prepare(self, s):
+        import sys
+        import threading
+
+        self.prepare_threads.append(threading.current_thread().name)
+        torch = sys.modules.get("torch")
+        if torch is not None:
+            self.prepare_inference.append(bool(torch.is_inference_mode_enabled()))
+        return self.one(s)
+
+    def encode_one(self, s):
+        if s.prepared is None:
+            self.unprepared.append(s.clip_id)
+            return self.one(s)
+        return s.prepared
 
 
 class ConstantPosBridge(NumpyBridge):

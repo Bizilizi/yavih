@@ -39,6 +39,7 @@ from test_extract_fixtures import (
     NotApplicableInitBridge,
     NumpyBridge,
     OrderBridge,
+    PrepareBridge,
     SigtermBridge,
     TwoTupleBridge,
     UndecodableBridge,
@@ -62,6 +63,7 @@ from yavih.extract import (
     E_ORACLE,
     E_PRECISION_UNDECLARED,
     E_PREEMPTED,
+    E_PREPARE_NONDETERMINISTIC,
     E_PROFILE,
     E_RERUN_DRIFT,
     E_TRAIN_MODE,
@@ -212,6 +214,7 @@ def test_run_extract_writes_shard_sidecar_and_canaries(tmp_path: Path):
     assert sc["env"]["decode_workers"] == 2 and sc["env"]["read_ahead"] == 2 and sc["env"]["host"]
     assert sc["timing"]["wall_s"] >= 0 and sc["timing"]["started"].endswith("Z")
     assert sc["timing"]["encode_s"] >= 0 and sc["timing"]["read_s"] >= 0 and "decode_calls" not in sc["timing"]
+    assert sc["timing"]["prepare_s"] == 0.0  # an encode-only bridge: nothing prepared ahead
     assert len(bench.reader_calls) == 1 and bench.reader_calls[0]["canaries"] == 8
 
 
@@ -1516,3 +1519,221 @@ def test_fp16_storage_rounding_is_not_batch_dependence(tmp_path: Path):
     assert sc["canary"]["max_rel_l2"] <= 1e-5
     rep = validate_features(_split_dir(tmp_path), bench=bench, write_meta=False)
     assert rep.ok and not any(f.code == "E_BATCH_INVARIANCE" for f in rep.errors), rep.errors
+
+
+# ----------------------------------------------------------------------------- Bridge.prepare (decode ahead)
+
+
+def _tar_members(tmp_path: Path, split="train", sub="run") -> dict[str, bytes]:
+    with tarfile.open(tmp_path / sub / "features" / split / "shard-000000.tar") as tf:
+        return {m.name: tf.extractfile(m).read() for m in tf.getmembers()}
+
+
+def test_prepare_runs_in_prepare_threads_under_inference_mode(tmp_path: Path):
+    seen = {}
+
+    class B(PrepareBridge):
+        def __init__(self, bench, args=None):
+            super().__init__(bench, args)
+            seen["bridge"] = self
+
+    summary, _ = _run(tmp_path, bridge=B, canaries=4, decode_workers=3)
+    br = seen["bridge"]
+    assert summary["status"] == "ok" and summary["rows"]["n_written"] == 20 and summary["canary"]["n"] == 4
+    assert len(br.prepare_threads) == 24 and all(t.startswith("yavih-prepare") for t in br.prepare_threads)  # rows + canaries
+    assert br.unprepared == []
+    if HAS_TORCH:
+        assert br.prepare_inference and all(br.prepare_inference)
+    sc = read_sidecar(_split_dir(tmp_path) / "shard-000000.json")
+    assert sc["timing"]["prepare_s"] >= 0.0
+    # the same members, byte for byte, as the encode-only bridge it was split from
+    run_extract(bench=FakeBenchmark(), bridge=NumpyBridge, split="train", shard=(0, 1), out=tmp_path / "plain", canaries=4, decode_workers=3)
+    assert _tar_members(tmp_path) == _tar_members(tmp_path, sub="plain")
+
+
+def test_encode_only_bridge_unchanged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A bridge without prepare: no prepare pool, ``s.prepared`` stays None, bytes readable in encode."""
+    pools: list[str] = []
+    real_pool = extract.ThreadPoolExecutor
+
+    def spy(*a, **k):
+        pools.append(k.get("thread_name_prefix", ""))
+        return real_pool(*a, **k)
+
+    monkeypatch.setattr(extract, "ThreadPoolExecutor", spy)
+    seen: list[tuple] = []
+
+    class Spy(NumpyBridge):
+        name = "np-spy-prepared"
+
+        def encode(self, samples):
+            seen.extend((s.prepared, s.streams["video"]._src.releases) for s in samples)
+            return super().encode(samples)
+
+    summary, _ = _run(tmp_path, bridge=Spy, canaries=2)
+    assert summary["status"] == "ok" and not any(p.startswith("yavih-prepare") for p in pools)
+    assert seen and all(p is None and rel == 0 for p, rel in seen)
+    assert not extract.has_prepare(NumpyBridge) and extract.has_prepare(PrepareBridge)
+
+
+@pytest.mark.parametrize("exc", ["undecodable", "missing"])
+def test_prepare_media_undecodable_is_a_missing_row(tmp_path: Path, exc: str):
+    from yavih.bridge import MediaUndecodable
+    from yavih.media import MediaMissing
+
+    class B(PrepareBridge):
+        name = "np-prepare-bad"
+
+        def prepare(self, s):
+            if s.row == 3:
+                if exc == "undecodable":
+                    raise MediaUndecodable([s.clip_id], "moov atom not found")
+                raise MediaMissing(s.clip_id, "video", "vanished")
+            return super().prepare(s)
+
+        def encode(self, samples):
+            assert all(s.row != 3 for s in samples)
+            return super().encode(samples)
+
+    summary, _ = _run(tmp_path, bridge=B, canaries=0)
+    assert summary["rows"]["n_written"] == 19 and summary["rows"]["n_missing"] == 1
+    assert [m["row"] for m in summary["missing"]] == [3]
+
+
+@pytest.mark.parametrize("variant", ["bug", "other_clip"])
+def test_prepare_bug_is_E_BRIDGE(tmp_path: Path, variant: str):
+    from yavih.bridge import MediaUndecodable
+
+    class B(PrepareBridge):
+        name = "np-prepare-bug"
+
+        def prepare(self, s):
+            if s.row == 5:
+                if variant == "bug":
+                    raise RuntimeError("boom inside prepare")
+                raise MediaUndecodable(["someone-else"], "names another clip")
+            return super().prepare(s)
+
+    with pytest.raises(ExtractError) as ei:
+        _run(tmp_path, bridge=B, canaries=0)
+    assert ei.value.code == E_BRIDGE and ei.value.exit_code == 5 and "prepare" in str(ei.value)
+    assert _listing(_split_dir(tmp_path)) == []
+
+
+def test_prepare_network_is_E_NETWORK(tmp_path: Path):
+    class B(PrepareBridge):
+        name = "np-prepare-net"
+
+        def prepare(self, s):
+            import socket
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.settimeout(0.01)
+                sock.connect(("127.0.0.1", 9))
+            except OSError:
+                pass  # swallowed on purpose: the audit hook still records it
+            finally:
+                sock.close()
+            return super().prepare(s)
+
+    with pytest.raises(ExtractError) as ei:
+        _run(tmp_path, bridge=B, canaries=0)
+    assert ei.value.code == E_NETWORK and ei.value.exit_code == 2 and "prepare" in str(ei.value)
+    assert _listing(_split_dir(tmp_path)) == [] and extract._Audit.armed == 0
+
+
+def test_prepare_writes_outside_the_run_dir_are_w_side_effect(tmp_path: Path, capsys):
+    target = tmp_path / "prepare.cache"
+
+    class B(PrepareBridge):
+        name = "np-prepare-writer"
+
+        def prepare(self, s):
+            with open(target, "a") as fh:
+                fh.write(s.clip_id)
+            return super().prepare(s)
+
+    summary, _ = _run(tmp_path, bridge=B, canaries=0)
+    assert summary["side_effects"]["writes_outside_run_dir"] == [str(target)]
+    assert "W_SIDE_EFFECT" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("keep", [False, True])
+def test_prepare_releases_bytes_unless_keep_bytes(tmp_path: Path, keep: bool):
+    at_encode: list[int] = []
+    streams: list = []
+
+    class B(PrepareBridge):
+        name = "np-prepare-keep"
+        keep_bytes = keep
+
+        def prepare(self, s):
+            streams.append(s.streams["video"])
+            return super().prepare(s)
+
+        def encode(self, samples):
+            at_encode.extend(s.streams["video"]._src.releases for s in samples)
+            return super().encode(samples)
+
+    summary, _ = _run(tmp_path, bridge=B, canaries=0)
+    assert summary["rows"]["n_written"] == 20 and len(at_encode) == 20
+    assert all(n == (0 if keep else 1) for n in at_encode)  # released right after prepare, unless kept
+    assert all(st._src.releases >= 1 for st in streams)  # every batch's bytes are dropped once it is written
+
+
+def test_bridge_check_prepare_nondeterministic(tmp_path: Path):
+    class Jitter(PrepareBridge):
+        name = "np-prepare-jitter"
+        calls = 0
+
+        def prepare(self, s):
+            type(self).calls += 1
+            f, p, u = super().prepare(s)
+            return f + np.float32(type(self).calls) * np.float32(1e-3), p, u
+
+    out = tmp_path / "p.json"
+    with pytest.raises(ExtractError) as ei:
+        bridge_check(bridge=Jitter, bench=FakeBenchmark(), n=6, decode_workers=2, out=out)
+    assert ei.value.code == E_PREPARE_NONDETERMINISTIC and ei.value.exit_code == 2 and not out.exists()
+    # the deterministic split of NumpyBridge passes with the encode-only bridge's invariance figures
+    prof = bridge_check(bridge=PrepareBridge, bench=FakeBenchmark(), n=6, decode_workers=2)
+    ref = bridge_check(bridge=NumpyBridge, bench=FakeBenchmark(), n=6, decode_workers=2)
+    assert prof["status"] == "ok" and prof["invariance"] == ref["invariance"] and prof["N"] == ref["N"]
+
+
+def test_bytes_released_after_write_and_canaries_reread(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """``run_extract`` drops a batch's stored bytes once its rows are written; the canaries (Samples of their own
+    byte sources) read theirs again, and the features are those of a run that keeps every byte."""
+    pytest.importorskip("av")
+    pytest.importorskip("soundfile")
+    from yavih import testing
+    from yavih.benchmark import Benchmark
+    from yavih.sample import _Source
+
+    monkeypatch.setenv("YAVIH_HOME", str(tmp_path / "home"))
+    folder = testing.make_synthetic_benchmark(tmp_path / "b", "clf", n_train=24, n_eval=4, media="tiny")
+    bench = Benchmark.load(str(folder))
+    cls = testing.random_bridge(bench, N=4, D=8)
+    split = bench.roles()["train"][0]
+    released: list[int] = []
+    cached_at_write: list[bool] = []
+    real_release, real_write = _Source.release, extract._write_rows
+
+    def release(self):
+        released.append(id(self))
+        real_release(self)
+
+    def write_rows(writer, res, media_keys, *, canary=False):
+        cached_at_write.extend(st._src.cached for s in res.samples for st in s.streams.values())
+        return real_write(writer, res, media_keys, canary=canary)
+
+    monkeypatch.setattr(_Source, "release", release)
+    monkeypatch.setattr(extract, "_write_rows", write_rows)
+    summary = run_extract(bench=bench, bridge=cls, split=split, shard=(0, 1), out=tmp_path / "run", canaries=3, decode_workers=2)
+    assert summary["rows"]["n_written"] == 24 and summary["canary"]["n"] == 3 and summary["canary"]["max_rel_l2"] == 0.0
+    assert cached_at_write and all(cached_at_write)  # bytes still in memory while the rows are written
+    assert len(set(released)) >= 24 + 3  # every regular row's and every canary's byte source, after its write
+    monkeypatch.setattr(extract, "_release_bytes", lambda s: None)  # a run that keeps every byte
+    run_extract(bench=bench, bridge=cls, split=split, shard=(0, 1), out=tmp_path / "keep", canaries=3, decode_workers=2)
+    assert _tar_members(tmp_path, split, "run") == _tar_members(tmp_path, split, "keep")

@@ -657,3 +657,34 @@ def test_media_package_imports_nothing_optional():
     )
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert proc.returncode == 0 and proc.stdout.strip() == "ok", proc.stderr
+
+
+@needs_av
+@needs_sf
+def test_source_prefers_cached_bytes_and_frames_identical_to_path(tmp_path: Path):
+    """A RawStream decodes from its stored path until the read-ahead cached its bytes, then from memory (no second
+    read of the store); both give the same frames, pts and samples."""
+    import io
+
+    from yavih.media import decode
+    from yavih.sample import RawStream, _Source
+
+    vid, wav = tmp_path / "v.mp4", tmp_path / "a.wav"
+    write_video(vid, fps=10, n_frames=20, width=64, height=48)
+    write_wav(wav, seconds=1.0, rate=16000, channels=2)
+    for p, kind in ((vid, "video"), (wav, "audio")):
+        st = RawStream(kind, kind, src=_Source(("file", str(p))), clip_id="c", ext=p.suffix[1:])
+
+        def dec(st=st, kind=kind):
+            return decode.frames_at(st, [0.05, 0.92, 1.5]) if kind == "video" else decode.audio(st, [[100, 900]])
+
+        assert isinstance(decode._source(st), str)  # nothing cached yet: by path
+        by_path = dec()
+        st.bytes()
+        assert isinstance(decode._source(st), io.BytesIO)  # cached by the read-ahead: from memory
+        p.unlink()  # the store is gone: a decode that read it again would fail
+        cached = dec()
+        for x, y in zip(by_path, cached, strict=True):
+            assert np.asarray(x).dtype == np.asarray(y).dtype and np.asarray(x).tobytes() == np.asarray(y).tobytes()
+        st._src.release()
+        assert isinstance(decode._source(st), str)  # released: back to the path

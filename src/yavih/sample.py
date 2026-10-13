@@ -163,8 +163,8 @@ class _Source:
 
 # ----------------------------------------------------------------------------- opaque paths
 #
-# ``RawStream.path`` is an opaque handle: a symlink, in a per-process temporary directory, to the stored file,
-# named by a hash. The stored path itself can carry the label (k400 ``val/<class>/…``, in1k ``val/<wnid>/…``,
+# ``RawStream.path`` is an opaque handle: a symlink, in a per-process temporary directory (sharded by the first two
+# characters of the name, so no directory grows to a whole split's worth of entries), to the stored file, named by a hash. The stored path itself can carry the label (k400 ``val/<class>/…``, in1k ``val/<wnid>/…``,
 # ESC-50's ``…-<target>.wav``) and the split, and the bridge sees media only. Each Sample's
 # streams carry a salt (``_handle``: manifest hash, split, row; canaries and every bridge-check pass get their own;
 # the link name hashes the salt with the stored path, so two streams of one file share one handle), so a cache
@@ -193,10 +193,13 @@ def _opaque_name(handle: str, real: str, ext: str | None) -> str:
 
 
 def _opaque_link(handle: str, real: str, ext: str | None) -> str:
-    """``<link dir>/<sha256(handle, real)[:24]>.<ext>`` → ``real`` (created if absent; idempotent, race-safe)."""
-    link = os.path.join(_link_dir(), _opaque_name(handle, real, ext))
+    """``<link dir>/<name[:2]>/<name>`` with ``name = <sha256(handle, real)[:24]>.<ext>`` → ``real`` (created if
+    absent; idempotent, race-safe)."""
+    name = _opaque_name(handle, real, ext)
+    link = os.path.join(_link_dir(), name[:2], name)
     if os.path.islink(link):
         return link
+    os.makedirs(os.path.dirname(link), exist_ok=True)
     try:
         os.symlink(real, link)
     except FileExistsError:
@@ -205,6 +208,9 @@ def _opaque_link(handle: str, real: str, ext: str | None) -> str:
 
 
 # ----------------------------------------------------------------------------- RawStream
+
+#: Video containers whose header carries no frame count: ``n_frames`` needs a demuxing probe.
+_NO_FRAME_COUNT_EXTS: frozenset[str] = frozenset({"webm", "mkv"})
 
 
 class RawStream:
@@ -323,10 +329,13 @@ class RawStream:
             info.update(self._info_entry)
         else:
             info["bytes"] = self.nbytes
+            # a guaranteed frame count of a container whose header never carries one (webm / mkv): one demuxing
+            # probe instead of a header probe followed by a demuxing one
+            demux = self._kind == "video" and "n_frames" in self._required and (self._ext or "").lower() in _NO_FRAME_COUNT_EXTS
             try:
-                info.update(self._probe(demux=False))
+                info.update(self._probe(demux=demux))
                 missing = [k for k in self._required if info.get(k) is None]
-                if missing and self._kind == "video" and "n_frames" in missing and info.get("has_track") is not False:
+                if not demux and missing and self._kind == "video" and "n_frames" in missing and info.get("has_track") is not False:
                     info.update({k: v for k, v in self._probe(demux=True).items() if v is not None})
             except (DecodeError, DecoderMissing):
                 if self._required:
@@ -388,6 +397,9 @@ class Sample:
 
     ``meta`` is ``{"facts": {key: protocol[key] for key in input_contract.facts}}``. ``_canary_of`` is private:
     a bridge MUST NOT read it, and it is excluded from equality, so a canary equals its original.
+    ``prepared`` is what ``Bridge.prepare`` returned for this sample, set by the extractor before ``encode``
+    (``None`` for a bridge without ``prepare``); not an init argument, excluded from equality and repr, and not
+    carried over by ``rehandle``.
     """
 
     row: int
@@ -396,6 +408,7 @@ class Sample:
     streams: dict[str, RawStream]
     meta: dict = field(default_factory=dict)
     _canary_of: int | None = field(default=None, repr=False, compare=False)
+    prepared: Any = field(default=None, init=False, repr=False, compare=False)
 
 
 # ----------------------------------------------------------------------------- media-info table

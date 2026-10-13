@@ -632,3 +632,61 @@ def test_stream_path_is_opaque_for_label_bearing_layouts(name: str, tmp_path: Pa
             parent = os.path.basename(os.path.dirname(real))
             stem = os.path.splitext(os.path.basename(real))[0]
             assert parent not in st.path and stem not in st.path and f"/{split}/" not in st.path
+
+
+# ----------------------------------------------------------------------------- prepared payload, probes, opaque links
+
+
+def test_sample_prepared_excluded_from_equality(tmp_path: Path, monkeypatch):
+    import dataclasses
+
+    from yavih.sample import rehandle
+
+    b, media = _video_bench(tmp_path, monkeypatch, write=False)
+    touch_media(media, ["train/train00.mp4"], b"payload")
+    s, t = b.sample("train", 0), b.sample("train", 0)
+    assert s.prepared is None
+    object.__setattr__(s, "prepared", {"frames": np.zeros(3)})  # what the extractor does
+    assert s == t and "prepared" not in repr(s)
+    assert rehandle(s, "x").prepared is None  # never carried over to another pass's copy
+    with pytest.raises(TypeError):
+        Sample(row=0, clip_id="c", split="train", streams={}, prepared=1)  # type: ignore[call-arg]
+    last = dataclasses.fields(Sample)[-1]
+    assert last.name == "prepared" and not last.init and not last.compare
+    clone = pickle.loads(pickle.dumps(s))
+    assert clone == s and clone.prepared["frames"].shape == (3,)
+
+
+@needs_av
+@pytest.mark.parametrize("ext, demuxes", [("webm", [True]), ("mkv", [True]), ("mp4", [False])])
+def test_webm_probe_demuxes_once(tmp_path: Path, monkeypatch, ext: str, demuxes: list[bool]):
+    """A guaranteed ``n_frames`` of a webm / mkv (whose header carries none) costs one demuxing probe, not a
+    header probe followed by a demuxing one; an mp4 header has the count."""
+    import yavih.media.info as info_mod
+
+    p = tmp_path / "v.mp4"
+    write_video(p, fps=10, n_frames=12, width=32, height=24)
+    calls: list[bool] = []
+    real = info_mod.probe_info
+
+    def spy(file, kind, *, demux=False, ext=None):
+        calls.append(bool(demux))
+        return real(file, kind, demux=demux, ext=ext)
+
+    monkeypatch.setattr(info_mod, "probe_info", spy)
+    st = RawStream("video", "video", src=_Source(("file", str(p))), clip_id="c", required_info=("duration_s", "fps", "n_frames"), ext=ext)
+    assert st.info["n_frames"] == 12 and calls == demuxes
+
+
+def test_opaque_link_is_sharded_by_prefix(tmp_path: Path):
+    from yavih import sample as smod
+
+    p = tmp_path / "x.mp4"
+    p.write_bytes(b"x")
+    links = {RawStream("video", "video", src=_Source(("file", str(p))), handle=f"h{k}").path for k in range(40)}
+    assert len(links) == 40
+    for link in links:
+        name = os.path.basename(link)
+        assert os.path.basename(os.path.dirname(link)) == name[:2] and os.path.dirname(os.path.dirname(link)) == smod._link_dir()
+        assert os.path.realpath(link) == os.path.realpath(p)
+    assert len({os.path.dirname(x) for x in links}) > 1

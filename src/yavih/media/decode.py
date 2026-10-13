@@ -93,9 +93,18 @@ def decoder_info(kind: str | None = None) -> dict:
     raise ValueError(f"decoder_info: unknown kind {kind!r}")
 
 
+def _cached(stream: Any) -> bool:
+    """``True`` when a RawStream's stored bytes are already in memory (the read-ahead read them)."""
+    return bool(getattr(getattr(stream, "_src", None), "cached", False))
+
+
 def _source(stream: Any) -> Any:
-    """A path or a seekable file object for any supported input."""
+    """A path or a seekable file object for any supported input. A RawStream whose bytes are already in memory
+    decodes from them (``open()``), so a decode after the read-ahead never reads the store again; otherwise from
+    its ``path`` when it has one."""
     if hasattr(stream, "open") and hasattr(stream, "bytes"):
+        if _cached(stream):
+            return stream.open()
         path = getattr(stream, "path", None)
         return path if path else stream.open()
     if isinstance(stream, (bytes, bytearray, memoryview)):
@@ -172,7 +181,7 @@ def frames_at(stream: Any, times: Any) -> tuple[np.ndarray, np.ndarray]:
     try:
         av = _av()
     except DecoderMissing:
-        src = _source(stream)
+        src = getattr(stream, "path", None) if hasattr(stream, "bytes") else _source(stream)  # the ffmpeg CLI reads a file
         if not isinstance(src, str):
             raise
         return _ffmpeg_frames_at(src, t)
