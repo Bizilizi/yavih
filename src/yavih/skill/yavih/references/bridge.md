@@ -74,7 +74,18 @@ from yavih.media.rules import rule_times, audio_ranges, crop_region   # numpy on
 ```
 
 `run_extract` sets `self.decode_workers` (= matrix `cpus − 1`) before the first `encode`: your CPU
-budget for decoding (a thread pool over the batch; PyAV, soundfile and pillow release the GIL).
+budget for decoding (PyAV, soundfile and pillow release the GIL).
+
+**Decode in `prepare(sample)`, not in `encode`** (every packaged template does): yavih runs
+`prepare` per sample in `decode_workers` threads up to `--read-ahead + 1` batches ahead, so decoding
+overlaps the forward pass, and hands its return value to `encode` as `s.prepared`. Contract: a pure,
+deterministic function of that one sample (no model/GPU state, nothing kept across calls;
+`bridge check` prepares every smoke sample twice: `E_PREPARE_NONDETERMINISTIC`); it may raise
+`MediaUndecodable([sample.clip_id], reason)` / `MediaMissing` (missing row); it runs under
+`inference_mode` and the same network/write audit as `encode`. The stored bytes are released once
+`prepare` returns, so `encode` uses `s.prepared` + `info` and never `bytes()` / `open()` (set
+`keep_bytes = True` to keep them). Without `prepare`, decode inside `encode`.
+Full contract: https://github.com/Bizilizi/yavih/blob/main/docs/bridge.md#prepare
 
 ## 2. The `Bridge` class
 
@@ -95,6 +106,7 @@ class MyBridge(yavih.Bridge):
         super().__init__(bench, args)
         ...; self.model.eval(); self.sha = fingerprint_state_dict(self.model)
     def describe(self) -> dict: ...   # REQUIRED, JSON primitives only (table below)
+    def prepare(self, sample): ...    # optional: decode + CPU preprocessing of ONE sample → s.prepared
     def encode(self, samples):        # REQUIRED → (feats [B, N, D], pos None | [N, 4] | [B, N, 4], used: list of B dicts)
         ...
 ```
@@ -102,9 +114,9 @@ class MyBridge(yavih.Bridge):
 `feats` may be an ndarray or anything with `.detach().float().cpu().numpy()`. `N` and `D` are
 fixed for every row of every split (the writer fixes them from the first clip and refuses a
 mismatch by `clip_id`): pad or crop to a FIXED length inside the bridge, never to the batch
-maximum. `encode` runs under `torch.inference_mode()`; a module left in training mode is
-`E_TRAIN_MODE` (call `.eval()` yourself). A network connection during `encode` is `E_NETWORK`;
-a write outside the run directory is `W_SIDE_EFFECT`.
+maximum. `prepare` and `encode` run under `torch.inference_mode()`; a module left in training mode is
+`E_TRAIN_MODE` (call `.eval()` yourself). A network connection during `encode` or `prepare` is
+`E_NETWORK`; a write outside the run directory is `W_SIDE_EFFECT`.
 
 ### `describe()` — MUST contain
 
@@ -384,8 +396,9 @@ a `describe()` with the `input` block to fill, `used` reporting, `grid_pos` with
 4. **`describe()`**: the table keys — `model` (the one name every bridge of this model uses) and
    `reading` first —, `views: 1`, explicit `precision`, and `input` rules that restate the docstring
    line by line (a `custom` rule with a one-line description where the vocabulary does not fit).
-5. **`encode()`**: per clip evaluate your rule on `s.streams[x].info`, decode exactly that, report
-   `used`, build pos; stack to `[B, N, D]`. `NotApplicable("audio-only bridge: no audio stream")`
+5. **`prepare()` / `encode()`**: `prepare` evaluates your rule on `s.streams[x].info` and decodes
+   exactly that (plus the CPU transform); `encode` runs the model on `s.prepared`, reports `used`,
+   builds pos; stack to `[B, N, D]`. `NotApplicable("audio-only bridge: no audio stream")`
    from `__init__` or the first `encode` when the model cannot serve the benchmark (recorded,
    exit 0); never fake a reading with zeros or noise.
 
@@ -438,6 +451,6 @@ and re-extracted. A benchmark edit on the scoring side only (`probe.py`, a metri
 package, a readout version) never touches finished shards: it re-probes. The first unit of a reconfigured split moves EVERY shard of the old configuration or
 shard count (also the ones the new plan no longer writes) and the old `_meta.json` there in one step;
 with `--expect-profile` nothing moves before the drift check passed (`E_CONFIG_DRIFT`). SIGTERM/SIGUSR1 or the deadline finishes the current
-batch, discards the shard's `.tmp` and exits 4. `--read-ahead` batches of bytes are read by
-`--decode-workers` threads while you encode (`--decode-workers = max(1, SLURM_CPUS_PER_TASK − 1)`
+batch, discards the shard's `.tmp` and exits 4. `--read-ahead` batches of bytes are read (and, with
+`prepare`, prepared) by `--decode-workers` threads while you encode (`--decode-workers = max(1, SLURM_CPUS_PER_TASK − 1)`
 inside SLURM, else `cpu_count // 2`, cap 16).

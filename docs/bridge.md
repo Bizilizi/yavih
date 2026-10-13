@@ -15,8 +15,8 @@ This page is the normative reference for that contract. Related pages: what the 
 
 ## What a bridge receives
 
-`Bridge.__init__` receives a `BenchmarkView`; `encode` receives lists of `Sample`s. Neither carries the
-manifest, labels, splits or data roots.
+`Bridge.__init__` receives a `BenchmarkView`; `prepare` receives one `Sample`, `encode` lists of them. None of
+them carries the manifest, labels, splits or data roots.
 
 ```python
 class RawStream:                          # read-only (__slots__; assignment raises AttributeError)
@@ -36,6 +36,7 @@ class Sample:
     streams: dict[str, RawStream]         # every present stream, under its declared name
     meta: dict                            # {"facts": {key: protocol[key] for key in input_contract.facts}}
     _canary_of: int | None                # private: a bridge MUST NOT read it
+    prepared: Any                         # what Bridge.prepare returned for this sample (None without prepare)
 
 @dataclass(frozen=True)
 class BenchmarkView:                      # Benchmark.view(); JSON primitives only
@@ -202,6 +203,7 @@ class MyBridge(yavih.Bridge):
     pos_mode = "per_sample"      # "none" | "constant" | "per_sample"
     streams = ("video",)         # stream tags used in pos[:, 0]; order = tag index
     ARGS = {"layer": ArgSpec(type=int, default=12)}
+    keep_bytes = False           # True: encode() still reads the stored bytes after prepare()
 
     def __init__(self, bench, args):       # bench: BenchmarkView
         super().__init__(bench, args)      # self.bench, self.args (typed, defaults filled)
@@ -209,6 +211,7 @@ class MyBridge(yavih.Bridge):
         self.sha = fingerprint_state_dict(self.model)
 
     def describe(self) -> dict: ...        # REQUIRED
+    def prepare(self, sample): ...         # optional: per-sample decode ahead of encode -> sample.prepared
     def encode(self, samples): ...         # REQUIRED -> (feats, pos, used)
     def profile(self) -> dict | None: ...  # optional, e.g. {"peak_gpu_gb": ...}
 ```
@@ -218,7 +221,11 @@ class MyBridge(yavih.Bridge):
   checks `choices`; `self.args` has exactly the keys of `ARGS`, so passing a default explicitly changes nothing.
   An unknown or malformed `--arg` is `E_ARG` (exit 1).
 - **`decode_workers`** is set by `run_extract` and `bridge check` before the first `encode`: the bridge's CPU
-  budget for its own decoding, e.g. a thread pool over the batch ([execution](execution.md)).
+  budget for its own decoding. With `prepare` it is the number of threads `prepare` runs in; a bridge that
+  decodes inside `encode` may use it for its own thread pool over the batch ([execution](execution.md)).
+- **`prepare` and `keep_bytes`** are optional and not part of `describe()`, so neither moves `describe_sha256`.
+  A bridge without `prepare` decodes inside `encode`: no prepare threads, and the stored
+  bytes stay readable throughout `encode` ([`prepare()`](#prepare)).
 - **One bridge, one benchmark.** `__init__` receives that benchmark's view, and each matrix entry names one
   benchmark. A model read on several benchmarks has one bridge file per benchmark, typically thin subclasses of a
   shared `<model>_common.py`: yavih puts the bridge file's directory first on `sys.path` before importing it.
@@ -238,7 +245,7 @@ class MyBridge(yavih.Bridge):
 - enforce `describe()["precision"]` (`torch.set_float32_matmul_precision`, TF32 flags for matmul and cuDNN,
   `torch.use_deterministic_algorithms`; with `deterministic: true` also `CUBLAS_WORKSPACE_CONFIG` and
   `cudnn.benchmark = False`). `autocast` is declared, not applied: the bridge wraps its own forward.
-- run every `encode` under `torch.inference_mode()`. Precision flags that changed during extraction are
+- run every `prepare` and `encode` under `torch.inference_mode()`. Precision flags that changed during extraction are
   `E_PRECISION_DRIFT` (exit 2). The live values go to the sidecar `env`.
 
 ## `describe()`
@@ -368,6 +375,50 @@ row. What applies to every rule, custom included: reported times and sample rang
 (`E_TIMES_OUT_OF_MEDIA`), token positions in range and inside the media span reported in `used` (`E_POS_RANGE`,
 the position part of `E_RULE_MISMATCH`), canaries and the `bridge check` invariance passes.
 
+## `prepare()`
+
+```python
+def prepare(self, sample: Sample) -> Any:   # optional; the return value arrives in encode as sample.prepared
+```
+
+`prepare` is the per-sample CPU work of the bridge (decode, cut the declared window, resize, crop, normalize,
+compute a spectrogram) moved out of `encode`, so it overlaps the model's forward pass instead of idling the GPU.
+The contract:
+
+- **Pure and per-sample.** The result is a deterministic function of the one sample it is handed: no model or
+  GPU state, no state kept across calls or shared between samples, no randomness. `bridge check` calls it twice
+  on fresh copies of every smoke sample and compares the payloads (mappings by key, sequences by position,
+  arrays and tensors by shape, dtype and bytes); any difference is `E_PREPARE_NONDETERMINISTIC` (exit 2).
+- **Where it runs.** In a pool of `decode_workers` threads named `yavih-prepare-*`, under
+  `torch.inference_mode()`, on the batches the byte read-ahead has delivered: up to `--read-ahead + 1` batches
+  are prepared while `encode` runs on an earlier one. Every Sample of a batch, canaries included, is prepared
+  before that batch reaches `encode`. The payload is set as `sample.prepared` and dropped once the batch is
+  written.
+- **Bytes.** The read-ahead has read the stored bytes and resolved `info` before `prepare` is called. Unless the
+  bridge sets `keep_bytes = True`, `run_extract` releases the bytes as soon as `prepare` returns: `encode` must
+  work from `sample.prepared` and `info`, never `bytes()` / `open()` (a read there goes back to the store).
+  `bridge check` keeps the bytes of its smoke set for all passes.
+- **Missing rows.** It may raise `MediaUndecodable([sample.clip_id], reason)` or `MediaMissing` for media it
+  cannot decode: the row is recorded as missing and never reaches `encode`. A `MediaUndecodable` naming another
+  clip, or any other exception, is `E_BRIDGE` (exit 5); `DecoderMissing` stops the run (exit 3).
+- **Guardrails.** The prepare threads are always audited: a network connect is `E_NETWORK` and a write outside
+  the run directory `W_SIDE_EFFECT`, as in `encode`.
+- **Payload.** Anything `encode` can consume; the packaged templates return a dict (decoded `frames` / `wav` /
+  `x`, their `pts` or sample ranges, the per-stream `used` entry). It is not hashed and never written.
+
+The time spent in `prepare` (summed over samples, across threads) is the sidecar's `timing.prepare_s`.
+
+```python
+def prepare(self, sample):
+    v = sample.streams["video"]
+    frames, pts = frames_at(v, rule_times(TEMPORAL, v.info))      # decode the declared frames
+    return {"x": transform(frames), "pts": pts}                      # CPU preprocessing, per clip
+
+def encode(self, samples):
+    x = torch.from_numpy(np.stack([s.prepared["x"] for s in samples])).cuda()
+    ...                                                              # forward, pos from s.prepared["pts"] and info
+```
+
 ## `encode()`
 
 ```python
@@ -426,9 +477,10 @@ x0, y1, x1)`: `y = y0 + (i + 0.5)(y1 - y0)/H`. The optional CLS row comes first 
 
 | raised | where | effect |
 |---|---|---|
-| `yavih.NotApplicable(reason)` | `__init__` or the first `encode` | `run_extract` writes `NOT_APPLICABLE.json` and exits 0 ([features](features.md)); later it is `E_BRIDGE` (exit 5) |
+| `yavih.NotApplicable(reason)` | `__init__`, or `prepare` / `encode` of the first batch | `run_extract` writes `NOT_APPLICABLE.json` and exits 0 ([features](features.md)); later it is `E_BRIDGE` (exit 5) |
 | `yavih.MediaUndecodable(clip_ids, reason)` | `encode` | the named rows are recorded as missing and the batch is re-encoded without them (exact, by batch invariance); `MediaMissing` from the bridge's own read is treated the same way |
-| anything else | `encode` | a bridge bug, not coverage: `E_BRIDGE`, the shard is aborted (exit 5) |
+| `yavih.MediaUndecodable([sample.clip_id], reason)`, `MediaMissing` | `prepare` | the row is recorded as missing and never reaches `encode`; naming another clip is `E_BRIDGE` |
+| anything else | `prepare` or `encode` | a bridge bug, not coverage: `E_BRIDGE`, the shard is aborted (exit 5) |
 
 ## Guardrails
 
@@ -443,7 +495,8 @@ Requirements on every bridge. yavih enforces them where it can; the rest is advi
 | frozen weights under `inference_mode` | `E_TRAIN_MODE`, `torch.inference_mode()` |
 | fixed `N` and `D` for every sample | `FeatureShapeError` in the writer; `E_MEMBERS` |
 | positions in media coordinates | `E_POS_RANGE`, `E_TIMES_OUT_OF_MEDIA`, `E_RULE_MISMATCH` (token centres outside the declared crop region; token `t · duration_s` outside the media span reported in `used`; image tokens with `t >= 0`) |
-| weights loaded before the first sample; no network and no writes outside the run directory during extraction | an audit hook armed only inside `encode`: a network `connect` is `E_NETWORK` (exit 2); opening a file for writing outside the run directory is `W_SIDE_EFFECT`, listing the paths. With `--allow-loopback` (or matrix `allow_loopback`), connects to `127.0.0.0/8`, `::1` or `localhost` pass and are recorded |
+| weights loaded before the first sample; no network and no writes outside the run directory during extraction | an audit hook armed inside `encode` and in every `yavih-prepare` thread: a network `connect` is `E_NETWORK` (exit 2); opening a file for writing outside the run directory is `W_SIDE_EFFECT`, listing the paths. With `--allow-loopback` (or matrix `allow_loopback`), connects to `127.0.0.0/8`, `::1` or `localhost` pass and are recorded |
+| `prepare` deterministic and per-sample | `bridge check` prepares every smoke sample twice: `E_PREPARE_NONDETERMINISTIC` |
 | the model's own preprocessing source pasted into the bridge and matched by `describe()` line by line | `W_NO_PREPROCESSING_SOURCE` when the docstring slot is unfilled; matching is advised |
 
 **The preprocessing source slot** is a docstring line starting `Preprocessing source` (its paragraph of prose up
@@ -470,7 +523,8 @@ yavih bridge check bridges/mymodel_k400.py --bench k400 [--n 32] [--arg k=v]... 
    `train`, `folds`, `floor`), read once and cached. Rows with missing media are skipped and reported as
    `W_MISSING_ROWS`; no present row at all is `E_SMOKE` (exit 3).
 3. **Four passes at the declared `batch_size`**:
-   - **A**: batches in row order.
+   - **A**: batches in row order. A bridge with `prepare` then has every sample A encoded prepared twice more,
+     on fresh copies; payloads that differ are `E_PREPARE_NONDETERMINISTIC` ([`prepare()`](#prepare)).
    - **rerun**: A again in the same process; feats, pos and `used` bit-identical, else `E_RERUN_DRIFT`. With
      `precision.deterministic: false` the rerun is held to the tolerance instead (per clip `rel_l2 <= tol`,
      pos and `used` equal), and a non-zero drift within it is `W_RERUN_NONDETERMINISTIC`.
