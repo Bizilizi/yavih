@@ -53,7 +53,12 @@ __all__ = [
     "is_dense",
     "NOT_APPLICABLE_FILE",
     "REPORT_KEY",
+    "W_NO_CENSUS",
+    "uncensused_frame_streams",
 ]
+
+#: ``plan build`` warning: a video stream guarantees ``n_frames`` and the site has no media-info census.
+W_NO_CENSUS = "W_NO_CENSUS"
 
 UNIT_KINDS: frozenset[str] = frozenset({"extract", "probe", "report"})
 #: Topological layer of each kind (extract → probe → report).
@@ -235,6 +240,9 @@ class BenchmarkInfo:
     input_hash: str | None = None
     #: Full lr-grid fits per probe seed: 2 when ``readout_params.shuffled_control`` (estimate.py docstring).
     probe_fits: int = 1
+    #: Video streams whose input contract guarantees ``n_frames`` while this site has no media-info census
+    #: (``W_NO_CENSUS``): every extract unit then probes each clip's header, a demuxing pass for webm / mkv.
+    uncensused_frame_streams: tuple[str, ...] = ()
 
     def role_splits(self) -> list[str]:
         """Manifest split values the extraction covers: ``train + eval + floor + folds``, in
@@ -287,7 +295,24 @@ def benchmark_info(bench: Any) -> BenchmarkInfo:
         probe_hash=hashing.probe_hash(cfg),
         names=(bench.name, *spec.aliases),
         probe_fits=probe_fits_for(rp),
+        uncensused_frame_streams=uncensused_frame_streams(bench),
     )
+
+
+def uncensused_frame_streams(bench: Any) -> tuple[str, ...]:
+    """Video streams of ``bench`` whose ``input_contract.info`` guarantees ``n_frames`` when the site has no media-info
+    census (``$YAVIH_HOME/media_info/<name>-<manifest_hash12>.jsonl.gz``); ``()`` when the census exists. Only the
+    file's presence is checked (the table itself is not loaded)."""
+    from yavih.sample import media_info_path
+
+    try:
+        if media_info_path(bench.name, bench.manifest_hash).is_file():
+            return ()
+        spec = bench.spec
+        info = spec.input_contract.info
+        return tuple(name for name, s in spec.streams.items() if s.kind == "video" and "n_frames" in (info.get(name) or ()))
+    except (AttributeError, OSError, TypeError):  # a duck-typed benchmark without the surface: nothing to say
+        return ()
 
 
 def probe_fits_for(readout_params: Any) -> int:
@@ -498,7 +523,7 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
             rows = info.n_rows[split]
             out = os.path.join(run_dir, "features", split)
             n, ranges = _split_layout(matrix, entry, info, profile, split, out, rows=rows, batch_size=batch_size, cps=cps,
-                                      shard_minutes=shard_minutes, bpr=bpr)
+                                      shard_minutes=shard_minutes, bpr=bpr, max_rows_per_shard=matrix.rows_cap(entry))
             for i, (lo, hi) in enumerate(ranges):
                 uid = hashing.unit_id(kind="extract", benchmark=info.name, model=model, reading=reading, split=split,
                                       shard=[i, n], protocol_hash=None, input_hash=ih, probe_hash=None, seed=None)
@@ -567,10 +592,11 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
 
 
 def _split_layout(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profile: dict, split: str, out: str, *, rows: int,
-                  batch_size: int, cps: float, shard_minutes: int, bpr: int) -> tuple[int, list[tuple[int, int]]]:
+                  batch_size: int, cps: float, shard_minutes: int, bpr: int,
+                  max_rows_per_shard: int | None = estimate.MAX_ROWS_PER_SHARD) -> tuple[int, list[tuple[int, int]]]:
     """``(n, ranges)`` of one split: the split's frozen layout when one exists for this configuration
     (``features/<split>/_layout.json``, or the layout its finished shards carry when that file is absent), else the matrix
-    ``shards`` pin, else the shard-count estimate (``n_shards_for``). A pin disagreeing with a frozen layout is refused: re-sharding a split
+    ``shards`` pin, else the shard-count estimate (``n_shards_for``: time, 2 GiB and ``max_rows_per_shard`` caps). A pin disagreeing with a frozen layout is refused: re-sharding a split
     means moving it aside first."""
     from yavih.io.layout import frozen_layout, layout_identity
 
@@ -591,7 +617,7 @@ def _split_layout(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profi
     if pinned is not None:
         n = int(pinned)
     else:
-        n = estimate.n_shards_for(rows, clips_per_s=cps, shard_minutes=shard_minutes, bytes_per_row=bpr)
+        n = estimate.n_shards_for(rows, clips_per_s=cps, shard_minutes=shard_minutes, bytes_per_row=bpr, max_rows_per_shard=max_rows_per_shard)
     return n, estimate.shard_ranges(rows, batch_size, n)
 
 
@@ -625,8 +651,18 @@ def _order(units: list[Unit]) -> list[Unit]:
                                         estimate.minutes_bucket(u.needs.get("minutes", 0))))
 
 
-def build_units(matrix: Matrix, *, shard_minutes: int | None = None, ram_budget_bytes: int | None = None) -> list[Unit]:
-    """Every unit of the matrix (no filtering): matrix refusals, unit records, topological order."""
+def _no_census_warning(info: BenchmarkInfo) -> dict:
+    streams = list(info.uncensused_frame_streams)
+    return {"code": W_NO_CENSUS, "where": info.name, "message": (
+        f"{info.name}: no media-info census on this site and stream(s) {streams} guarantee n_frames: every extract unit probes "
+        f"each clip's header first (a demuxing pass per webm / mkv clip); run `yavih bench verify {info.name} --census` once "
+        "(shared by every bridge on this benchmark). The plan is unchanged.")}
+
+
+def build_units(matrix: Matrix, *, shard_minutes: int | None = None, ram_budget_bytes: int | None = None,
+                warnings: list[dict] | None = None) -> list[Unit]:
+    """Every unit of the matrix (no filtering): matrix refusals, unit records, topological order. ``warnings`` (when
+    given) collects ``W_NO_CENSUS`` findings, one per benchmark; they never change a unit."""
     shard_minutes = int(shard_minutes or matrix.shard_minutes)
     if shard_minutes < 1:
         raise PlanError("--shard-minutes must be >= 1")
@@ -641,6 +677,8 @@ def build_units(matrix: Matrix, *, shard_minutes: int | None = None, ram_budget_
     for entry in matrix.entries:
         if entry.benchmark not in infos:
             infos[entry.benchmark] = resolve_benchmark(entry.benchmark)
+            if infos[entry.benchmark].uncensused_frame_streams and warnings is not None:
+                warnings.append(_no_census_warning(infos[entry.benchmark]))
         info = infos[entry.benchmark]
         if info.readout not in READOUTS:
             raise PlanError(f"benchmark {info.name}: unknown readout {info.readout!r}")
@@ -689,12 +727,14 @@ def plan(
     pending: bool = False,
     kind: str | None = None,
     shard_minutes: int | None = None,
+    warnings: list[dict] | None = None,
 ) -> list[Unit]:
-    """``yavih plan build``. ``pending`` emits only units whose ``done`` is missing or stale."""
+    """``yavih plan build``. ``pending`` emits only units whose ``done`` is missing or stale. ``warnings`` collects the
+    plan's warnings (``W_NO_CENSUS``)."""
     if kind is not None and kind not in UNIT_KINDS:
         raise PlanError(f"--kind must be one of {sorted(UNIT_KINDS)}, got {kind!r}")
     matrix = load_matrix(matrix_path)
-    units = build_units(matrix, shard_minutes=shard_minutes)
+    units = build_units(matrix, shard_minutes=shard_minutes, warnings=warnings)
     if pending:
         units = [u for u in units if check_done(u) is None or is_stale(u)]
     if kind is not None:

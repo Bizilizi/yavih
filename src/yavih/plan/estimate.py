@@ -1,4 +1,4 @@
-"""Resource estimation: shard count from ``clips_per_s`` and the 2 GiB cap; extract
+"""Resource estimation: shard count from ``clips_per_s``, the 2 GiB cap and the rows cap; extract
 ``minutes = ceil(1.5 * rows / clips_per_s / 60)``, ``mem_gb = 16 + 4 * cpus``; probe ``mem_gb = max(16,
 1.3 * bytes_train / 2**30 + 8)``, ``scratch_gb`` when above the RAM budget, ``minutes = probe_minutes_ref
 * clamp(N * D / (16 * 768), 1, 24) * seeds * fits`` (floor 30).
@@ -27,6 +27,7 @@ __all__ = [
     "probe_needs",
     "bytes_per_row",
     "SHARD_BYTES_CAP",
+    "MAX_ROWS_PER_SHARD",
     "EXTRACT_MARGIN",
     "PROBE_MINUTES_FLOOR",
     "EXTRACT_MINUTES_FLOOR",
@@ -38,6 +39,9 @@ __all__ = [
 ]
 
 SHARD_BYTES_CAP = 2 * 1024**3
+#: Default rows cap per shard (matrix ``max_rows_per_shard``): bounds a unit's resident sample objects, its writer
+#: index and the work a preempted unit loses, whatever the measured speed.
+MAX_ROWS_PER_SHARD = 10_000
 EXTRACT_MARGIN = 1.5
 #: The minimum wall minutes of a probe unit.
 PROBE_MINUTES_FLOOR = 30
@@ -64,20 +68,24 @@ def bytes_per_row(N: int, D: int, dtype: str, pos_mode: str) -> int:
     return n
 
 
-def n_shards_for(rows: int, *, clips_per_s: float, shard_minutes: int, bytes_per_row: int) -> int:
-    """``max(ceil(rows / rows_per_shard_time), ceil(rows * bytes_per_row / 2 GiB))`` with
-    ``rows_per_shard_time = clips_per_s * 60 * shard_minutes``; at least 1 (an empty split still gets one
-    empty shard so the split directory carries a sidecar)."""
+def n_shards_for(rows: int, *, clips_per_s: float, shard_minutes: int, bytes_per_row: int,
+                 max_rows_per_shard: int | None = MAX_ROWS_PER_SHARD) -> int:
+    """``max(ceil(rows / rows_per_shard_time), ceil(rows * bytes_per_row / 2 GiB), ceil(rows / max_rows_per_shard))``
+    with ``rows_per_shard_time = clips_per_s * 60 * shard_minutes``; ``max_rows_per_shard=None`` drops the rows cap.
+    At least 1 (an empty split still gets one empty shard so the split directory carries a sidecar)."""
     if clips_per_s <= 0:
         raise ValueError("clips_per_s must be > 0")
     if shard_minutes < 1:
         raise ValueError("shard_minutes must be >= 1")
+    if max_rows_per_shard is not None and max_rows_per_shard < 1:
+        raise ValueError("max_rows_per_shard must be >= 1")
     if rows <= 0:
         return 1
     rows_per_shard_time = clips_per_s * 60.0 * shard_minutes
     by_time = math.ceil(rows / rows_per_shard_time)
     by_bytes = math.ceil(rows * bytes_per_row / SHARD_BYTES_CAP)
-    return max(1, by_time, by_bytes)
+    by_rows = math.ceil(rows / max_rows_per_shard) if max_rows_per_shard is not None else 1
+    return max(1, by_time, by_bytes, by_rows)
 
 
 def shard_ranges(n_rows: int, batch_size: int, n_shards: int) -> list[tuple[int, int]]:

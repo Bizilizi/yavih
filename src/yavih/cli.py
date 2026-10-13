@@ -1476,7 +1476,10 @@ def cmd_report_build(ns: argparse.Namespace) -> Envelope:
 def cmd_plan_build(ns: argparse.Namespace) -> Envelope:
     from yavih.plan.units import plan, write_plan
 
-    units = plan(ns.matrix, pending=ns.pending, kind=ns.kind, shard_minutes=ns.shard_minutes)
+    warnings: list[dict] = []  # W_NO_CENSUS: advice only, the units are the same
+    units = plan(ns.matrix, pending=ns.pending, kind=ns.kind, shard_minutes=ns.shard_minutes, warnings=warnings)
+    for w in warnings:
+        sys.stderr.write(f"[yavih] {w['code']}: {w['message']}\n")
     paths = {}
     sha: str | None = None
     if ns.out:
@@ -1491,10 +1494,10 @@ def cmd_plan_build(ns: argparse.Namespace) -> Envelope:
         data: dict[str, Any] = {"count": len(units)}
         if sha:
             data["sha256"] = sha
-        return Envelope(data=data, paths=paths, text=f"{len(units)}\n")
+        return Envelope(data=data, paths=paths, warnings=warnings, text=f"{len(units)}\n")
     records = [u.to_json() for u in units]
     text = "" if ns.out else "".join(json.dumps(_jsonable(r), sort_keys=True) + "\n" for r in records)
-    return Envelope(data=records, paths=paths, text=text or f"wrote {len(units)} unit(s) to {ns.out}\n")
+    return Envelope(data=records, paths=paths, warnings=warnings, text=text or f"wrote {len(units)} unit(s) to {ns.out}\n")
 
 
 def cmd_plan_status(ns: argparse.Namespace) -> Envelope:

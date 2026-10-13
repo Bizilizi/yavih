@@ -274,3 +274,48 @@ def test_load_profile_accepts_a_declared_loose_tolerance(tmp_path):
     prof["invariance"].update({"tolerance": 1e-4, "tolerance_reason": "bf16 attention kernels differ between batch sizes", "batch_rel_l2": 3e-5, "order_rel_l2": 1e-5})
     p = write_profile(tmp_path, "p.json", prof)
     assert load_profile(str(p))["invariance"]["tolerance"] == 1e-4
+
+
+def test_max_rows_per_shard(tmp_path, monkeypatch):
+    """Top-level ``max_rows_per_shard`` (default 10 000) caps the rows of an estimated shard; an entry's own key wins;
+    a pin and a frozen layout still decide over the estimate."""
+    from test_plan_helpers import install_benchmarks, make_info
+    from yavih.plan import units as U
+
+    p = write_matrix(tmp_path, {"a": _entry(), "b": _entry(max_rows_per_shard=3)}, extra_top={"max_rows_per_shard": 4})
+    m = load_matrix(str(p))
+    a, b = m.entries
+    assert m.max_rows_per_shard == 4 and a.max_rows_per_shard is None and b.max_rows_per_shard == 3
+    assert m.rows_cap(a) == 4 and m.rows_cap(b) == 3
+    assert load_matrix(str(write_matrix(tmp_path, {"a": _entry()}, name="d.yaml"))).max_rows_per_shard == 10_000
+    for bad in (0, -1, 1.5, True, "10"):
+        with pytest.raises(MatrixError, match="max_rows_per_shard"):
+            load_matrix(str(write_matrix(tmp_path, {"a": _entry()}, extra_top={"max_rows_per_shard": bad}, name="bad.yaml")))
+        with pytest.raises(MatrixError, match="max_rows_per_shard"):
+            load_matrix(str(write_matrix(tmp_path, {"a": _entry(max_rows_per_shard=bad)}, name="bad.yaml")))
+
+    # the plan: 12 train rows, 6 val rows, fast enough that time and bytes say one shard each
+    root = tmp_path / "m"
+    root.mkdir()
+    install_benchmarks(monkeypatch, {"synth_clf": make_info(n_train=12, n_eval=6)})
+    write_profile(root, "bridges/x.profile.json", make_profile("synth_clf", clips_per_s=1000.0))
+    ent = {"script": "bridges/x.py", "benchmark": "synth_clf", "profile": "bridges/x.profile.json", "args": {"layer": 12}}
+
+    def shards(top: dict | None = None, **over) -> dict[str, int]:
+        mp = write_matrix(root, {"e": {**ent, **over}}, extra_top=top, name="matrix.yaml")
+        return {u.split: u.shard[1] for u in U.plan(str(mp)) if u.kind == "extract"}
+
+    assert shards() == {"train": 1, "val": 1}
+    assert shards({"max_rows_per_shard": 4}) == {"train": 3, "val": 2}
+    assert shards({"max_rows_per_shard": 4}, max_rows_per_shard=6) == {"train": 2, "val": 1}
+    assert shards({"max_rows_per_shard": 4}, shards={"train": 1}) == {"train": 1, "val": 2}  # a pin wins over the cap
+    # a frozen layout wins over the cap: the split was sharded before, its units keep that layout
+    from yavih.io.layout import freeze_layout, layout_identity
+
+    info, prof = make_info(n_train=12, n_eval=6), make_profile("synth_clf", clips_per_s=1000.0)
+    ident = layout_identity(manifest_hash=info.manifest_hash, input_hash=info.protocol_hash, model=prof["model"], reading=prof["reading"],
+                            describe_sha256=prof["describe_sha256"])
+    split_dir = root / "runs" / "synth_clf" / prof["model"] / prof["reading"] / "features" / "train"
+    split_dir.mkdir(parents=True)
+    freeze_layout(split_dir, ident, n=1, batch_size=int(prof["describe"]["batch_size"]), n_rows=12)
+    assert shards({"max_rows_per_shard": 4}) == {"train": 1, "val": 2}
