@@ -686,8 +686,10 @@ def evaluate_metrics(
     A spec naming ``external`` is computed by the folder's scorer instead (``scorer(outputs) ->
     {name: value}``, the ``probe.py`` ``score`` hook bound to the eval rows and targets): once on
     the head's outputs, once on the floor outputs; a floor takes its own name from the second call, or
-    the value of the metric its ``floor_of`` names. Any fn that fails or returns nothing is a
-    refusal (``metrics.list`` names not all produced)."""
+    the value of the metric its ``floor_of`` names. An external scorer that returns ``None`` for a
+    metric it names declares that metric not applicable to this configuration (vggsounder's ``*_only``
+    metrics for the ``av`` reading); it is recorded as ``null``. Any other fn that fails or returns
+    nothing is a refusal (``metrics.list`` names not all produced)."""
     protocol = dict(protocol)
     out: dict[str, dict[str, Any]] = {"metrics": {}, "floors": {}, "controls": {}, "ci95": {}}
     failures: list[str] = []
@@ -712,6 +714,9 @@ def evaluate_metrics(
             try:
                 if getattr(spec, "external", None):
                     value = external_value(name, spec, block, inputs)
+                    if value is None:  # the scorer's "not applicable to this configuration"
+                        out[block][name] = None
+                        continue
                 else:
                     value = spec.fn(inputs, targets, protocol, split_meta)
                 out[block][name] = _coerce_value(name, spec, value)
@@ -907,6 +912,7 @@ class ReadoutContext:
     probe_mod: Any = None  # the folder probe.py, or None
     log_samples: bool = False  # the readout returns its scored rows for the samples file
     external: dict = field(default_factory=dict)  # {package: version} checked before training
+    reading: str | None = None  # the run's describe()["reading"], handed to a score hook that declares it
 
     # -- helpers used by every readout
     def reader(self, split: str) -> Any:
@@ -951,13 +957,15 @@ class ReadoutContext:
     def scorer(self, splits: Sequence[str], rows: np.ndarray, targets: Any) -> Any:
         """The folder ``score(bench, split, rows, outputs, targets)`` hook bound to the eval rows, for the
         metric specs that name ``external``; ``None`` when the folder defines none.
-        Several eval splits are passed joined with ``+``."""
+        Several eval splits are passed joined with ``+``. A hook that declares a ``reading`` parameter also
+        receives ``reading=`` the run's ``describe()["reading"]`` (a scorer that routes by reading)."""
         fn = getattr(self.probe_mod, "score", None)
         if fn is None:
             return None
         split = "+".join(splits)
         rows = np.asarray(rows, dtype=np.int64)
-        return lambda outputs: fn(self.bench, split, rows, outputs, targets)
+        kw = {"reading": self.reading} if _accepts_keyword(fn, "reading") else {}
+        return lambda outputs: fn(self.bench, split, rows, outputs, targets, **kw)
 
     def stream_names(self) -> list[str]:
         from yavih.readouts.coords import stream_names
@@ -975,6 +983,18 @@ class ReadoutContext:
             raise ProbeInterrupted("E_PREEMPTED", f"signal {self.stop_flag.signal} received")
         if self.deadline is not None and time.time() >= self.deadline:
             raise ProbeInterrupted("E_DEADLINE", "deadline reached")
+
+
+def _accepts_keyword(fn: Any, name: str) -> bool:
+    """Whether ``fn`` takes the keyword argument ``name`` (a named parameter, or ``**kwargs``)."""
+    import inspect
+
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any((p.name == name and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)) or p.kind is p.VAR_KEYWORD
+               for p in params)
 
 
 def _manifest_index(manifest: Any, rows: np.ndarray) -> np.ndarray:
@@ -1927,7 +1947,7 @@ def _probe(
                 describe=bridge["describe"], pos_mode=str(feats.get("pos_mode")), N=int(feats.get("N") or 0), D=int(feats.get("D") or 0),
                 dtype=str(feats.get("dtype")), deadline=deadline_ts, stop_flag=stop_flag, device=device, loader_workers=loader_workers,
                 timing=dict(timing), warnings=list(warnings), readers=readers, manifests=manifests,
-                probe_mod=probe_mod, log_samples=log_samples, external=dict(external),
+                probe_mod=probe_mod, log_samples=log_samples, external=dict(external), reading=reading,
             )
             seed_started = time.time()
             from yavih.probes.trainer import reset_determinism

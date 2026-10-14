@@ -91,6 +91,7 @@ class MetricSpec:
     external: str | None = None        # the external[].name whose code computes it (folder metrics)
     per_clip: Callable | None = None   # folder metrics: per-clip values for intervals
     ci: frozenset[str] = frozenset()   # folder metrics: the interval kinds per_clip supports
+    description: str = ""              # folder metrics: what computes it (an external package's metric name and definition)
 ```
 
 `benchmark.yaml[metrics.list/floors/controls]` names are resolved at `Benchmark.load`: an unknown name, a name
@@ -131,8 +132,10 @@ that benchmark only. A folder metric may replace a registry entry of the same na
 that no metric declares. `Benchmark.load` requires every key a resolved metric or `PROTOCOL_KEYS` declares and
 refuses a per-benchmark protocol key that nothing consumes (a metric, the readout's `protocol_keys`,
 `PROTOCOL_KEYS` or `input_contract.facts`). Examples: avsync's offset metrics (`acc_tol1`, `mae_seconds`,
-`acc_coarse5`, `n_coarse5`) and floor-arm controls (`acc_floor_arm`, `floor_violated`); vggsounder's
-`auc_pr_<set>`, `auc_roc_<set>` and floors, computed by the official package; nyuv2_depth's depth metrics,
+`acc_coarse5`, `n_coarse5`) and floor-arm controls (`acc_floor_arm`, `floor_violated`); vggsounder's 30
+package metrics under the package's own names (`auc_pr`, `auc_roc`, `f1@k`, `f1_macro@k`, `accuracy@k`,
+`jaccard@k`, `precision@k`, `recall@k`, `hit_rate@k`) on the reading's own label set and, with `_only`, on its
+exclusive set, every value computed by the official package; nyuv2_depth's depth metrics,
 computed by Probe3D's code. The other `probe.py` hooks (`targets`, `score`, `join`) are listed
 in [benchmark-folder](benchmark-folder.md#probepy-hooks).
 
@@ -218,6 +221,9 @@ The probe never re-derives eligibility. It reads `_meta.json.eligibility` (every
   head's raw-output shape (train majority class, train prevalence, most frequent segment label, mean log-depth
   map, mean box), and the floor metric scores it on the eval rows through the same metric function, an
   external scorer included. `floor_of` names the metric each floor belongs to (the report's floor column).
+  Floors are optional: a benchmark may declare `metrics.floors: []` (vggsounder, which reports only the authors'
+  package's own numbers); its results carry `floors: {}`, and the report shows no floor column value and greys
+  no row for a floor.
 - Controls are scored on the trained head's outputs and can void a headline: avsync `floor_violated`, vggss_box
   `audio_blind`. The report greys such rows.
 - Chance values are copied from `metrics.chance` into `result.chance`; they are weaker than floors.
@@ -397,7 +403,8 @@ scale 64) of their task coordinate; queries are initialized from sincos of the t
   empty (`label.empty_ok: true`).
 - Metrics: whatever `metrics.list` names: single → `acc`; multi → `map`, `effective_pos_classes`; multi_sets →
   `auc_pr_<set>`, `auc_roc_<set>`; folds → `acc_mean`, `acc_pstd`, `acc_per_fold`, `n_folds`; plus folder
-  metrics (avsync: `acc_tol1`, `mae_seconds`, `acc_coarse5`, `n_coarse5`).
+  metrics (avsync: `acc_tol1`, `mae_seconds`, `acc_coarse5`, `n_coarse5`; vggsounder: the package's 30 metrics,
+  scored by its `score` hook, which ignores the yavih label-set targets).
 - Floors: `acc_floor` (one-hot of the train majority class, ties to the lowest index), `map_floor` /
   `auc_pr_<set>_floor` (train prevalence per class as a constant score). Under folds each fold's floor is its
   own train majority.

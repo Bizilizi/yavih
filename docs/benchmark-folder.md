@@ -79,6 +79,14 @@ def score(bench, split: str, rows: np.ndarray, outputs, targets) -> dict  # the 
 def join(bench, results: dict) -> dict                                    # cross-reading join for `report --join`
 ```
 
+`score` may also declare a `reading` parameter (`def score(bench, split, rows, outputs, targets, *, reading)`):
+the probe then passes the run's `describe()["reading"]`, for a scorer that routes by reading (vggsounder scores
+the `a` reading on the package's `a` and `a only` sets, `v` on `v` and `v only`, `av` on `av`). A scorer returns
+`None` for a metric it names that does not apply to this configuration; `result.json` records it as `null`
+([results](results.md)). A folder metric's `MetricSpec.description` says what computes it (an external package's
+own metric name and definition). `join` may return `table: {header, rows, notes}`, the compact view `report`
+prints in md instead of every key (the rest under `--detail`).
+
 Every call into an original-author package goes through `yavih.external.require(name, pip, version_pin)` with the
 matching `benchmark.yaml` `external` entry. A `probe.py` that re-implements the authors' code instead (because it is
 not importable) says so in README "## In yavih" and setup.md "## Dependencies".
@@ -256,9 +264,11 @@ protocol:                          # label facts only, JSON values (finite numbe
 metrics:                           # names: yavih.metrics registry overlaid by probe.py METRICS (readouts.md)
   headline: acc                    # in `list`; the metric the report sorts on
   list: [acc, n_eval]              # non-empty; kinds metric | disclosure; result.json[metrics] holds exactly these
-  floors: [acc_floor]              # kind floor
+  table: [acc]                     # optional: the report's default markdown metrics, a subset of `list` holding the
+                                   #   headline; the rest are in json / csv and under --detail (absent: all of `list`)
+  floors: [acc_floor]              # kind floor; may be [] (no floor: nothing greys a row, e.g. vggsounder)
   controls: []                     # kind control
-  chance: {acc: 0.0025}            # keys in `list`
+  chance: {acc: 0.0025}            # keys in `list`; may be {}
   ci: {acc: binomial}              # keys in `list`: binomial | bootstrap_clip | pooled_binomial | null, admissible for the metric
   bootstrap: {samples: 2000, seed: 0}    # optional; required when a ci is bootstrap_clip
   aggregation: null                # required iff splits.folds: {over: folds, report: [mean, pstd, per_fold], ci?: <kind>}
@@ -298,8 +308,8 @@ From the yaml (`SchemaError`, exit 1):
 - `external`: four non-empty strings per entry, unique names, a non-empty list requires `probe.py`, and every metric
   computed by an external package names a declared entry;
 - `metrics`: every name resolves (registry or `probe.py` `METRICS`) with the right kind and is allowed for the
-  readout; no name in two lists; `headline`, `chance` and `ci` keys in `list`; ci kinds admissible; `bootstrap` and
-  `aggregation` rules;
+  readout; no name in two lists; `headline`, `chance` and `ci` keys in `list`; `table` (when present) a non-empty
+  subset of `list` holding the headline; ci kinds admissible; `bootstrap` and `aggregation` rules;
 - `readout_params`: exactly the readout's keys, `*_stream` values are declared streams, and the readout's own
   cross-checks;
 - `probe.py` imports, `METRICS` is a `dict[str, MetricSpec]` and `PROTOCOL_KEYS` a `frozenset[str]`.
@@ -567,6 +577,6 @@ The full index with descriptions, media and sources is [src/yavih/benchmarks/REA
 | k400 | clf | single | video | `acc` |  |
 | nyuv2_depth | grid | none (targets) | image | `d1` | yes, `external` |
 | ssv2 | clf | single | video | `acc` |  |
-| vggsounder | clf | multi_sets | video, audio | `auc_pr_all` | yes, `external` |
+| vggsounder | clf | multi_sets | video, audio | `auc_pr` | yes, `external` |
 | vggss_box | box | box | video, audio | `iou_mean` |  |
 <!-- yavih:bench-table folder end -->

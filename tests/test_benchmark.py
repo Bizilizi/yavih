@@ -443,6 +443,10 @@ def _schema_cases() -> list[tuple[str, Callable[[dict], None] | None, str]]:
         ("per_set_metric_without_sets", lambda s: s["metrics"].__setitem__("list", ["acc", "auc_pr_audible"]), "audible"),
         ("headline_not_listed", lambda s: s["metrics"].__setitem__("headline", "map"), "headline"),
         ("chance_not_listed", lambda s: s["metrics"].__setitem__("chance", {"map": 0.1}), "chance"),
+        ("table_not_listed", lambda s: s["metrics"].__setitem__("table", ["acc", "map"]), "table"),
+        ("table_without_headline", lambda s: s["metrics"].__setitem__("table", ["n_eval"]), "headline"),
+        ("table_empty", lambda s: s["metrics"].__setitem__("table", []), "table"),
+        ("table_not_a_list", lambda s: s["metrics"].__setitem__("table", "acc"), "table"),
         ("ci_kind", lambda s: s["metrics"].__setitem__("ci", {"acc": "jackknife"}), "ci"),
         ("ci_not_listed", lambda s: s["metrics"].__setitem__("ci", {"map": "binomial"}), "ci"),
         ("ci_not_admissible", lambda s: s["metrics"].__setitem__("ci", {"n_eval": "binomial"}), "no binomial interval"),
@@ -475,6 +479,40 @@ def test_schema_validation_rules(tmp_path, case):
     folder = make_folder(tmp_path, mutate=mutate)
     with pytest.raises(SchemaError, match=match):
         load_yaml(folder / "benchmark.yaml")
+
+
+def test_metrics_table_is_optional(tmp_path):
+    """``metrics.table`` absent → ``None`` (the report shows all of ``list``); present → the declared subset."""
+    assert load_yaml(make_folder(tmp_path / "plain") / "benchmark.yaml").metrics.table is None
+    folder = make_folder(tmp_path / "table", mutate=lambda s: s["metrics"].__setitem__("table", ["acc"]))
+    assert load_yaml(folder / "benchmark.yaml").metrics.table == ("acc",)
+
+
+def test_score_hook_gets_the_reading_only_when_it_declares_it():
+    """``ReadoutContext.scorer`` passes ``reading=`` to a hook that names it (or takes ``**kwargs``), never to
+    one with the five-argument signature."""
+    from types import SimpleNamespace
+
+    from yavih.readouts.base import ReadoutContext
+
+    seen = []
+
+    def plain(bench, split, rows, outputs, targets):
+        seen.append(("plain", split))
+        return {}
+
+    def routed(bench, split, rows, outputs, targets, *, reading=None):
+        seen.append(("routed", reading))
+        return {}
+
+    def anykw(bench, split, rows, outputs, targets, **kw):
+        seen.append(("anykw", kw.get("reading")))
+        return {}
+
+    for fn in (plain, routed, anykw):
+        ctx = SimpleNamespace(probe_mod=SimpleNamespace(score=fn), bench=None, reading="av")
+        ReadoutContext.scorer(ctx, ["test"], [0, 1], None)(None)
+    assert seen == [("plain", "test"), ("routed", "av"), ("anykw", "av")]
 
 
 def test_missing_protocol_key_of_a_probe_py_metric(tmp_path):

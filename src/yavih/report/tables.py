@@ -137,11 +137,14 @@ def _column_title(col: dict[str, Any]) -> str:
     return title
 
 
-def render_lm_eval(lm_eval: dict[str, list[dict[str, Any]]]) -> str:
+def render_lm_eval(lm_eval: dict[str, list[dict[str, Any]]], *, show_all: bool = True) -> str:
     """View 1: one ``## <model>`` table per model, lm-eval style; ``eval_hash`` is the
-    comparability key (two numbers of one benchmark compare iff it is equal)."""
+    comparability key (two numbers of one benchmark compare iff it is equal). Without ``show_all`` a metric
+    outside its benchmark's ``metrics.table`` (row ``in_table: false``) is left out."""
     out: list[str] = []
     for model, rows in lm_eval.items():
+        if not show_all:
+            rows = [r for r in rows if r.get("in_table", True)]
         out.append(f"## {_md_escape(model)}")
         out.append("")
         out.append("| " + " | ".join(LM_EVAL_HEADER) + " |")
@@ -183,9 +186,10 @@ def render_md(report) -> str:
     if not report.columns:
         out.append("_no result.json with DONE found_")
         out.append("")
+    show_all = bool(getattr(report, "show_all", True))
     lm = getattr(report, "lm_eval", None) or {}
     if lm:
-        out.append(render_lm_eval(lm))
+        out.append(render_lm_eval(lm, show_all=show_all))
         out.append("# Comparability columns")
         out.append("")
     rows_by_col: dict[str, list[dict[str, Any]]] = {}
@@ -204,6 +208,8 @@ def render_md(report) -> str:
             out.append("; ".join(notes))
         out.append("")
         metrics = list(col.get("metrics") or [])
+        if not show_all and col.get("table"):
+            metrics = [m for m in metrics if m in set(col["table"])]  # metrics.table; the rest under --detail
         controls = list(col.get("controls") or [])
         headline = col.get("headline")
         header = ["model", "reading", "seeds", "cov eval"]
@@ -259,11 +265,7 @@ def render_md(report) -> str:
             out.append(f"### {kind}")
             out.append("")
             if isinstance(data, dict):
-                for k, v in data.items():
-                    if isinstance(v, dict):
-                        out.append(f"- **{k}**: " + ", ".join(f"{kk}={format_number(vv)}" for kk, vv in v.items()))
-                    else:
-                        out.append(f"- **{k}**: {format_number(v)}")
+                out.extend(_render_join_md(data, show_all=show_all))
             out.append("")
     if getattr(report, "detail", None):
         out.append("## Detail: configuration and feature sets per row")
@@ -283,6 +285,50 @@ def render_md(report) -> str:
     if getattr(report, "suite", None):
         out.extend(render_suite_md(report.suite))
     return "\n".join(out).rstrip("\n") + "\n"
+
+
+def _join_dump(data: dict[str, Any]) -> list[str]:
+    """Every key of a join output: scalars inline, a flat mapping as ``k=v`` pairs, a mapping of mappings
+    (``{column: {row: value}}``) as a table."""
+    out = []
+    for k, v in data.items():
+        if isinstance(v, dict) and v and all(isinstance(x, dict) for x in v.values()):
+            cols = list(v)
+            rows = list(dict.fromkeys(r for x in v.values() for r in x))
+            out += [f"- **{k}**:", "", "| | " + " | ".join(_md_escape(str(c)) for c in cols) + " |", "|" + "---|" * (len(cols) + 1)]
+            out += ["| " + " | ".join([_md_escape(str(r))] + [format_number(v[c].get(r)) for c in cols]) + " |" for r in rows]
+            out.append("")
+        elif isinstance(v, dict):
+            out.append(f"- **{k}**: " + ", ".join(f"{kk}={format_number(vv)}" for kk, vv in v.items()))
+        else:
+            out.append(f"- **{k}**: {format_number(v)}")
+    return out
+
+
+def _render_join_md(data: dict[str, Any], *, show_all: bool) -> list[str]:
+    """One ``report --join`` section. When the folder's ``join()`` output carries ``table`` (``{"header": [...],
+    "rows": [[...]], "notes": [...]}``, the folder's compact view of its numbers), that table plus the join's
+    identity lines is shown, and everything else only with ``show_all`` (``--detail``); otherwise every key."""
+    results = data.get("results") if isinstance(data.get("results"), dict) else {}
+    table = results.get("table") if isinstance(results.get("table"), dict) else None
+    if table is None:
+        return _join_dump(data)
+    out = [f"- **{k}**: {format_number(data.get(k))}" for k in ("model", "reading", "eval_hash", "path") if data.get(k) is not None]
+    header = [str(h) for h in table.get("header") or []]
+    out += ["", "| " + " | ".join(_md_escape(h) for h in header) + " |", "|" + "---|" * len(header)]
+    for row in table.get("rows") or []:
+        out.append("| " + " | ".join(_md_escape(format_number(c)) for c in row) + " |")
+    notes = [str(n) for n in table.get("notes") or []]
+    if notes:
+        out += [""] + [f"- {_md_escape(n)}" for n in notes]
+    for w in data.get("warnings") or []:
+        if isinstance(w, dict):
+            out.append(f"- `{w.get('code', 'W')}`: {_md_escape(str(w.get('message', '')))}")
+    if show_all:
+        out += ["", "Full join output:", ""]
+        out += _join_dump({k: v for k, v in data.items() if k != "results"})
+        out += _join_dump({k: v for k, v in results.items() if k != "table"})
+    return out
 
 
 def render_suite_md(suite: dict[str, Any]) -> list[str]:

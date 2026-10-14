@@ -472,6 +472,8 @@ class MetricsSpec:
     ci: Mapping[str, str | None]
     bootstrap: Mapping[str, int] | None = None
     aggregation: Mapping[str, Any] | None = None
+    #: the report's default markdown columns (a subset of ``list`` holding the headline); ``None`` = all of ``list``
+    table: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -1321,7 +1323,7 @@ def _resolve_metric_names(names: Sequence[str], readout: str, *, sets: Sequence[
 
 def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: SplitsSpec, folder_metrics: Mapping[str, Any] | None = None) -> tuple[MetricsSpec, dict[str, Any]]:
     d = _expect_mapping(v, path)
-    _check_keys(d, path, ["headline", "list", "floors", "controls", "chance", "ci"], ["bootstrap", "aggregation"])
+    _check_keys(d, path, ["headline", "list", "floors", "controls", "chance", "ci"], ["bootstrap", "aggregation", "table"])
     names = _str_list(d["list"], f"{path}.list")
     floors = _str_list(d["floors"], f"{path}.floors")
     controls = _str_list(d["controls"], f"{path}.controls")
@@ -1382,6 +1384,16 @@ def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: Sp
         agg = dict(agg)
     elif splits.folds is not None:
         raise SchemaError(f"{path}.aggregation: required with splits.folds")
+    table = d.get("table")
+    if table is not None:
+        table = _str_list(table, f"{path}.table")
+        if not table:
+            raise SchemaError(f"{path}.table: must name at least one metric (omit the key to show all of metrics.list)")
+        bad = [k for k in table if k not in names]
+        if bad:
+            raise SchemaError(f"{path}.table: {bad} not in metrics.list")
+        if headline not in table:
+            raise SchemaError(f"{path}.table: must hold the headline {headline!r}")
     spec = MetricsSpec(
         headline=headline,
         list=names,
@@ -1391,6 +1403,7 @@ def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: Sp
         ci=dict(ci),
         bootstrap=bootstrap,
         aggregation=agg,
+        table=table,
     )
     return spec, resolved
 
