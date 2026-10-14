@@ -26,7 +26,7 @@ def test_chips_are_derived_from_the_yaml():
 
 def test_headline_metric_reads_as_a_name():
     labels = {name: headers.chips(Benchmark.load(name))[-1][1] for name in ("audioset20k", "ave", "nyuv2_depth", "vggsounder", "vggss_box", "k400")}
-    assert labels == {"audioset20k": "mAP", "ave": "segment acc", "nyuv2_depth": "δ₁", "vggsounder": "AUC-PR", "vggss_box": "mean IoU",
+    assert labels == {"audioset20k": "mAP", "ave": "segment acc", "nyuv2_depth": "δ₁", "vggsounder": "mAP", "vggss_box": "mean IoU",
                       "k400": "accuracy"}
     assert headers.metric_label("auc_pr_audible") == "AUC-PR (audible)" and headers.metric_label("rmse") == "rmse"
 

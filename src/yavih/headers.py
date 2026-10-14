@@ -49,6 +49,7 @@ _KIND_ORDER = ("video", "image", "audio")
 #: The headline metric as people read it (the metric registry carries ids only); any other id is shown as is.
 METRIC_LABELS: dict[str, str] = {
     "acc": "accuracy", "acc_mean": "mean acc", "map": "mAP", "seg_acc": "segment acc", "d1": "δ₁", "iou_mean": "mean IoU",
+    "auc_pr": "mAP",  # vggsounder: the package's auc_pr, the paper's mAP
 }
 
 

@@ -1,30 +1,35 @@
 """vggsounder probe hooks: an external scorer (the folder's setup.md).
 
-Every vggsounder number is computed by the authors' package, ``vggsounder`` (PyPI 1.0), never by a
-yavih re-implementation. The package is NOT a yavih dependency: it is installed independently
-(setup.md "## Dependencies") and reached only through the assert-import of ``benchmark.yaml``
-``external`` (``yavih.external.require``). Module scope imports stdlib, numpy and yavih core only.
+Every vggsounder number is a value the authors' package, ``vggsounder`` (PyPI 1.0), returns; yavih computes
+none of them. The package is NOT a yavih dependency: it is installed independently (setup.md
+"## Dependencies") and reached only through the assert-import of ``benchmark.yaml`` ``external``
+(``yavih.external.require``). Module scope imports stdlib, numpy and yavih core only.
+
+The package's ground-truth sets (``vggsounder.benchmark.MODALITIES``) and the pkl logits key each is scored
+from (``load_test_predictions``): ``a`` (A + AV labels) ← ``logits["a"]``, ``v`` (V + AV) ← ``logits["v"]``,
+``av`` (labels both audible and visible) ← ``logits["av"]``, ``a only`` ← ``logits["a"]``, ``v only`` ←
+``logits["v"]``. Per set ``compare_labels_logits`` returns the 30 ``PACKAGE_METRICS``: for k in 1, 3, 5, 10
+``f1@k`` (micro), ``f1_macro@k``, ``accuracy@k``, ``jaccard@k``, ``precision@k``, ``recall@k``, ``hit_rate@k``,
+and ``auc_roc`` / ``auc_pr`` (macro over the classes with a positive). Each set is scored over the clips holding at
+least one label of it.
 
 Hooks:
 
-- ``METRICS``: ``auc_pr_<set>``, ``auc_roc_<set>`` (audible, visible, all) and ``auc_pr_<set>_floor``,
-  each naming ``external: vggsounder``; they replace the registry's native multi_sets versions for
-  this benchmark. ``n_eval`` stays the registry's disclosure.
-- ``score(bench, split, rows, outputs, targets)``: this bridge's eval logits ``[n, 309]`` (rows in
-  ``classes.csv`` order) are written under the pkl keys ``a``, ``v`` and ``all`` and scored by
-  ``vggsounder.benchmark.compute_all_results`` (the function behind ``benchmark()``) against the
-  package's ground truth ``a`` (A + AV labels = yavih ``audible``), ``v`` (V + AV = ``visible``) and
-  ``all`` (A + V + AV = ``all``). The package's ``av`` ground truth is the AV-only label set, which is
-  NOT yavih's ``all``; it is filled with the same
-  logits only because the package's ``mu`` step needs it, and its numbers are discarded. The package
-  scores each set over the clips holding at least one label of that set (``a``: 11 911, ``v``:
-  10 182, ``all``: 12 008 of the 12 008 eval clips) and macro-averages over classes with a positive.
-- Floors: ``score_floors`` scores the constant train-prevalence row (train targets only)
-  through the same call; a driver may equivalently call ``score`` with that matrix and read the
-  ``auc_pr_<set>`` values as ``auc_pr_<set>_floor`` (``MetricSpec.floor_of``).
+- ``METRICS``: the 30 package names on the reading's own set and the same names with ``_only`` on its exclusive
+  set; ``external: vggsounder``, the package's name and set in ``MetricSpec.description``. The ids do not depend on
+  the reading, so one ``benchmark.yaml`` serves the three readings. No floors, no chance values, no yavih
+  disclosure: nothing here is computed outside the package.
+- ``score(bench, split, rows, outputs, targets, *, reading)``: the run's eval logits ``[n, 309]`` (rows in
+  ``classes.csv`` order) are written under the pkl key of the reading ONLY (``READING_SETS``: ``a`` → sets ``a``
+  and ``a only``; ``v`` → ``v`` and ``v only``; ``av`` → ``av``) and every set of that reading is scored by the
+  package's own per-set step of ``compute_all_results`` (``get_gt_for_modality`` → ``load_test_predictions`` →
+  ``compare_labels_logits``). A reading's logits are never scored on another reading's set. The ``av`` reading has
+  no exclusive set: its ``*_only`` metrics are ``None`` (``null`` in ``result.json``: not applicable).
 - ``join(bench, results)``: ``report --join vggsounder a=RUN v=RUN av=RUN`` — the three readings'
-  ``eval_logits.npy`` under their own pkl keys, scored with ``auc_pr``, ``auc_roc`` and ``mu`` per
-  routing exactly as the paper's table does.
+  ``eval_logits.npy`` under their own pkl keys through ``compute_all_results``: the 30 metrics on all five sets
+  plus ``mu`` (modality confusion against the ``all`` ground truth) for ``a``, ``v`` and ``av``, exactly as the
+  package returns them, and a compact ``table`` (rows A / V / AV; ``auc_pr``, ``hit_rate@1``, ``f1@1``, and ``mu``
+  displayed A / V / A∩V for the package keys ``a`` / ``v`` / ``av``).
 """
 
 from __future__ import annotations
@@ -45,25 +50,42 @@ from yavih.metrics.registry import MetricSpec
 
 __all__ = [
     "METRICS",
+    "JOIN_METRICS",
+    "MU_LABELS",
+    "PACKAGE_METRICS",
+    "PACKAGE_SETS",
+    "READING_SETS",
+    "ONLY_SUFFIX",
     "PROTOCOL_KEYS",
-    "SET_TO_PACKAGE",
     "JOIN_ROUTINGS",
     "JOIN_INPUTS",
+    "JOIN_TABLE",
     "ExternalPackageError",
     "JoinRefused",
     "external_entry",
     "require_vggsounder",
+    "official_set_scores",
     "official_scores",
+    "metric_ids",
     "score",
-    "score_floors",
     "join",
 ]
 
-#: yavih ``label.sets`` name → the package's ground-truth modality key (verified equal on the 12 008
-#: eval clips, tests/test_folder.py::test_package_ground_truth_equals_label_sets).
-SET_TO_PACKAGE: dict[str, str] = {"audible": "a", "visible": "v", "all": "all"}
+#: ``compare_labels_logits`` (``ks = [1, 3, 5, 10]``): its result keys, in the order it computes them.
+PACKAGE_METRICS: tuple[str, ...] = tuple(
+    f"{m}@{k}" for k in (1, 3, 5, 10) for m in ("f1", "f1_macro", "accuracy", "jaccard", "precision", "recall", "hit_rate")
+) + ("auc_roc", "auc_pr")
+#: the package's ground-truth sets (``vggsounder.benchmark.MODALITIES``).
+PACKAGE_SETS: tuple[str, ...] = ("a", "v", "av", "a only", "v only")
+#: reading → (its own set, its exclusive set or ``None``): the pkl key is the reading, and the package reads
+#: ``a only`` / ``v only`` from ``logits["a"]`` / ``logits["v"]``.
+READING_SETS: dict[str, tuple[str, str | None]] = {"a": ("a", "a only"), "v": ("v", "v only"), "av": ("av", None)}
+#: suffix of the metric ids scored on the reading's exclusive set (``a only`` / ``v only``).
+ONLY_SUFFIX = "_only"
 #: pkl keys of ``report --join`` (the three readings of one model), the paper's routings.
 JOIN_ROUTINGS: tuple[str, ...] = ("a", "v", "av")
+#: the join's compact markdown table: (column label, package metric); rows A / V / AV are the sets a / v / av.
+JOIN_TABLE: tuple[tuple[str, str], ...] = (("mAP", "auc_pr"), ("HIT", "hit_rate@1"), ("F1", "f1@1"), ("mu", "mu"))
 #: the package's dataset variant this benchmark freezes: default, no background-music clips.
 _VARIANT = {"background_music": False, "download_samples": False}
 _MODEL = "yavih_probe"
@@ -107,28 +129,52 @@ class _ComputedByScore:
         return f"vggsounder.probe.score:{self.name}"
 
 
-def _spec(name: str, *, kind: str = "metric", floor_of: tuple[str, ...] = ()) -> MetricSpec:
+def _spec(name: str, description: str, *, higher_is_better: bool | None = True) -> MetricSpec:
     return MetricSpec(
         name=name,
         fn=_ComputedByScore(name),
         readouts=frozenset({"clf"}),
         protocol_keys=frozenset(),
         shape="scalar",
-        kind=kind,
-        higher_is_better=True,
-        floor_of=floor_of,
+        kind="metric",
+        higher_is_better=higher_is_better,
         external="vggsounder",
+        description=description,
     )
 
 
 METRICS: dict[str, MetricSpec] = {}
-for _set in SET_TO_PACKAGE:
-    METRICS[f"auc_pr_{_set}"] = _spec(f"auc_pr_{_set}")
-    METRICS[f"auc_roc_{_set}"] = _spec(f"auc_roc_{_set}")
-    METRICS[f"auc_pr_{_set}_floor"] = _spec(
-        f"auc_pr_{_set}_floor", kind="floor", floor_of=(f"auc_pr_{_set}",)
-    )
-del _set
+for _m in PACKAGE_METRICS:
+    METRICS[_m] = _spec(_m, f"vggsounder 1.0 compare_labels_logits {_m!r} on the reading's own ground truth "
+                            "(reading a: set 'a' = A + AV labels; v: 'v' = V + AV; av: 'av' = labels both audible and visible)")
+for _m in PACKAGE_METRICS:
+    METRICS[_m + ONLY_SUFFIX] = _spec(_m + ONLY_SUFFIX, f"vggsounder 1.0 compare_labels_logits {_m!r} on the reading's "
+                                                        "exclusive ground truth (reading a: set 'a only'; v: 'v only'); "
+                                                        "null for the av reading (no exclusive set)")
+del _m
+
+#: the join-only ``mu`` values (``compute_modality_confusion_logits`` against the ``all`` ground truth), named by
+#: their package key, with the package's own definitions.
+JOIN_METRICS: dict[str, MetricSpec] = {
+    "mu_a": _spec("mu_a", "vggsounder 1.0 mu['a']: Audio confusion rate (audio top-1 hits when AV top-1 fails)",
+                  higher_is_better=None),
+    "mu_v": _spec("mu_v", "vggsounder 1.0 mu['v']: Visual confusion rate (visual top-1 hits when AV top-1 fails)",
+                  higher_is_better=None),
+    "mu_av": _spec("mu_av", "vggsounder 1.0 mu['av']: Combined confusion rate (both A and V top-1 hit when AV top-1 fails)",
+                   higher_is_better=None),
+}
+#: how the report displays the three ``mu`` values (display labels only; the ids stay the package keys).
+MU_LABELS: dict[str, str] = {"mu_a": "A", "mu_v": "V", "mu_av": "A∩V"}
+
+
+def metric_ids(reading: str) -> dict[str, tuple[str, str]]:
+    """``{metric id: (package set, package metric)}`` a reading's ``score`` returns a value for (the ``av``
+    reading's ``*_only`` ids are absent here: ``score`` returns ``None`` for them)."""
+    own, only = READING_SETS[reading]
+    out = {m: (own, m) for m in PACKAGE_METRICS}
+    if only is not None:
+        out.update({m + ONLY_SUFFIX: (only, m) for m in PACKAGE_METRICS})
+    return out
 
 
 # ----------------------------------------------------------------------------- the assert-import
@@ -163,7 +209,54 @@ def require_vggsounder(bench: Any = None) -> str:
     return versions_used()[e["name"]]
 
 
-# ----------------------------------------------------------------------------- the official call
+def _check_package_result(r: Mapping[str, Any], bench: Any) -> None:
+    if "auc_pr" not in r:
+        raise ExternalPackageError(
+            "E_EXTERNAL_VERSION",
+            "the installed vggsounder build reports no 'auc_pr' (a development build renamed it 'mAP'); "
+            f"install the pinned release: {external_entry(bench)['pip']}",
+        )
+
+
+def _float(v: Any) -> Any:
+    return float(v) if np.ndim(v) == 0 else v
+
+
+# ----------------------------------------------------------------------------- the official calls
+
+
+def _write_pkl(tmp: str, payload: Mapping[str, Any]) -> str:
+    path = os.path.join(tmp, f"{_MODEL}.pkl")
+    with open(path, "wb") as fh:
+        pickle.dump(dict(payload), fh, protocol=pickle.HIGHEST_PROTOCOL)
+    return path
+
+
+def official_set_scores(payload: Mapping[str, Any], subset_ids: Sequence[str], sets: Sequence[str]) -> dict:
+    """The package's per-set step of ``compute_all_results`` (its logits branch) for ``sets`` only, on one model's
+    pkl payload ``{video_id: {"logits": {key: [C floats]}}}``: ``get_gt_for_modality`` → ``load_test_predictions``
+    (which maps ``a only`` / ``v only`` to the ``a`` / ``v`` key) → ``compare_labels_logits``. Returns ``{set:
+    {metric: value}}`` as fractions. Sets outside ``sets`` are never scored, so a payload holding one reading's key
+    is never read under another key (the package raises ``KeyError`` first)."""
+    from vggsounder.benchmark import (
+        compare_labels_logits,
+        get_gt_for_modality,
+        load_test_predictions,
+    )
+    from vggsounder.labels import VGGSounder
+
+    vggsounder = VGGSounder(**_VARIANT)
+    classes = vggsounder.get_all_labels()
+    ids = set(subset_ids)  # membership only; a set keeps it O(n)
+    out: dict[str, dict] = {}
+    with tempfile.TemporaryDirectory(prefix="yavih-vggsounder-") as tmp:
+        pkl = _write_pkl(tmp, payload)
+        for s in sets:
+            gt = get_gt_for_modality(vggsounder, s, ids)
+            pred = load_test_predictions(pkl, s)
+            pred.drop(columns=["labels"], inplace=True)
+            out[s] = {k: _float(v) for k, v in compare_labels_logits(gt, pred, classes).items()}
+    return out
 
 
 def official_scores(
@@ -176,8 +269,7 @@ def official_scores(
     from vggsounder.labels import VGGSounder
 
     with tempfile.TemporaryDirectory(prefix="yavih-vggsounder-") as tmp:
-        with open(os.path.join(tmp, f"{_MODEL}.pkl"), "wb") as fh:
-            pickle.dump(dict(payload), fh, protocol=pickle.HIGHEST_PROTOCOL)
+        _write_pkl(tmp, payload)
         res = compute_all_results(
             models_path=tmp,
             subset_ids=set(subset_ids),  # membership only; a set keeps it O(n)
@@ -185,24 +277,12 @@ def official_scores(
             vggsounder=VGGSounder(**_VARIANT),
             verbose=False,
         )
-    return {
-        m: {k: (float(v) if np.ndim(v) == 0 else v) for k, v in d.items()}
-        for m, d in res[_MODEL].items()
-    }
+    return {m: {k: _float(v) for k, v in d.items()} for m, d in res[_MODEL].items()}
 
 
 def _eval_ids(bench: Any, split: str, rows: Any) -> list[str]:
     ids = list(bench.manifest(split).clip_id)
     return [str(ids[int(r)]) for r in np.asarray(rows).ravel()]
-
-
-def _single_reading_payload(ids: Sequence[str], outputs: np.ndarray, keys: Sequence[str]) -> dict:
-    """One reading's logits under several pkl keys; one list object per clip (pickle memoizes it)."""
-    out: dict[str, dict] = {}
-    for i, cid in enumerate(ids):
-        vec = outputs[i].astype(float).tolist()
-        out[cid.removesuffix(".mp4")] = {"logits": {k: vec for k in keys}}
-    return out
 
 
 def _check_outputs(outputs: Any, n: int) -> np.ndarray:
@@ -214,39 +294,32 @@ def _check_outputs(outputs: Any, n: int) -> np.ndarray:
     return out
 
 
-def score(bench: Any, split: str, rows: Any, outputs: Any, targets: Any = None) -> dict[str, float]:
-    """``{auc_pr_<set>, auc_roc_<set>}`` for audible / visible / all from the official package.
+def score(bench: Any, split: str, rows: Any, outputs: Any, targets: Any = None, *, reading: str | None = None) -> dict:
+    """Every ``METRICS`` id for one reading from the official package, routed as the package routes it.
 
-    ``outputs`` = the head's raw logits ``[len(rows), 309]`` in ``classes.csv`` order (identical to the
-    package's ``classes.csv``, sha256 ``90a5cd19…``); ``targets`` is unused: the ground truth is the
-    package's own (equal to the manifest's ``label.sets``, test-pinned).
+    ``reading`` = the run's ``describe()["reading"]`` (one of ``a``, ``v``, ``av``; setup.md); ``outputs`` = the
+    head's raw logits ``[len(rows), 309]`` in ``classes.csv`` order (identical to the package's ``classes.csv``,
+    sha256 ``90a5cd19…``), written under the pkl key ``reading`` only; ``targets`` is unused: the ground truth is
+    the package's own. Returns the 30 package metrics on the reading's own set and, with ``_only``, on its
+    exclusive set; ``None`` for the ``_only`` ids of the ``av`` reading (not applicable).
     """
+    if reading not in READING_SETS:
+        raise ValueError(
+            f"vggsounder score: describe()['reading'] is {reading!r}; the package routes only the readings "
+            f"{sorted(READING_SETS)} (a = audio only, v = video only, av = both)"
+        )
     require_vggsounder(bench)
     ids = _eval_ids(bench, split, rows)
     out = _check_outputs(outputs, len(ids))
-    pkg_keys = ("a", "v", "av", "all")  # av: needed by the package's mu step only, discarded
-    res = official_scores(_single_reading_payload(ids, out, pkg_keys), ids, pkg_keys)
-    metrics: dict[str, float] = {}
-    for set_name, key in SET_TO_PACKAGE.items():
-        r = res[key]
-        if "auc_pr" not in r:
-            raise ExternalPackageError(
-                "E_EXTERNAL_VERSION",
-                "the installed vggsounder build reports no 'auc_pr' (a development build renamed it 'mAP'); "
-                f"install the pinned release: {external_entry(bench)['pip']}",
-            )
-        metrics[f"auc_pr_{set_name}"] = float(r["auc_pr"])
-        metrics[f"auc_roc_{set_name}"] = float(r["auc_roc"])
+    payload = {cid.removesuffix(".mp4"): {"logits": {reading: out[i].astype(float).tolist()}} for i, cid in enumerate(ids)}
+    sets = [s for s in READING_SETS[reading] if s is not None]
+    res = official_set_scores(payload, ids, sets)
+    for s in sets:
+        _check_package_result(res[s], bench)
+    metrics: dict[str, Any] = {mid: float(res[s][m]) for mid, (s, m) in metric_ids(reading).items()}
+    for m in PACKAGE_METRICS:
+        metrics.setdefault(m + ONLY_SUFFIX, None)  # the av reading: no exclusive set
     return metrics
-
-
-def score_floors(bench: Any, split: str, rows: Any, train_prevalence: Any) -> dict[str, float]:
-    """``auc_pr_<set>_floor``: the constant per-class train prevalence ``[309]`` (from TRAIN targets
-    only) as every eval clip's score, through the same official call."""
-    prev = np.asarray(train_prevalence, dtype=np.float64).ravel()
-    n = len(np.asarray(rows).ravel())
-    vals = score(bench, split, rows, np.broadcast_to(prev, (n, prev.size)))
-    return {f"auc_pr_{s}_floor": vals[f"auc_pr_{s}"] for s in SET_TO_PACKAGE}
 
 
 # ----------------------------------------------------------------------------- report --join
@@ -343,6 +416,19 @@ def _check_readings(recs: Mapping[str, Mapping[str, Any]]) -> list[dict]:
     return warnings
 
 
+def _join_table(scores: Mapping[str, Mapping[str, Any]]) -> dict:
+    """The compact view ``report`` prints by default: rows A / V / AV (the package sets ``a`` / ``v`` / ``av``),
+    columns ``JOIN_TABLE``; the ``mu`` column holds the package's ``mu`` of the row's key, displayed as
+    ``MU_LABELS`` (A, V, A∩V) and defined in the notes."""
+    header = ["", *(f"mu ({', '.join(MU_LABELS.values())})" if m == "mu" else label for label, m in JOIN_TABLE)]
+    rows = [[k.upper(), *(scores[k].get(m) for _, m in JOIN_TABLE)] for k in JOIN_ROUTINGS]
+    notes = [
+        "mAP = auc_pr, HIT = hit_rate@1, F1 = f1@1 (micro), each on the row's own set (A = a, V = v, AV = av)",
+        *(f"mu {MU_LABELS[name]} ({name}): {spec.description.removeprefix('vggsounder 1.0 ')}" for name, spec in JOIN_METRICS.items()),
+    ]
+    return {"header": header, "rows": rows, "notes": notes}
+
+
 def join(bench: Any, results: Mapping[str, Any]) -> dict:
     """Score three readings of one model with the official package (setup.md).
 
@@ -354,9 +440,11 @@ def join(bench: Any, results: Mapping[str, Any]) -> dict:
     ``bench.protocol_hash``, one ``eval_hash`` and one ``coverage.eval.ids_sha256``. Different non-null
     ``weights_sha256`` are the warning ``W_JOIN_WEIGHTS``, never a refusal. A ``ref`` that carries the
     (possibly upgraded) record as ``.result`` is read from it, else from ``result.json``. Returns
-    ``{"auc_pr": {a, v, av}, "auc_roc": {...}, "mu": {...}, "n_eval", "protocol_hash", "eval_hash",
-    "eval_ids_sha256", "model", "readings": {routing: reading}, "describe_sha256": {routing: sha},
-    "warnings": [{"code", "message", "where"}], "external": {"vggsounder": version}}`` as fractions.
+    ``{"scores": {set: {metric: value}}`` (``compute_all_results``' own output: the 30 ``PACKAGE_METRICS`` on
+    each of the five ``PACKAGE_SETS``, plus ``mu`` on ``a`` / ``v`` / ``av``), ``"table"`` (the compact view),
+    ``"n_eval", "protocol_hash", "eval_hash", "eval_ids_sha256", "model", "readings": {routing: reading},
+    "describe_sha256": {routing: sha}, "warnings": [{"code", "message", "where"}], "external": {"vggsounder":
+    version}}`` as fractions.
     """
     missing = [k for k in JOIN_ROUTINGS if k not in results]
     if missing:
@@ -425,21 +513,22 @@ def join(bench: Any, results: Mapping[str, Any]) -> dict:
         raise JoinRefused("E_JOIN_POPULATION", "the three readings score different eval rows")
     version = require_vggsounder(bench)  # after the refusals above (exit 2), before scoring (exit 3)
     ids = list(payload)
-    res = official_scores(payload, ids, JOIN_ROUTINGS)
-    out: dict[str, Any] = {
-        m: {k: float(res[k][m]) for k in JOIN_ROUTINGS} for m in ("auc_pr", "auc_roc", "mu")
+    res = official_scores(payload, ids, PACKAGE_SETS)
+    for s in PACKAGE_SETS:
+        _check_package_result(res[s], bench)
+    scores = {s: {k: (float(v) if np.ndim(v) == 0 else v) for k, v in res[s].items()} for s in PACKAGE_SETS}
+    return {
+        "scores": scores,
+        "table": _join_table(scores),
+        "n_eval": len(ids),
+        "protocol_hash": ph,
+        "eval_ids_sha256": ids_sha.pop(),
+        "ids_sha256_scored": hashlib.sha256("\n".join(sorted(ids)).encode()).hexdigest(),
+        "eval_hash": eval_hashes.pop(),
+        "model": _model(recs["av"]),
+        "readings": {k: recs[k].get("reading") or _describe(recs[k]).get("reading") for k in JOIN_ROUTINGS},
+        "describe_sha256": {k: (recs[k].get("bridge") or {}).get("describe_sha256") for k in JOIN_ROUTINGS},
+        "warnings": warnings,
+        "runs": {k: str(d) for k, d in dirs.items()},
+        "external": {"vggsounder": version},
     }
-    out.update(
-        n_eval=len(ids),
-        protocol_hash=ph,
-        eval_ids_sha256=ids_sha.pop(),
-        ids_sha256_scored=hashlib.sha256("\n".join(sorted(ids)).encode()).hexdigest(),
-        eval_hash=eval_hashes.pop(),
-        model=_model(recs["av"]),
-        readings={k: recs[k].get("reading") or _describe(recs[k]).get("reading") for k in JOIN_ROUTINGS},
-        describe_sha256={k: (recs[k].get("bridge") or {}).get("describe_sha256") for k in JOIN_ROUTINGS},
-        warnings=warnings,
-        runs={k: str(d) for k, d in dirs.items()},
-        external={"vggsounder": version},
-    )
-    return out

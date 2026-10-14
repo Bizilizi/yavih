@@ -29,7 +29,7 @@ Packaged benchmarks per readout: `clf` audioset20k, avsync, esc50, fsd50k, in1k,
 | lr / grid | 1e-4, none | 3e-4, (1e-4, 3e-4, 1e-3) | same as seq | same as seq |
 | epochs / batch / patience | 30 / 256 / 5 | 50 / 64 / 10 | 50 / 64 / 10 | 50 / 64 / 10 |
 | metrics (`metrics.list`) | `acc`, `n_eval` (single); `map`, `effective_pos_classes` (multi); `auc_pr_<set>`, `auc_roc_<set>` (multi_sets); `acc_mean`, `acc_pstd`, `acc_per_fold`, `n_folds` (folds); avsync adds `acc_tol1`, `mae_seconds`, `acc_coarse5`, `n_coarse5` | `seg_acc`, `clip_acc`, `seg_acc_boundary`, `n_boundary`, `n_eval` | `d1`, `d2`, `d3`, `absrel`, `rmse`, `n_eval` | `iou_mean`, `acc@0.5`, `acc@0.3`, `center_in_gt`, `n_eval`, `n_excluded_degenerate` |
-| floor (`metrics.floors`) | `acc_floor` = train majority class; `map_floor` = constant train-prevalence score; `auc_pr_<set>_floor` | `seg_acc_floor`, `seg_acc_boundary_floor` = most frequent train segment label (over all 10 seconds) | `d1_floor` = per-pixel mean train log-depth map (0.4403) | `iou_floor` = mean train box in full-frame fractions (strong) |
+| floor (`metrics.floors`) | `acc_floor` = train majority class; `map_floor` = constant train-prevalence score; `auc_pr_<set>_floor`; vggsounder: none | `seg_acc_floor`, `seg_acc_boundary_floor` = most frequent train segment label (over all 10 seconds) | `d1_floor` = per-pixel mean train log-depth map (0.4403) | `iou_floor` = mean train box in full-frame fractions (strong) |
 | control (`metrics.controls`) | avsync: `acc_floor_arm` (same probe on stationary rows), `floor_violated` | — | — | `iou_shuffled` (conditioning tokens deranged across clips), `audio_blind` (McNemar z over paired `acc@0.5` ≤ 3) |
 | intervals (`metrics.ci`) | `acc: binomial` (Wilson); esc50 `acc_mean: pooled_binomial` over 2 000 rows; fsd50k `map: bootstrap_clip` | `seg_acc`, `seg_acc_boundary: bootstrap_clip` (2 000 resamples, seed 0) | `d1: bootstrap_clip` | `iou_mean: bootstrap_clip`; `acc@0.5`, `acc@0.3`, `center_in_gt: binomial` |
 
@@ -69,9 +69,10 @@ vggss_box asks for 0.25; on NYUv2 Resize(224) + CenterCrop(224) covers the targe
 Where the authors ship a scorer, the folder's `probe.py` calls it through
 `yavih.external.require(name, pip, version_pin)` — an assert-import, never a yavih dependency:
 
-- **vggsounder**: every metric (`auc_pr_<set>`, `auc_roc_<set>`, floors, the `mu` join) comes from
-  the `vggsounder` package (`pip install --no-deps vggsounder==1.0`; the exact line is in setup.md "##
-  Dependencies"). yavih has no extra for it.
+- **vggsounder**: every number is the `vggsounder` package's own (`pip install --no-deps
+  vggsounder==1.0`; the exact line is in setup.md "## Dependencies"): its 30 metrics under its own
+  names (`auc_pr`, `hit_rate@1`, `f1@1`, …) per reading, and `mu` in the join. No floor, no chance, no
+  `n_eval` (`metrics.floors: []`). yavih has no extra for it.
 - **nyuv2_depth**: Probe3D's depth metrics when importable at the pinned commit; otherwise the
   folder documents yavih's transcription (README "## In yavih" says which).
 - ave (the authors' accuracy is a few lines of a research repo) and vggss_box (the official VGG-SS
@@ -190,9 +191,12 @@ feature set only. To show two configurations side by side, give them two `model`
   still emits one row for them, its declared choice). `map_floor` = 0.004855; no interval. Numbers on another AS-20K download are not comparable
   (another `eval_hash`); write a/v/av readings.
 - **fsd50k** (`clf`, multi, 200): `map` with a clip-level bootstrap CI; `map_floor` 0.0189.
-- **vggsounder** (`clf`, multi_sets): `audible`, `visible`, `all` label sets scored by the
-  `vggsounder` package; train = 20 000 VGGSound-train single labels (BCE one-hot). `mu` only via
-  `report --join`. Write a/v/av readings, never av alone.
+- **vggsounder** (`clf`, multi_sets): scored by the `vggsounder` package with its routing — reading
+  `a` on the sets `a` (ids `<metric>`) and `a only` (`<metric>_only`), `v` on `v` / `v only`, `av` on
+  `av` (its `*_only` values are `null`); headline `auc_pr` (mAP); the report shows `auc_pr`,
+  `hit_rate@1`, `f1@1` by default, the other 57 in json/csv and `--detail`. Train = 20 000
+  VGGSound-train single labels (BCE one-hot). `mu` (A, V, A∩V) only via `report --join`, which stores
+  the package's whole `compute_all_results` output. Write a/v/av readings, never av alone.
 - **in1k** (`clf`): `acc` on 50 000 val; floor 0.001. **ssv2** (`clf`): 174 classes, eval 24 777.
   **k400** (`clf`): eval 13 492 (every `.mp4` of the Academic-Torrents `val_256`; "internal
   comparison only"). The frame rule is the bridge's declared choice.

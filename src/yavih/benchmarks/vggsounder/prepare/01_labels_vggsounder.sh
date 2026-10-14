@@ -5,7 +5,7 @@
 #
 # The frozen eval rows are VGGSounder(background_music=False) (12 014 videos, the "default without
 # background music" variant) minus 6 videos whose YouTube id is in VGGSound-train. Every vggsounder metric
-# and floor is computed by this package (benchmark.yaml `external`, probe.py), so the PROBE env needs it;
+# is computed by this package (benchmark.yaml `external`, probe.py), so the PROBE env needs it;
 # the model env (bridges) does not. It is not a yavih dependency: install it independently, exactly as
 # below (setup.md "## Dependencies").
 #

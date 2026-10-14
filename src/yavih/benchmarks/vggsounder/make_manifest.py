@@ -22,8 +22,8 @@ order (183 730 rows, clip id ``<ytid>_<start zero-padded to 6 digits>``). The dr
 
 Outputs, byte-identical on re-run: ``manifest.csv.gz`` (gzip mtime 0, no filename; train rows then eval rows),
 ``classes.csv`` (``index,name,mid``: the package's ``index,mid,display_name`` normalized, order untouched) and a
-printed JSON block with every value ``benchmark.yaml`` needs (sha256s, ``manifest.upstream``, ``curation``, chance
-levels). ``--check`` compares against the committed files instead of writing (exit 1 on drift).
+printed JSON block with every value ``benchmark.yaml`` needs (sha256s, ``manifest.upstream``, ``curation``).
+``--check`` compares against the committed files instead of writing (exit 1 on drift).
 """
 
 from __future__ import annotations
@@ -50,7 +50,6 @@ NUM_CLASSES = 309
 # clip id = <ytid>_<start6>: the join key and a path-component guard.
 _CLIP_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}_\d{6}$")
 MANIFEST_COLUMNS = ["clip_id", "split", "label", "labels_a", "labels_v", "labels_av", "rel_video", "rel_audio"]
-SETS = {"audible": ["labels_a", "labels_av"], "visible": ["labels_v", "labels_av"], "all": ["labels_a", "labels_v", "labels_av"]}
 MODALITY_COLUMN = {"A": "labels_a", "V": "labels_v", "AV": "labels_av"}
 # Rows whose stored video or audio is shorter than protocol.clip_seconds (10.0 s), measured over all 32 008 frozen
 # rows by prepare/05_media_facts.py. Nothing is cut or padded for them (curation.short_clips); make_manifest.py does
@@ -226,23 +225,6 @@ def freeze(vggsounder_data: Path, vggsound_csv: Path, media_root: Path | None, c
     manifest_bytes = buf.getvalue().encode("utf-8")
     classes_bytes = classes_csv_bytes(classes)
 
-    # Chance levels: the official scorer scores each set over the eval clips holding >= 1 label of that set, macro
-    # over classes with a positive, so chance = mean class prevalence over that population (= macro AP of a random
-    # or constant score); ROC 0.5.
-    idx = {n: i for i, n, _ in classes}
-    chance: dict[str, float] = {}
-    for set_name, cols in SETS.items():
-        pos = [0] * NUM_CLASSES
-        n_pop = 0
-        for r in eval_rows:
-            labels = {idx[t] for c in cols for t in (r[c].split(";") if r[c] else [])}
-            n_pop += bool(labels)
-            for i in labels:
-                pos[i] += 1
-        with_pos = sum(1 for v in pos if v)
-        chance[f"auc_pr_{set_name}"] = round(sum(v / n_pop for v in pos) / with_pos, 5)
-        chance[f"auc_roc_{set_name}"] = 0.5
-
     listed = {"train": len(drawn), "test": len(eval_rows)}
     curation = {
         "total_upstream": len(package_rows) + len(train_rows),
@@ -277,7 +259,6 @@ def freeze(vggsounder_data: Path, vggsound_csv: Path, media_root: Path | None, c
                 "curation": curation,
             },
             "train_draw": {"cap": cap, "seed": seed, "balance": "class", "eligible_train_rows": len(known), "per_class_min_max": _min_max(drawn)},
-            "metrics_chance": chance,
         },
     }
 

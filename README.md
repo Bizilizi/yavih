@@ -66,7 +66,7 @@ Each benchmark ships as a self-contained folder (`src/yavih/benchmarks/<name>/`)
 | `k400` | Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe) | `clf` | `acc` | torrent | 20 000 train / 13 492 val |
 | `nyuv2_depth` | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | `grid` | `d1` | manual portal | 12 000 train / 654 eval |
 | `ssv2` | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | `clf` | `acc` | manual portal | 20 000 train / 24 777 val |
-| `vggsounder` | VGGSounder audible / visible / all multilabel probe (VGGSound-train probe, 309 classes) | `clf` | `auc_pr_all` | public | 20 000 train / 12 008 test |
+| `vggsounder` | VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes) | `clf` | `auc_pr` | public | 20 000 train / 12 008 test |
 | `vggss_box` | VGG-SS audio-conditioned single-box regression | `box` | `iou_mean` | public | 3 700 train / 914 eval |
 <!-- yavih:bench-table readme end -->
 

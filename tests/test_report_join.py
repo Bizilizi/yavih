@@ -41,7 +41,7 @@ CLIP_IDS = [f"clip{i:02d}" for i in range(N)]
 
 def _vgg_result(reading: str, model: str = "avm", **kw):
     r = make_result(bench="vggsounder", model=model, reading=reading, eval_present=N, eval_nominal=N,
-                    metrics={"auc_pr_all": 0.3, "n_eval": N}, floors={"auc_pr_all_floor": 0.1}, **kw)
+                    metrics={"auc_pr": 0.3, "hit_rate@1": 0.5}, floors={}, **kw)
     # the reading's declared streams: a = audio only, v = video only, av = both (the folder join checks them)
     r["bridge"]["describe"]["input"] = {s: {} for s in _READS.get(reading, ["audio", "video"])}
     return r
@@ -115,8 +115,12 @@ def fake_vggsounder(monkeypatch: pytest.MonkeyPatch):
                      verbose=verbose, payload=payload, model=pkls[0].stem)
         if calls.get("raise_key_error"):
             raise KeyError("a only")
-        res = {m: {k: base + {"a": 0.001, "v": 0.002, "av": 0.003}.get(m, 0.0) for k, base in (("auc_pr", 0.30), ("auc_roc", 0.70), ("mu", 0.05))}
+        names = [f"{m}@{k}" for k in (1, 3, 5, 10) for m in ("f1", "f1_macro", "accuracy", "jaccard", "precision", "recall", "hit_rate")]
+        res = {m: {k: base + {"a": 0.001, "v": 0.002, "av": 0.003}.get(m, 0.0)
+                   for k, base in [*((n, 0.5) for n in names), ("auc_roc", 0.70), ("auc_pr", 0.30)]}
                for m in modalities}
+        for m in ("a", "v", "av"):  # the package's modality confusion, on a / v / av only
+            res[m]["mu"] = 0.05 + {"a": 0.001, "v": 0.002, "av": 0.003}[m]
         return {pkls[0].stem: res}
 
     pkg = types.ModuleType("vggsounder")
@@ -181,14 +185,19 @@ def test_vggsounder_folder_join_calls_official_scorer(three_runs, fake_vggsounde
     with the three readings under their routings, ``compute_all_results`` on it, the version recorded."""
     out = run_join("vggsounder", three_runs, bench=_vgg_bench(), results_root=tmp_path / "results")
     calls = fake_vggsounder
-    assert calls["modalities"] == ["a", "v", "av"] and set(calls["subset_ids"]) == set(CLIP_IDS) and calls["verbose"] is False
-    assert calls["labels_kwargs"] == {"background_music": False, "download_samples": False}
+    assert calls["modalities"] == ["a", "v", "av", "a only", "v only"] and set(calls["subset_ids"]) == set(CLIP_IDS)
+    assert calls["verbose"] is False and calls["labels_kwargs"] == {"background_music": False, "download_samples": False}
     payload = calls["payload"]
     assert sorted(payload) == CLIP_IDS and payload["clip03"]["logits"]["av"] == [3.0] * C and payload["clip03"]["logits"]["a"] == [1.0] * C
     assert not Path(calls["models_path"]).exists()  # tempdir cleaned up
     joined = out["results"]
-    assert joined["mu"] == pytest.approx({"a": 0.051, "v": 0.052, "av": 0.053})
-    assert joined["auc_pr"]["av"] == pytest.approx(0.303) and joined["n_eval"] == N
+    scores = joined["scores"]  # compute_all_results' own output: 5 sets × 30 metrics + mu for a / v / av
+    assert sum(len(d) for d in scores.values()) == 5 * 30 + 3
+    assert {k: scores[k]["mu"] for k in ROUTINGS} == pytest.approx({"a": 0.051, "v": 0.052, "av": 0.053})
+    assert scores["av"]["auc_pr"] == pytest.approx(0.303) and scores["a only"]["hit_rate@1"] == pytest.approx(0.5)
+    assert joined["n_eval"] == N and joined["table"]["rows"][2][0] == "AV"
+    doc = json.loads(Path(out["path"]).read_text())  # the results store keeps the whole output
+    assert doc["results"]["vggsounder:a+v+av"]["scores"]["v only"]["f1@10"] == pytest.approx(0.5)
     assert set(joined["runs"]) == set(ROUTINGS)
     assert out["external"] == {"vggsounder": "1.0"} and joined["external"] == {"vggsounder": "1.0"}
     doc = json.loads(Path(out["path"]).read_text())
@@ -394,3 +403,49 @@ def test_run_join_keeps_the_folders_refusal_code(three_runs, tmp_path: Path):
     with pytest.raises(JoinError) as e:
         run_join("vggsounder", {"a": three_runs["a"]}, bench=bench, write=False)
     assert e.value.code == "E_JOIN_MISSING" and e.value.exit_code == 2
+
+
+# --------------------------------------------------------------------------- what the report shows for vggsounder
+
+
+def _vgg_metrics(reading: str) -> dict:
+    import yaml
+
+    names = yaml.safe_load((VGGSOUNDER_FOLDER / "benchmark.yaml").read_text(encoding="utf-8"))["metrics"]["list"]
+    return {n: (None if reading == "av" and n.endswith("_only") else 0.25) for n in names}
+
+
+def test_vggsounder_report_shows_metrics_table_by_default_and_everything_in_json():
+    """``metrics.table`` (auc_pr, hit_rate@1, f1@1) are the default markdown columns of view 2 and the default rows of
+    view 1; json and csv carry all 60 metrics, ``--detail`` prints them; the av reading's ``_only`` values are null."""
+    from test_report import _records
+    from yavih.report.compare import build_report
+
+    recs = _records(*(make_result(bench="vggsounder", model="avm", reading=k, metrics=_vgg_metrics(k), floors={}) for k in ROUTINGS))
+    rep = build_report(recs)
+    (col,) = rep.columns
+    assert len(col["metrics"]) == 60 and col["table"] == ["auc_pr", "hit_rate@1", "f1@1"] and col["headline"] == "auc_pr"
+    header = next(line for line in rep.text.splitlines() if line.startswith("| model | reading"))
+    assert header == "| model | reading | seeds | cov eval | **auc_pr** | hit_rate@1 | f1@1 | flags |"
+    assert "accuracy@5" not in rep.text and "auc_pr_only" not in rep.text
+    av_row = next(r for r in rep.rows if r["reading"] == "av")
+    assert av_row["metrics"]["auc_pr_only"]["value"] is None and av_row["metrics"]["auc_pr"]["value"] == 0.25
+    js = json.loads(build_report(recs, fmt="json").text)
+    assert all(len(r["metrics"]) == 60 for r in js["rows"]) and len(js["lm_eval"]["avm"]) == 3 * 60 - 30
+    csv_text = build_report(recs, fmt="csv").text
+    assert csv_text.count(",accuracy@5,") == 3 and csv_text.count(",hit_rate@10_only,") == 3
+    detail = build_report(recs, detail=True).text
+    assert "accuracy@5" in detail and "auc_pr_only" in detail
+
+
+def test_join_markdown_shows_the_compact_table_and_everything_under_detail(three_runs, fake_vggsounder):
+    from yavih.report.compare import Report
+    from yavih.report.tables import render_md
+
+    out = run_join("vggsounder", three_runs, bench=_vgg_bench(), write=False)
+    text = render_md(Report(joins={"vggsounder": out}))
+    assert "|  | mAP | HIT | F1 | mu (A, V, A∩V) |" in text and "| AV | 0.303 | 0.503 | 0.503 | 0.053 |" in text
+    assert "mu A∩V (mu_av): mu['av']: Combined confusion rate (both A and V top-1 hit when AV top-1 fails)" in text
+    assert "f1_macro@10" not in text and "a only" not in text
+    full = render_md(Report(joins={"vggsounder": out}, show_all=True))
+    assert "f1_macro@10" in full and "| | a | v | av | a only | v only |" in full

@@ -19,7 +19,8 @@ yavih bench prepare vggsounder 03   # layout and presence check of the staged tr
   (`400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06`), `vggsounder+background-music.csv`
   (`6279875ac93df11d90b1a9d60da7dee89073ce233b0843759856bc72e00396ba`). The frozen eval labels equal
   `VGGSounder(background_music=False)` exactly (the package's `a`, `v`, `all` ground truths equal the manifest's
-  `audible`, `visible`, `all` sets; the folder test pins this).
+  `audible`, `visible`, `all` sets, its `a only` / `v only` / `av` ground truths the `labels_a` / `labels_v` /
+  `labels_av` cells; the folder test pins this).
 - **VGGSound listing** (public, CC BY 4.0): `metadata/vggsound.csv` from
   https://www.robots.ox.ac.uk/~vgg/data/vggsound/vggsound.csv (sha256
   `ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8`, 199 176 rows, no header). Step 02 fetches
@@ -150,9 +151,15 @@ vggsounder: manifest sha ok; labels ok; curation ok; targets_sha_ok=None; derive
 
 A copy with decayed clips reports them as missing; below 95 % eval coverage the probe refuses.
 
-Scoring: `yavih probe run <run>` calls `probe.py` `score()` and `score_floors()`. After probing the three
+Scoring: `yavih probe run <run>` calls `probe.py` `score()` with the run's `describe()["reading"]`, which routes
+exactly as the package does: reading `a` → its logits under pkl key `a`, scored on the sets `a` (ids `<metric>`)
+and `a only` (`<metric>_only`); `v` → `v` and `v only`; `av` → `av` only (its `*_only` ids are `null`). The 30
+metric names are the package's `compare_labels_logits` keys (`f1@k`, `f1_macro@k`, `accuracy@k`, `jaccard@k`,
+`precision@k`, `recall@k`, `hit_rate@k` for k = 1, 3, 5, 10; `auc_roc`, `auc_pr`). After probing the three
 readings of one model, `yavih report build runs/* --join vggsounder a=<run_a> v=<run_v> av=<run_av>` scores them
-together (`auc_pr`, `auc_roc` and `mu` per routing, under the key `vggsounder:a+v+av`). The three runs must be the
+together with `compute_all_results` (the 30 metrics on all five sets plus `mu` for `a`, `v`, `av`, under the key
+`vggsounder:a+v+av`; markdown: rows A / V / AV with mAP, HIT, F1 and mu A / V / A∩V, everything under
+`--detail`). The three runs must be the
 audio-only (`a`), video-only (`v`) and audio-visual (`av`) readings of ONE model (one `model` name) under one
 standard probe, with one `protocol_hash` and `eval_hash`; `join()` refuses anything else (exit 2). Always score the
 full eval population: a sparse `subset_ids` that empties a package ground-truth category raises an opaque pandas
@@ -184,8 +191,8 @@ Bridge-side mistakes that pass validation:
 5. **Dead rows / duplicates.** No two rows share media here: `E_DUPLICATE_CLIPS` on this benchmark means the bridge
    ignores its input. A constant feature on short-audio rows (a model that reads only the padded tail) shows up as
    `E_DEAD_ROWS`.
-6. **Reading the numbers.** The floors equal chance (`auc_pr` 0.00775 audible, 0.00615 visible, 0.00795 all)
-   because AP of a constant score is the class prevalence. `auc_roc` saturates early on 309-way sparse labels (0.9+
-   is ordinary): rank on `auc_pr_*`. An audio-only bridge scoring well on `visible` is expected (AV labels are in
-   both sets), not a leak: read `visible` for video readings, `audible` for audio readings, `all` for `av`. `n_eval`
-   must be 12 008.
+6. **Reading the numbers.** Each reading's `auc_pr` is on a different set (`a`: 11 911 clips, `v`: 10 182, `av`:
+   9 883; `a only`: 6 392, `v only`: 850 — the package scores a set over the clips holding a label of it), so compare a reading with the same reading of another model, and
+   the three readings of one model only through the join. `auc_roc` saturates early on 309-way sparse labels (0.9+
+   is ordinary): rank on `auc_pr`. AP of a constant score is the class prevalence, so a probe that learned nothing
+   scores the mean class prevalence of its set (about 0.008 on `a`).
