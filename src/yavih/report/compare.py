@@ -109,6 +109,8 @@ class Report:
     #: ``report(suite=...)``: the suite completeness appendix ``{name, description, origin, path, results_root, rows,
     #: counts}`` with rows ``{capability, benchmark, reading, model, status, required, note, hint}`` (``yavih.suites``)
     suite: dict[str, Any] | None = None
+    #: ``--detail``: the markdown also shows the metrics outside a column's ``metrics.table`` and a join's full output
+    show_all: bool = False
 
     def to_json(self) -> dict:
         return {
@@ -163,8 +165,9 @@ def _packaged_spec(name: str, load_yaml) -> Any | None:
 
 
 def _bench_meta(name: str) -> dict[str, Any]:
-    """``{headline, min_eval_coverage, protocol_version}`` from the packaged yaml when loadable;
-    ``{}`` otherwise (the report then falls back to defaults and heuristics)."""
+    """``{headline, table, min_eval_coverage, protocol_version, stream_kinds}`` from the packaged yaml when
+    loadable (``table`` only when ``metrics.table`` is declared); ``{}`` otherwise (the report then falls back to
+    defaults and heuristics)."""
     try:
         from yavih.benchmark import load_yaml
 
@@ -176,6 +179,9 @@ def _bench_meta(name: str) -> dict[str, Any]:
         headline = getattr(metrics, "headline", None)
         if headline:
             out["headline"] = str(headline)
+        table = getattr(metrics, "table", None)
+        if table:
+            out["table"] = [str(m) for m in table]
         splits = getattr(spec, "splits", None)
         mec = getattr(splits, "min_eval_coverage", None)
         if isinstance(mec, (int, float)):
@@ -707,7 +713,8 @@ def lm_eval_tables(records: Sequence[dict], aliases: Mapping[str, str] | None = 
     has a value (headline first, disclosures such as ``n_eval`` last). ``eval_hash`` = the 12-hex comparability
     key (two numbers of one benchmark compare iff it is equal); ``value`` = mean over seeds (``std`` and
     ``n_seeds`` when several), ``ci95`` = the interval of the lowest seed (as in the results store) or
-    ``None``, ``floor`` = the value of the floor whose ``floor_of`` names the metric. Each row key shows
+    ``None``, ``floor`` = the value of the floor whose ``floor_of`` names the metric, ``in_table`` = whether the
+    metric is in the benchmark's ``metrics.table`` (all are when it declares none). Each row key shows
     its newest configuration and feature set (:func:`select_newest`). A ``not_applicable`` benchmark prints one
     row with ``metric = —`` and the reason; a non-standard probe is labelled ``(nonstandard)``."""
     from yavih.report.store import metric_info
@@ -749,7 +756,9 @@ def lm_eval_tables(records: Sequence[dict], aliases: Mapping[str, str] | None = 
             metric_names = _ordered_union([list((r.get("metrics") or {}).keys()) for r in ok])
             floor_names = _ordered_union([list((r.get("floors") or {}).keys()) for r in ok])
             info = metric_info(metric_names, floors=floor_names)
-            headline = _pick_headline(metric_names, floor_names, _bench_meta(bench))
+            meta = _bench_meta(bench)
+            headline = _pick_headline(metric_names, floor_names, meta)
+            table = (set(meta.get("table") or ()) & set(metric_names)) or set(metric_names)
             disclosures = [m for m in metric_names if info[m]["kind"] == "disclosure"]
             names = ([headline] if headline in metric_names else []) + [m for m in metric_names if m != headline and m not in disclosures] + [
                 m for m in disclosures if m != headline]
@@ -761,7 +770,7 @@ def lm_eval_tables(records: Sequence[dict], aliases: Mapping[str, str] | None = 
                 ci = (ok[0].get("ci95") or {}).get(m)
                 rows.append({**base, "metric": m, "value": cell["value"], "std": cell["std"], "n_seeds": len(ok),
                              "ci95": list(ci) if isinstance(ci, list) else None, "floor": cell["floor"],
-                             "status": "ok", "reason": None, "headline": m == headline})
+                             "status": "ok", "reason": None, "headline": m == headline, "in_table": m in table})
         out[model] = rows
     return out
 
@@ -785,7 +794,7 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             res = rec["result"]
             moved.setdefault((column_key(res, aliases), bool(res.get("standard")), _model(res), _reading(res)), []).append(res)
     records = [rec for rec in records if not rec.get(MOVED_ASIDE)]
-    rep = Report(fmt=fmt, n_results=len(records))
+    rep = Report(fmt=fmt, n_results=len(records), show_all=bool(detail))
     rep.lm_eval = lm_eval_tables(records, aliases)
 
     # --- columns: (benchmark, eval_hash), standard and non-standard apart
@@ -887,6 +896,8 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             "floors": floor_names,
             "controls": control_names,
             "headline": headline,
+            # the default markdown columns: metrics.table (in metrics order), else (or when none is present) every metric
+            "table": [m for m in metric_names if m in set(meta.get("table") or ())] or list(metric_names),
             "population_differs": False,
             "superseded": any(pv < latest.get(bench, pv) for pv in pvs),
             "n_results": len(results),

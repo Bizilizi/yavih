@@ -567,7 +567,8 @@ def _c_citations(c: _Ctx) -> Iterator[Finding]:
 
 _BLOCKED_IMPORT = r'''
 import importlib.util, os, sys
-for m in sys.argv[2:]:
+sys.path.insert(0, sys.argv[2])  # the yavih the linter runs from, not whichever one -I would find
+for m in sys.argv[3:]:
     sys.modules[m] = None   # `import m` raises ImportError, as in an env without the package
 folder = sys.argv[1]
 for f in ("reader.py", "probe.py"):
@@ -584,7 +585,8 @@ print("ok")
 @_check("imports")
 def _c_imports(c: _Ctx) -> Iterator[Finding]:
     externals = [str(e.get("name")) for e in ((c.raw or {}).get("external") or [])]
-    proc = subprocess.run([sys.executable, "-I", "-c", _BLOCKED_IMPORT, str(c.folder), "torch", *externals],
+    yavih_root = str(Path(__file__).resolve().parents[1])
+    proc = subprocess.run([sys.executable, "-I", "-c", _BLOCKED_IMPORT, str(c.folder), yavih_root, "torch", *externals],
                           capture_output=True, text=True, timeout=120)
     if proc.returncode != 0 or not proc.stdout.strip().endswith("ok"):
         tail = (proc.stderr or "").strip().splitlines()[-1:] or ["?"]

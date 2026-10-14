@@ -163,24 +163,22 @@ def test_train_draw_is_class_balanced(manifest_rows):
     assert len(counts) == 309 and min(counts.values()) == 64 and max(counts.values()) == 65
 
 
-def test_eval_set_populations_and_chance(spec, manifest_rows, classes):
-    """The official scorer scores each set over the clips holding a label of it; chance = mean class
-    prevalence over that population (= AP of a constant score), as benchmark.yaml records."""
-    idx = {r["name"]: i for i, r in enumerate(classes)}
+#: the package's ground-truth sets as manifest cells (``vggsounder.labels.VGGSounder.set_modality``).
+PACKAGE_SETS = {
+    "a": ("labels_a", "labels_av"),
+    "v": ("labels_v", "labels_av"),
+    "av": ("labels_av",),
+    "a only": ("labels_a",),
+    "v only": ("labels_v",),
+    "all": ("labels_a", "labels_v", "labels_av"),
+}
+
+
+def test_eval_set_populations(manifest_rows):
+    """The official scorer scores each set over the clips holding a label of it (setup.md gotcha 6)."""
     ev = [r for r in manifest_rows if r["split"] == "test"]
-    pops = {}
-    for name, cols in SETS.items():
-        y = np.zeros((len(ev), 309), bool)
-        for i, r in enumerate(ev):
-            for c in cols:
-                for t in _cells(r[c]):
-                    y[i, idx[t]] = True
-        pop = y[y.any(axis=1)]
-        pops[name] = len(pop)
-        assert (pop.sum(0) > 0).all()  # every class has a positive in every set
-        assert round(float(pop.mean(0).mean()), 5) == spec["metrics"]["chance"][f"auc_pr_{name}"]
-        assert spec["metrics"]["chance"][f"auc_roc_{name}"] == 0.5
-    assert pops == {"audible": 11911, "visible": 10182, "all": 12008}
+    pops = {name: sum(1 for r in ev if any(r[c] for c in cols)) for name, cols in PACKAGE_SETS.items()}
+    assert pops == {"a": 11911, "v": 10182, "av": 9883, "a only": 6392, "v only": 850, "all": 12008}
 
 
 def test_curation_sums(spec, manifest_rows):
@@ -203,10 +201,16 @@ def test_curation_sums(spec, manifest_rows):
 
 def test_metric_names_resolve(spec, probe_mod):
     F.assert_metric_names_resolve(HERE, spec)
-    names = [*spec["metrics"]["list"], *spec["metrics"]["floors"], *spec["metrics"]["controls"]]
-    assert set(probe_mod.METRICS) == {n for n in names if n.startswith("auc_")}
-    assert spec["metrics"]["headline"] == "auc_pr_all"
-    assert spec["metrics"]["ci"] == {} and spec["metrics"]["controls"] == []
+    m = spec["metrics"]
+    # only the package's own values: its 30 names on the reading's set and on its exclusive set, nothing else
+    assert list(probe_mod.METRICS) == [*probe_mod.PACKAGE_METRICS, *(n + "_only" for n in probe_mod.PACKAGE_METRICS)]
+    assert sorted(m["list"]) == sorted(probe_mod.METRICS) and len(m["list"]) == 60
+    assert m["floors"] == [] and m["controls"] == [] and m["chance"] == {} and m["ci"] == {}
+    assert m["headline"] == "auc_pr" and m["table"] == ["auc_pr", "hit_rate@1", "f1@1"]
+    assert len(probe_mod.PACKAGE_METRICS) == 30
+    assert {s.external for s in probe_mod.METRICS.values()} == {"vggsounder"}
+    for name, s in probe_mod.METRICS.items():
+        assert repr(name.removesuffix("_only")) in s.description and "vggsounder 1.0" in s.description
 
 
 # ----------------------------------------------------------------------------- docs
@@ -343,17 +347,16 @@ def test_probe_imports_without_torch_and_package(monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", None)
     monkeypatch.setitem(sys.modules, "vggsounder", None)
     mod = _load("vggsounder_probe_isolated", HERE / "probe.py")
-    assert mod.SET_TO_PACKAGE == {"audible": "a", "visible": "v", "all": "all"}
+    assert mod.READING_SETS == {"a": ("a", "a only"), "v": ("v", "v only"), "av": ("av", None)}
     assert mod.PROTOCOL_KEYS == frozenset()
-    for name, m in mod.METRICS.items():
+    for name, m in {**mod.METRICS, **mod.JOIN_METRICS}.items():
         assert m.name == name and m.readouts == frozenset({"clf"}) and m.shape == "scalar"
-        assert m.kind == ("floor" if name.endswith("_floor") else "metric")
-        if hasattr(m, "external"):
-            assert m.external == "vggsounder"
-        if hasattr(m, "floor_of") and name.endswith("_floor"):
-            assert m.floor_of == (name.removesuffix("_floor"),)
+        assert m.kind == "metric" and m.external == "vggsounder" and m.floor_of == ()
         with pytest.raises(RuntimeError, match="official vggsounder package"):
             m.fn(None, None, None, None)
+    # mu: the package's definitions verbatim; display labels A / V / A∩V
+    assert "both A and V top-1 hit when AV top-1 fails" in mod.JOIN_METRICS["mu_av"].description
+    assert mod.MU_LABELS == {"mu_a": "A", "mu_v": "V", "mu_av": "A∩V"}
     # the assert-import: absent package → not ready, message carries the pip line
     with pytest.raises(Exception, match=re.escape("pip install --no-deps vggsounder==1.0")) as exc:
         mod.require_vggsounder()
@@ -492,7 +495,7 @@ def test_join_reads_the_handed_over_record(tmp_path, probe_mod):
 
 def test_package_ground_truth_equals_label_sets(manifest_rows):
     """setup.md: the package's a / v / all ground truth equals the manifest's audible / visible / all sets
-    on the eval population (and its AV-only `av` set is labels_av alone, which is why `all` maps to `all`)."""
+    on the eval population, and its `av` / `a only` / `v only` sets the labels_av / labels_a / labels_v cells."""
     labels_mod = pytest.importorskip("vggsounder.labels")
     import vggsounder
 
@@ -502,15 +505,11 @@ def test_package_ground_truth_equals_label_sets(manifest_rows):
     ids = {r["clip_id"] for r in ev}
     vs = labels_mod.VGGSounder(background_music=False, download_samples=False)
     assert len(vs) == 12014 and ids <= set(vs.keys())
-    mine = {
-        name: {r["clip_id"]: {t for c in cols for t in _cells(r[c])} for r in ev}
-        for name, cols in SETS.items()
-    }
-    mine["av_only"] = {r["clip_id"]: set(_cells(r["labels_av"])) for r in ev}
-    for name, key in (("audible", "a"), ("visible", "v"), ("all", "all"), ("av_only", "av")):
+    for key, cols in PACKAGE_SETS.items():
+        mine = {r["clip_id"]: {t for c in cols for t in _cells(r[c])} for r in ev}
         vs.set_modality(key)
         pkg = {v.video_id: set(v.labels) for v in vs if v.video_id in ids}
-        assert pkg == {k: s for k, s in mine[name].items() if s}, name
+        assert pkg == {k: s for k, s in mine.items() if s}, key
 
 
 def _pinned_package_or_skip(probe_mod):
@@ -525,15 +524,188 @@ def test_score_with_official_package(manifest_rows, spec, probe_mod):
     ev_ids = [r["clip_id"] for r in manifest_rows if r["split"] == "test"]
     bench = _StubBench(ev_ids)
     rows = np.arange(len(ev_ids))
-    out = probe_mod.score(
-        bench, "test", rows, np.random.default_rng(0).standard_normal((len(ev_ids), 309))
-    )
-    assert set(out) == {n for n in spec["metrics"]["list"] if n.startswith("auc_")}
-    for k, v in out.items():
-        assert (0.4 < v < 0.6) if "roc" in k else (0.0 < v < 0.02), (k, v)
-    floors = probe_mod.score_floors(bench, "test", rows, np.full(309, 1 / 309))
-    for s in SETS:
-        assert round(floors[f"auc_pr_{s}_floor"], 5) == spec["metrics"]["chance"][f"auc_pr_{s}"]
+    rng = np.random.default_rng(0)
+    logits = {k: rng.standard_normal((len(ev_ids), 309)) for k in ("a", "v", "av")}
+    per_reading = {k: probe_mod.score(bench, "test", rows, logits[k], reading=k) for k in logits}
+    for k, out in per_reading.items():
+        assert set(out) == set(spec["metrics"]["list"])
+        assert all(v is None for n, v in out.items() if n.endswith("_only")) == (k == "av")
+        for n in ("auc_roc", "auc_pr"):
+            assert (0.4 < out[n] < 0.6) if n == "auc_roc" else (0.0 < out[n] < 0.03), (k, n, out[n])
+    # the per-reading scores are the package's compute_all_results numbers for the same logits
+    payload = {c.removesuffix(".mp4"): {"logits": {k: logits[k][i].tolist() for k in logits}} for i, c in enumerate(ev_ids)}
+    full = probe_mod.official_scores(payload, ev_ids, probe_mod.PACKAGE_SETS)
+    for k, (own, only) in probe_mod.READING_SETS.items():
+        for m in probe_mod.PACKAGE_METRICS:
+            assert per_reading[k][m] == pytest.approx(full[own][m])
+            if only is not None:
+                assert per_reading[k][m + "_only"] == pytest.approx(full[only][m])
+    assert {"a", "v", "av"} <= {s for s, d in full.items() if "mu" in d}
+
+
+# ----------------------------------------------------------------------------- probe.py with a fake package
+
+
+_SET_CODE = {"a": 1.0, "v": 2.0, "av": 3.0, "a only": 4.0, "v only": 5.0, "all": 6.0}
+
+
+class _Frame:
+    """The two DataFrame operations the package's per-set step uses on ``load_test_predictions`` output."""
+
+    def __init__(self, **cols):
+        self.cols = dict(cols)
+
+    def drop(self, columns, inplace=False):
+        assert inplace
+        for c in columns:
+            del self.cols[c]
+
+
+@pytest.fixture
+def fake_package(monkeypatch):
+    """A fake ``vggsounder`` 1.0 with the package's routing semantics: ``load_test_predictions`` reads
+    ``logits["a"]`` for ``a only`` and ``logits["v"]`` for ``v only`` (KeyError for an absent key);
+    ``compare_labels_logits`` records (ground-truth set, logits key) and returns every package metric as
+    ``set code + metric index / 1000``; ``compute_all_results`` adds ``mu`` for a / v / av."""
+    from yavih import external
+
+    calls: list[tuple[str, str]] = []
+
+    class VGGSounder:
+        def __init__(self, **kw):
+            self.kw, self.modality = kw, None
+
+        def get_all_labels(self):
+            return [f"c{i}" for i in range(309)]
+
+        def set_modality(self, modality):
+            self.modality = modality
+
+    def get_gt_for_modality(vs, modality, subset_ids=None):
+        vs.set_modality(modality)
+        return _Frame(set=modality, ids=subset_ids)
+
+    def load_test_predictions(model, modality):
+        key = {"a only": "a", "v only": "v"}.get(modality, modality)
+        with open(model, "rb") as fh:
+            payload = __import__("pickle").load(fh)
+        return _Frame(labels=None, logits={i: d["logits"][key] for i, d in payload.items()}, modality=key)
+
+    def compare_labels_logits(gt, logits_df, classes, ks=(1, 3, 5, 10)):
+        assert "labels" not in logits_df.cols and len(classes) == 309
+        calls.append((gt.cols["set"], logits_df.cols["modality"]))
+        names = [f"{m}@{k}" for k in ks for m in ("f1", "f1_macro", "accuracy", "jaccard", "precision", "recall", "hit_rate")]
+        return {n: _SET_CODE[gt.cols["set"]] + i / 1000 for i, n in enumerate([*names, "auc_roc", "auc_pr"])}
+
+    def compute_all_results(models_path, subset_ids=None, modalities=(), vggsounder=None, verbose=True):
+        (pkl,) = Path(models_path).glob("*.pkl")
+        res = {}
+        for m in modalities:
+            res[m] = compare_labels_logits(get_gt_for_modality(vggsounder, m, subset_ids), _strip(load_test_predictions(str(pkl), m)),
+                                           vggsounder.get_all_labels())
+        for m in ("a", "v", "av"):
+            res[m]["mu"] = {"a": 0.11, "v": 0.22, "av": 0.33}[m]
+        return {pkl.stem: res}
+
+    def _strip(frame):
+        frame.drop(columns=["labels"], inplace=True)
+        return frame
+
+    pkg = types.ModuleType("vggsounder")
+    bench_mod = types.ModuleType("vggsounder.benchmark")
+    labels_mod = types.ModuleType("vggsounder.labels")
+    for f in (get_gt_for_modality, load_test_predictions, compare_labels_logits, compute_all_results):
+        setattr(bench_mod, f.__name__, f)
+    labels_mod.VGGSounder = VGGSounder
+    pkg.benchmark, pkg.labels = bench_mod, labels_mod
+    for name, mod in (("vggsounder", pkg), ("vggsounder.benchmark", bench_mod), ("vggsounder.labels", labels_mod)):
+        monkeypatch.setitem(sys.modules, name, mod)
+    import importlib.metadata as md
+
+    real_version = md.version
+    monkeypatch.setattr(md, "version", lambda name: "1.0" if name == "vggsounder" else real_version(name))
+    external.reset()
+    yield calls
+    external.reset()
+
+
+def _value(set_name: str, metric: str, probe_mod) -> float:
+    return _SET_CODE[set_name] + probe_mod.PACKAGE_METRICS.index(metric) / 1000
+
+
+def test_score_ids_per_reading(spec, probe_mod, fake_package):
+    """Reading a / v: exactly the 30 + 30 ids, all values; reading av: the 30 ids with values and the 30
+    ``_only`` ids None (not applicable). The id set never depends on the reading."""
+    ids = [f"c{i}_000000" for i in range(5)]
+    bench, rows, out = _StubBench(ids), np.arange(5), np.zeros((5, 309))
+    listed = set(spec["metrics"]["list"])
+    for reading in ("a", "v"):
+        got = probe_mod.score(bench, "test", rows, out, reading=reading)
+        assert set(got) == listed and len(got) == 60 and all(isinstance(v, float) for v in got.values())
+    got = probe_mod.score(bench, "test", rows, out, reading="av")
+    assert set(got) == listed
+    assert {n for n, v in got.items() if v is not None} == set(probe_mod.PACKAGE_METRICS)
+    with pytest.raises(ValueError, match="reading"):
+        probe_mod.score(bench, "test", rows, out, reading="rgb")
+    with pytest.raises(ValueError, match="reading"):
+        probe_mod.score(bench, "test", rows, out)
+
+
+def test_score_routes_each_reading_to_its_own_sets_only(probe_mod, fake_package):
+    """The logits of a reading go under its own pkl key and are scored only on its sets: a → a, a only;
+    v → v, v only; av → av. An audio reading is never scored on a visible set."""
+    ids = [f"c{i}_000000" for i in range(3)]
+    bench, rows = _StubBench(ids), np.arange(3)
+    expect = {"a": [("a", "a"), ("a only", "a")], "v": [("v", "v"), ("v only", "v")], "av": [("av", "av")]}
+    for reading, calls in expect.items():
+        fake_package.clear()
+        got = probe_mod.score(bench, "test", rows, np.zeros((3, 309)), reading=reading)
+        assert fake_package == calls
+        own, only = probe_mod.READING_SETS[reading]
+        assert got["hit_rate@1"] == _value(own, "hit_rate@1", probe_mod) and got["auc_pr"] == _value(own, "auc_pr", probe_mod)
+        if only is not None:
+            assert got["f1@10_only"] == _value(only, "f1@10", probe_mod)
+
+
+def test_score_through_the_driver_hands_over_the_reading(spec, probe_mod, fake_package):
+    """``evaluate_metrics`` with the folder's specs and ``ReadoutContext.scorer``: the hook receives the run's
+    reading; the av reading's ``_only`` metrics are recorded as null."""
+    from yavih.readouts.base import ReadoutContext, evaluate_metrics
+
+    ids = [f"c{i}_000000" for i in range(4)]
+    specs = {"metrics": {n: probe_mod.METRICS[n] for n in spec["metrics"]["list"]}, "floors": {}, "controls": {}}
+    for reading in ("a", "av"):
+        ctx = types.SimpleNamespace(probe_mod=probe_mod, bench=_StubBench(ids), reading=reading)
+        scorer = ReadoutContext.scorer(ctx, ["test"], np.arange(4), None)
+        blocks = evaluate_metrics(specs, outputs=np.zeros((4, 309)), targets=None, protocol={}, split_meta={},
+                                  floor_outputs=None, scorer=scorer)
+        assert list(blocks["metrics"]) == spec["metrics"]["list"] and blocks["floors"] == {}
+        assert blocks["metrics"]["auc_pr"] == _value(reading, "auc_pr", probe_mod)
+        assert (blocks["metrics"]["auc_pr_only"] is None) == (reading == "av")
+
+
+def test_join_returns_the_full_package_output(tmp_path, probe_mod, fake_package):
+    """``join``: compute_all_results on the five sets — 5 × 30 metrics + mu for a / v / av — and the compact
+    table rows A / V / AV with mAP, HIT, F1 and mu (A / V / A∩V)."""
+    rng = np.random.default_rng(3)
+    bench = _StubBench([f"c{i}" for i in range(4)])
+    runs = {k: _fake_result(tmp_path, k, bench.protocol_hash, "s", 4, rng) for k in ("a", "v", "av")}
+    out = probe_mod.join(bench, runs)
+    scores = out["scores"]
+    assert list(scores) == list(probe_mod.PACKAGE_SETS)
+    n_values = sum(len(d) for d in scores.values())
+    assert n_values == 5 * 30 + 3 and {s for s, d in scores.items() if "mu" in d} == {"a", "v", "av"}
+    for s in probe_mod.PACKAGE_SETS:
+        assert set(scores[s]) - {"mu"} == set(probe_mod.PACKAGE_METRICS)
+    # each set scored from the logits key the package reads it from
+    assert sorted(fake_package) == sorted([("a", "a"), ("v", "v"), ("av", "av"), ("a only", "a"), ("v only", "v")])
+    table = out["table"]
+    assert table["header"] == ["", "mAP", "HIT", "F1", "mu (A, V, A∩V)"]
+    assert [r[0] for r in table["rows"]] == ["A", "V", "AV"]
+    assert table["rows"][2][1:] == [_value("av", "auc_pr", probe_mod), _value("av", "hit_rate@1", probe_mod),
+                                    _value("av", "f1@1", probe_mod), 0.33]
+    assert any("A∩V (mu_av)" in n and "both A and V top-1 hit when AV top-1 fails" in n for n in table["notes"])
+    assert out["external"] == {"vggsounder": "1.0"} and out["n_eval"] == 4
 
 
 # ----------------------------------------------------------------------------- core-backed

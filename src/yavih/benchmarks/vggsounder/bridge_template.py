@@ -6,8 +6,9 @@ staged; an unfilled copy fails bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FE
 
 A bridge file serves one benchmark; each matrix entry (file + args) is one reading of one model. VGGSounder
 scores three readings — audio only (``a``), video only (``v``), both (``av``) — so register this file three
-times in the matrix with ``--arg reading=a|v|av`` (or write three files) and give them ONE ``model`` name. Each reading is probed and scored on all three
-label sets; ``yavih report build --join vggsounder a=RUN v=RUN av=RUN`` then scores the three readings
+times in the matrix with ``--arg reading=a|v|av`` (or write three files) and give them ONE ``model`` name. Each reading is probed and scored by
+the package on its own ground-truth sets (``a`` + ``a only``, ``v`` + ``v only``, ``av``), so ``describe()["reading"]``
+must be ``a``, ``v`` or ``av``; ``yavih report build --join vggsounder a=RUN v=RUN av=RUN`` then scores the three readings
 together with the official package (``mu``).
 
 Preprocessing source (paste the model's own eval-time input pipeline here, verbatim, with repo, file,

@@ -17,7 +17,7 @@ benchmark's README (description, citation, the protocol in yavih).
 | [k400](k400/README.md) | Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe) | clf | video | torrent (obtain: auto) |
 | [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
 | [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
-| [vggsounder](vggsounder/README.md) | VGGSounder audible / visible / all multilabel probe (VGGSound-train probe, 309 classes) | clf | video + audio | public (obtain: needs-data-owner) |
+| [vggsounder](vggsounder/README.md) | VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes) | clf | video + audio | public (obtain: needs-data-owner) |
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 <!-- yavih:bench-table index end -->
 

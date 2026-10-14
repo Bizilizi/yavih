@@ -84,6 +84,11 @@ Rules:
 - For `ok`, `metrics` holds exactly `metrics.list`, `floors` exactly `metrics.floors`, `controls` exactly
   `metrics.controls`, and `ci95` one `[lo, hi]` per non-null `metrics.ci` entry. Coverage and probe facts are
   separate blocks and never named in `metrics.list`.
+- A metric value is `null` only when the folder's external scorer declares it not applicable to this
+  configuration (it returns `None` for it; vggsounder's `*_only` metrics for the `av` reading, which has no
+  exclusive label set). A registry metric never returns `null`: a missing value refuses the result.
+- A benchmark may declare `metrics.floors: []`: its results then carry `floors: {}` and the report shows no floor
+  and greys no row for it (vggsounder, whose numbers are all the authors' package's).
 - `features.rules_checked` records a bridge's opt-out (`"custom"`); nothing flags it.
 - `waived` is recorded and marked by the report, never part of a key, never a penalty.
 - A result with `sample` never reaches the results store (the probe skips it whatever `--results` says), so
@@ -213,7 +218,10 @@ is `missing` with the note `partial only`.
 
 ### Formats and detail
 
-- `md`: view 1, then view 2.
+- `md`: view 1, then view 2. A benchmark that declares `metrics.table` shows only those metrics by default:
+  they are view 2's metric columns and view 1's metric rows; every other metric of `metrics.list` is in csv, json
+  (`columns[].metrics`, the rows' `metrics`, view 1 rows with `in_table: false`) and in md under `--detail`.
+  Without `metrics.table` every metric is shown (`columns[].table` = `columns[].metrics`).
 - `csv`: view 2 in long format, one line per (row, metric) plus one per control, with `benchmark`, `eval_hash`,
   `protocol_hash`, `probe_hash`, `model`, `reading`, `describe_sha256`, `features_fingerprint`, `bridge_name`,
   `status`, `seed`, `n_seeds`, coverage, `metric`, `kind`, `value`, `std`, `floor`, `ci_lo`, `ci_hi`,
@@ -222,7 +230,8 @@ is `missing` with the note `partial only`.
 - csv carries view 2 only: the superseded, join, warning and suite completeness sections are in md and json.
 - `--detail`: per row, the shown configuration's `describe()` and `describe_sha256`, `rules_checked`, the
   older configurations and feature sets with their `describe()` diff, seeds and headline values, and the codes
-  of the shown results' recorded warnings.
+  of the shown results' recorded warnings; in md also the metrics outside `metrics.table` and each join's full
+  output.
 
 ### Report warnings
 
@@ -249,7 +258,12 @@ external packages are checked as in a probe (exit 3). The folder adds its own re
 `E_JOIN_ROUTING` when a reading's bridge reads other streams than `a`/`v`/`av` imply, `E_JOIN_PROBE` for
 different or non-standard probe configs). Different non-null `weights_sha256` among the readings are
 `W_JOIN_WEIGHTS`, recorded, never a refusal. The joined numbers are printed and written to the model's results
-directory under the key `<benchmark>:a+v+av`.
+directory under the key `<benchmark>:a+v+av`: the hook's whole output is stored. When that output carries
+`table` (`{header, rows, notes}`, the folder's compact view), md prints that table and moves the rest under
+`--detail`; json always has everything. vggsounder's join stores the package's `compute_all_results` output
+under `scores` (`{set: {metric: value}}`: 30 metrics on each of `a`, `v`, `av`, `a only`, `v only`, plus `mu` on
+`a`, `v`, `av`) and prints rows A / V / AV with mAP (`auc_pr`), HIT (`hit_rate@1`), F1 (`f1@1`) and mu, labelled
+A, V and A∩V for the package keys `a`, `v` and `av`.
 
 ### Suite completeness
 

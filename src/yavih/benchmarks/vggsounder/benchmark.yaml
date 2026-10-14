@@ -4,7 +4,7 @@
 schema_version: 2
 name: vggsounder
 aliases: []
-title: VGGSounder audible / visible / all multilabel probe (VGGSound-train probe, 309 classes)
+title: VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes)
 readout: clf
 protocol_version: 1
 header:
@@ -20,7 +20,7 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 8bdd806396d11325fc405415ed6efbb5433296519982537a97943e0e436d9f79
+    protocol_hash: 079179bbf3e15d97aace40b26e3922217097d4ac2affbfa1870aacada94943f5
     input_hash: bc13c858671db9a1aa8cb5b7e66591e6fe43b627bcbdc720125390feccf01a80
     supersedes: []
 
@@ -165,9 +165,10 @@ external:
     pip: "pip install --no-deps vggsounder==1.0"
     version_pin: "1.0"
     used_for: >-
-      auc_pr / auc_roc against the package's a / v / all ground truth (= audible / visible / all), their
-      floors, and the cross-reading join with mu (report --join vggsounder); needs pandas, scikit-learn
-      and tqdm in the probe env (not installed by --no-deps)
+      every reported number: per reading, the package's 30 compare_labels_logits metrics on its ground
+      truth sets (a: a + a only, v: v + v only, av: av), and the cross-reading join (compute_all_results on
+      all five sets, with mu; report --join vggsounder); needs pandas, scikit-learn and tqdm in the probe
+      env (not installed by --no-deps)
 
 protocol:
   clip_seconds: 10.0
@@ -178,18 +179,22 @@ protocol:
     drawn_from: "VGGSound vggsound.csv (sha256 ed9fdeed…), the 183 730 split == train rows in file order, class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0"
   views: none
 
-metrics:
-  headline: auc_pr_all
-  list: [auc_pr_audible, auc_roc_audible, auc_pr_visible, auc_roc_visible, auc_pr_all, auc_roc_all, n_eval]
-  floors: [auc_pr_audible_floor, auc_pr_visible_floor, auc_pr_all_floor]
+metrics:   # every value is the vggsounder package's own (probe.py); `<metric>` = the reading's set, `<metric>_only` = its exclusive set
+  headline: auc_pr
+  list: [auc_pr, hit_rate@1, f1@1, auc_roc, f1_macro@1, accuracy@1, jaccard@1, precision@1, recall@1,
+         f1@3, f1_macro@3, accuracy@3, jaccard@3, precision@3, recall@3, hit_rate@3,
+         f1@5, f1_macro@5, accuracy@5, jaccard@5, precision@5, recall@5, hit_rate@5,
+         f1@10, f1_macro@10, accuracy@10, jaccard@10, precision@10, recall@10, hit_rate@10,
+         auc_pr_only, hit_rate@1_only, f1@1_only, auc_roc_only, f1_macro@1_only, accuracy@1_only, jaccard@1_only,
+         precision@1_only, recall@1_only,
+         f1@3_only, f1_macro@3_only, accuracy@3_only, jaccard@3_only, precision@3_only, recall@3_only, hit_rate@3_only,
+         f1@5_only, f1_macro@5_only, accuracy@5_only, jaccard@5_only, precision@5_only, recall@5_only, hit_rate@5_only,
+         f1@10_only, f1_macro@10_only, accuracy@10_only, jaccard@10_only, precision@10_only, recall@10_only,
+         hit_rate@10_only]
+  table: [auc_pr, hit_rate@1, f1@1]
+  floors: []
   controls: []
-  chance:
-    auc_pr_audible: 0.00775
-    auc_roc_audible: 0.5
-    auc_pr_visible: 0.00615
-    auc_roc_visible: 0.5
-    auc_pr_all: 0.00795
-    auc_roc_all: 0.5
+  chance: {}
   ci: {}
 
 readout_params: {}

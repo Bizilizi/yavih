@@ -137,6 +137,8 @@ class MetricSpec:
     #: folder metrics: the ``metrics.ci`` kinds this metric admits (``binomial`` / ``pooled_binomial`` need a per-row
     #: 0/1 ``per_clip``, ``bootstrap_clip`` any ``per_clip``); registry metrics use ``CI_ADMISSIBLE``.
     ci: frozenset[str] = frozenset()
+    #: folder metrics: one line naming what computes it (an external package's own metric name and definition)
+    description: str = field(default="", compare=False)
 
     def __post_init__(self) -> None:
         if self.shape not in SHAPES:
