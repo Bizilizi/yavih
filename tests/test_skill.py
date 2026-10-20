@@ -470,10 +470,10 @@ def _yaml_blocks(text: str) -> list[str]:
     return re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
 
 
-@pytest.mark.parametrize("doc", ["references/slurm.md", "README.md"])
+@pytest.mark.parametrize("doc", ["references/slurm.md", "docs/quickstart.md"])
 def test_matrix_examples_parse_with_plan_build(tmp_path, doc):
     """The ``matrix.yaml`` examples of the skill (``references/slurm.md`` "matrix.yaml", which SKILL.md points to) and
-    README.md are accepted by ``plan build``'s parser."""
+    docs/quickstart.md are accepted by ``plan build``'s parser."""
     from yavih.plan.matrix import load_matrix
 
     path = SKILL_ROOT / doc if doc.startswith("references/") else REPO / doc
@@ -516,12 +516,12 @@ def test_in1k_image_as_video_gotcha_says_top_level():
 
 
 def test_readme_example_reading_uses_the_benchmarks_vocabulary():
-    """The README's vggsounder bridge declares ``reading`` in vggsounder's {a, v, av}."""
+    """The quickstart's vggsounder bridge declares ``reading`` in vggsounder's {a, v, av}."""
     from yavih.benchmarks import packaged_folder
 
-    readme = REPO / "README.md"
+    readme = REPO / "docs" / "quickstart.md"
     if not readme.is_file():
-        pytest.skip("README.md not available")
+        pytest.skip("docs/quickstart.md not available")
     m = re.search(r'"reading": "([a-z]+)"', readme.read_text(encoding="utf-8"))
     assert m and m.group(1) == "v"
     assert "`describe()[\"reading\"]` ∈ {`a`, `v`, `av`}" in (packaged_folder("vggsounder") / "setup.md").read_text(encoding="utf-8")
