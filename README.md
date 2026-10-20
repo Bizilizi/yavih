@@ -15,7 +15,7 @@
 yavih brings the benchmarks, the data recipes, the probes and the guarantees that your numbers mean the same thing
 as everyone else's.
 
-<p align="center"><img src="assets/readme/agent.gif" alt="An agent benchmarks a model with yavih from one sentence" width="90%"></p>
+<p align="center"><img src="assets/readme/agent.gif" alt="An agent benchmarks a model with yavih from one sentence" width="100%"></p>
 
 ## Get started in one sentence
 
@@ -80,7 +80,7 @@ yavih suite list               # default, minimal, and any suite you define
 yavih bench list               # every benchmark: task, size, how to get the data, what's ready on your machine
 ```
 
-<p align="center"><img src="assets/readme/library.gif" alt="The benchmark library grouped by capability" width="90%"></p>
+<p align="center"><img src="assets/readme/library.gif" alt="The benchmark library grouped by capability" width="100%"></p>
 
 <!-- yavih:bench-table capabilities begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
 <!-- yavih:bench-table capabilities end -->
@@ -103,7 +103,7 @@ That frozen protocol is summarised in one short hash, the `eval_hash`. Same hash
 probe. The report only ever puts numbers with the same hash in one column; change a clip or a metric and you get a
 new hash, never a quietly different number.
 
-<p align="center"><img src="assets/readme/hash.gif" alt="Matching hashes make results comparable; a changed protocol gets its own hash" width="90%"></p>
+<p align="center"><img src="assets/readme/hash.gif" alt="Matching hashes make results comparable; a changed protocol gets its own hash" width="100%"></p>
 
 ## Add your benchmark
 
@@ -116,7 +116,7 @@ step by step — scaffold the folder, freeze the manifest from the public releas
 tests, render the header — then runs a synthetic trial and a fresh-agent
 [trial run](https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md) before opening the pull request.
 
-<p align="center"><img src="assets/readme/contribute.gif" alt="An agent adds a new benchmark folder and opens a pull request" width="90%"></p>
+<p align="center"><img src="assets/readme/contribute.gif" alt="An agent adds a new benchmark folder and opens a pull request" width="100%"></p>
 
 ## How it works
 
