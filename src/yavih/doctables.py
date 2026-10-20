@@ -1,7 +1,7 @@
 """Benchmark tables generated from the folders: the folder is the single source of truth.
 
 Every list of the packaged benchmarks is generated: in the repo ``README.md`` (the capability table), the controls
-bullet of ``docs/quickstart.md``, the
+bullet of https://github.com/Bizilizi/yavih/blob/main/docs/quickstart.md, the
 "Packaged benchmarks" table of https://github.com/Bizilizi/yavih/blob/main/docs/benchmark-folder.md, the index
 ``yavih/benchmarks/README.md`` (the tables per capability, the ``setup.md`` links) and the skill's
 ``references/data.md`` (the obtainability table, the ``prepare_only`` roots) and ``references/readouts.md`` (the
