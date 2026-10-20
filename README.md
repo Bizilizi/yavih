@@ -83,10 +83,19 @@ yavih bench list               # every benchmark: task, size, how to get the dat
 <p align="center"><img src="assets/readme/library.gif" alt="The benchmark library grouped by capability" width="100%"></p>
 
 <!-- yavih:bench-table capabilities begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
+| capability | benchmarks | examples |
+|---|---|---|
+| `audio` | 2 | [esc50](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/esc50/README.md), [fsd50k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/fsd50k/README.md) |
+| `visual` | 4 | [in1k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/in1k/README.md), [k400](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/k400/README.md), [nyuv2_depth](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/nyuv2_depth/README.md), [ssv2](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ssv2/README.md) |
+| `audio-visual` | 5 | [audioset20k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audioset20k/README.md), [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md), [vggsounder](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/vggsounder/README.md) + 1 more |
+| `temporal` | 2 | [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md) |
+| `spatial` | 2 | [nyuv2_depth](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/nyuv2_depth/README.md), [vggss_box](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/vggss_box/README.md) |
+
+[All 11 benchmarks → the index](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/README.md)
 <!-- yavih:bench-table capabilities end -->
 
 Each benchmark is one self-contained folder with its own page: the paper, how to get the data, and exactly how yavih
-runs it. See the [full index](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/README.md).
+runs it.
 
 ## Numbers you can trust
 

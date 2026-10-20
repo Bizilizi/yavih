@@ -1,6 +1,7 @@
 """Benchmark tables generated from the folders: the folder is the single source of truth.
 
-Every list of the packaged benchmarks is generated: in the repo ``README.md`` (the table, the controls bullet), the
+Every list of the packaged benchmarks is generated: in the repo ``README.md`` (the capability table), the controls
+bullet of ``docs/quickstart.md``, the
 "Packaged benchmarks" table of https://github.com/Bizilizi/yavih/blob/main/docs/benchmark-folder.md, the index
 ``yavih/benchmarks/README.md`` (the tables per capability, the ``setup.md`` links) and the skill's
 ``references/data.md`` (the obtainability table, the ``prepare_only`` roots) and ``references/readouts.md`` (the
@@ -301,14 +302,14 @@ def replace_blocks(text: str, folders: Mapping[str, Path] | None = None) -> str:
 
 
 def repo_documents() -> list[Path]:
-    """The documents with generated blocks: the packaged index and skill references, plus the repo README and
-    the benchmark-folder page of the repository's docs when the package runs from a source checkout."""
+    """The documents with generated blocks: the packaged index and skill references, plus the repo README, the
+    quickstart and the benchmark-folder page of the repository's docs when the package runs from a source checkout."""
     pkg = Path(__file__).resolve().parent
     refs = pkg / "skill" / "yavih" / "references"
     docs = [pkg / "benchmarks" / "README.md", refs / "data.md", refs / "readouts.md"]
     repo = pkg.parent.parent
     if (repo / "pyproject.toml").is_file():
-        docs = [p for p in (repo / "README.md", repo / "docs" / "benchmark-folder.md") if p.is_file()] + docs
+        docs = [p for p in (repo / "README.md", repo / "docs" / "quickstart.md", repo / "docs" / "benchmark-folder.md") if p.is_file()] + docs
     return docs
 
 
