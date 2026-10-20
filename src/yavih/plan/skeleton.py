@@ -136,11 +136,16 @@ def write_matrix_skeleton(suite: Any, *, model: str, launcher: str | None = None
             "joins": [{"benchmark": e.benchmark, "readings": list(e.readings), "reading": e.join_reading} for e in joins]}
 
 
-def project_defaults(model: str) -> dict[str, Any]:
+def project_defaults(model: str, out: str | os.PathLike | None = None) -> dict[str, Any]:
     """Where ``plan init`` writes in a project (``yavih-bench/``): ``{project, out, bridges_dir, launcher_configured}``;
-    outside one ``out`` is ``matrix.yaml`` and ``bridges_dir`` is ``bridges`` in the current directory. ``bridges_dir`` is
-    relative to the matrix directory. An invalid configuration counts as no project (``plan init`` must still work)."""
+    outside one ``out`` is ``matrix.yaml`` and ``bridges_dir`` is ``bridges`` in the current directory. ``bridges_dir``
+    is the project's bridges directory relative to the directory of ``out`` (the given matrix path, else the project
+    default), so an explicit ``--out`` elsewhere still points at the project's bridges. ``launcher_configured`` is
+    whether a default ``launcher`` is configured: a skeleton's ``launcher: null`` resolves to that one only, never to
+    a ``[launchers]`` name. An invalid configuration counts as no project (``plan init`` must still work), but a
+    ``[project]`` path that does not resolve is reported (``E_USAGE``)."""
     from yavih import config
+    from yavih.suites import SuiteError
 
     try:
         settings = config.load()
@@ -148,15 +153,19 @@ def project_defaults(model: str) -> dict[str, Any]:
         settings = None
     project = settings.project_dir() if settings is not None else None
     if project is None:
-        return {"project": None, "out": "matrix.yaml", "bridges_dir": "bridges", "launcher_configured": False}
-    out = settings.project_path("matrices") / f"{model}.yaml"
-    bridges = settings.project_path("bridges")
+        return {"project": None, "out": str(out) if out is not None else "matrix.yaml", "bridges_dir": "bridges",
+                "launcher_configured": False}
     try:
-        rel = Path(os.path.relpath(bridges, out.parent)).as_posix()
+        out_path = Path(out) if out is not None else settings.project_path("matrices") / f"{model}.yaml"
+        bridges = settings.project_path("bridges")
+    except config.ConfigError as e:
+        raise SuiteError(f"the project configuration does not resolve: {e}", "E_USAGE") from e
+    try:
+        rel = Path(os.path.relpath(bridges, out_path.resolve().parent)).as_posix()
     except ValueError:  # another drive (Windows)
         rel = bridges.as_posix()
-    return {"project": str(project), "out": str(out), "bridges_dir": rel,
-            "launcher_configured": settings.launcher() is not None or bool(settings.launchers())}
+    return {"project": str(project), "out": str(out_path), "bridges_dir": rel,
+            "launcher_configured": settings.launcher() is not None}
 
 
 def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str | os.PathLike | None = None,
@@ -173,7 +182,7 @@ def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str |
 
     _check_model(model)
     suite = load_suite(suite)
-    defaults = project_defaults(model)
+    defaults = project_defaults(model, out)
     if out is None:
         out = defaults["out"]
     if bridges_dir is None:

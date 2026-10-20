@@ -81,8 +81,9 @@ def _toml_str(s: str) -> str:
 
 
 def project_toml(*, version: str, site: str | None = None, hosts: Iterable[str] = (), launcher: str | None = None) -> str:
-    """The ``yavih.toml`` ``init`` writes: the requirement, commented relocations, a commented data root and launcher,
-    and one ``[site.<id>]`` table (a real one with ``site``, else a commented example)."""
+    """The ``yavih.toml`` ``init`` writes: the requirement, commented relocations, a commented data root, the launcher
+    (inside the site table with ``site``, else at the top level, else a commented example) and one ``[site.<id>]``
+    table (a real one with ``site``, else a commented example)."""
     hosts = list(hosts)
     lines = [
         "# yavih project configuration (`yavih init`). Layers, lowest first: the user file (~/.config/yavih/config.toml) →",
@@ -90,6 +91,11 @@ def project_toml(*, version: str, site: str | None = None, hosts: Iterable[str] 
         "# Project facts only: the yavih version, data roots, the model environments. Personal roots (runs, results,",
         "# scratch) belong in the user file, so this file can be committed. Schema: `yavih config show`,",
         "# https://github.com/Bizilizi/yavih/blob/main/docs/configuration.md.",
+        "",
+        "# The launcher is how a model environment's python is started (a path, or a prefix such as `conda run -n m python`):",
+        "# the top-level default (a key, so it comes before any table), per site under [site.<id>], or by name under",
+        "# [launchers], which a matrix entry refers to as `launcher: <name>` and gets on whichever site runs it.",
+        (f"launcher = {_toml_str(launcher)}" if launcher and not site else "# launcher = \"/envs/mymodel/bin/python\""),
         "",
         "[project]",
         f"yavih = {_toml_str(_requirement_for(version))}            # the yavih this project expects; `yavih doctor` warns on a mismatch",
@@ -99,9 +105,6 @@ def project_toml(*, version: str, site: str | None = None, hosts: Iterable[str] 
         "[data]",
         "# root = \"/data/datasets\"      # ${data.root}; one benchmark's root: [data.<bench>] <root> = \"...\"",
         "",
-        "# The launcher is how a model environment's python is started (a path, or a prefix such as `conda run -n m python`).",
-        "# A matrix entry may say `launcher: <name>` and get the name's command on whichever site runs it.",
-        "# launcher = \"/envs/mymodel/bin/python\"",
         "# [launchers]",
         "# mymodel = \"/envs/mymodel/bin/python\"",
         "",
@@ -175,6 +178,9 @@ def init_project(dir: str | os.PathLike | None = None, *, site: str | None = Non
     file = folder / PROJECT_FILE
     if site is not None and not re.match(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$", site):
         raise ProjectError(f"--site {site!r}: a site id matches [A-Za-z][A-Za-z0-9_-]*", "E_ARG")
+    hosts = list(hosts)
+    if hosts and site is None:
+        raise ProjectError("--hosts names the hosts of a site table: pass --site <id> as well", "E_ARG")
     existing = config._discover_project(base)
     if existing is not None and existing.resolve() != file.resolve():
         raise ProjectError(f"{existing} already governs {base} (one project per repository; discovery stops at the git root). "
@@ -211,7 +217,7 @@ def init_project(dir: str | os.PathLike | None = None, *, site: str | None = Non
         upath.write_text(USER_CONFIG, encoding="utf-8")
         user_written = True
     try:
-        config.load(refresh=True)  # the new file must parse under the strict schema
+        config.load(refresh=True, cwd=base)  # the new file (discovered from its own repository) must parse under the strict schema
     except ConfigError as e:  # pragma: no cover - the template is valid; a pre-existing user file may not be
         raise ProjectError(f"{file} written, but the configuration does not load: {e}") from e
     return {"dir": str(folder), "file": str(file), "written": written, "kept": kept, "user_config": str(upath),
@@ -297,7 +303,7 @@ def _scan_root(settings: Any, cwd: Path) -> Path | None:
 def layout_report(settings: Any, cwd: str | os.PathLike | None = None) -> dict[str, Any]:
     """``{dir, file, root, nested, stray, skipped}``: the project folder, the repository root the scan covers, other
     project files inside it (``nested``: not listed in ``[project] subprojects``) and matrix files outside the project
-    folder (``stray``). The scan never enters dot-directories, virtual environments, ``__pycache__``, build and
+    folder and its relocated directories (``stray``). The scan never enters dot-directories, virtual environments, ``__pycache__``, build and
     ``node_modules`` trees, the configured runs / results roots, or deeper than 8 levels; ``skipped`` says when the
     directory cap stopped it."""
     from yavih import config
@@ -313,6 +319,11 @@ def layout_report(settings: Any, cwd: str | os.PathLike | None = None) -> dict[s
     allowed = {p.resolve() for p in settings.subprojects()}
     if project is not None:
         allowed.add(project.resolve())
+        for kind in PROJECT_KINDS:  # a relocated project directory is where its files belong, never a stray
+            try:
+                allowed.add(settings.project_path(kind).resolve())
+            except ConfigError:
+                continue
     avoid = set()
     for getter in (settings.runs_root, settings.results_root):
         try:

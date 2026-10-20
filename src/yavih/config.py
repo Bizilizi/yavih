@@ -259,6 +259,7 @@ _CLI: dict[str, Any] = {}
 _CACHE: dict[str, Any] = {"key": None, "settings": None, "stamps": None}
 _REGISTERED: dict[str, tuple[tuple[str, ...], dict[str, Any]]] = {}
 _REGISTRY_CACHE: dict[str, Any] = {"key": None, "value": None}
+_PROJECT_FILE_CACHE: dict[str, tuple[tuple, ConfigFile]] = {}
 _WARNED: set[str] = set()
 _PENDING_WARNINGS: list[dict[str, Any]] = []
 
@@ -454,22 +455,40 @@ def user_config_path(env: Mapping[str, str] | None = None) -> tuple[Path, str]:
     return Path.home() / ".config" / "yavih" / "config.toml", "~/.config"
 
 
+def _is_repo_root(d: Path) -> bool:
+    """``d`` holds a ``.git`` directory, or a ``.git`` file of a linked worktree. A submodule's ``.git`` file (its
+    ``gitdir:`` points into the superproject's ``.git/modules/``) does not count: the superproject's project
+    governs it."""
+    g = d / ".git"
+    if g.is_dir():
+        return True
+    if not g.is_file():
+        return False
+    try:
+        head = g.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return True
+    target = head[len("gitdir:"):].strip() if head.startswith("gitdir:") else ""
+    return "/modules/" not in target.replace("\\", "/")
+
+
 def git_root(start: Path) -> Path | None:
-    """The nearest directory at or above ``start`` holding ``.git`` (a directory or a worktree file), else ``None``."""
+    """The nearest repository root at or above ``start`` (:func:`_is_repo_root`), else ``None``."""
     for d in (start, *start.parents):
-        if (d / ".git").exists():
+        if _is_repo_root(d):
             return d
     return None
 
 
 def _discover_project(cwd: Path) -> Path | None:
     """The nearest ``yavih-bench/yavih.toml``, else ``yavih.toml``, walking up from ``cwd``; the walk stops at the
-    git root (a repository has one project), and runs to the filesystem root outside any repository."""
+    repository root (a repository has one project; a submodule checkout is walked through to its superproject), and
+    runs to the filesystem root outside any repository."""
     for d in (cwd, *cwd.parents):
         for p in (d / PROJECT_DIR / PROJECT_FILE, d / PROJECT_FILE):
             if p.is_file():
                 return p
-        if (d / ".git").exists():
+        if _is_repo_root(d):
             return None
     return None
 
@@ -484,9 +503,20 @@ def project_benchmarks_dir(env: Mapping[str, str] | None = None, cwd: str | os.P
     if p is None or not p.is_file():
         return None
     try:
-        f = _read_file(p, "project", how)
-    except ConfigError:
+        st = p.stat()
+        stamp = (str(p), st.st_mtime_ns, st.st_size)
+    except OSError:
         return None
+    with _LOCK:  # parsed once per file version: this sits on the registry's cache key, i.e. on every settings build
+        cached = _PROJECT_FILE_CACHE.get(str(p))
+        if cached is not None and cached[0] == stamp:
+            f = cached[1]
+        else:
+            try:
+                f = _read_file(p, "project", how)
+            except ConfigError:
+                return None
+            _PROJECT_FILE_CACHE[str(p)] = (stamp, f)
     proj = f.data.get("project")
     raw = proj.get("benchmarks") if isinstance(proj, Mapping) else None
     if isinstance(raw, str) and raw.strip():
@@ -834,8 +864,16 @@ class Settings:
         project: dict[str, Any] | None = None
         pf = self.project_file()
         if pf is not None:
+
+            def safe(get: Any) -> Any:  # a [project] path that does not resolve is shown, never raised (as every value)
+                try:
+                    v = get()
+                except ConfigError as e:
+                    return f"<{e}>"
+                return [str(x) for x in v] if isinstance(v, list) else str(v)
+
             project = {"file": str(pf.path), "dir": str(self.project_dir()), "yavih": self.project_requirement(),
-                       **{k: str(self.project_path(k)) for k in PROJECT_KINDS}, "subprojects": [str(p) for p in self.subprojects()]}
+                       **{k: safe(lambda k=k: self.project_path(k)) for k in PROJECT_KINDS}, "subprojects": safe(self.subprojects)}
         data: dict[str, Any] = {
             "project": project,
             "files": [f.to_json() for f in self.files],

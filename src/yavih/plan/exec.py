@@ -103,6 +103,9 @@ _PREEMPT = threading.Event()
 _FORWARDED: list[int] = []
 
 
+_UNRESOLVED: Any = object()
+
+
 class ExecError(ValueError):
     """Bad ``exec`` invocation (unknown id, index out of range, ``--slots`` with ``--id``) — exit 1."""
 
@@ -126,11 +129,12 @@ def resolve_deadline(spec: str | float | None, *, margin_s: float = DEFAULT_DEAD
     return parse_deadline(spec, env=env, margin_s=margin_s, inherit=False)
 
 
-def resolve_launcher(spec: str | None) -> str | None:
+def resolve_launcher(spec: str | None, cwd: str | os.PathLike | None = None) -> str | None:
     """A unit's ``launcher`` as the command to run: a value with a path separator or whitespace is the command itself;
-    a bare NAME is ``[launchers] NAME`` of the active configuration (``yavih-bench/yavih.toml``, per site), else NAME
-    when it is a command on PATH, else ``ExecError``; ``None`` is the configured default ``launcher``, else ``None``
-    (the unit runs with the interpreter running ``exec``)."""
+    a bare NAME is ``[launchers] NAME`` of the configuration discovered from ``cwd`` (the unit's cwd = the matrix
+    directory, so the project's ``yavih-bench/yavih.toml`` and its site tables are found wherever ``exec`` runs), else
+    NAME when it is a command on PATH, else ``ExecError``; ``None`` is the configured default ``launcher``, else
+    ``None`` (the unit runs with the interpreter running ``exec``)."""
     from yavih import config
 
     if spec is not None and not str(spec).strip():
@@ -138,7 +142,7 @@ def resolve_launcher(spec: str | None) -> str | None:
     if spec is not None and ("/" in spec or os.sep in spec or any(ch.isspace() for ch in spec)):
         return spec
     try:
-        settings = config.load()
+        settings = config.load(cwd=cwd) if cwd else config.load()
     except config.ConfigError as e:
         raise ExecError(f"launcher {spec!r}: the configuration does not load: {e}") from e
     if spec is None:
@@ -154,11 +158,12 @@ def resolve_launcher(spec: str | None) -> str | None:
                     f"in {settings.edit_hint()} (per site under [site.<id>]), or write the command itself in the matrix")
 
 
-def build_command(unit: Any) -> list[str]:
-    """``resolve_launcher(unit.launcher)`` + ``cmd``: a launcher whose last token matches ``python*`` replaces ``cmd[0]``;
-    otherwise it is a prefix; none leaves ``cmd`` as it is."""
+def build_command(unit: Any, launcher: str | None = _UNRESOLVED) -> list[str]:
+    """``launcher`` (already resolved; default ``resolve_launcher(unit.launcher, unit.cwd)``) + ``cmd``: a launcher whose
+    last token matches ``python*`` replaces ``cmd[0]``; otherwise it is a prefix; none leaves ``cmd`` as it is."""
     cmd = list(unit.cmd)
-    launcher = resolve_launcher(unit.launcher)
+    if launcher is _UNRESOLVED:
+        launcher = resolve_launcher(unit.launcher, getattr(unit, "cwd", None))
     if not launcher or not str(launcher).strip():
         return cmd
     toks = shlex.split(str(launcher))
@@ -395,14 +400,15 @@ def _sweep_scratch(root: str, *, now: float | None = None, host: str | None = No
 # ----------------------------------------------------------------------------- runners (step 5)
 
 
-def _run_extract(unit: Unit, *, env: dict[str, str], log_path: str, cpus: int | None = None) -> tuple[int, bool]:
+def _run_extract(unit: Unit, *, env: dict[str, str], log_path: str, cpus: int | None = None,
+                 launcher: str | None = _UNRESOLVED) -> tuple[int, bool]:
     """Spawn ``launcher + cmd``, tee output to the log and to stderr, forward signals; returns
     ``(returncode, killed_by_signal)``. With ``cpus`` (``--cpus``, a slot's share, or the usable CPUs when fewer
     than planned) the child's ``--decode-workers`` is rewritten to ``cpus - 1`` (decode workers =
-    cpus − 1)."""
+    cpus − 1). ``launcher`` is the resolved launcher (``_run_unit`` resolves it before the unit is marked running)."""
     from yavih.plan.units import resolve_path
 
-    argv = build_command(unit)
+    argv = build_command(unit, launcher)
     if cpus is not None and "--decode-workers" in argv:
         i = argv.index("--decode-workers")
         if i + 1 < len(argv):
@@ -586,8 +592,19 @@ def _run_unit(units_by_id: dict[str, Unit], unit: Unit, *, deadline: float | Non
     else:
         # 3. DONE check
         already = check_done(unit)
+        launcher: str | None = None
+        launcher_error: str | None = None
+        if already is None and unit.kind == "extract":
+            # 3b. the launcher: a [launchers] name of the configuration discovered from the unit's cwd; a name the
+            # active site does not define is `misconfigured` before anything is marked running
+            try:
+                launcher = resolve_launcher(unit.launcher, unit.cwd)
+            except ExecError as e:
+                launcher_error = str(e)
         if already is not None:
             status, message = "skipped", f"already {already}: {unit.done}"
+        elif launcher_error is not None:
+            status, message, child_rc = "misconfigured", f"launcher: {launcher_error}", 1
         else:
             # 4. deadline headroom
             headroom = max(MIN_HEADROOM_S, HEADROOM_FRACTION * float(needs.get("minutes") or 0) * 60.0)
@@ -597,7 +614,8 @@ def _run_unit(units_by_id: dict[str, Unit], unit: Unit, *, deadline: float | Non
             else:
                 _write_running(unit, out_dir=out_dir, host=host, gpu=gpu, slurm_job_id=slurm_job_id, needs=needs,
                                started=started, started_t=started_t, deadline=deadline, log_path=log_path, history=history)
-                status, message, child_rc = _dispatch(unit, env=env, log_path=log_path, deadline=deadline, cpus=eff_cpus)
+                status, message, child_rc = _dispatch(unit, env=env, log_path=log_path, deadline=deadline, cpus=eff_cpus,
+                                                      launcher=launcher)
 
     exit_code = _exit_for(status, child_rc)
     if exit_code == 0:
@@ -642,14 +660,14 @@ def _run_unit(units_by_id: dict[str, Unit], unit: Unit, *, deadline: float | Non
 
 
 def _dispatch(unit: Unit, *, env: dict[str, str], log_path: str, deadline: float | None,
-              cpus: int | None = None) -> tuple[str, str | None, int | None]:
+              cpus: int | None = None, launcher: str | None = _UNRESOLVED) -> tuple[str, str | None, int | None]:
     """Step 5 for one kind. Returns ``(status, message, child_rc)``."""
     from yavih.plan.units import check_done
 
     _PREEMPT.clear()
     _FORWARDED.clear()
     if unit.kind == "extract":
-        rc, killed = _run_extract(unit, env=env, log_path=log_path, cpus=cpus)
+        rc, killed = _run_extract(unit, env=env, log_path=log_path, cpus=cpus, launcher=launcher)
         if killed:
             return "preempted", f"child killed by signal (rc={rc})", rc
         if rc == 0:

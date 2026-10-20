@@ -36,7 +36,9 @@ sits next to its matrix. Profiles are small JSON files and are committed with th
 ## One project per repository
 
 Discovery takes the nearest `yavih-bench/yavih.toml` (else a bare `yavih.toml`) walking up from the
-current directory and **stops at the git root**: a second project file deeper in the same repository
+current directory and **stops at the repository root** (a `.git` directory, or the `.git` file of a
+linked worktree; a submodule checkout is walked through to its superproject): a second project file
+deeper in the same repository
 would silently take over for commands run below it, which is how setups fragment into one copy per
 experiment and per cluster. `yavih init` refuses to write a folder already governed by another
 project file (`E_PROJECT_EXISTS`), and `yavih doctor` reports:
@@ -44,7 +46,7 @@ project file (`E_PROJECT_EXISTS`), and `yavih doctor` reports:
 | finding | meaning |
 |---|---|
 | `W_PROJECT_NESTED` | another `yavih.toml` inside the repository that `[project] subprojects` does not list |
-| `W_PROJECT_STRAY` | a `matrix*.yaml` outside the project folder |
+| `W_PROJECT_STRAY` | a `matrix*.yaml` outside the project folder and its relocated directories |
 | `W_PROJECT_VERSION` | the installed yavih is outside `[project] yavih`, or the requirement cannot be read |
 | `N_PROJECT` (note) | no project folder (`yavih init`), a development build, or a scan that hit its directory cap |
 
@@ -111,6 +113,7 @@ what split a setup.
 writes `D/yavih-bench/` (`D` default: the current directory): `yavih.toml` (never overwritten),
 `README.md`, `.gitignore`, the five directories with a `.gitkeep` each, and the user config with
 personal roots when it does not exist. `--site` writes a real `[site.ID]` table for this cluster
-(`--hosts` default: this host's name); otherwise the file carries a commented example. `--force`
+(`--hosts` default: this host's name) with `--launcher` inside it; `--launcher` alone writes a
+top-level `launcher`; otherwise the file carries a commented example. `--force`
 refreshes README.md, .gitignore and the directories of an existing folder. The text ends with the next
 commands: edit the file, `yavih doctor`, `yavih plan init --suite default --model <name>`.
