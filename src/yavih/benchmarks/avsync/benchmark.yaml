@@ -4,6 +4,7 @@ schema_version: 2
 name: avsync
 aliases: []
 title: AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor)
+capability: [audio-visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: AVSync
   title: "VGGSound: A Large-scale Audio-Visual Dataset"

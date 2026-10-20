@@ -73,39 +73,61 @@ def test_pinned_revision_folders_are_known():
 # ===================================================================== the index
 
 
-def _index_rows() -> tuple[str, list[list[str]]]:
+def _index_groups() -> list[tuple[str, int, list[list[str]]]]:
+    """``(capability, count in the heading, rows)`` per ``### <capability> (<n>)`` table of the index."""
     text = (packaged_root() / "README.md").read_text(encoding="utf-8")
     lines = [line for _, line in _lines_outside_fences(text)]
+    groups: list[tuple[str, int, list[list[str]]]] = []
+    heading: tuple[str, int] | None = None
     for k, line in enumerate(lines):
+        m = re.fullmatch(r"### ([a-z-]+) \((\d+)\)", line.strip())
+        if m:
+            heading = (m.group(1), int(m.group(2)))
+            continue
         cells = [c.strip().lower() for c in line.strip().strip("|").split("|")]
         if line.lstrip().startswith("|") and cells[0] in ("benchmark", "name") and cells[1:] == INDEX_COLUMNS:
+            assert heading is not None, "an index table must sit under a `### <capability> (<n>)` heading"
             rows = []
             for row in lines[k + 2:]:
                 if not row.lstrip().startswith("|"):
                     break
                 rows.append([c.strip() for c in row.strip().strip("|").split("|")])
-            return text, rows
-    raise AssertionError("benchmarks/README.md has no | Benchmark | Description | Readout | Media | Source | table")
+            groups.append((*heading, rows))
+            heading = None
+    assert groups, "benchmarks/README.md has no | Benchmark | Description | Readout | Media | Source | table"
+    return groups
 
 
 def test_index_table_lists_every_packaged_folder():
-    """One row per packaged folder, sorted by name, links resolve, readout and source agree."""
-    text, rows = _index_rows()
-    names = []
-    for cells in rows:
-        assert len(cells) == 1 + len(INDEX_COLUMNS), cells
-        m = re.fullmatch(r"\[([a-z0-9_]+)\]\(([^)]+)\)", cells[0])
-        assert m and m.group(2) == f"{m.group(1)}/README.md", f"index row must link the folder README: {cells[0]!r}"
-        name = m.group(1)
-        names.append(name)
-        assert packaged_folder(name) is not None, f"index lists {name!r}, which is not a packaged folder"
-        y = _yaml(name)
-        assert cells[2] == y["readout"], f"index: {name} readout {cells[2]!r} != {y['readout']!r}"
-        assert SOURCE_WORDS[y["source"]["kind"]] in cells[4].lower(), f"index: {name} source {cells[4]!r} vs {y['source']['kind']}"
-        assert cells[1] and cells[3], f"index: {name} needs a description and the media handed over"
-        for alias in y.get("aliases") or []:
-            assert f"`{alias}`" in cells[1], f"index: {name}'s description must name alias {alias!r}"
-    assert names == packaged_names(), f"index rows {names} != packaged folders {packaged_names()} (sorted by name)"
+    """Grouped by capability (vocabulary order): each packaged folder sits, sorted by name, under every capability
+    it declares; links resolve, readout and source agree."""
+    from yavih.suites import CAPABILITIES
+
+    groups = _index_groups()
+    caps = [cap for cap, _n, _rows in groups]
+    assert caps == [c for c in CAPABILITIES if c in caps], f"index groups {caps} are not in CAPABILITIES order"
+    seen: dict[str, list[str]] = {}
+    for cap, count, rows in groups:
+        names = []
+        for cells in rows:
+            assert len(cells) == 1 + len(INDEX_COLUMNS), cells
+            m = re.fullmatch(r"\[([a-z0-9_]+)\]\(([^)]+)\)", cells[0])
+            assert m and m.group(2) == f"{m.group(1)}/README.md", f"index row must link the folder README: {cells[0]!r}"
+            name = m.group(1)
+            names.append(name)
+            assert packaged_folder(name) is not None, f"index lists {name!r}, which is not a packaged folder"
+            y = _yaml(name)
+            assert cap in y["capability"], f"index lists {name} under {cap!r}; it declares {y['capability']}"
+            assert cells[2] == y["readout"], f"index: {name} readout {cells[2]!r} != {y['readout']!r}"
+            assert SOURCE_WORDS[y["source"]["kind"]] in cells[4].lower(), f"index: {name} source {cells[4]!r} vs {y['source']['kind']}"
+            assert cells[1] and cells[3], f"index: {name} needs a description and the media handed over"
+            for alias in y.get("aliases") or []:
+                assert f"`{alias}`" in cells[1], f"index: {name}'s description must name alias {alias!r}"
+            seen.setdefault(name, []).append(cap)
+        assert names == sorted(names) and len(names) == count, f"index group {cap}: {names} (heading says {count})"
+    assert sorted(seen) == packaged_names(), f"index lists {sorted(seen)} != packaged folders {packaged_names()}"
+    for name, caps_of in seen.items():
+        assert caps_of == [c for c in CAPABILITIES if c in _yaml(name)["capability"]], f"{name} is under {caps_of}"
 
 
 def test_index_links_resolve():
@@ -206,6 +228,46 @@ def test_obtain_is_optional_and_outside_the_protocol_hash(tmp_path):
         assert b.protocol_hash == want and (b.spec.obtain is None) == (variant == "dropped")
 
 
+# ===================================================================== capability
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_capability_is_declared_shown_and_matches_the_suites(name, capsys):
+    """Every folder declares its capability tags (the suites' vocabulary); ``bench list`` / ``bench info`` show them;
+    no shipped suite lists the folder under a capability it does not carry (``W_SUITE_CAPABILITY``)."""
+    from yavih import cli
+    from yavih.suites import CAPABILITIES
+
+    y = _yaml(name)
+    assert y["capability"] and set(y["capability"]) <= set(CAPABILITIES)
+    assert Benchmark.load(name).spec.capability == tuple(y["capability"])
+    assert cli.main(["--json", "bench", "info", name]) == 0
+    assert json.loads(capsys.readouterr().out)["data"]["capability"] == y["capability"]
+    rep = lint.lint_folder(packaged_folder(name), checks=["capability"])
+    assert not rep.findings, rep.findings
+
+
+def test_capability_is_strict_and_outside_every_hash(tmp_path, esc50_copy):
+    """An unknown capability is a schema error naming the vocabulary; editing or dropping the tags changes no hash;
+    a shipped suite group the tags do not cover is a lint warning."""
+    from yavih.benchmark import SchemaError
+
+    want = Benchmark.load("esc50")
+    for caps in (["visual", "temporal"], None):
+        _edit_yaml(esc50_copy, lambda y, caps=caps: y.update({"capability": caps}) if caps else y.pop("capability", None))
+        b = Benchmark.load(str(esc50_copy))
+        assert (b.protocol_hash, b.input_hash, b.scoring_hash) == (want.protocol_hash, want.input_hash, want.scoring_hash)
+    _edit_yaml(esc50_copy, lambda y: y.update({"capability": ["visual", "temporal"]}))
+    found = lint.lint_folder(esc50_copy, checks=["capability"]).findings
+    assert [(f.code, f.severity) for f in found] == [("W_SUITE_CAPABILITY", "warning")] * 2  # minimal + default: audio
+    for bad, word in ((["smell"], "vocabulary is audio, visual"), ([], "non-empty"), ("audio", r"list\[str\]"),
+                      (["audio", "audio"], "duplicate")):
+        _edit_yaml(esc50_copy, lambda y, bad=bad: y.update({"capability": bad}))
+        with pytest.raises(SchemaError, match=word):
+            Benchmark.load(str(esc50_copy))
+        assert "E_SCHEMA" in _codes(esc50_copy, checks=["yaml"])
+
+
 # ===================================================================== the lint catches what it claims
 
 
@@ -255,6 +317,9 @@ def _edit_yaml(d, fn):
 def test_lint_yaml_obtain_budget_and_name(esc50_copy, tmp_path):
     _edit_yaml(esc50_copy, lambda y: y.pop("obtain"))
     assert "E_OBTAIN" in _codes(esc50_copy, checks=["obtain"])
+    _edit_yaml(esc50_copy, lambda y: y.pop("capability"))
+    assert "E_CAPABILITY" in _codes(esc50_copy, checks=["capability"])
+    assert Benchmark.load(str(esc50_copy)).spec.capability == ()  # optional for the loader
     _edit_yaml(esc50_copy, lambda y: y.pop("header"))
     assert "E_HEADER" in _codes(esc50_copy, checks=["header"])
     _edit_yaml(esc50_copy, lambda y: y["budget"]["clips"].update({"1": 399}))

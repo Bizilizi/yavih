@@ -5,6 +5,7 @@ schema_version: 2
 name: in1k
 aliases: [imagenet1k, imagenet]
 title: ImageNet-1K image classification (frozen 50/class train draw, full 50k val)
+capability: [visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: ImageNet-1K
   title: ImageNet Large Scale Visual Recognition Challenge

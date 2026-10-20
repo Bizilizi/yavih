@@ -5,6 +5,7 @@ schema_version: 2
 name: vggsounder
 aliases: []
 title: VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes)
+capability: [audio-visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 readout: clf
 protocol_version: 1
 header:

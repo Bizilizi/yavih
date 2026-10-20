@@ -32,7 +32,7 @@ _isolated_yavih_home = F.isolated_yavih_home
 spec, manifest_bytes, rows, bench = F.spec, F.manifest_bytes, F.rows, F.bench
 
 TOP_LEVEL = [
-    "schema_version", "name", "aliases", "title", "header", "readout", "protocol_version", "changelog", "source", "obtain",
+    "schema_version", "name", "aliases", "title", "capability", "header", "readout", "protocol_version", "changelog", "source", "obtain",
     "budget", "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract", "external", "protocol",
     "metrics", "readout_params",
 ]

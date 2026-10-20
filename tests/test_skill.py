@@ -83,8 +83,24 @@ def test_frontmatter_name_and_description():
     head = text.split("---", 2)[1]
     assert re.search(r"^name:\s*yavih\s*$", head, re.M)
     assert "description:" in head
-    for trigger in ("yavih", "bridge", "frozen", "setup.md", "K400", "SSv2", "ESC-50", "AVE", "NYUv2"):
+    for trigger in ("yavih", "bridge", "frozen", "setup.md", "probing", "probe", "benchmark suite", "benchmark my model",
+                    "video", "audio-visual", "`yavih bench list`"):
         assert trigger in head, f"description must trigger on {trigger!r}"
+
+
+def test_frontmatter_enumerates_no_benchmark():
+    """The benchmark set grows by adding folders: the description triggers on `yavih bench list`, never on a list of
+    names that would go stale (no packaged name, alias or header display name)."""
+    import yaml
+
+    from yavih.benchmarks import packaged_folder, packaged_names
+
+    head = SKILL_MD.read_text(encoding="utf-8").split("---", 2)[1]
+    for name in packaged_names():
+        y = yaml.safe_load((packaged_folder(name) / "benchmark.yaml").read_text(encoding="utf-8"))
+        for word in (name, *(y.get("aliases") or []), (y.get("header") or {}).get("name") or name):
+            assert not re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", head, flags=re.I), \
+                f"the SKILL.md description names benchmark {word!r}"
 
 
 def test_nine_steps_present_in_order():
