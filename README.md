@@ -104,7 +104,9 @@ yavih bench info vggsounder --setup   # the folder setup.md: obtain, dependencie
 yavih bench verify vggsounder --census   # manifest hash, presence per split, read sample, media-info table, coverage
 ```
 
-Data roots are resolved from `~/.config/yavih/config.toml` (`[data] root = ...`, per-benchmark overrides under `[data.<name>]`, shared trees under `[datasets]`), a project `yavih.toml` found upward from the current directory (or `--config FILE`), per-cluster `[site.<id>]` tables, `YAVIH_DATA__<name>__<root>` environment variables, and `--data <name>.<root>=PATH`; `yavih config show --bench <name>` prints every value with where it came from (skill reference `cli.md`, "Configuration").
+Data roots are resolved from `~/.config/yavih/config.toml` (`[data] root = ...`, per-benchmark overrides under `[data.<name>]`, shared trees under `[datasets]`), the project file `yavih-bench/yavih.toml` found upward from the current directory (or `--config FILE`), per-cluster `[site.<id>]` tables, `YAVIH_DATA__<name>__<root>` environment variables, and `--data <name>.<root>=PATH`; `yavih config show --bench <name>` prints every value with where it came from (skill reference `cli.md`, "Configuration").
+
+A repository keeps everything yavih-related in one folder, `yavih-bench/` (`yavih init` writes it): the project configuration with one `[site.<id>]` per cluster, `bridges/`, `matrices/` with their profiles, `suites/`, project-local `benchmarks/` and the project's own `tools/`. One per repository, found from any directory below the root; `yavih doctor` warns about a second project file or a stray matrix ([project layout](https://github.com/Bizilizi/yavih/blob/main/docs/project-layout.md)).
 
 ### 3. Write a bridge
 
@@ -196,25 +198,27 @@ benchmark set (`default` is what "benchmark my model" means, `minimal` a smoke p
 and `plan init` writes its matrix and one bridge stub per benchmark:
 
 ```bash
+yavih init                                # once per repository: yavih-bench/ (config, bridges/, matrices/, suites/, benchmarks/, tools/)
 yavih suite show default                  # capabilities, benchmarks, readings
-yavih plan init --suite default --model mymodel --launcher /envs/mymodel/bin/python   # -> matrix.yaml + bridges/mymodel_<b>.py
+yavih plan init --suite default --model mymodel   # -> yavih-bench/matrices/mymodel.yaml + bridges/mymodel_<b>.py (--launcher unless the site config names one)
 ```
 
 or by hand, one entry per bridge and benchmark:
 
 ```yaml
-# matrix.yaml
+# yavih-bench/matrices/mymodel.yaml
 schema_version: 1
-out: runs/
-defaults: {launcher: /envs/mymodel/bin/python, cpus: 8}
+out: null                                 # the configured runs root
+defaults: {launcher: mymodel, cpus: 8}    # a [launchers] name from yavih.toml (per site), a python path, or null
 bridges:
-  mymodel-vggsounder: {script: bridges/mymodel_vggsounder.py, benchmark: vggsounder,
-                       args: {ckpt: /ckpts/mymodel.pt}, profile: bridges/mymodel-vggsounder.profile.json}
+  mymodel-vggsounder: {script: ../bridges/mymodel_vggsounder.py, benchmark: vggsounder,
+                       args: {ckpt: /ckpts/mymodel.pt}, profile: mymodel.profiles/mymodel-vggsounder.profile.json}
 ```
 
 ```bash
-yavih plan build matrix.yaml --sample 32 --out trial.jsonl && yavih plan run trial.jsonl --local   # capped run first: 32 rows per split
-yavih plan build matrix.yaml --out plan.jsonl            # extract shards (GPU) -> probe (CPU/GPU) -> report
+M=yavih-bench/matrices/mymodel.yaml
+yavih plan build $M --sample 32 --out trial.jsonl && yavih plan run trial.jsonl --local   # capped run first: 32 rows per split
+yavih plan build $M --out plan.jsonl                     # extract shards (GPU) -> probe (CPU/GPU) -> report
 yavih exec plan.jsonl --index $SLURM_ARRAY_TASK_ID --deadline slurm   # one unit; idempotent; exit 4 = resubmit
 yavih plan status plan.jsonl
 yavih suite missing default --model mymodel                 # what the suite still lacks for this model

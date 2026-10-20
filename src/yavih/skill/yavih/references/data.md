@@ -56,7 +56,7 @@ were 3–17 h per benchmark on one GPU.
 ## 2. Data roots per site
 
 Resolution (references/cli.md "Configuration"): `Benchmark.load(data=…)` → `--data
-<bench>.<root>=PATH` → env `YAVIH_DATA__<BENCH>__<ROOT>` → project `yavih.toml` → user
+<bench>.<root>=PATH` → env `YAVIH_DATA__<BENCH>__<ROOT>` → project `yavih-bench/yavih.toml` → user
 `~/.config/yavih/config.toml` `[data.<bench>] <root>` (each file's active `[site.<id>]` table first) →
 `benchmark.yaml` default with `${data.root}` from `[data] root` (or `YAVIH_DATA__ROOT`) and
 `${datasets.<name>}` from `[datasets] <name>` (else `${data.root}/<name>`). `yavih config show --bench

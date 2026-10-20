@@ -22,7 +22,8 @@ Normative descriptions of current behaviour.
 | [Readouts](readouts.md) | the metric registry, common probe rules, `ProbeConfig`, the `clf` / `seq` / `grid` / `box` readouts, floors, controls, intervals |
 | [Results](results.md) | `result.json`, `yavih report`, comparability in reports, the results store |
 | [Hashing](hashing.md) | version constants, canonicalization, input / scoring / protocol / describe / probe / eval hashes, unit ids, migration through folder changelogs |
-| [Configuration](configuration.md) | config layers and tables, data roots, sites, environment variables |
+| [Configuration](configuration.md) | config layers and tables, data roots, sites, launchers, the `[project]` table, environment variables |
+| [Project layout](project-layout.md) | the `yavih-bench/` folder: what lives where, one project per repository, sites instead of per-cluster copies, what may live elsewhere, `yavih init`, the `doctor` findings |
 | [CLI](cli.md) | every command and flag, the `--json` envelope, exit codes |
 | [Suites](suites.md) | named benchmark sets (`minimal`, `default`), the suite file schema, project suites, completeness (`suite missing`, `report build --suite`) |
 | [Execution](execution.md) | sharding, read-ahead, `plan init`, `matrix.yaml`, plan units, `yavih exec`, deadlines, slots, DONE markers, local runs, wrapping in SLURM |

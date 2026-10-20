@@ -86,15 +86,21 @@ def _entry_point_roots() -> list[tuple[str, Path]]:
 
 
 def external_folders(env: dict | None = None) -> dict[str, Path]:
-    """``name -> folder`` of the out-of-tree benchmark folders, in resolution order: each directory of
-    ``$YAVIH_BENCH_PATH`` (colon-separated, first wins), then each ``yavih.benchmarks`` entry-point pack. A name is
+    """``name -> folder`` of the out-of-tree benchmark folders, in resolution order: the project's benchmarks
+    directory (``yavih-bench/benchmarks/``, or ``[project] benchmarks``), each directory of ``$YAVIH_BENCH_PATH``
+    (colon-separated, first wins), then each ``yavih.benchmarks`` entry-point pack. A name is
     the folder's directory name; the first occurrence wins. Packaged names are not filtered here (the caller
     decides precedence: ``yavih.benchmark.resolve_folder`` never lets these shadow a packaged folder)."""
     import os
 
+    from yavih import config  # stdlib-only; reads the project file without building the settings
+
     env = os.environ if env is None else env
     out: dict[str, Path] = {}
     roots = [("YAVIH_BENCH_PATH", Path(p).expanduser()) for p in str(env.get(BENCH_PATH_ENV, "") or "").split(os.pathsep) if p]
+    project = config.project_benchmarks_dir(env)
+    if project is not None:
+        roots.insert(0, ("project", project))
     for _origin, root in [*roots, *_entry_point_roots()]:
         for folder in _folders_in(root):
             out.setdefault(folder.name, folder)

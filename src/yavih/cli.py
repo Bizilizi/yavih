@@ -454,9 +454,29 @@ def _tools_block(bench: Any, *, timeout: float = 30.0) -> dict[str, dict[str, An
     return {name: rec}
 
 
+def cmd_init(ns: argparse.Namespace) -> Envelope:
+    """``yavih init [--dir D] [--site ID [--hosts GLOB]... [--launcher CMD]] [--no-user-config] [--force]``: the project
+    folder ``yavih-bench/`` (``yavih.project.init_project``); refuses a folder already governed by another project
+    file (``E_PROJECT_EXISTS``) and an existing ``yavih.toml`` (``E_EXISTS``) unless ``--force`` refreshes the rest."""
+    from yavih.project import init_project
+
+    rec = init_project(ns.dir, site=ns.site, hosts=ns.hosts, launcher=ns.launcher, force=bool(ns.force),
+                       user_file=not ns.no_user_config)
+    lines = [f"project folder {rec['dir']}"]
+    lines += [f"  wrote {w}" for w in rec["written"]]
+    lines += [f"  kept  {k}" for k in rec["kept"]]
+    if rec["user_config_written"]:
+        lines.append(f"  wrote {rec['user_config']} (personal runs / results roots; edit them)")
+    else:
+        lines.append(f"  user config {rec['user_config']} left as it is")
+    lines.append("next: " + "; then ".join(rec["next"]))
+    return Envelope(data=rec, paths={"dir": rec["dir"], "file": rec["file"]}, text="\n".join(lines) + "\n")
+
+
 def cmd_doctor(ns: argparse.Namespace) -> Envelope:
     """``yavih doctor [--bench B] [--selftest]``: extras, torch, decoders, decode sample, data
-    roots, GPUs, launcher, decode-worker default, ``$YAVIH_HOME`` and the runs root."""
+    roots, GPUs, launcher, decode-worker default, ``$YAVIH_HOME``, the runs root and the project folder
+    (``yavih.project.doctor_block``: ``W_PROJECT_VERSION``, ``W_PROJECT_NESTED``, ``W_PROJECT_STRAY``)."""
     from yavih import config as _cfg
     from yavih.extract import default_decode_workers
     from yavih.media import decoder_info
@@ -583,6 +603,18 @@ def cmd_doctor(ns: argparse.Namespace) -> Envelope:
     data["yavih_version"] = __version__
     data["python"] = sys.version.split()[0]
     data["host"] = socket.gethostname()
+    # the project folder (yavih-bench/): version requirement, nested project files, stray matrices
+    data["project"] = None
+    if settings is not None:
+        from yavih.project import doctor_block
+
+        try:
+            data["project"], pw, pn = doctor_block(settings)
+        except Exception as e:  # noqa: BLE001 - a layout scan must never take doctor down
+            warnings.append(_finding("W_INTERNAL", f"project layout check failed: {e.__class__.__name__}: {e}"))
+        else:
+            warnings += [_finding(code, msg, where=where) for code, msg, where in pw]
+            data["notes"] += [_finding("N_PROJECT", n) for n in pn]
     # where this yavih comes from, and whether an installed skill copy is older than the packaged skill
     from yavih.shipped import installed_from, installed_skills, skill_stamp
 
@@ -613,6 +645,9 @@ def _config_text(cfg: dict[str, Any], *, indent: str = "  ") -> list[str]:
         lines.append(f"{indent}config   (no file)")
     lines.append(f"{indent}site     {cfg.get('site') or '-'}" + (f"  ({cfg['site_source']})" if cfg.get("site_source") else "")
                  + ("  [lenient]" if cfg.get("lenient") else ""))
+    pj = cfg.get("project")
+    lines.append(f"{indent}project  " + (f"{pj['dir']}  (bridges {pj['bridges']}; matrices {pj['matrices']}; suites {pj['suites']}; "
+                                         f"benchmarks {pj['benchmarks']}; yavih {pj.get('yavih') or 'unpinned'})" if pj else "none (yavih init)"))
     vals = cfg.get("values") or {}
     width = max((len(k) for k in vals), default=10)
     for key, rec in vals.items():
@@ -711,6 +746,17 @@ def _doctor_text(d: dict[str, Any]) -> str:
     lines.append(f"  gpu         {[g['name'] for g in d['gpu']] or 'none'}")
     lines.append(f"  launcher    {d['launcher']}")
     lines.append(f"  decode_workers_default {d['decode_workers_default']}")
+    pj = d.get("project")
+    if pj and pj.get("dir"):
+        req = pj.get("requirement") or {}
+        state = "ok" if req.get("ok") else ("MISMATCH" if req.get("ok") is False else "unchecked")
+        lines.append(f"  project     {pj['dir']}  (yavih {req.get('spec') or 'unpinned'}: {state}{', dev build' if req.get('dev') else ''})")
+        for q in pj.get("nested") or []:
+            lines.append(f"    NESTED project file {q}")
+        for q in pj.get("stray") or []:
+            lines.append(f"    STRAY matrix {q}")
+    else:
+        lines.append("  project     none (yavih init)")
     if d.get("config"):
         lines.extend(_config_text({k: v for k, v in d["config"].items() if k != "bench"}))
     else:
@@ -1560,14 +1606,21 @@ def cmd_plan_build(ns: argparse.Namespace) -> Envelope:
 
 
 def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
-    """``yavih plan init --suite S --model M --launcher L [--out matrix.yaml] [--bridges-dir DIR] [--force]``: one
+    """``yavih plan init --suite S --model M [--launcher L] [--out matrix.yaml] [--bridges-dir DIR] [--force]``: one
     bridge file per suite benchmark (``yavih.shipped.bridge_new``; an existing one is kept) and a ``matrix.yaml``
-    skeleton with one entry per suite ``(benchmark, reading)`` (``yavih.plan.skeleton``). The text lists the
-    ``bridge check`` command of every entry, then the ``plan build`` command."""
+    skeleton with one entry per suite ``(benchmark, reading)`` (``yavih.plan.skeleton``), in the project folder when
+    there is one. The text lists the ``bridge check`` command of every entry, then the ``plan build`` command;
+    ``W_LAUNCHER_UNSET`` when neither ``--launcher`` nor the configuration names one."""
     from yavih.plan.skeleton import plan_init
 
     rec = plan_init(ns.suite, model=ns.model, launcher=ns.launcher, out=ns.out, bridges_dir=ns.bridges_dir, force=bool(ns.force))
-    lines = [f"wrote {rec['path']}: suite {rec['suite']}, model {rec['model']}, {len(rec['entries'])} entries"]
+    warnings: list[dict] = []
+    if rec["launcher"] is None and not rec["launcher_configured"]:
+        warnings.append(_finding("W_LAUNCHER_UNSET", "no --launcher and no configured launcher: set `launcher = ...` (or [launchers]) in "
+                                 "the project yavih.toml, per site under [site.<id>], or pass --launcher; until then the units run "
+                                 "with the python running `yavih exec`"))
+    lines = [f"wrote {rec['path']}: suite {rec['suite']}, model {rec['model']}, {len(rec['entries'])} entries"
+             + (f" (project {rec['project']})" if rec["project"] else "")]
     for b in rec["bridges"]:
         lines.append(f"  bridge {b['path']} " + ("(exists, kept)" if b["action"] == "kept" else f"(created from {b['benchmark']}'s bridge_template.py)"))
     for p in rec["pending"]:
@@ -1578,7 +1631,7 @@ def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
         lines.append(f"after probing: `yavih suite missing {rec['suite']} --model {rec['model']}` prints the "
                      f"`yavih report build --join {j['benchmark']} ...` command that scores {j['benchmark']}:{j['reading']}")
     paths = {"matrix": rec["path"], "bridges": [b["path"] for b in rec["bridges"]]}
-    return Envelope(data=rec, paths=paths, text="\n".join(lines) + "\n")
+    return Envelope(data=rec, paths=paths, warnings=warnings, text="\n".join(lines) + "\n")
 
 
 def cmd_plan_status(ns: argparse.Namespace) -> Envelope:
@@ -1750,8 +1803,18 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", metavar="<command>")
     sub.required = True
 
+    # init
+    sp = sub.add_parser("init", parents=[common_r], help="write the project folder yavih-bench/ (yavih.toml, bridges/, matrices/, suites/, benchmarks/, tools/) and the user config when absent")
+    sp.add_argument("--dir", default=None, metavar="D", help="the repository root the folder goes under (default: the current directory)")
+    sp.add_argument("--site", default=None, metavar="ID", help="write a [site.ID] table for this cluster")
+    sp.add_argument("--hosts", action="append", default=[], metavar="GLOB", help="hostname glob(s) of --site (default: this host's name)")
+    sp.add_argument("--launcher", default=None, metavar="CMD", help="the site's default launcher (the model env's python or a prefix command)")
+    sp.add_argument("--no-user-config", action="store_true", help="do not write ~/.config/yavih/config.toml when it is absent")
+    sp.add_argument("--force", action="store_true", help="refresh README.md, .gitignore and the directories of an existing folder (yavih.toml is never overwritten)")
+    sp.set_defaults(func=cmd_init)
+
     # doctor
-    sp = sub.add_parser("doctor", parents=[common_r], help="environment, decoders, data roots, GPU, configuration; --selftest runs the reference bridge")
+    sp = sub.add_parser("doctor", parents=[common_r], help="environment, decoders, data roots, GPU, configuration, the project folder; --selftest runs the reference bridge")
     sp.add_argument("--bench", default=None)
     sp.add_argument("--selftest", action="store_true")
     sp.set_defaults(func=cmd_doctor)
@@ -1858,7 +1921,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("name")
     s.add_argument("--readout", default=None, help="the readout (clf, seq, grid, box or a registered one); picks the default --like")
     s.add_argument("--like", default=None, metavar="BENCH", help="the folder whose manifest, reader and template are copied (default per readout)")
-    s.add_argument("--dir", default=None, metavar="D", help="parent directory (default: the first $YAVIH_BENCH_PATH entry, else .)")
+    s.add_argument("--dir", default=None, metavar="D", help="parent directory (default: the project's benchmarks/, else the first $YAVIH_BENCH_PATH entry, else .)")
     s.set_defaults(func=cmd_bench_new)
     s = bsub.add_parser("trial", parents=[common_r],
                         help="run the whole pipeline of one folder (stand-in, oracle bridge, check, extract, validate, probe, report) on a "
@@ -1885,11 +1948,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--allow-loopback", action="store_true",
                    help="let encode() connect to 127.0.0.0/8 / ::1 (a local inference server); recorded in the profile")
     s.set_defaults(func=cmd_bridge_check)
-    s = brsub.add_parser("new", parents=[common_r], help="copy a benchmark's bridge_template.py to bridges/<model>_<bench>.py with the model name filled in")
+    s = brsub.add_parser("new", parents=[common_r], help="copy a benchmark's bridge_template.py to <project bridges dir>/<model>_<bench>.py with the model name filled in")
     s.add_argument("bench", metavar="<bench>")
     s.add_argument("--model", required=True, help="the model's NAME (every bridge of this model uses it; results are filed under it)")
     s.add_argument("--reading", default=None, help="a | v | av (fills a literal reading, or the default of a reading arg)")
-    s.add_argument("--out", default=None, metavar="DIR|FILE", help="destination (default bridges/<model>_<bench>.py)")
+    s.add_argument("--out", default=None, metavar="DIR|FILE", help="destination (default: the project's bridges/<model>_<bench>.py, else ./bridges/)")
     s.add_argument("--force", action="store_true", help="overwrite an existing destination file")
     s.set_defaults(func=cmd_bridge_new)
 
@@ -1988,9 +2051,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = plsub.add_parser("init", parents=[common_r], help="write a matrix.yaml skeleton and the bridge stubs for one model on a suite")
     s.add_argument("--suite", required=True, metavar="S", help="the suite (yavih suite list)")
     s.add_argument("--model", required=True, help="the model NAME (every bridge of this model uses it; results are filed under it)")
-    s.add_argument("--launcher", required=True, metavar="PYTHON", help="the model environment's python (matrix defaults.launcher)")
-    s.add_argument("--out", default="matrix.yaml", metavar="matrix.yaml", help="the matrix file (default ./matrix.yaml)")
-    s.add_argument("--bridges-dir", default="bridges", metavar="DIR", help="bridge files and profiles, relative to the matrix (default bridges)")
+    s.add_argument("--launcher", default=None, metavar="PYTHON|NAME", help="the model environment's python, or a [launchers] name (matrix defaults.launcher); default: the configured launcher at execution")
+    s.add_argument("--out", default=None, metavar="matrix.yaml", help="the matrix file (default: the project's matrices/<model>.yaml, else ./matrix.yaml)")
+    s.add_argument("--bridges-dir", default=None, metavar="DIR", help="bridge files, relative to the matrix (default: the project's bridges/, else bridges); profiles go to <matrix stem>.profiles/ next to the matrix")
     s.add_argument("--force", action="store_true", help="overwrite an existing matrix file (bridge files are always kept)")
     s.set_defaults(func=cmd_plan_init)
     s = plsub.add_parser("build", parents=[common_r])

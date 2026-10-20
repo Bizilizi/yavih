@@ -13,8 +13,9 @@ written from the folder contract, plus a ``header:`` block for the README header
 not a protocol: replace the manifest (``make_manifest.py``), the protocol, the contracts, the copied scripts, the
 tests and the docs, then lint again.
 
-Where it goes: ``--dir D`` (the folder is ``D/<name>``), else the first ``$YAVIH_BENCH_PATH`` directory, else the
-current directory. A folder on ``$YAVIH_BENCH_PATH`` resolves by name; elsewhere use its path.
+Where it goes: ``--dir D`` (the folder is ``D/<name>``), else the project's benchmarks directory
+(``yavih-bench/benchmarks/``), else the first ``$YAVIH_BENCH_PATH`` directory, else the current directory. A folder
+in the project directory or on ``$YAVIH_BENCH_PATH`` resolves by name; elsewhere use its path.
 """
 
 from __future__ import annotations
@@ -279,8 +280,13 @@ def test_reader_smoke_synthetic_raw():
 
 
 def _dest(dir_: str | os.PathLike | None) -> Path:
+    from yavih import config
+
     if dir_:
         return Path(dir_).expanduser()
+    project = config.project_benchmarks_dir()
+    if project is not None:
+        return project
     bp = [p for p in os.environ.get("YAVIH_BENCH_PATH", "").split(os.pathsep) if p]
     return Path(bp[0]).expanduser() if bp else Path.cwd()
 

@@ -3,7 +3,10 @@
 One matrix entry per suite ``(benchmark, reading)``, keyed ``<model>-<benchmark>-<reading>``, with
 ``script: <bridges_dir>/<model>_<benchmark>.py`` (ONE bridge file per benchmark: a template that takes the
 reading as an argument gets ``args: {reading: <r>}`` per entry), ``profile:
-<bridges_dir>/<model>-<benchmark>-<reading>.profile.json`` and a commented ``waive:`` line. Pending suite
+<profiles_dir>/<model>-<benchmark>-<reading>.profile.json`` (``<matrix stem>.profiles/`` next to the matrix: a
+profile belongs to a matrix entry, not to a bridge file) and a commented ``waive:`` line. In a project
+(``yavih-bench/``) the matrix goes to ``matrices/<model>.yaml`` and the bridges to ``bridges/``; the launcher may be
+left to the configuration (``launcher`` / ``[launchers]``, per site). Pending suite
 entries become a comment block; a ``join`` is a report step, never a matrix entry. The bridge files are
 copies of each folder's ``bridge_template.py`` (``yavih.shipped.bridge_new``); an existing bridge file is
 kept, never overwritten. ``plan build`` refuses the matrix (``E_PROFILE``) until every profile exists.
@@ -19,7 +22,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-__all__ = ["write_matrix_skeleton", "plan_init", "skeleton_entries"]
+__all__ = ["write_matrix_skeleton", "plan_init", "skeleton_entries", "project_defaults"]
 
 _PLAIN = re.compile(r"^[A-Za-z0-9_./-]+$")
 
@@ -29,12 +32,14 @@ def _scalar(value: str) -> str:
     return value if _PLAIN.match(value) else json.dumps(value)
 
 
-def skeleton_entries(suite: Any, *, model: str, bridges_dir: str = "bridges") -> list[dict[str, Any]]:
+def skeleton_entries(suite: Any, *, model: str, bridges_dir: str = "bridges", profiles_dir: str | None = None) -> list[dict[str, Any]]:
     """The matrix entries of ``suite`` for ``model``, in suite order: ``{key, capability, benchmark, reading,
     script, profile, args}`` (``args`` is ``{reading: r}`` for a multi-reading template, else ``{}``). Paths are
-    relative to the matrix file's directory (``bridges_dir`` may be absolute)."""
+    relative to the matrix file's directory (``bridges_dir`` / ``profiles_dir`` may be absolute); ``profiles_dir``
+    defaults to ``matrix.profiles``."""
     from yavih.suites import load_suite
 
+    profiles_dir = profiles_dir if profiles_dir is not None else "matrix.profiles"
     suite = load_suite(suite)
     out = []
     for cap, e in suite.entries():
@@ -44,7 +49,7 @@ def skeleton_entries(suite: Any, *, model: str, bridges_dir: str = "bridges") ->
         for r in e.readings:
             key = f"{model}-{e.benchmark}-{r}"
             out.append({"key": key, "capability": cap, "benchmark": e.benchmark, "reading": r, "script": script,
-                        "profile": (Path(bridges_dir) / f"{key}.profile.json").as_posix(),
+                        "profile": (Path(profiles_dir) / f"{key}.profile.json").as_posix(),
                         "args": {"reading": r} if e.multi_reading else {}})
     return out
 
@@ -58,21 +63,25 @@ def _check_model(model: str) -> None:
                          "(the name every bridge of this model uses; results are filed under it)", "E_ARG")
 
 
-def write_matrix_skeleton(suite: Any, *, model: str, launcher: str, out: str | os.PathLike = "matrix.yaml",
-                          bridges_dir: str = "bridges", force: bool = False) -> dict[str, Any]:
+def write_matrix_skeleton(suite: Any, *, model: str, launcher: str | None = None, out: str | os.PathLike = "matrix.yaml",
+                          bridges_dir: str = "bridges", profiles_dir: str | None = None, force: bool = False) -> dict[str, Any]:
     """Write the ``matrix.yaml`` skeleton for ``model`` on ``suite`` in the layout of
     https://github.com/Bizilizi/yavih/blob/main/docs/execution.md; refuses an existing ``out`` unless ``force``
-    (``E_EXISTS``). Returns ``{path, suite, model, entries, pending, joins}``."""
+    (``E_EXISTS``). ``launcher`` ``None`` writes ``launcher: null``: the configured ``launcher`` (per site) applies at
+    execution. ``profiles_dir`` defaults to ``<matrix stem>.profiles`` next to the matrix. Returns
+    ``{path, suite, model, launcher, entries, pending, joins}``."""
     from yavih.suites import SuiteError, load_suite
 
     _check_model(model)
-    if not isinstance(launcher, str) or not launcher.strip():
-        raise SuiteError("--launcher must be the model environment's python (e.g. /envs/mymodel/bin/python)", "E_ARG")
+    if launcher is not None and (not isinstance(launcher, str) or not launcher.strip()):
+        raise SuiteError("--launcher must be the model environment's python (e.g. /envs/mymodel/bin/python), a [launchers] name, or omitted", "E_ARG")
     suite = load_suite(suite)
     path = Path(out)
     if path.exists() and not force:
         raise SuiteError(f"{path} exists; pass --force to overwrite it (or --out another path)", "E_EXISTS")
-    entries = skeleton_entries(suite, model=model, bridges_dir=bridges_dir)
+    if profiles_dir is None:
+        profiles_dir = f"{path.stem}.profiles"
+    entries = skeleton_entries(suite, model=model, bridges_dir=bridges_dir, profiles_dir=profiles_dir)
     if not entries:
         raise SuiteError(f"suite {suite.name!r} has no packaged entry to plan")
     pending = [(cap, e) for cap, e in suite.entries() if e.status != "packaged"]
@@ -89,7 +98,8 @@ def write_matrix_skeleton(suite: Any, *, model: str, launcher: str, out: str | o
         "shard_minutes: 30                   # target wall per extract unit",
         "canaries: 8                         # canary rows re-encoded per shard",
         "defaults:                           # merged into every entry",
-        f"  launcher: {json.dumps(launcher)}",
+        (f"  launcher: {json.dumps(launcher)}" if launcher is not None
+         else "  launcher: null                    # null = the configured `launcher` (yavih-bench/yavih.toml, per site); a [launchers] name or a command"),
         "  env: {}",
         "  cpus: 8                           # decode workers = cpus - 1",
         "  args: {}",
@@ -121,23 +131,53 @@ def write_matrix_skeleton(suite: Any, *, model: str, launcher: str, out: str | o
     if path.parent and not path.parent.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
-    return {"path": str(path.resolve()), "suite": suite.name, "model": model, "entries": entries,
+    return {"path": str(path.resolve()), "suite": suite.name, "model": model, "launcher": launcher, "entries": entries,
             "pending": [{"capability": c, "benchmark": e.benchmark, "readings": list(e.readings)} for c, e in pending],
             "joins": [{"benchmark": e.benchmark, "readings": list(e.readings), "reading": e.join_reading} for e in joins]}
 
 
-def plan_init(suite: Any, *, model: str, launcher: str, out: str | os.PathLike = "matrix.yaml", bridges_dir: str = "bridges",
-              force: bool = False) -> dict[str, Any]:
+def project_defaults(model: str) -> dict[str, Any]:
+    """Where ``plan init`` writes in a project (``yavih-bench/``): ``{project, out, bridges_dir, launcher_configured}``;
+    outside one ``out`` is ``matrix.yaml`` and ``bridges_dir`` is ``bridges`` in the current directory. ``bridges_dir`` is
+    relative to the matrix directory. An invalid configuration counts as no project (``plan init`` must still work)."""
+    from yavih import config
+
+    try:
+        settings = config.load()
+    except config.ConfigError:
+        settings = None
+    project = settings.project_dir() if settings is not None else None
+    if project is None:
+        return {"project": None, "out": "matrix.yaml", "bridges_dir": "bridges", "launcher_configured": False}
+    out = settings.project_path("matrices") / f"{model}.yaml"
+    bridges = settings.project_path("bridges")
+    try:
+        rel = Path(os.path.relpath(bridges, out.parent)).as_posix()
+    except ValueError:  # another drive (Windows)
+        rel = bridges.as_posix()
+    return {"project": str(project), "out": str(out), "bridges_dir": rel,
+            "launcher_configured": settings.launcher() is not None or bool(settings.launchers())}
+
+
+def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str | os.PathLike | None = None,
+              bridges_dir: str | None = None, force: bool = False) -> dict[str, Any]:
     """``yavih plan init``: one bridge file per packaged suite benchmark (``yavih.shipped.bridge_new`` into
     ``<matrix dir>/<bridges_dir>/<model>_<benchmark>.py``; an existing file is kept) and the matrix skeleton
-    (:func:`write_matrix_skeleton`; ``force`` overwrites the matrix only). Returns the skeleton record plus
-    ``bridges: [{benchmark, path, action: created|kept}]`` and ``next``: one ``yavih bridge check`` command per
-    entry, then the ``plan build`` command, with paths as seen from the current directory."""
+    (:func:`write_matrix_skeleton`; ``force`` overwrites the matrix only). ``out`` and ``bridges_dir`` default to the
+    project's ``matrices/<model>.yaml`` and ``bridges/`` (:func:`project_defaults`), else ``matrix.yaml`` and ``bridges``
+    in the current directory. Returns the skeleton record plus ``bridges: [{benchmark, path, action: created|kept}]``,
+    ``project``, ``launcher_configured`` and ``next``: one ``yavih bridge check`` command per entry, then the
+    ``plan build`` command, with paths as seen from the current directory."""
     from yavih.shipped import ShippedFileError, bridge_new
     from yavih.suites import SuiteError, load_suite
 
     _check_model(model)
     suite = load_suite(suite)
+    defaults = project_defaults(model)
+    if out is None:
+        out = defaults["out"]
+    if bridges_dir is None:
+        bridges_dir = defaults["bridges_dir"]
     path = Path(out)
     if path.exists() and not force:  # refuse before any bridge file is written
         raise SuiteError(f"{path} exists; pass --force to overwrite it (or --out another path)", "E_EXISTS")
@@ -154,6 +194,8 @@ def plan_init(suite: Any, *, model: str, launcher: str, out: str | os.PathLike =
             bridges.append({"benchmark": e_bench, "path": str(dest.resolve()), "action": "kept", "filled": []})
     rec = write_matrix_skeleton(suite, model=model, launcher=launcher, out=path, bridges_dir=bridges_dir, force=force)
     rec["bridges"] = bridges
+    rec["project"] = defaults["project"]
+    rec["launcher_configured"] = defaults["launcher_configured"]
     commands = []
     for ent in rec["entries"]:
         script, profile = _shown(root / ent["script"]), _shown(root / ent["profile"])

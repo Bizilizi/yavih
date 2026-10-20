@@ -126,10 +126,39 @@ def resolve_deadline(spec: str | float | None, *, margin_s: float = DEFAULT_DEAD
     return parse_deadline(spec, env=env, margin_s=margin_s, inherit=False)
 
 
+def resolve_launcher(spec: str | None) -> str | None:
+    """A unit's ``launcher`` as the command to run: a value with a path separator or whitespace is the command itself;
+    a bare NAME is ``[launchers] NAME`` of the active configuration (``yavih-bench/yavih.toml``, per site), else NAME
+    when it is a command on PATH, else ``ExecError``; ``None`` is the configured default ``launcher``, else ``None``
+    (the unit runs with the interpreter running ``exec``)."""
+    from yavih import config
+
+    if spec is not None and not str(spec).strip():
+        spec = None
+    if spec is not None and ("/" in spec or os.sep in spec or any(ch.isspace() for ch in spec)):
+        return spec
+    try:
+        settings = config.load()
+    except config.ConfigError as e:
+        raise ExecError(f"launcher {spec!r}: the configuration does not load: {e}") from e
+    if spec is None:
+        return settings.launcher()
+    named = settings.launcher(spec)
+    if named is not None:
+        return named
+    if shutil.which(spec):
+        return spec
+    known = sorted(settings.launchers())
+    raise ExecError(f"launcher {spec!r} is neither a [launchers] name of the active configuration "
+                    f"({', '.join(known) if known else 'none defined'}) nor a command on PATH; define `[launchers] {spec} = ...` "
+                    f"in {settings.edit_hint()} (per site under [site.<id>]), or write the command itself in the matrix")
+
+
 def build_command(unit: Any) -> list[str]:
-    """Launcher whose last token matches ``python*`` replaces ``cmd[0]``; otherwise it is a prefix."""
+    """``resolve_launcher(unit.launcher)`` + ``cmd``: a launcher whose last token matches ``python*`` replaces ``cmd[0]``;
+    otherwise it is a prefix; none leaves ``cmd`` as it is."""
     cmd = list(unit.cmd)
-    launcher = unit.launcher
+    launcher = resolve_launcher(unit.launcher)
     if not launcher or not str(launcher).strip():
         return cmd
     toks = shlex.split(str(launcher))

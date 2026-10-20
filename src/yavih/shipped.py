@@ -249,9 +249,21 @@ def default_bridge_path(bench: str, model: str) -> Path:
     return Path("bridges") / f"{model}_{bench}.py"
 
 
+def project_bridges_dir() -> Path | None:
+    """The project's bridges directory (``yavih-bench/bridges/``, or ``[project] bridges``) when a project file is
+    found, else ``None``; an invalid configuration counts as no project here (``bridge new`` must still work)."""
+    from yavih import config
+
+    try:
+        return config.load().project_path("bridges")
+    except config.ConfigError:
+        return None
+
+
 def bridge_new(bench: str, *, model: str, reading: str | None = None, out: str | os.PathLike | None = None,
                force: bool = False) -> dict[str, Any]:
-    """Copy the folder's ``bridge_template.py`` to ``bridges/<model>_<bench>.py`` (``out``: a directory or a file),
+    """Copy the folder's ``bridge_template.py`` to ``<project bridges dir>/<model>_<bench>.py`` (``bridges/`` without a
+    project; ``out``: a directory or a file),
     with ``describe()["model"]`` (and the optional file label ``Bridge.name``) filled where the template has its
     ``TODO-model`` placeholder, the reading filled when given (a literal ``"reading"`` value, or the default of a
     ``reading`` argument), and a header naming the commands that print the contract. Everything else stays a
@@ -286,9 +298,13 @@ def bridge_new(bench: str, *, model: str, reading: str | None = None, out: str |
             filled.append("ARGS['reading'].default")
         elif n_lit:
             filled.append("describe()['reading']")
-    dest = Path(out) if out is not None else default_bridge_path(bench_name, model)
-    if out is not None and (dest.is_dir() or str(out).endswith(("/", os.sep))):
-        dest = dest / default_bridge_path(bench_name, model).name
+    project = project_bridges_dir() if out is None else None
+    if project is not None:
+        dest = project / default_bridge_path(bench_name, model).name
+    else:
+        dest = Path(out) if out is not None else default_bridge_path(bench_name, model)
+        if out is not None and (dest.is_dir() or str(out).endswith(("/", os.sep))):
+            dest = dest / default_bridge_path(bench_name, model).name
     if dest.exists() and not force:
         raise ShippedFileError(f"{dest} exists; pass --force to overwrite it (or --out another path)", "E_EXISTS")
     header = (f"# yavih bridge for model {model!r} on benchmark {bench_name!r}: a copy of that folder's bridge_template.py "

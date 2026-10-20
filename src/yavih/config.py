@@ -5,8 +5,8 @@ Layers, lowest to highest precedence (every later layer overrides an earlier one
 1. built-in defaults and ``benchmark.yaml`` root defaults (``${data.root}``, ``${datasets.<name>}``);
 2. the USER file ``$XDG_CONFIG_HOME/yavih/config.toml`` (else ``~/.config/yavih/config.toml``);
 3. the active ``[site.<id>]`` table of the user file;
-4. the PROJECT file: ``--config FILE``, else ``$YAVIH_CONFIG``, else the nearest ``yavih.toml`` found
-   walking up from the current directory;
+4. the PROJECT file: ``--config FILE``, else ``$YAVIH_CONFIG``, else the nearest ``yavih-bench/yavih.toml``
+   (else ``yavih.toml``) found walking up from the current directory, stopping at the git root;
 5. the active ``[site.<id>]`` table of the project file;
 6. environment variables ``YAVIH_*`` (:data:`ENV_VARS`, ``YAVIH_DATA__<BENCH>__<ROOT>``,
    ``YAVIH_DATASETS__<NAME>``);
@@ -14,7 +14,11 @@ Layers, lowest to highest precedence (every later layer overrides an earlier one
    by :func:`set_cli`; programmatic ``Benchmark.load(data=...)`` overrides sit above everything.
 
 The active site is ``$YAVIH_SITE`` or the first ``[site.<id>]`` whose ``hosts`` globs match
-``socket.gethostname()``. Values get ``~`` and ``$VAR`` expansion; a relative path in a file is
+``socket.gethostname()``. A site table also carries the model environments of that cluster:
+``launcher`` (the default) and ``[launchers] name = command`` (named ones a matrix entry refers to).
+The project file's ``[project]`` table pins the yavih version it expects (``yavih = ">=1,<2"``,
+checked by ``doctor``), relocates the project directories (``bridges``, ``matrices``, ``suites``,
+``benchmarks``) and lists ``subprojects`` (nested project folders that are not strays). Values get ``~`` and ``$VAR`` expansion; a relative path in a file is
 anchored to that file's directory; ``${data.root}`` and ``${datasets.<name>}`` are substituted in
 yaml defaults and config values alike (``${datasets.X}`` = ``[datasets] X``, else ``${data.root}/X``).
 
@@ -89,11 +93,22 @@ __all__ = [
     "DATASETS_ENV_PREFIX",
     "ENV_VARS",
     "PROJECT_FILE",
+    "PROJECT_DIR",
+    "PROJECT_KINDS",
+    "git_root",
+    "project_benchmarks_dir",
 ]
 
 DATA_ENV_PREFIX = "YAVIH_DATA__"
 DATASETS_ENV_PREFIX = "YAVIH_DATASETS__"
 PROJECT_FILE = "yavih.toml"
+#: The project folder ``yavih init`` writes and discovery looks for first: ``<repo>/yavih-bench/yavih.toml``.
+PROJECT_DIR = "yavih-bench"
+#: The directories a project keeps under :data:`PROJECT_DIR` (each relocatable by ``[project] <kind> = path``).
+PROJECT_KINDS = ("bridges", "matrices", "suites", "benchmarks")
+#: ``[project]`` keys.
+_PROJECT_KEYS = ("yavih", *PROJECT_KINDS, "subprojects")
+_LAUNCHER_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,63}$")
 
 #: Every ``YAVIH_*`` variable yavih reads or sets, with what it means. Anything else named ``YAVIH_*``
 #: is an error (a warning with ``--lenient``), so a typo or an unknown variable never goes unnoticed.
@@ -102,11 +117,12 @@ ENV_VARS: dict[str, str] = {
     "YAVIH_RUNS": "runs root; config [runs] root; default ./runs",
     "YAVIH_RESULTS": "results-store root; config [results] root; default <runs root>/../results",
     "YAVIH_SCRATCH": "scratch for staged shards; config [scratch] root; else SLURM_TMPDIR; never TMPDIR",
-    "YAVIH_CONFIG": "the project config file (beats ./yavih.toml discovery); same as --config",
+    "YAVIH_CONFIG": "the project config file (beats the yavih-bench/yavih.toml discovery); same as --config",
     "YAVIH_SITE": "the active [site.<id>] table (else the first whose hosts glob matches the hostname)",
     "YAVIH_LENIENT": "1 = unknown config keys / YAVIH_* variables / stale benchmark copies warn instead of failing",
-    "YAVIH_BENCH_PATH": "colon-separated directories of out-of-tree benchmark folders (after $YAVIH_HOME/benchmarks and the packaged ones)",
-    "YAVIH_SUITES": "directory of project suites (<name>.yaml; beats suites/ next to the project yavih.toml, else ./suites)",
+    "YAVIH_BENCH_PATH": "colon-separated directories of out-of-tree benchmark folders (after $YAVIH_HOME/benchmarks, the packaged ones and the project's benchmarks/)",
+    "YAVIH_SUITES": "directory of project suites (<name>.yaml; beats the project's suites/, else ./suites)",
+    "YAVIH_LAUNCHER": "the default launcher (the model environment's python, or a prefix command); config `launcher` (top level or [site.<id>])",
     "YAVIH_DATA__ROOT": "the site data root (${data.root}); config [data] root",
     "YAVIH_RAM_BUDGET_GB": "RAM budget of a probe / validate in GiB; config [resources] ram_budget_gb",
     "YAVIH_CPUS": "CPUs this process may use (set per slot by `yavih exec --slots`); config [resources] cpus",
@@ -129,7 +145,7 @@ _PLACEHOLDER = re.compile(r"\$\{(data\.root|datasets\.([a-z][a-z0-9_]*))\}")
 #: Allowed scalar keys per table (``[data]`` and ``[datasets]`` are free-form, checked separately).
 _ROOT_TABLES = ("home", "runs", "results", "scratch")
 _RESOURCE_KEYS: dict[str, type] = {"ram_budget_gb": float, "cpus": int, "decode_workers": int}
-_TOP_TABLES = (*_ROOT_TABLES, "data", "datasets", "resources", "site")
+_TOP_TABLES = (*_ROOT_TABLES, "data", "datasets", "resources", "launchers", "project", "site")
 _ENV_SCALARS: dict[str, tuple[str, ...]] = {
     "YAVIH_HOME": ("home", "root"),
     "YAVIH_RUNS": ("runs", "root"),
@@ -139,6 +155,7 @@ _ENV_SCALARS: dict[str, tuple[str, ...]] = {
     "YAVIH_RAM_BUDGET_GB": ("resources", "ram_budget_gb"),
     "YAVIH_CPUS": ("resources", "cpus"),
     "YAVIH_DECODE_WORKERS": ("resources", "decode_workers"),
+    "YAVIH_LAUNCHER": ("launcher", "default"),
 }
 
 
@@ -351,7 +368,7 @@ def _registry() -> dict[str, tuple[tuple[str, ...], dict[str, Any]]]:
     """``name -> (aliases, roots)`` over packaged folders, ``<home>/benchmarks`` and registered folders.
     Read from the yamls once per process (and again when the home directory changes)."""
     home = _home_from_env(os.environ)
-    key = f"{home}|{os.environ.get('YAVIH_BENCH_PATH', '')}"
+    key = f"{home}|{os.environ.get('YAVIH_BENCH_PATH', '')}|{project_benchmarks_dir() or ''}"
     with _LOCK:
         if _REGISTRY_CACHE["key"] != key:
             _REGISTRY_CACHE["value"] = _scan_registry(home)
@@ -437,12 +454,48 @@ def user_config_path(env: Mapping[str, str] | None = None) -> tuple[Path, str]:
     return Path.home() / ".config" / "yavih" / "config.toml", "~/.config"
 
 
-def _discover_project(cwd: Path) -> Path | None:
-    for d in (cwd, *cwd.parents):
-        p = d / PROJECT_FILE
-        if p.is_file():
-            return p
+def git_root(start: Path) -> Path | None:
+    """The nearest directory at or above ``start`` holding ``.git`` (a directory or a worktree file), else ``None``."""
+    for d in (start, *start.parents):
+        if (d / ".git").exists():
+            return d
     return None
+
+
+def _discover_project(cwd: Path) -> Path | None:
+    """The nearest ``yavih-bench/yavih.toml``, else ``yavih.toml``, walking up from ``cwd``; the walk stops at the
+    git root (a repository has one project), and runs to the filesystem root outside any repository."""
+    for d in (cwd, *cwd.parents):
+        for p in (d / PROJECT_DIR / PROJECT_FILE, d / PROJECT_FILE):
+            if p.is_file():
+                return p
+        if (d / ".git").exists():
+            return None
+    return None
+
+
+def project_benchmarks_dir(env: Mapping[str, str] | None = None, cwd: str | os.PathLike | None = None) -> Path | None:
+    """The project's benchmark folders directory (``[project] benchmarks``, else ``benchmarks/`` next to the project
+    file), without building the settings: read by the benchmark registry, which the settings build itself needs.
+    ``None`` without a project file."""
+    env = os.environ if env is None else env
+    cwd_path = Path(cwd) if cwd is not None else _cwd()
+    p, how = _project_path(env, cwd_path, cli_overrides() if env is os.environ else {})
+    if p is None or not p.is_file():
+        return None
+    try:
+        f = _read_file(p, "project", how)
+    except ConfigError:
+        return None
+    proj = f.data.get("project")
+    raw = proj.get("benchmarks") if isinstance(proj, Mapping) else None
+    if isinstance(raw, str) and raw.strip():
+        try:
+            s = os.path.expanduser(_expand_env(raw, env, "[project] benchmarks", None))
+        except ConfigError:
+            return None
+        return Path(s) if os.path.isabs(s) else Path(os.path.normpath(p.parent / s))
+    return p.parent / "benchmarks"
 
 
 def _project_path(env: Mapping[str, str], cwd: Path, cli: Mapping[str, Any]) -> tuple[Path | None, str]:
@@ -619,6 +672,49 @@ class Settings:
 
         return _PLACEHOLDER.sub(sub, value)
 
+    # -- the project (yavih-bench/) ---------------------------------------------------------
+    def project_file(self) -> ConfigFile | None:
+        """The project config file that exists (``--config``, ``$YAVIH_CONFIG`` or discovered), else ``None``."""
+        return next((f for f in self.files if f.layer == "project" and f.exists and f.how != "config="), None)
+
+    def project_dir(self) -> Path | None:
+        """The project directory: the directory holding the project file (``yavih-bench/``), else ``None``."""
+        f = self.project_file()
+        return Path(f.path).resolve().parent if f is not None else None
+
+    def project_path(self, kind: str) -> Path | None:
+        """Where the project keeps its ``kind`` (``bridges``, ``matrices``, ``suites``, ``benchmarks``): ``[project] <kind>``,
+        else ``<project dir>/<kind>``; ``None`` without a project."""
+        if kind not in PROJECT_KINDS:
+            raise ValueError(f"project_path: unknown kind {kind!r}; one of {PROJECT_KINDS}")
+        root = self.project_dir()
+        if root is None:
+            return None
+        v = self.get("project", kind)
+        return Path(self.path_of(v)) if v else root / kind
+
+    def project_requirement(self) -> str | None:
+        """``[project] yavih``: the version requirement the project expects (``doctor`` checks it), else ``None``."""
+        v = self.get("project", "yavih")
+        return str(v.value) if v else None
+
+    def subprojects(self) -> list[Path]:
+        """``[project] subprojects``: nested project directories that are not strays, anchored to the project file."""
+        v = self.get("project", "subprojects")
+        if not v:
+            return []
+        return [Path(self.path_of(Value(s, v.source, v.base))) for s in v.value]
+
+    def launcher(self, name: str | None = None) -> str | None:
+        """The configured launcher: with ``name`` the ``[launchers] name`` entry of the active layers, else the default
+        ``launcher``; ``None`` when not configured. A launcher is a command (``~`` expanded), never anchored to a file."""
+        v = self.get("launchers", name) if name is not None else self.get("launcher", "default")
+        return os.path.expanduser(str(v.value)) if v else None
+
+    def launchers(self) -> dict[str, str]:
+        """Every named launcher of the active layers, ``name -> command``."""
+        return {k[1]: os.path.expanduser(str(v.value)) for k, v in sorted(self.values.items()) if k[0] == "launchers"}
+
     def edit_hint(self) -> str:
         project = next((f for f in self.files if f.layer == "project" and f.exists), None)
         user = next((f for f in self.files if f.layer == "user"), None)
@@ -731,7 +827,17 @@ class Settings:
                 vals[f"data.{rest[0]}.{rest[1]}"] = {"value": self._safe_path(v), "source": v.source}
         for key, rec in resources.describe(self).items():
             vals[f"resources.{key}"] = rec
+        lv = self.get("launcher", "default")
+        vals["launcher"] = {"value": self.launcher(), "source": lv.source if lv else "unset (the unit's own launcher, else the current python)"}
+        for name, cmd in self.launchers().items():
+            vals[f"launchers.{name}"] = {"value": cmd, "source": self.get("launchers", name).source}
+        project: dict[str, Any] | None = None
+        pf = self.project_file()
+        if pf is not None:
+            project = {"file": str(pf.path), "dir": str(self.project_dir()), "yavih": self.project_requirement(),
+                       **{k: str(self.project_path(k)) for k in PROJECT_KINDS}, "subprojects": [str(p) for p in self.subprojects()]}
         data: dict[str, Any] = {
+            "project": project,
             "files": [f.to_json() for f in self.files],
             "site": self.site,
             "site_source": self.site_source,
@@ -790,10 +896,60 @@ def _schema_entries(
     for table, body in data.items():
         if table == "hosts" and in_site:
             continue
+        if table == "launcher":
+            if not isinstance(body, str) or not body.strip():
+                col.strict("W_CONFIG_TYPE", f"{label}: launcher must be a non-empty string (the model environment's python, or a prefix command)")
+                continue
+            out.append((("launcher", "default"), Value(_expand_env(body, env, f"{label}: launcher", col), src("launcher"))))
+            continue
+        if table == "launchers":
+            if not isinstance(body, Mapping):
+                col.strict("W_CONFIG_TYPE", f"{label}: [launchers] must be a table of name = command")
+                continue
+            for k, v in body.items():
+                if not _LAUNCHER_NAME_RE.match(str(k)):
+                    col.strict("W_CONFIG_UNKNOWN", f"{label}: [launchers] {k}: a launcher name matches [A-Za-z][A-Za-z0-9_.-]*")
+                    continue
+                if not isinstance(v, str) or not v.strip():
+                    col.strict("W_CONFIG_TYPE", f"{label}: [launchers] {k} must be a non-empty string")
+                    continue
+                out.append((("launchers", str(k)), Value(_expand_env(v, env, f"{label}: launchers.{k}", col), src("launchers", str(k)))))
+            continue
+        if table == "project":
+            if in_site:
+                col.strict("W_CONFIG_UNKNOWN", f"{label}: [project] is not a site table")
+                continue
+            if f.layer != "project":
+                col.strict("W_CONFIG_UNKNOWN", f"{label}: [project] belongs to the project file ({PROJECT_DIR}/{PROJECT_FILE}), not the user file")
+                continue
+            if not isinstance(body, Mapping):
+                col.strict("W_CONFIG_TYPE", f"{label}: [project] must be a table")
+                continue
+            for k, v in body.items():
+                if k == "yavih":
+                    if not isinstance(v, str) or not v.strip():
+                        col.strict("W_CONFIG_TYPE", f"{label}: [project] yavih must be a version requirement string such as \">=1,<2\"")
+                        continue
+                    out.append((("project", "yavih"), Value(v.strip(), src("project", "yavih"))))
+                elif k in PROJECT_KINDS:
+                    val = as_path(v, "project", k)
+                    if val is not None:
+                        out.append((("project", k), val))
+                elif k == "subprojects":
+                    if not isinstance(v, list) or not all(isinstance(x, str) and x.strip() for x in v):
+                        col.strict("W_CONFIG_TYPE", f"{label}: [project] subprojects must be a list of directory paths")
+                        continue
+                    paths = tuple(_expand_env(x, env, f"{label}: project.subprojects", col) for x in v)
+                    out.append((("project", "subprojects"), Value(paths, src("project", "subprojects"), base)))
+                else:
+                    close = difflib.get_close_matches(str(k), _PROJECT_KEYS, n=1, cutoff=0.6)
+                    col.strict("W_CONFIG_UNKNOWN", f"{label}: unknown key [project] {k}" + (f", did you mean {close[0]!r}?" if close else "")
+                               + f"; known: {', '.join(_PROJECT_KEYS)}")
+            continue
         if table not in _TOP_TABLES or (table == "site" and in_site):
             close = difflib.get_close_matches(table, _TOP_TABLES, n=1, cutoff=0.6)
             col.strict("W_CONFIG_UNKNOWN", f"{label}: unknown table [{table}]" + (f", did you mean [{close[0]}]?" if close else "")
-                       + f"; known: {', '.join(t for t in _TOP_TABLES if not (in_site and t == 'site'))}")
+                       + f"; known: {', '.join(t for t in _TOP_TABLES if not (in_site and t in ('site', 'project')))}, and the key launcher")
             continue
         if table == "site":
             continue  # handled by the caller
@@ -1042,7 +1198,7 @@ def load(
         return _build(env_map, cwd_path, cli, config, lenient)
     key = json.dumps(
         [sorted((k, v) for k, v in env_map.items() if k.startswith("YAVIH_") or k in ("XDG_CONFIG_HOME", "HOME", "SLURM_TMPDIR")),
-         str(cwd_path), repr(sorted((k, repr(v)) for k, v in cli.items())), lenient, sorted(_REGISTERED)],
+         str(cwd_path), str(_discover_project(cwd_path)), repr(sorted((k, repr(v)) for k, v in cli.items())), lenient, sorted(_REGISTERED)],
     )
     with _LOCK:
         cached: Settings | None = _CACHE["settings"]

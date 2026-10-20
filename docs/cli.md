@@ -34,8 +34,9 @@ them to the environment of every child process it starts.
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih doctor` | report the environment: installed extras, torch, decoders, GPUs, the configuration with sources, the home / runs / results roots, the default decode-worker count, installed skill copies | `--bench B` also resolves B's data roots, reads one stored row per stream (`W_MEDIA_READ`), checks the header backends (`W_HEADER_BACKEND`), the benchmark's external packages and its pinned tools (`data.tools:` per tool, `W_TOOL_PIN` when one is missing or off its pin); `--selftest` runs the reference bridge on 32 ESC-50 clips |
-| `yavih config show` | every configuration value with its source, the files read and the active site | `--bench B` adds B's data roots, whether each exists, and the key / env var that sets it |
+| `yavih init` | write the project folder `yavih-bench/` (`yavih.toml`, `README.md`, `.gitignore`, `bridges/`, `matrices/`, `suites/`, `benchmarks/`, `tools/`) and the user config with personal roots when absent ([project layout](project-layout.md)) | `--dir D` (default `.`); `--site ID [--hosts GLOB]... [--launcher CMD]` writes a real site table; `--no-user-config`; `--force` refreshes README.md, .gitignore and the directories (`yavih.toml` is never overwritten); refuses a folder another project file already governs (`E_PROJECT_EXISTS`) |
+| `yavih doctor` | report the environment: installed extras, torch, decoders, GPUs, the configuration with sources, the home / runs / results roots, the default decode-worker count, installed skill copies, the project folder (version requirement, nested project files, stray matrices: `W_PROJECT_VERSION`, `W_PROJECT_NESTED`, `W_PROJECT_STRAY`) | `--bench B` also resolves B's data roots, reads one stored row per stream (`W_MEDIA_READ`), checks the header backends (`W_HEADER_BACKEND`), the benchmark's external packages and its pinned tools (`data.tools:` per tool, `W_TOOL_PIN` when one is missing or off its pin); `--selftest` runs the reference bridge on 32 ESC-50 clips |
+| `yavih config show` | every configuration value with its source, the files read, the active site and the project folder | `--bench B` adds B's data roots, whether each exists, and the key / env var that sets it |
 | `yavih config get` | print one resolved value for shell scripts | `KEY` = `runs.root`, `results.root`, `scratch.root`, `home.root`, `data.root`, `datasets.<name>`, `resources.<key>` or `<benchmark>.<root>`; exit 1 when it does not resolve |
 | `yavih skill install` | install the packaged agent skill into a project | `--target claude\|codex\|cursor\|agents-md` (default `claude`); `--path P` (default per target: `.claude/skills/yavih`, `.codex/skills/yavih`, `.cursor/rules/yavih.mdc`, `AGENTS.md`) |
 | `yavih skill show` | print the skill's `SKILL.md` | `--all` appends every reference; `--ref NAME` prints one reference (`bridge`, `cli`, `data`, `readouts`, `slurm`) |
@@ -109,7 +110,7 @@ An unknown suite or a file that does not validate is `E_SUITE` (exit 1).
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih bridge new` | copy a benchmark's `bridge_template.py` to `bridges/<model>_<bench>.py` with the model name (and reading) filled in | `<bench> --model M`; `--reading a\|v\|av`; `--out DIR\|FILE`; `--force` overwrites |
+| `yavih bridge new` | copy a benchmark's `bridge_template.py` to the project's `bridges/<model>_<bench>.py` (else `./bridges/`) with the model name (and reading) filled in | `<bench> --model M`; `--reading a\|v\|av`; `--out DIR\|FILE`; `--force` overwrites |
 | `yavih bridge check` | smoke-test a bridge: describe schema, declared rules, rerun / batch / order invariance, throughput; writes `profile.json` | `<bridge.py> --bench B`; `--n 32`; `--arg k=v` (repeatable); `--decode-workers N`; `--out profile.json`; `--synthetic` (a tiny generated stand-in, no data, no profile); `--allow-loopback` |
 
 A failed hard check, an unfilled template (`E_TEMPLATE_UNFILLED`) or features equal for every smoke
@@ -145,7 +146,7 @@ root, else `E_RESULTS_ROOT` (exit 1). See [readouts](readouts.md) and [results](
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih plan init` | write a `matrix.yaml` skeleton (one entry per suite `(benchmark, reading)`) and one bridge stub per benchmark for one model; prints the `bridge check` command of every entry, then `plan build` | `--suite S --model M --launcher PYTHON`; `--out matrix.yaml`; `--bridges-dir bridges` (relative to the matrix); `--force` overwrites the matrix (bridge files are always kept) |
+| `yavih plan init` | write a matrix skeleton (one entry per suite `(benchmark, reading)`) and one bridge stub per benchmark for one model, into the project's `matrices/<M>.yaml` and `bridges/` (else `./matrix.yaml`, `./bridges/`); profiles go to `<matrix stem>.profiles/`; prints the `bridge check` command of every entry, then `plan build` | `--suite S --model M`; `--launcher PYTHON\|NAME` (default: the configured launcher at execution; `W_LAUNCHER_UNSET` when none); `--out FILE`; `--bridges-dir DIR` (relative to the matrix); `--force` overwrites the matrix (bridge files are always kept) |
 | `yavih plan build` | turn a `matrix.yaml` into unit records (`plan.jsonl`) | `<matrix.yaml>`; `--out plan.jsonl` (else JSONL on stdout); `--pending` (only units whose DONE is missing or stale); `--kind extract\|probe\|report`; `--shard-minutes M`; `--format jsonl\|count`; `--sample N` (a capped trial run, below) |
 | `yavih plan status` | count units by status and list those that need attention | `<plan.jsonl>`; `--root DIR` |
 | `yavih plan run` | run every pending unit of a plan on this machine, dependencies first | `<plan.jsonl> --local` (required); `--slots K` (default 1); `--deadline …`; `--deadline-margin 900`; `--root DIR`; `--cpus N`; `--deps plan.jsonl` |
@@ -264,7 +265,8 @@ Codes of plans and execution:
 | code | exit | meaning |
 |---|---|---|
 | `E_SUITE` | 1 | an unknown suite, or a suite file that does not parse or validate ([suites](suites.md)) |
-| `E_EXISTS` | 1 | `plan init` / `suite new` / `bridge new`: the destination exists (pass `--force`) |
+| `E_EXISTS` | 1 | `init` / `plan init` / `suite new` / `bridge new`: the destination exists (pass `--force`) |
+| `E_PROJECT_EXISTS` | 1 | `init`: another project file already governs this directory (one project per repository; `[project] subprojects` for a nested one) |
 | `E_MATRIX` | 1 | malformed `matrix.yaml` (unknown key, wrong type, missing entry key) |
 | `E_PROFILE` | 1 | a profile missing, malformed, disagreeing with its entry or without passed hard checks |
 | `E_PLAN` | 1 | a plan cannot be built or read (two entries on one run directory, a frozen layout contradicting a `shards` pin, an older or newer plan schema, duplicate ids) |

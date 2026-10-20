@@ -39,7 +39,8 @@ pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and
 | `__main__.py` | `python -m yavih` = the `yavih` command |
 | `versions.py` | every version constant (formats, schemas, readout versions, `GIT_HASH`, `writer_stamp()`); stdlib only |
 | `buildinfo.py` | which source commit is running (checkout `git rev-parse` or the wheel's recorded commit) |
-| `config.py` | layered site configuration (`Settings`, data roots, runs/results/scratch roots, `ENV_VARS`) |
+| `config.py` | layered site configuration (`Settings`, data roots, runs/results/scratch roots, launchers, the `[project]` table, `ENV_VARS`; discovery of `yavih-bench/yavih.toml` up to the git root) |
+| `project.py` | the project folder `yavih-bench/`: `yavih init`, the layout scan and version check behind `doctor` (`W_PROJECT_*`) |
 | `_toml.py` | a minimal TOML reader for Python 3.10 without `tomli` |
 | `resources.py` | CPU, memory, RAM budget and decode-worker defaults from env, SLURM, PBS, cgroups |
 | `deadline.py` | the one `--deadline` parser shared by `exec`, `extract` and `probe run` |
@@ -81,7 +82,7 @@ torch. Module-scope imports are restricted:
 
 | allowed at module scope | where |
 |---|---|
-| stdlib only | `versions.py`, `buildinfo.py`, `config.py`, `resources.py`, `deadline.py`, `hashing.py`, `hash_history.py`, `external.py`, `readouts/registry.py`, `plan/`, `report/` |
+| stdlib only | `versions.py`, `buildinfo.py`, `config.py`, `project.py`, `resources.py`, `deadline.py`, `hashing.py`, `hash_history.py`, `external.py`, `readouts/registry.py`, `plan/`, `report/` |
 | numpy + pyyaml + stdlib | the rest of the core: `benchmark.py`, `sample.py`, `bridge.py`, `extract.py`, `io/`, `media/` (decoders inside functions), `metrics/` (scikit-learn inside functions), `cli.py` |
 | torch | `probes/` (not `probes/config.py`), `readouts/` drivers (their `READOUT` descriptors must import without torch), `bridges/examples/`, `testing/__init__.py` |
 

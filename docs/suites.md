@@ -49,9 +49,9 @@ Unknown keys at any level, a `(benchmark, reading)` listed twice, and every rule
 `yavih suite show <name>` and every `--suite <name>` resolve in this order:
 
 1. an existing `.yaml` / `.yml` path (any argument with a `/` or a yaml suffix is a path);
-2. `<project suites dir>/<name>.yaml`, where the project suites directory is `$YAVIH_SUITES` when set, else
-   `suites/` next to the project config file (`--config`, `$YAVIH_CONFIG` or the `yavih.toml` found walking up
-   from the current directory; [configuration](configuration.md)), else `./suites`;
+2. `<project suites dir>/<name>.yaml`, where the project suites directory is `$YAVIH_SUITES` when set, else the
+   project's `suites/` (`yavih-bench/suites/`, or `[project] suites`; [project layout](project-layout.md)), else
+   `./suites`;
 3. the shipped `yavih/suites/<name>.yaml`.
 
 A project suite of a shipped name shadows it (`yavih suite list` marks it `project*`). `yavih suite new <name>

@@ -382,7 +382,7 @@ imported base does not count. Run `bridge check` once per matrix entry: each loa
 ## 8. Template walkthrough (`bridge_template.py` of the benchmark folder)
 
 Start from a copy: `yavih bridge new <b> --model <name> [--reading a|v|av] [--out DIR|FILE] [--force]` writes
-`bridges/<name>_<b>.py` with `describe()["model"]` (and the reading, when given) filled in and a header naming the
+the project's `bridges/<name>_<b>.py` with `describe()["model"]` (and the reading, when given) filled in and a header naming the
 contract command; `yavih bench show <b> template` prints the pristine template. The template carries the benchmark's stream names,
 a `describe()` with the `input` block to fill, `used` reporting, `grid_pos` with `region` and
 `t_centres`, TODO markers and a "Preprocessing source" docstring slot. Fill in this order:

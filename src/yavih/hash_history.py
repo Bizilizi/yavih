@@ -151,8 +151,10 @@ def reset() -> None:
         _MERGED = None
 
 
-def _scan_key() -> tuple[str | None, str | None]:
-    return (os.environ.get("YAVIH_BENCH_PATH"), os.environ.get("YAVIH_HOME"))
+def _scan_key() -> tuple[str | None, str | None, str | None]:
+    from yavih import config
+
+    return (os.environ.get("YAVIH_BENCH_PATH"), os.environ.get("YAVIH_HOME"), str(config.project_benchmarks_dir() or "") or None)
 
 
 def _read_folder(folder: Path) -> tuple[str, list[HashRecord]] | None:

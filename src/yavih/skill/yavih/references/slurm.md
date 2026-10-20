@@ -32,8 +32,8 @@ Partition, account, QoS, paths and container names below are placeholders (`<par
 
 ## matrix.yaml
 
-`yavih plan init --suite <s> --model <name> --launcher <python>` writes one entry per suite
-`(benchmark, reading)` and the bridge stubs; by hand, one entry per bridge × benchmark:
+`yavih plan init --suite <s> --model <name> [--launcher <python>]` writes `yavih-bench/matrices/<name>.yaml` with
+one entry per suite `(benchmark, reading)` and the bridge stubs; by hand, one entry per bridge × benchmark:
 
 ```yaml
 schema_version: 1
@@ -42,15 +42,16 @@ seeds: [0, 1, 2]
 shard_minutes: 30            # target wall per extract unit; many small shards, never one unit per GPU
 canaries: 8
 defaults:
-  launcher: "/envs/model/bin/python"       # python → replaces argv[0]; otherwise a prefix (apptainer …)
+  launcher: "/envs/model/bin/python"       # python → replaces argv[0]; otherwise a prefix (apptainer …); a [launchers]
+                                           # name resolves per site; null = the site's `launcher` (one matrix, every cluster)
   env: {HF_HUB_OFFLINE: "1", OMP_NUM_THREADS: "8"}
   cpus: 8                                  # decode workers = cpus - 1 = your bridge's decode budget
 bridges:
   model-k400:
-    script: bridges/model_k400.py
+    script: ../bridges/model_k400.py           # relative to the matrix; or pkg.module:Class from the model env
     benchmark: k400
     args: {layer: 12}
-    profile: bridges/model-k400.profile.json   # from step 5 with the SAME --arg values
+    profile: model.profiles/model-k400.profile.json   # from step 5 with the SAME --arg values
 ```
 
 `plan build` exits 1 if `profile.bench != benchmark`, `profile.args` differ from the entry's `args`,
