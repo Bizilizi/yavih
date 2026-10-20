@@ -341,6 +341,8 @@ class UpstreamSpec:
     sha256: str
     rows: int
     note: str | None = None
+    #: How ``protocol.train_draw`` was drawn, in words (provenance; the hashed parameters are ``cap``/``seed``/``balance``).
+    draw: str | None = None
     upstream_files: Mapping[str, str] = field(default_factory=dict)
     curation: CurationSpec | None = None
 
@@ -474,6 +476,8 @@ class MetricsSpec:
     aggregation: Mapping[str, Any] | None = None
     #: the report's default markdown columns (a subset of ``list`` holding the headline); ``None`` = all of ``list``
     table: tuple[str, ...] | None = None
+    #: per-metric absolute conformance tolerance (``yavih.conformance``); absent names use the default. Not hashed.
+    tolerance: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -902,12 +906,13 @@ def _parse_curation(v: Any, path: str) -> CurationSpec:
 
 def _parse_upstream(v: Any, path: str) -> UpstreamSpec:
     d = _expect_mapping(v, path)
-    _check_keys(d, path, ["source", "sha256", "rows"], ["note", "upstream_files", "curation"])
+    _check_keys(d, path, ["source", "sha256", "rows"], ["note", "draw", "upstream_files", "curation"])
     return UpstreamSpec(
         source=_str(d["source"], f"{path}.source"),
         sha256=_str(d["sha256"], f"{path}.sha256"),
         rows=_int(d["rows"], f"{path}.rows", minimum=0),
         note=_str(d.get("note"), f"{path}.note", nullable=True),
+        draw=_str(d.get("draw"), f"{path}.draw", nullable=True),
         upstream_files=_str_dict(d.get("upstream_files", {}), f"{path}.upstream_files"),
         curation=_parse_curation(d["curation"], f"{path}.curation") if d.get("curation") is not None else None,
     )
@@ -1144,12 +1149,13 @@ def _check_protocol(proto: Mapping[str, Any], path: str) -> None:
     td = proto["train_draw"]
     if td is not None:
         td = _expect_mapping(td, f"{path}.train_draw")
-        _check_keys(td, f"{path}.train_draw", ["cap", "seed", "balance", "drawn_from"])
+        if "drawn_from" in td:
+            raise SchemaError(f"{path}.train_draw.drawn_from: prose is not part of the hashed protocol; move it to manifest.upstream.draw")
+        _check_keys(td, f"{path}.train_draw", ["cap", "seed", "balance"])
         _int(td["cap"], f"{path}.train_draw.cap", minimum=1)
         _int(td["seed"], f"{path}.train_draw.seed")
         if td["balance"] is not None:
             _enum(td["balance"], f"{path}.train_draw.balance", {"class", "first_label", "session"})
-        _str(td["drawn_from"], f"{path}.train_draw.drawn_from")
     _enum(proto["views"], f"{path}.views", VIEWS)
     if "target_region" in proto:
         _check_region(proto["target_region"], f"{path}.target_region")
@@ -1323,7 +1329,7 @@ def _resolve_metric_names(names: Sequence[str], readout: str, *, sets: Sequence[
 
 def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: SplitsSpec, folder_metrics: Mapping[str, Any] | None = None) -> tuple[MetricsSpec, dict[str, Any]]:
     d = _expect_mapping(v, path)
-    _check_keys(d, path, ["headline", "list", "floors", "controls", "chance", "ci"], ["bootstrap", "aggregation", "table"])
+    _check_keys(d, path, ["headline", "list", "floors", "controls", "chance", "ci"], ["bootstrap", "aggregation", "table", "tolerance"])
     names = _str_list(d["list"], f"{path}.list")
     floors = _str_list(d["floors"], f"{path}.floors")
     controls = _str_list(d["controls"], f"{path}.controls")
@@ -1394,6 +1400,16 @@ def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: Sp
             raise SchemaError(f"{path}.table: {bad} not in metrics.list")
         if headline not in table:
             raise SchemaError(f"{path}.table: must hold the headline {headline!r}")
+    tolerance: dict[str, float] = {}
+    if d.get("tolerance") is not None:
+        tol = _expect_mapping(d["tolerance"], f"{path}.tolerance")
+        for k, x in tol.items():
+            if k not in names and k not in floors and k not in controls:
+                raise SchemaError(f"{path}.tolerance: {k!r} is not in metrics.list, floors or controls")
+            v = _num(x, f"{path}.tolerance.{k}")
+            if not v >= 0:
+                raise SchemaError(f"{path}.tolerance.{k}: must be >= 0")
+            tolerance[k] = float(v)
     spec = MetricsSpec(
         headline=headline,
         list=names,
@@ -1404,6 +1420,7 @@ def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: Sp
         bootstrap=bootstrap,
         aggregation=agg,
         table=table,
+        tolerance=tolerance,
     )
     return spec, resolved
 
@@ -2424,12 +2441,15 @@ class Benchmark:
             if not (0 <= bi < len(classes)):
                 raise ManifestError(f"{self.name}: protocol.background_index {bi} is outside classes.csv (0..{len(classes) - 1})")
         # reader.py decides what is handed over (input side) and probe.py decides targets, metrics and the external call
-        # (scoring side); each enters as the digest of its normalized source: an edit to what the code
-        # does is a different protocol, a comment or docstring edit is not.
+        # (scoring side). Neither enters a hash (yavih-protocol-5: identity is the declaration, behaviour is pinned by
+        # protocol_version and the conformance fixture); the digest of each one's normalized source is PROVENANCE,
+        # recorded in sidecars and results so two numbers under one hash can be traced to the code that produced them.
         reader_py = self.folder / "reader.py"
         probe_py = self.folder / "probe.py"
         self.reader_sha256: str | None = hashing.source_sha256(reader_py.read_bytes()) if reader_py.is_file() else None
         self.probe_sha256: str | None = hashing.source_sha256(probe_py.read_bytes()) if probe_py.is_file() else None
+        #: ``{"probe": sha256|None, "reader": sha256|None}``: the folder's source provenance (never identity).
+        self.folder_source: dict[str, str | None] = {"probe": self.probe_sha256, "reader": self.reader_sha256}
         raw = spec.raw
         hashes = hashing.protocol_hashes(
             name=spec.name,
@@ -2446,8 +2466,6 @@ class Benchmark:
             manifest=raw["manifest"],
             manifest_hash=self.manifest_hash,
             readout=spec.readout,
-            reader_sha256=self.reader_sha256,
-            probe_sha256=self.probe_sha256,
         )
         self.hashes: hashing.ProtocolHashes = hashes
         self.protocol_hash = hashes.protocol_hash

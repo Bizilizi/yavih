@@ -10,6 +10,12 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
 - ``yaml``: ``benchmark.yaml`` parses with pyyaml and loads strictly (``Benchmark.load``); ``name`` = folder name.
 - ``hashes``: the newest ``changelog`` entry records the ``protocol_hash`` and ``input_hash`` the folder computes
   (``E_CHANGELOG_HASH``, with the exact lines to write).
+- ``hashed``: no prose inside a hashed view (``E_HASHED_PROSE``): a sentence in ``protocol``, ``metrics``, the
+  contracts or ``targets`` would fork the hash on a wording edit; prose belongs in ``manifest.upstream``, the README
+  or setup.md.
+- ``conformance``: ``conformance/expected.json`` is recorded at the folder's ``protocol_version`` and the scoring
+  path reproduces it within tolerance (``E_CONFORMANCE_MISSING`` / ``E_CONFORMANCE_STALE`` / ``E_CONFORMANCE_DRIFT``;
+  ``W_CONFORMANCE_SKIPPED`` when a pinned external package is absent here).
 - ``layout``: the required files, a non-empty ``prepare/``, ``classes.csv`` iff ``manifest.classes``, no
   ``__init__.py`` in the folder or its ``tests/`` (a folder is data + scripts, never a package).
 - ``reader``: an optional folder ``reader.py`` accepts ``shard=`` (per-shard canaries); without one the generic
@@ -304,6 +310,33 @@ def _c_hashes(c: _Ctx) -> Iterator[Finding]:
 
     for msg in check_recorded(c.bench):
         yield _err("hashes", "E_CHANGELOG_HASH", msg, "benchmark.yaml")
+
+
+@_check("hashed")
+def _c_hashed_prose(c: _Ctx) -> Iterator[Finding]:
+    """No prose inside a hashed view (``E_HASHED_PROSE``): a sentence there forks the hash on a wording edit."""
+    if c.bench is None:
+        return
+    from yavih.hashing import find_prose
+
+    for side, values in (("input", c.bench.hashes.input_values), ("scoring", c.bench.hashes.scoring_values)):
+        for path, text in find_prose(values):
+            yield _err("hashed", "E_HASHED_PROSE", f"{side} side, {path}: prose in a hashed view ({text[:60]!r}…); move it to an "
+                       "unhashed key (manifest.upstream, README.md, setup.md) or encode it as typed values", "benchmark.yaml")
+
+
+@_check("conformance")
+def _c_conformance(c: _Ctx) -> Iterator[Finding]:
+    """``conformance/expected.json`` exists, is at the folder's ``protocol_version`` and the folder's scoring path still
+    reproduces it within tolerance (``yavih.conformance.check``: ``E_CONFORMANCE_MISSING`` / ``_STALE`` / ``_DRIFT``;
+    ``W_CONFORMANCE_SKIPPED`` when a pinned external package is absent here)."""
+    if c.bench is None:
+        return
+    from yavih.conformance import check
+
+    rep = check(c.bench)
+    for f in rep.findings:
+        yield (_err if f.severity == "error" else _warn)("conformance", f.code, f.message, "conformance/expected.json")
 
 
 @_check("layout")

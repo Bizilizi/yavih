@@ -160,7 +160,8 @@ structural and identity checks and `E_TEMPLATE_UNFILLED` never (`E_WAIVE_INVALID
 Corrupt media your decoder cannot read: raise `yavih.MediaUndecodable(clip_ids, reason)` (those rows
 become missing); any other exception aborts the shard. `probe` refuses missing authors' packages (exit 3
 with the pip line), stale hashes, train ∩ eval ≠ ∅ and low eval coverage; `report` greys rows below the
-floor (never for a bridge decision).
+floor (never for a bridge decision). Hashes cover a benchmark's declaration, never code: `yavih bench conformance`
+holds a folder's `protocol_version` to its numbers (references/cli.md).
 
 ## Operational rules
 

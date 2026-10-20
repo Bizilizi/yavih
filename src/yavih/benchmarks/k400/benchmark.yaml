@@ -20,8 +20,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 51a569b273617a953c3695dd741c7bfd265e1a4a4d64d07d2bae7ddecd144784
-    input_hash: bf6f39b907e34ea8ea6a1cc26d1023e18e873483c4f1b6d9360c7b5ef10a7c42
+    protocol_hash: 62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470
+    input_hash: f1fe9cc653e11623db59b5f1b2975aa05b279f5725af4c10b2dfb74f00dcb1d1
     supersedes: []
 
 source:
@@ -76,6 +76,7 @@ manifest:
     source: "Academic Torrents 184d11318372f70018cf9a72ef867e2fb9ce1d26 (Kinetics-400 _256 release): file listing of train_256 + val_256"
     sha256: c9a7dfd4e9119aa4a033a28e14e2be2bfa22a73b4bcbc6bdce5321bb3baf39a5
     rows: 260022
+    draw: "all 240 618 train mp4 of the Academic-Torrents Kinetics-400 _256 release (classes.csv class order, then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0"
     note: >-
       sha256 of the sorted listing `<split>/<class>/<file>` of all 260 022 train + val files (the staged tree or the
       zips' central directories; make_manifest.py reads either). Rows are the *.mp4 files (clip_id = file stem,
@@ -155,7 +156,6 @@ protocol:
     cap: 20000
     seed: 0
     balance: class
-    drawn_from: "all 240 618 train mp4 of the Academic-Torrents Kinetics-400 _256 release (classes.csv class order, then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0"
   views: none
 
 metrics:

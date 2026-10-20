@@ -36,7 +36,7 @@ DEFAULT_LIKE: dict[str, str] = {"clf": "esc50", "seq": "ave", "grid": "nyuv2_dep
 _WRITTEN = {"README.md", "setup.md", "make_manifest.py", "benchmark.yaml"}
 #: Files of the ``--like`` folder that are not copied: its own re-freeze record.
 _NOT_COPIED = {"curation.json"}
-_SKIPPED_DIRS = {"notes", "tests", "prepare", "assets", "__pycache__"}
+_SKIPPED_DIRS = {"notes", "tests", "prepare", "assets", "conformance", "__pycache__"}
 #: Folder scripts copied from ``--like`` (code, not data): a ``TODO`` banner is prepended as their first lines.
 _BANNERED = {
     "reader.py": "the reader of this benchmark's own layout (or delete it: without reader.py the generic "
@@ -373,4 +373,12 @@ def new_benchmark(name: str, *, readout: str | None = None, like: str | None = N
     readings = sorted(template_readings(tpl.read_text(encoding="utf-8"))) if tpl.is_file() else []
     (dest / "tests" / "test_folder.py").write_text(
         _test_folder(y, like_name, readings=readings, has_probe=(dest / "probe.py").is_file()), encoding="utf-8")
+    # the conformance fixture of the scaffold's (copied) protocol: re-recorded by the author once the protocol is theirs
+    try:
+        from yavih.benchmark import Benchmark
+        from yavih.conformance import record
+
+        record(Benchmark.from_dir(dest), force=True)
+    except Exception:  # noqa: BLE001 - `bench lint` reports E_CONFORMANCE_MISSING with the command to run
+        pass
     return dest

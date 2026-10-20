@@ -19,8 +19,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 0401b8d4ff77e08007370c5318cd471674c4c72574267082021336e253c5b5db   # recorded, outside the hashed payload; `yavih bench lint` checks it
-    input_hash: 94b56cba6e67f9d4a2ef9e6e9fb317b4d9a86eeae46cd8ae76e343a449afc20f
+    protocol_hash: 0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: d890623dc8af991ba3ab4290a83f3d7db07a3a8fcb825e5dabd7fae54791d092
     supersedes: []
 
 source:

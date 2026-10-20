@@ -221,8 +221,11 @@ What a number means is decided by the benchmark and by the probe. The hashes cov
 
 Two numbers of one benchmark compare iff their `eval_hash` agrees and both come from the pinned (standard)
 probe configuration. Features are checked against the input
-side only, so a metric or `probe.py` edit re-probes and never re-extracts. Source files are hashed as
-normalized syntax trees, so comments and docstrings do not move a hash.
+side only, so a metric edit re-probes and never re-extracts. No source file is hashed: identity is the
+declaration (manifest content, typed yaml views, declared versions), and the code behind a declared
+`protocol_version`, the folder's or yavih's, is held to it by a per-folder conformance fixture. A refactor, a
+port to another framework or a third party's re-implementation that stays within tolerance keeps the hash, which
+is what lets a registry of recorded scores compare models that were never run by the same code.
 
 What the bridge decides and what the site has (paths, hosts, staged media, coverage) is recorded beside
 every number and checked for consistency, but never enters a comparability key, a path or a result key.

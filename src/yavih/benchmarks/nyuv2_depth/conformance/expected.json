@@ -1,0 +1,56 @@
+{
+ "benchmark": "nyuv2_depth",
+ "generator": 1,
+ "population": {
+  "eval": 16,
+  "floor": 0,
+  "folds": 0,
+  "train": 16
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "externals": {
+   "evals": "1.0"
+  },
+  "folder_source": {
+   "probe": "648b8b2b0dfb6a48ff7d6ab2fc19f7d22d40313fa70f1a64da64e27ca95c7d07",
+   "reader": null
+  },
+  "protocol_hash": "4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4",
+  "scoring_hash": "49a9d234925ba7ecc01468b4eae3a29df8500a4fcb70badc06c9b88cec30b674",
+  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "absrel": 0.001,
+  "d1": 0.001,
+  "d1_floor": 0.001,
+  "d2": 0.001,
+  "d3": 0.001,
+  "n_eval": 0.001,
+  "rmse": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "d1": [
+     0.21324663928967313,
+     0.21576922572532456
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "d1_floor": 0.1872091656550765
+   },
+   "metrics": {
+    "absrel": 1.539975323844481,
+    "d1": 0.2145421402528882,
+    "d2": 0.3859322667121887,
+    "d3": 0.5225792564451694,
+    "n_eval": 16,
+    "rmse": 3.9428014308214188
+   }
+  }
+ }
+}

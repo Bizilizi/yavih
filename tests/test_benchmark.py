@@ -192,7 +192,7 @@ def _expected_protocol_hash(b: Benchmark) -> str:
         name=b.name, protocol_version=b.spec.protocol_version, protocol=raw["protocol"], splits=raw["splits"], streams=raw["streams"],
         input_contract=raw["input_contract"], output_contract=raw["output_contract"], external=raw["external"], metrics=raw["metrics"],
         readout_params=raw["readout_params"], targets=raw["targets"], manifest=raw["manifest"], manifest_hash=b.manifest_hash,
-        readout=b.spec.readout, reader_sha256=b.reader_sha256, probe_sha256=b.probe_sha256,
+        readout=b.spec.readout,
     )
 
 
@@ -210,27 +210,32 @@ def test_load_hashes_match_oracle(tmp_path):
     # manifest-hash oracle computed without yavih.hashing
     oracle = _sha(b"manifest:" + _sha(mb).encode() + b"\nclasses:" + _sha(cb).encode())
     assert b.manifest_hash == oracle
-    # protocol payload (yavih-protocol-4), recomputed independently of yavih.hashing: input side, scoring side, combined
+    # protocol payload (yavih-protocol-5), recomputed independently of yavih.hashing: input side, scoring side, combined,
+    # from the declaration only (typed views; no source digest)
     raw = yaml.safe_load((folder / "benchmark.yaml").read_text())
-    assert hashing.PROTOCOL_SCHEMA == "yavih-protocol-4"
+    assert hashing.PROTOCOL_SCHEMA == "yavih-protocol-5"
 
     def canon(x):
         return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
     def part(name, comps):
-        return _sha(canon({"schema": "yavih-protocol-4", "part": name, "components": {k: _sha(canon(v)) for k, v in comps.items()}}))
+        return _sha(canon({"schema": "yavih-protocol-5", "part": name, "components": {k: _sha(canon(v)) for k, v in comps.items()}}))
 
     facts = set(raw["input_contract"].get("facts") or [])
     inp = {"name": "synth_clf", "manifest_hash": oracle, "manifest": {"key": raw["manifest"]["key"], "columns": raw["manifest"]["columns"]},
-           "splits": raw["splits"], "streams": raw["streams"], "input_contract": raw["input_contract"], "output_contract": raw["output_contract"],
+           "splits": raw["splits"], "streams": raw["streams"],
+           "input_contract": {k: raw["input_contract"].get(k) for k in ("info", "facts", "materialize")}, "output_contract": raw["output_contract"],
            "readout": "clf", "readout_inputs": {"params": {}, "protocol": {k: v for k, v in sorted(raw["protocol"].items())
-                                                                         if k in set(hashing.INPUT_PROTOCOL_KEYS) | facts}},
-           "reader": hashing.source_sha256((folder / "reader.py").read_bytes()) if (folder / "reader.py").is_file() else None}
-    sco = {"protocol_version": 2, "protocol": raw["protocol"], "readout_params": {}, "metrics": raw["metrics"], "external": [],
-           "targets": None, "label": raw["manifest"]["label"], "readout": {"name": "clf", "version": READOUT_VERSION["clf"]}, "probe": None}
+                                                                         if k in set(hashing.INPUT_PROTOCOL_KEYS) | facts}}}
+    proto = dict(raw["protocol"])
+    if isinstance(proto.get("train_draw"), dict):
+        proto["train_draw"] = {k: proto["train_draw"].get(k) for k in ("cap", "seed", "balance")}
+    metrics = {k: raw["metrics"].get(k) for k in ("headline", "list", "floors", "controls", "chance", "ci", "bootstrap", "aggregation")}
+    sco = {"protocol_version": 2, "protocol": proto, "readout_params": {}, "metrics": metrics, "external": [],
+           "targets": None, "label": raw["manifest"]["label"], "readout": {"name": "clf", "version": READOUT_VERSION["clf"]}}
     ih, sh = part("input", inp), part("scoring", sco)
     assert (b.input_hash, b.scoring_hash) == (ih, sh)
-    assert b.protocol_hash == _sha(json.dumps({"schema": "yavih-protocol-4", "input_hash": ih, "scoring_hash": sh}, sort_keys=True,
+    assert b.protocol_hash == _sha(json.dumps({"schema": "yavih-protocol-5", "input_hash": ih, "scoring_hash": sh}, sort_keys=True,
                                               separators=(",", ":")).encode())
     assert b.protocol_hash == _expected_protocol_hash(b)
     assert b.spec.raw == raw
@@ -284,7 +289,7 @@ def test_protocol_hash_is_env_independent_and_ignores_aliases(tmp_path):
     f2 = make_folder(tmp_path / "b", "synth", mutate=lambda s: s.__setitem__("aliases", ["other_name"]))
     b1, b2 = Benchmark.from_dir(f1), Benchmark.from_dir(f2)
     assert b1.protocol_hash == b2.protocol_hash and b1.manifest_hash == b2.manifest_hash
-    # every protocol block is hashed: streams, the two contracts, external, a label fact
+    # every typed view is hashed: streams, the contracts' data keys, external, a label fact; prose and site facts are not
     for n, mut in enumerate([
         lambda s: s["streams"]["video"].__setitem__("required", False),
         lambda s: s["input_contract"]["handed_over"].__setitem__("video", "something else"),
@@ -295,7 +300,7 @@ def test_protocol_hash_is_env_independent_and_ignores_aliases(tmp_path):
     ]):
         f = make_folder(tmp_path / f"m{n}", "synth", mutate=mut)
         same = Benchmark.from_dir(f).protocol_hash == b1.protocol_hash
-        assert same is (n == 5), n
+        assert same is (n in (1, 5)), n  # handed_over (1) is prose: documentation, not hashed
     assert READOUT_VERSION["clf"] == 1
 
 
@@ -595,14 +600,16 @@ def test_probe_py_metrics_overlay_and_protocol_keys(tmp_path):
     assert b.metric_specs["my_score"].fn(None, None, None, None) == 0.0
     assert b.spec.folder_metrics == ("my_score",)
     assert b.probe_sha256 == hashing.source_sha256(PROBE_PY) and b.protocol_hash == _expected_protocol_hash(b)
+    assert b.folder_source == {"probe": b.probe_sha256, "reader": None}
     assert b.probe_module().PROTOCOL_KEYS == {"helper_key"}
-    # probe.py is scoring-side identity as normalized source — a comment-only edit is no change, a code edit
-    # changes protocol_hash but never input_hash (extracted features stay valid)
+    # probe.py is provenance, never identity (yavih-protocol-5): a comment edit leaves its digest, a code edit moves
+    # the digest, and neither moves protocol_hash — behaviour is pinned by protocol_version and the conformance fixture
     (f / "probe.py").write_text(PROBE_PY + "# comment\n")
-    assert Benchmark.from_dir(f).protocol_hash == b.protocol_hash
+    assert Benchmark.from_dir(f).folder_source == b.folder_source
     (f / "probe.py").write_text(PROBE_PY + "EXTRA = 1\n")
     b2 = Benchmark.from_dir(f)
-    assert b2.protocol_hash != b.protocol_hash and b2.input_hash == b.input_hash
+    assert b2.folder_source["probe"] != b.folder_source["probe"]
+    assert b2.protocol_hash == b.protocol_hash and b2.input_hash == b.input_hash and b2.scoring_hash == b.scoring_hash
     # without probe.py the folder metric is unknown and the helper key unconsumed
     (f / "probe.py").unlink()
     with pytest.raises(SchemaError, match="my_score"):
@@ -1353,23 +1360,24 @@ def iter_samples(bench, split, rows, batch_size, canaries, canary_seed, *, shard
 '''
 
 
-def test_folder_reader_is_hashed_and_receives_the_shard(tmp_path, monkeypatch):
-    """An optional ``reader.py`` is input-side protocol identity as normalized source (a comment edit is not a
-    change) and ``Benchmark.reader`` hands it ``shard=(i, n)`` so the canary draw is seeded with the shard index."""
+def test_folder_reader_is_provenance_and_receives_the_shard(tmp_path, monkeypatch):
+    """An optional ``reader.py`` is recorded as provenance (``folder_source.reader``, normalized source: a comment
+    edit is not a change) and never moves a hash; ``Benchmark.reader`` hands it ``shard=(i, n)`` so the canary draw
+    is seeded with the shard index."""
     from yavih.io.shards import plan_shards
 
     rows = [[f"r{i:02d}", "train" if i < 20 else "val", "a" if i % 2 else "b", f"m/r{i:02d}.mp4"] for i in range(26)]
     folder = make_folder(tmp_path, rows=rows, mutate=lambda s: (s["budget"].__setitem__("clips", {"train": 20, "val": 6}), s["manifest"].__setitem__("upstream", None)))
     with_roots(monkeypatch, "synth", media_root=tmp_path / "media")
     b0 = Benchmark.from_dir(folder)
-    assert b0.reader_sha256 is None and b0.probe_sha256 is None
+    assert b0.folder_source == {"probe": None, "reader": None}
     (folder / "reader.py").write_text(READER_PY, encoding="utf-8")
     b = Benchmark.from_dir(folder)
-    assert b.reader_sha256 == hashing.source_sha256(READER_PY)
-    assert b.protocol_hash != b0.protocol_hash and b.protocol_hash == _expected_protocol_hash(b)
-    assert b.input_hash != b0.input_hash and b.scoring_hash == b0.scoring_hash
+    assert b.folder_source["reader"] == hashing.source_sha256(READER_PY)
+    assert b.protocol_hash == b0.protocol_hash == _expected_protocol_hash(b)
+    assert b.input_hash == b0.input_hash and b.scoring_hash == b0.scoring_hash
     (folder / "reader.py").write_text("# a comment added\n" + READER_PY, encoding="utf-8")
-    assert Benchmark.from_dir(folder).protocol_hash == b.protocol_hash
+    assert Benchmark.from_dir(folder).folder_source == b.folder_source
     (folder / "reader.py").write_text(READER_PY, encoding="utf-8")
     lo, hi = plan_shards(20, 2, 2)[1]
     out = list(b.reader("train", shard=(1, 2), batch_size=2, canaries=8))

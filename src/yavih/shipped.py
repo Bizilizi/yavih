@@ -45,7 +45,7 @@ __all__ = [
 ]
 
 #: ``kind`` of a shipped folder file (``yavih bench files``).
-FILE_KINDS: tuple[str, ...] = ("readme", "setup", "yaml", "template", "probe", "manifest", "classes", "prepare", "test", "other")
+FILE_KINDS: tuple[str, ...] = ("readme", "setup", "yaml", "template", "probe", "manifest", "classes", "conformance", "prepare", "test", "other")
 #: ``yavih bench show <b> <what>``: the short names and the file each one means.
 SHORT_NAMES: dict[str, str] = {
     "readme": "README.md",
@@ -55,6 +55,7 @@ SHORT_NAMES: dict[str, str] = {
     "probe": "probe.py",
     "classes": "classes.csv",
     "manifest": "manifest.csv.gz",
+    "conformance": "conformance/expected.json",
 }
 _KIND_OF_NAME: dict[str, str] = {v: k for k, v in SHORT_NAMES.items()}
 #: Never part of the shipped surface: bytecode, maintainer notes (not in the wheel), hidden files (fetch stamps).
@@ -100,8 +101,8 @@ def _kind(rel: Path) -> str:
         return "prepare"
     if parts[0] == "tests":
         return "test"
-    if len(parts) == 1 and parts[0] in _KIND_OF_NAME:
-        return _KIND_OF_NAME[parts[0]]
+    if rel.as_posix() in _KIND_OF_NAME:
+        return _KIND_OF_NAME[rel.as_posix()]
     return "other"
 
 

@@ -11,8 +11,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: bef0420a133ba13a9c524f3a3ed1d74b37cb7931ffd957b4fba46adb0dafbd32
-    input_hash: 4417cab577dfc2a4825c38c128af642017e6d3a75cfd86595650b717730edbfd
+    protocol_hash: df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27
+    input_hash: 158d6197fee94074525d1b21babaf95ff4c006a92e4bb15de2ed12ee44f27479
     supersedes: []
 
 header:

@@ -197,7 +197,7 @@ the scaffold is deleted when the folder needs none.
 
 **Done when:** `yavih bench lint <name>` reports no `E_IMPORT`, and `test_metric_names_resolve` passes.
 
-## 8. Record the hashes
+## 8. Record the hashes and the conformance fixture
 
 A new folder has one `changelog` entry, `version: 1`, with `protocol_version: 1`. Its `protocol_hash` and
 `input_hash` must be the ones the folder computes; `yavih bench lint <name>` (`E_CHANGELOG_HASH`) prints the exact
@@ -205,8 +205,21 @@ lines to write. Until the pull request is merged, keep that one entry and update
 that moves them; nothing goes under `supersedes`, since no result was ever filed under the earlier digests. Every
 later change to a merged folder follows [hashing: migration](hashing.md#migration).
 
-**Done when:** `yavih bench lint <name>` reports no `E_CHANGELOG_HASH`, and
-`python -m pytest tests/test_hashing.py -q -p no:cacheprovider -o addopts="--import-mode=importlib"` passes.
+The hashes cover the declaration, never the code: what pins the folder's scoring behaviour (its `probe.py`, the
+metrics and readout it uses) to `protocol_version: 1` is the conformance fixture
+([conformance](conformance.md)). Record it once the protocol, `probe.py` and `external` entries are final:
+
+```bash
+yavih bench conformance <name> --record
+```
+
+writes `conformance/expected.json` (the scoring path's numbers on a generated population; a few KB, no inputs
+stored). Re-record after every later edit that moves them, as long as the folder is unmerged; after the merge a
+moved number means a `protocol_version` bump. The scaffold recorded a fixture for the copied protocol; `--record`
+overwrites it (`--force` if lint says it records another benchmark).
+
+**Done when:** `yavih bench lint <name>` reports no `E_CHANGELOG_HASH` and no `E_CONFORMANCE_*`, and
+`python -m pytest tests/test_hashing.py tests/test_conformance.py -q -p no:cacheprovider -o addopts="--import-mode=importlib"` passes.
 
 ## 9. Folder tests
 
@@ -266,9 +279,10 @@ then, once the pull request is open, download the `headers` artifact of its `hea
 yavih bench trial <name> --synthetic --readout-fast
 ```
 
-runs the whole chain (stand-in, oracle bridge, `bridge check`, extract, validate, probe, report) in process on a
-generated stand-in of the folder ([CLI](cli.md#bench-trial---synthetic)). It does not exercise the real data, the
-folder's `probe.py` hooks or its `external` packages; step 13 does.
+runs the whole chain (conformance fixture, stand-in, oracle bridge, `bridge check`, extract, validate, probe, report)
+in process on a generated stand-in of the folder ([CLI](cli.md#bench-trial---synthetic)). Beyond the conformance
+stage (which runs the real folder's scoring path, `probe.py` and `external` included), it does not exercise the
+real data; step 13 does.
 
 **Done when:** it exits 0, every stage in `data.stages` is `ok`, and the headline clears its floor.
 

@@ -56,7 +56,7 @@ def test_a_superseded_result_lands_in_the_current_column(bench_path):
     """A current-schema result written under a superseded protocol hash moves to the current column (``eval_hash``
     recomputed); in memory only."""
     qh = "c" * 64
-    rec = {"schema_version": 3, "model": "m", "reading": "a", "benchmark": {"name": "mybench", "protocol_hash": OLD},
+    rec = {"schema_version": 4, "model": "m", "reading": "a", "benchmark": {"name": "mybench", "protocol_hash": OLD},
            "probe": {"hash": qh}, "eval_hash": hashing.eval_hash(OLD, qh), "bridge": {"name": "b", "describe": {}}}
     out = migrate(rec)
     assert out["benchmark"]["protocol_hash"] == NEW and out["eval_hash"] == hashing.eval_hash(NEW, qh)

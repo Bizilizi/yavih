@@ -89,13 +89,13 @@ def make_result(
     ok = status == "ok"
     ci = [acc - 0.05, acc + 0.05] if ci is None else ci
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "status": status,
         "reason": None if ok else "eligibility: missing pos",
         "standard": standard,
         "eval_hash": hashing.eval_hash(protocol_hash, probe_hash),
         "benchmark": {"name": bench, "protocol_version": protocol_version, "readout": readout, "readout_version": 1 if readout == "clf" else 2,
-                      "manifest_hash": "9" * 64, "protocol_hash": protocol_hash},
+                      "manifest_hash": "9" * 64, "protocol_hash": protocol_hash, "folder_source": {"probe": None, "reader": None}},
         "model": model,
         "reading": reading,
         "bridge": {"name": bridge_name, "describe": describe, "describe_sha256": hashing.describe_sha256(describe), "source_sha256": "7" * 64},
@@ -167,7 +167,7 @@ def test_migrate_identity_for_current_schema():
     r = make_result()
     out = migrate(r)
     assert out == r and out is not r
-    assert out["schema_version"] == RESULT_SCHEMA_VERSION == 3
+    assert out["schema_version"] == RESULT_SCHEMA_VERSION == 4
 
 
 def test_migrate_refuses_newer_schema_and_bad_types():

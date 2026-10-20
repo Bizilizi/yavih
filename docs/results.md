@@ -18,13 +18,13 @@ Path: `<run_dir>/probe/<eval_hash12>/seed<k>/result.json`, where a standard run 
 
 ```jsonc
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "status": "ok",                          // "ok" | "not_applicable" | "failed"
   "reason": null,                          // a string for not_applicable / failed
   "standard": true,                        // false for a non-pinned ProbeConfig
   "eval_hash": "…",                        // sha256(canon({protocol_hash, probe_hash})): the comparability key
   "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2,
-                "manifest_hash": "…", "protocol_hash": "…"},
+                "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"probe": "…", "reader": null}},
   "model": "vjepa2-l",                     // describe()["model"]
   "reading": "av",                         // describe()["reading"]
   "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
@@ -57,11 +57,11 @@ Values are illustrative.
 
 | key | content |
 |---|---|
-| `schema_version` | `RESULT_SCHEMA_VERSION` (3) |
+| `schema_version` | `RESULT_SCHEMA_VERSION` (4) |
 | `status`, `reason` | `reason` is null for `ok`, a string otherwise |
 | `standard` | true iff the probe config's `probe_hash` equals the pinned one |
 | `eval_hash` | full hex; must equal the hash of `benchmark.protocol_hash` and `probe.hash` |
-| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash` |
+| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash`, `folder_source` (`{probe, reader}` normalized-source digests of the folder's `probe.py` / `reader.py` at scoring: provenance, never a key) |
 | `model`, `reading` | from the bridge's `describe()`; `model` matches `[A-Za-z0-9][A-Za-z0-9_.-]{0,63}`, `reading` `[A-Za-z0-9][A-Za-z0-9_-]{0,31}` |
 | `bridge` | exactly `name`, `describe`, `describe_sha256` (current describe schema), `source_sha256`; recorded, never a key |
 | `features` | exactly `fingerprint` (the split's, or a sha256 over the per-split ones), `dtype`, `N`, `D`, `pos_mode`, `bytes` (summed), `backend` (`ram` / `memmap`), `canary_max_rel_l2`, `batch_tolerance`, `rules_checked` (per stream: the temporal rule or `"custom"`, the spatial check). Null for a plan-time `not_applicable`; every key present with null geometry for a bridge-declared one |
@@ -239,6 +239,7 @@ is `missing` with the note `partial only`.
 |---|---|
 | `W_BRIDGE_CHANGED` | a row key holds several bridge configurations; newest shown |
 | `W_FEATURES_DIFFER` | the shown configuration holds several feature sets; newest shown, never averaged |
+| `W_FOLDER_SOURCE_DIFFERS` | results in a column were scored by different versions of the folder's `probe.py` / `reader.py` (`benchmark.folder_source`); comparable by declaration, listed for diagnosis |
 | `W_POPULATION_DIFFERS` | eval populations differ within a column |
 | `W_MISSING_READING` | a model lacks an expected reading in a column |
 | `W_NONSTANDARD` | a column of non-pinned probe configs: comparable with nothing |
@@ -372,6 +373,13 @@ With `--log-samples`, one JSON line per scored row, seed and fold: `{"clip_id", 
 | seq | `[T]` class indices each |
 | grid | `prediction` that image's `{d1, absrel, rmse}`; `target` null |
 | box | `[cx, cy, w, h]` each, plus `"iou"` |
+
+### --registry
+
+`report build --registry DIR` adds the accepted entries of a model registry ([registry](registry.md)) to the
+comparison as rows: model `<org>/<model>`, flag `registry`, one record per recorded seed, under the same
+comparability rule as every local result (same benchmark, same `eval_hash`, both standard). An entry whose
+conformance did not pass is not a row. Differences below a metric's recorded conformance tolerance are ties.
 
 ### --merge-results
 

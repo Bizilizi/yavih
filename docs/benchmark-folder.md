@@ -23,8 +23,10 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
   bridge_template.py    a Bridge skeleton to copy
   make_manifest.py      upstream metadata -> manifest.csv.gz + classes.csv, byte-identical re-freeze
   prepare/              numbered steps: 01_download.sh, 02_verify.sh, 03_materialize.py, ...
-  probe.py              optional: folder metrics, targets, the authors' scorer
-  reader.py             optional: replaces the generic reader
+  probe.py              optional: folder metrics, targets, the authors' scorer (provenance, never hashed)
+  reader.py             optional: replaces the generic reader (provenance, never hashed)
+  conformance/
+    expected.json       the conformance fixture: the scoring path's numbers at this protocol_version (bench conformance --record)
   tests/test_folder.py  the folder's own facts
   assets/header.png     the README header image (python -m yavih.headers) + header.src.sha256; never shipped
   notes/                optional maintainer notes; never shipped
@@ -68,8 +70,10 @@ current directory, with `FOLDER=<folder>` and `YAVIH_BENCH=<name>` set. Helper s
 
 All hooks are optional. Module scope imports only the standard library, numpy and yavih core (`yavih bench lint`
 imports it with torch and the folder's `external` packages blocked). It reuses the shared heads, trainer and
-`ProbeConfig`; it never defines a head, loss or training loop. Its normalized source (comments and docstrings
-excluded) enters `scoring_hash`, so editing it never invalidates extracted features.
+`ProbeConfig`; it never defines a head, loss or training loop. Its source never enters a hash: the digest of its
+normalized source is recorded as provenance (`folder_source.probe`), and its behaviour is pinned by
+`protocol_version` and the folder's conformance fixture (`conformance/expected.json`, [conformance](conformance.md)).
+An edit that moves the fixture's numbers is `E_CONFORMANCE_DRIFT` until `protocol_version` is bumped.
 
 ```python
 METRICS: dict[str, MetricSpec]      # folder metrics; may replace a registry metric only with the same readouts/shape/kind
@@ -101,14 +105,17 @@ def iter_samples(bench, split, rows, batch_size, canaries, canary_seed, *, shard
 ```
 
 It replaces the generic reader, imports only yavih core, must accept `shard=(i, n)` (per-shard canaries; `bench
-lint` check `reader`), and its normalized source enters `input_hash`. No packaged folder ships one.
+lint` check `reader`); its normalized-source digest is provenance (`folder_source.reader`), never identity. No
+packaged folder ships one.
 
 ## benchmark.yaml
 
 `yavih.benchmark.load_yaml(path)` parses the file into a frozen `BenchmarkSpec`. Unknown keys at any level are an
 error (`SchemaError`). Keys are required unless the comment says optional. Which blocks are hashed, and on which side,
 is in [hashing](hashing.md); in short, `aliases`, `title`, `header`, `changelog`, `source`, `obtain`, `budget`,
-`data` and `manifest.upstream` are never hashed.
+`data` and `manifest.upstream` are never hashed, and the hashed blocks enter through typed views that leave prose
+(`input_contract.handed_over`, `external[].used_for`) and display settings (`metrics.table`) out. No source file is
+hashed: `probe.py` / `reader.py` are provenance, their behaviour is `protocol_version` + the conformance fixture.
 
 ```yaml
 schema_version: 2                  # int, == yavih.versions.BENCHMARK_SCHEMA_VERSION
@@ -170,6 +177,7 @@ manifest:
     rel_media: {type: str, role: media, stream: video}   # type str|int|float; role media|extra|label_aux
     offset_bin: {type: int, role: extra}                 # `stream` (a name or a list) only with role media
   upstream:                        # optional for the loader; bench lint requires `curation`; not hashed
+    draw: "..."                    # optional str: how protocol.train_draw was drawn, in words (hashed parameters: cap/seed/balance)
     source: "..."                  # the file the rows were frozen from
     sha256: "..."
     rows: 254110
@@ -254,8 +262,7 @@ protocol:                          # label facts only, JSON values (finite numbe
   train_draw:                      # null when uncapped
     cap: 20000
     seed: 0
-    balance: class                 # class | first_label | session | null
-    drawn_from: "..."
+    balance: class                 # class | first_label | session | null; the draw's description is manifest.upstream.draw
   views: none                      # none | rows: whether several rows derive from one source clip
   # Every other key is a per-benchmark label fact and must be consumed: named by a resolved metric, by the
   # readout, by probe.py PROTOCOL_KEYS, or by input_contract.facts. target_region, when present, is
@@ -545,6 +552,8 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 |---|---|---|
 | `yaml` | `E_YAML`, `E_SCHEMA`, `E_NAME`, `E_LAYOUT` | `benchmark.yaml` exists and parses; `Benchmark.load` succeeds; `name` equals the folder name. |
 | `hashes` | `E_CHANGELOG_HASH` | The newest changelog entry records the computed `protocol_hash` and `input_hash` and does not supersede its own digests. |
+| `conformance` | `E_CONFORMANCE_MISSING`, `E_CONFORMANCE_STALE`, `E_CONFORMANCE_DRIFT`, `E_CONFORMANCE_SCHEMA`, `W_CONFORMANCE_SKIPPED` (warning) | `conformance/expected.json` exists, was recorded at the folder's `protocol_version`, and the scoring path reproduces it within tolerance ([conformance](conformance.md)); skipped with a warning when a pinned external package is absent here. |
+| `hashed` | `E_HASHED_PROSE` | No prose (a string of 8+ words or 80+ characters) inside a hashed view: it would fork the hash on a wording edit; prose belongs in `manifest.upstream`, README.md or setup.md. |
 | `layout` | `E_LAYOUT` | `README.md`, `setup.md`, `benchmark.yaml`, `manifest.csv.gz`, `bridge_template.py`, `make_manifest.py`, `tests/test_folder.py` exist; `prepare/` is non-empty; `classes.csv` exists iff `manifest.classes`; no `__init__.py` in the folder or `tests/`. |
 | `reader` | `E_READER` | An optional `reader.py` loads and its `iter_samples` accepts `shard=`. |
 | `budget` | `E_MANIFEST`, `E_BUDGET`, `E_CURATION` | The manifest reads; `budget.clips` equals the frozen rows per read split; `manifest.upstream.curation` exists, its `per_split.*.listed` equal the frozen rows, and listed plus excluded equals `total_upstream`. |

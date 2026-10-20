@@ -185,7 +185,7 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
         assert len(res) == 1 and res[0].status == "ok", (kind, res[0].status, res[0].reason)
         results[kind] = res[0]
         rj = res[0].result
-        assert rj["standard"] is False and rj["schema_version"] == 3 and rj["benchmark"]["readout"] == readout and rj["external"] == {}
+        assert rj["standard"] is False and rj["schema_version"] == 4 and rj["benchmark"]["readout"] == readout and rj["external"] == {}
         assert rj["features"]["rules_checked"] and rj["features"]["batch_tolerance"] == 1e-5
         # model and reading recorded; eval_hash = sha256(canon({protocol_hash, probe_hash}))
         assert (rj["model"], rj["reading"]) == (profiles[kind]["model"], profiles[kind]["reading"])
@@ -217,6 +217,12 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
     assert oracle_lo > floor, f"oracle {headline} CI lower {oracle_lo} <= floor {floor}: {results['oracle'].result['metrics']}"
     assert random_lo <= floor, f"random {headline} CI lower {random_lo} > floor {floor}: {results['random'].result['metrics']}"
     assert results["oracle"].result["metrics"][headline] > results["random"].result["metrics"][headline]
+    # the readout's conformance band (readouts/<name>.py CONFORMANCE): a trainer or readout change that leaves it bumps VERSION
+    import importlib
+
+    band = importlib.import_module(f"yavih.readouts.{readout}").CONFORMANCE
+    assert results["oracle"].result["metrics"][headline] >= band["oracle_min"], band
+    assert results["random"].result["metrics"][headline] <= band["random_max"], band
     # comparability is what yavih controls: two bridges declaring different rules, weights and args share one eval_hash
     assert results["oracle"].result["eval_hash"] == results["random"].result["eval_hash"]
     assert results["oracle"].result["bridge"]["describe_sha256"] != results["random"].result["bridge"]["describe_sha256"]

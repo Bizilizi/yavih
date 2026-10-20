@@ -43,13 +43,15 @@ FEATURE_FORMAT_VERSION: Final[int] = 4
 #: Bumped when the ``benchmark.yaml`` schema changes.
 BENCHMARK_SCHEMA_VERSION: Final[int] = 2
 
-#: Bumped when the ``result.json`` schema changes (``eval_hash``, ``model``, ``reading``, ...).
-RESULT_SCHEMA_VERSION: Final[int] = 3
+#: Bumped when the ``result.json`` schema changes (``eval_hash``, ``model``, ``reading``, ...). 4: ``benchmark.folder_source``.
+RESULT_SCHEMA_VERSION: Final[int] = 4
 
 #: Bumped when the results-store file schema changes (``results_<timestamp>.json``): one directory per ``model``,
 #: entries keyed ``<benchmark>:<reading>``.
 RESULTS_FILE_VERSION: Final[int] = 2
 
+#: Bumped when the registry entry schema changes (``yavih.registry``: ``entries/<benchmark>/<eval_hash12>/<org>/<model>/<reading>.json``).
+REGISTRY_ENTRY_VERSION: Final[int] = 1
 #: Bumped when the unit record (``plan.jsonl``) changes. Extract units are keyed by ``input_hash``, probe and
 #: report units by ``protocol_hash``.
 PLAN_SCHEMA_VERSION: Final[int] = 3
@@ -111,10 +113,11 @@ READOUT_VERSION: Final[Mapping[str, int]] = _ReadoutVersions()
 #: The ``probe_hash`` payload schema tag.
 PROBE_SCHEMA: Final[str] = "yavih-probe-1"
 
-#: The ``protocol_hash`` payload schema tag: ``protocol_hash = H(input_hash, scoring_hash)``, with ``reader.py`` /
-#: ``probe.py`` hashed as normalized source. Bumped when either payload's schema changes, and by a change to
-#: ``yavih.sample.iter_samples`` that changes what is handed over.
-PROTOCOL_SCHEMA: Final[str] = "yavih-protocol-4"
+#: The ``protocol_hash`` payload schema tag: ``protocol_hash = H(input_hash, scoring_hash)`` over the benchmark's
+#: declaration only (manifest content, typed yaml views, declared versions; no source file since 5). Bumped when
+#: either payload's schema or a typed view changes, and by a change to ``yavih.sample.iter_samples`` that changes
+#: what is handed over.
+PROTOCOL_SCHEMA: Final[str] = "yavih-protocol-5"
 
 #: The ``describe_sha256`` payload schema tag: the digest covers ``describe()`` minus ``weights_ref``,
 #: ``batch_tolerance``, ``batch_size`` and every ``input.<stream>.decoder`` (provenance).
@@ -148,6 +151,7 @@ __all__ = [
     "RESULT_SCHEMA_VERSION",
     "RESULTS_FILE_VERSION",
     "PLAN_SCHEMA_VERSION",
+    "REGISTRY_ENTRY_VERSION",
     "READOUT_VERSION",
     "PROBE_SCHEMA",
     "PROTOCOL_SCHEMA",

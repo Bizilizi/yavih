@@ -104,8 +104,8 @@ the deadline or SIGTERM; only a hard kill (SIGKILL, OOM) loses up to that interv
 ## Reading `result.json`
 
 ```json
-{"schema_version": 3, "status": "ok", "reason": null, "standard": true, "eval_hash": "…",
- "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2, "manifest_hash": "…", "protocol_hash": "…"},
+{"schema_version": 4, "status": "ok", "reason": null, "standard": true, "eval_hash": "…",
+ "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2, "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"probe": "…", "reader": null}},
  "model": "vjepa2-l", "reading": "av",
  "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
  "features": {"fingerprint": "…", "dtype": "float16", "N": 1568, "D": 1024, "pos_mode": "per_sample", "bytes": 5.2e9,

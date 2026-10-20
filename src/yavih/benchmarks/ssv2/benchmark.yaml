@@ -19,8 +19,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: ed1e0ffd487926e2d422a24813d23d58e94001cb3a3851ab56823934b597c800
-    input_hash: 07e72948888fa5654c6ddb6cbe211ef4c666f3c4b67503d897628638978b650f
+    protocol_hash: 641928e796bd0eda4ac0df9bdac78e77b0b7b115bb91466bf72dec2d79c0d9c7
+    input_hash: e15958addf12bf79316553fd2efde9ec15e5df8a63587125fa16275815b5a214
     supersedes: []
 
 source:
@@ -81,6 +81,7 @@ manifest:
     source: "official labels/{labels,train,validation}.json of the Something-Something v2 release"
     sha256: "b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b"
     rows: 193690
+    draw: "official labels/train.json sha256 b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b, class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20000, seed 0"
     note: >-
       train rows are the seeded class-balanced draw of protocol.train_draw over the 168 913 upstream train rows
       (yavih.freeze.class_balanced_subsample, torch.Generator seed 0; 154 classes x 115, 18 x 116, and the two
@@ -159,7 +160,6 @@ protocol:
     cap: 20000
     seed: 0
     balance: class
-    drawn_from: "official labels/train.json sha256 b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b, class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20000, seed 0"
   views: none
 
 metrics:

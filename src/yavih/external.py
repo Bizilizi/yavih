@@ -72,6 +72,30 @@ class ExternalVersion(ExternalError):
     code = "E_EXTERNAL_VERSION"
 
 
+def same_version(installed: str | None, pin: str) -> bool:
+    """``installed == pin`` as PEP 440 versions (``1.0`` is ``1.0.0``); a string that is not a version compares as text."""
+    if installed is None:
+        return False
+    a, b = str(installed), str(pin)
+    if a == b:
+        return True
+    try:
+        from packaging.version import InvalidVersion, Version
+    except ImportError:  # pragma: no cover - packaging is ubiquitous but not a dependency
+        return _strip_zeros(a) == _strip_zeros(b)
+    try:
+        return Version(a) == Version(b)
+    except InvalidVersion:
+        return _strip_zeros(a) == _strip_zeros(b)
+
+
+def _strip_zeros(v: str) -> str:
+    parts = v.split(".")
+    while len(parts) > 1 and parts[-1] == "0":
+        parts.pop()
+    return ".".join(parts)
+
+
 def installed_version(name: str, module: Any = None) -> str | None:
     """``importlib.metadata.version(name)``, else the module's ``__version__``, else ``None``."""
     try:
@@ -109,7 +133,7 @@ def require(name: str, pip: str, version_pin: str) -> Any:
                 )
             _USED[name] = co["version"]
             return module
-    if version != str(version_pin):
+    if not same_version(version, str(version_pin)):
         raise ExternalVersion(
             name,
             f"E_EXTERNAL_VERSION: {name} {version or '(unknown version)'} is installed but this protocol pins "
@@ -126,7 +150,7 @@ def status(name: str, pip: str, version_pin: str) -> dict[str, Any]:
         v: str | None = metadata.version(name)
     except metadata.PackageNotFoundError:
         v = None
-    out: dict[str, Any] = {"ok": v == str(version_pin), "version": v, "version_pin": str(version_pin), "pip": _hint(pip)}
+    out: dict[str, Any] = {"ok": same_version(v, str(version_pin)), "version": v, "version_pin": str(version_pin), "pip": _hint(pip)}
     if v is None:
         co = checkout_status(name, pip, version_pin)
         if co is not None:

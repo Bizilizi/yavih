@@ -1,0 +1,48 @@
+{
+ "benchmark": "fsd50k",
+ "generator": 1,
+ "population": {
+  "eval": 256,
+  "floor": 0,
+  "folds": 0,
+  "train": 256
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "externals": {},
+  "folder_source": {
+   "probe": null,
+   "reader": null
+  },
+  "protocol_hash": "2e59e335f433b107e9f5f37436a21c89d177a0ee2e6bb5425c9740ef8bf2e6b7",
+  "scoring_hash": "a651c38acd9672efa34c38961099a9f1e4a1a218037330cad96c6ee97968428b",
+  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "effective_pos_classes": 0.001,
+  "map": 0.001,
+  "map_floor": 0.001,
+  "n_eval": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "map": [
+     0.03854310289861991,
+     0.055290403925942096
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "map_floor": 0.01953125
+   },
+   "metrics": {
+    "effective_pos_classes": 181,
+    "map": 0.039247732377864115,
+    "n_eval": 256
+   }
+  }
+ }
+}

@@ -128,7 +128,7 @@ def _protocol_kwargs(**over):
 
 
 def test_protocol_schema_tag():
-    assert PROTOCOL_SCHEMA == "yavih-protocol-4"  # protocol_hash = H(input_hash, scoring_hash) over normalized source
+    assert PROTOCOL_SCHEMA == "yavih-protocol-5"  # protocol_hash = H(input_hash, scoring_hash) over the declaration only
 
 
 def _part(part, comps):
@@ -139,7 +139,8 @@ def _part(part, comps):
 
 
 def test_protocol_hash_payload_matches_the_hand_written_payload():
-    """yavih-protocol-4: input side, scoring side, combined — each written out here by hand."""
+    """yavih-protocol-5: input side, scoring side, combined — each written out here by hand, from the declaration
+    only (typed views: no prose, no display keys, no source digest)."""
     kw = _protocol_kwargs()
     inp = {
         "name": kw["name"],
@@ -147,24 +148,23 @@ def test_protocol_hash_payload_matches_the_hand_written_payload():
         "manifest": {"key": "clip_id", "columns": MANIFEST_BLOCK["columns"]},
         "splits": kw["splits"],
         "streams": kw["streams"],
-        "input_contract": kw["input_contract"],
+        "input_contract": {"info": kw["input_contract"]["info"], "facts": [], "materialize": None},
         "output_contract": kw["output_contract"],
         "readout": "clf",
         "readout_inputs": {"params": {k: v for k, v in sorted(kw["readout_params"].items()) if k in hashing.INPUT_READOUT_PARAMS},
                            "protocol": {k: v for k, v in sorted(kw["protocol"].items())
                                         if k in set(hashing.INPUT_PROTOCOL_KEYS) | set(kw["input_contract"].get("facts") or [])}},
-        "reader": None,
     }
     sco = {
         "protocol_version": kw["protocol_version"],
         "protocol": kw["protocol"],
         "readout_params": kw["readout_params"],
-        "metrics": kw["metrics"],
-        "external": kw["external"],
+        "metrics": {"headline": "acc", "list": ["acc", "n_eval"], "floors": ["acc_floor"], "controls": [], "chance": {"acc": 0.5},
+                    "ci": {"acc": "binomial"}, "bootstrap": None, "aggregation": None},
+        "external": [],
         "targets": None,
         "label": MANIFEST_BLOCK["label"],
         "readout": {"name": "clf", "version": READOUT_VERSION["clf"]},
-        "probe": None,
     }
     ih, sh = _part("input", inp), _part("scoring", sco)
     combined = {"schema": PROTOCOL_SCHEMA, "input_hash": ih, "scoring_hash": sh}
@@ -173,11 +173,57 @@ def test_protocol_hash_payload_matches_the_hand_written_payload():
     assert (hs.input_hash, hs.scoring_hash, hs.protocol_hash) == (ih, sh, expected)
     assert hashing.protocol_hash(**kw) == expected and hashing.input_hash(**kw) == ih
     assert hs.input_components == hashing.component_digests(inp) and set(hs.scoring_components) == set(sco)
-    # reader.py is input side, probe.py scoring side
-    assert hashing.protocol_hashes(**kw, reader_sha256="a" * 64).input_hash != ih
-    assert hashing.protocol_hashes(**kw, probe_sha256="a" * 64).input_hash == ih
-    assert hashing.protocol_hash(**kw, probe_sha256="a" * 64) != expected
-    assert hashing.protocol_hash(**kw, reader_sha256="a" * 64) != hashing.protocol_hash(**kw, probe_sha256="a" * 64)
+    assert hs.input_values == inp and hs.scoring_values == sco
+    # no source digest is an input at all
+    for extra in ("reader_sha256", "probe_sha256"):
+        with pytest.raises(TypeError):
+            hashing.protocol_hashes(**kw, **{extra: "a" * 64})
+    # explain(): the canonical text of every component reproduces every digest with stdlib only
+    ex = hs.explain()
+    assert ex["schema"] == PROTOCOL_SCHEMA and ex["protocol_hash"] == expected
+    for side, h in (("input", ih), ("scoring", sh)):
+        assert ex[side]["hash"] == h
+        for c in ex[side]["components"].values():
+            assert hashlib.sha256(c["canon"].encode("utf-8")).hexdigest() == c["digest"]
+        digests = {k: c["digest"] for k, c in ex[side]["components"].items()}
+        assert hashlib.sha256(json.dumps({"schema": PROTOCOL_SCHEMA, "part": side, "components": digests}, sort_keys=True,
+                                         separators=(",", ":"), ensure_ascii=False).encode()).hexdigest() == h
+
+
+def test_typed_views_exclude_prose_and_display_keys():
+    """A wording, instruction or report-layout edit never moves a hash; a value edit does."""
+    base = hashing.protocol_hashes(**_protocol_kwargs())
+    same = [
+        {"protocol": dict(BENCH_SPEC["protocol"], train_draw={"cap": 10, "seed": 0, "balance": "class"})},
+        {"metrics": dict(BENCH_SPEC["metrics"], table=["acc"])},
+        {"metrics": dict(BENCH_SPEC["metrics"], tolerance={"acc": 0.01})},
+        {"input_contract": dict(BENCH_SPEC["input_contract"], handed_over={"video": "another sentence about the mp4"})},
+    ]
+    td = {"cap": 10, "seed": 0, "balance": "class"}
+    a = hashing.protocol_hashes(**_protocol_kwargs(protocol=dict(BENCH_SPEC["protocol"], train_draw=td)))
+    b = hashing.protocol_hashes(**_protocol_kwargs(protocol=dict(BENCH_SPEC["protocol"], train_draw=dict(td, drawn_from="a long story"))))
+    assert a.protocol_hash == b.protocol_hash != base.protocol_hash
+    assert hashing.protocol_hashes(**_protocol_kwargs(protocol=dict(BENCH_SPEC["protocol"], train_draw=dict(td, seed=1)))).protocol_hash != a.protocol_hash
+    for over in same[1:]:
+        assert hashing.protocol_hashes(**_protocol_kwargs(**over)).protocol_hash == base.protocol_hash, over
+    ext = [{"name": "pkg", "pip": "pip install pkg==1.0", "version_pin": "1.0", "used_for": "everything"}]
+    e1 = hashing.protocol_hashes(**_protocol_kwargs(external=ext))
+    e2 = hashing.protocol_hashes(**_protocol_kwargs(external=[dict(ext[0], pip="pip install --no-deps pkg==1.0", used_for="x")]))
+    assert e1.protocol_hash == e2.protocol_hash != base.protocol_hash
+    assert hashing.external_view(ext + [{"name": "a", "version_pin": "2"}]) == [{"name": "a", "version_pin": "2"}, {"name": "pkg", "version_pin": "1.0"}]
+    assert hashing.metrics_view({"headline": "acc"}) == {"headline": "acc", "list": None, "floors": None, "controls": None, "chance": None,
+                                                        "ci": None, "bootstrap": None, "aggregation": None}
+    assert hashing.input_contract_view(BENCH_SPEC["input_contract"]) == {"info": {"video": ["duration_s"]}, "facts": [], "materialize": None}
+    assert hashing.protocol_view({"train_draw": None, "x": 1}) == {"train_draw": None, "x": 1}
+
+
+def test_find_prose_flags_sentences_only():
+    v = {"a": "clip_id", "b": ["-nostdin", "trim=start={v0}:end={v1},setpts=PTS-{v0}/TB"], "c": {"d": "the quick brown fox jumps over the lazy dog today"},
+         "e": "x" * 80, "f": 1.5, "g": None}
+    assert hashing.find_prose(v) == [("c.d", v["c"]["d"]), ("e", "x" * 80)]
+    assert hashing.find_prose("one two three") == []
+    assert hashing.find_prose("one two three four five six seven eight") == [("<root>", "one two three four five six seven eight")]
+    assert hashing.find_prose(["a", "b"]) == []
 
 
 def test_normalized_source_ignores_comments_docstrings_and_layout():
@@ -238,10 +284,9 @@ def _sides(**over):
     {"external": [{"name": "pkg", "pip": "pkg==1.1", "version_pin": "1.1", "used_for": "x"}]},
     {"protocol": dict(BENCH_SPEC["protocol"], clip_seconds=9.0)},  # not a fact the bridge receives
     {"targets": {"eval": {"kind": "dense_depth", "file": "e.npy", "sha256": "e" * 64}}},
-    {"probe_sha256": "b" * 64},
 ])
 def test_scoring_edits_leave_the_input_hash_alone(over):
-    """A metric pin, probe.py, a readout version or a scoring-only protocol value never invalidates features."""
+    """A metric pin, a readout version or a scoring-only protocol value never invalidates features."""
     i0, s0 = _sides()
     i1, s1 = _sides(**over)
     assert i1 == i0 and s1 != s0
@@ -254,7 +299,6 @@ def test_scoring_edits_leave_the_input_hash_alone(over):
     {"output_contract": dict(BENCH_SPEC["output_contract"], requires={"pos": ["t"], "streams": [], "grid": None, "t_bins": None})},
     {"protocol": dict(BENCH_SPEC["protocol"], views="multi")},
     {"readout_params": {"visual_stream": "video"}},
-    {"reader_sha256": "a" * 64},
 ])
 def test_input_edits_change_the_input_hash(over):
     i0, _ = _sides()
@@ -360,10 +404,11 @@ def test_packaged_protocol_hashes_are_recorded_in_the_folder(name):
         name=b.spec.name, protocol_version=b.spec.protocol_version, protocol=raw["protocol"], splits=raw["splits"], streams=raw["streams"],
         input_contract=raw["input_contract"], output_contract=raw["output_contract"], external=raw["external"], metrics=raw["metrics"],
         readout_params=raw["readout_params"], targets=raw["targets"], manifest=raw["manifest"], manifest_hash=b.manifest_hash,
-        readout=b.spec.readout, reader_sha256=b.reader_sha256, probe_sha256=b.probe_sha256,
+        readout=b.spec.readout,
     )
     assert (again.protocol_hash, again.input_hash) == (rec.protocol_hash, rec.input_hash) == (b.protocol_hash, b.input_hash)
-    assert b.reader_sha256 is None  # the packaged folders ship no reader.py: the generic yavih.sample reader
+    assert b.folder_source == {"probe": b.probe_sha256, "reader": None}  # the packaged folders ship no reader.py
+    assert not hashing.find_prose(b.hashes.input_values) and not hashing.find_prose(b.hashes.scoring_values)
 
 
 def test_check_recorded_tells_the_author_what_to_write():

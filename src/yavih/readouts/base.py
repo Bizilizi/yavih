@@ -94,7 +94,7 @@ RESULT_KEYS: frozenset[str] = frozenset(
     }
 )
 _METRIC_BLOCKS: tuple[str, ...] = ("metrics", "floors", "controls", "ci95")
-_BENCHMARK_KEYS = frozenset({"name", "protocol_version", "readout", "readout_version", "manifest_hash", "protocol_hash"})
+_BENCHMARK_KEYS = frozenset({"name", "protocol_version", "readout", "readout_version", "manifest_hash", "protocol_hash", "folder_source"})
 #: The result's ``bridge`` block: recorded, never a key.
 _BRIDGE_KEYS = frozenset({"name", "describe", "describe_sha256", "source_sha256"})
 #: Charsets of ``describe()["model"]`` / ``["reading"]`` (they key paths, results files and report rows).
@@ -1124,6 +1124,8 @@ def _benchmark_block(bench: Any) -> dict:
         "readout_version": READOUT_VERSION[bench.spec.readout],
         "manifest_hash": bench.manifest_hash,
         "protocol_hash": bench.protocol_hash,
+        # provenance: the folder's probe.py / reader.py normalized-source digests (never identity)
+        "folder_source": dict(getattr(bench, "folder_source", None) or {"probe": None, "reader": None}),
     }
 
 

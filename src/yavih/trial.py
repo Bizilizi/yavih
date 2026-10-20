@@ -48,7 +48,7 @@ __all__ = ["run_trial", "TrialError", "TRIAL_DOC", "STAGES", "E_TRIAL", "E_TRIAL
 #: The trial-run protocol (the fresh-agent trial on real data).
 TRIAL_DOC = "https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md"
 #: The stages, in order.
-STAGES: tuple[str, ...] = ("stand_in", "bridge", "bridge_check", "extract", "validate", "probe", "report", "headline")
+STAGES: tuple[str, ...] = ("conformance", "stand_in", "bridge", "bridge_check", "extract", "validate", "probe", "report", "headline")
 #: A stage failed (exit 2; exit 3 when that stage itself was not ready, e.g. a decoder missing).
 E_TRIAL = "E_TRIAL"
 #: The stand-in cannot be built: a readout or stream kind the synthetic fixtures do not cover, or no media writer
@@ -322,6 +322,17 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
         return {"rows": len(rep.rows), "columns": len(rep.columns), "warnings": sorted({str(w.get("code")) for w in rep.warnings}),
                 "report": rep.paths.get("report")}
 
+    def conformance() -> dict:
+        from yavih.conformance import check as check_conformance
+        rep = check_conformance(real)
+        out = {"ok": rep.ok, "skipped": rep.skipped, "compared": rep.compared, "protocol_version": rep.protocol_version,
+               "warnings": [f.code for f in rep.warnings]}
+        if not rep.ok:
+            err = rep.errors[0]
+            return {"_status": "failed", "_code": err.code, "_message": err.message, **out}
+        return out
+
+    st.run("conformance", conformance)
     st.run("stand_in", stand_in)
     st.run("bridge", write_bridge)
     st.run("bridge_check", check)

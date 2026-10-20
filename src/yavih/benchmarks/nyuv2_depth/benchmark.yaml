@@ -19,8 +19,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 8763c99ee6263334970fa565797634160769528160e057258cbf7a81745ba117
-    input_hash: e3f8b3802f1767ab103403aa055254afd75dc428666450293dc6a388d065194a
+    protocol_hash: 4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4
+    input_hash: a81f90c7e183b6ec98a9e1ca5801f1b8b45690f28eb2b45c3b3f34cfaef76bba
     supersedes: []
 
 source:
@@ -83,6 +83,7 @@ manifest:
     source: "GeoNet nyu_geonet listing (30 916 .mat names) + eval_meta.json of the eval index (prepare/02, from nyu_depth_v2_labeled.mat and test_SN40.json)"
     sha256: "247d4ceb29fb39ef55f1dcce2a5739ddab57971787368e55255908a1ccf33ff3"   # the sorted nyu_geonet listing, one name per line
     rows: 12654
+    draw: "GeoNet nyu_geonet listing (30 916 .mat, sorted names sha256 247d4ceb29fb39ef55f1dcce2a5739ddab57971787368e55255908a1ccf33ff3) minus 847 leakage-excluded and 2 corrupt files = 30 067-file pool; session-balanced draw (yavih.freeze.class_balanced_subsample), cap 12 000, seed 0"
     note: >-
       train rows are the seeded session-balanced draw of protocol.train_draw (yavih.freeze.class_balanced_subsample
       over capture sessions, torch.Generator seed 0) from the 30 067-file pool = 30 916 GeoNet files - 847
@@ -190,7 +191,6 @@ protocol:
     cap: 12000
     seed: 0
     balance: session
-    drawn_from: "GeoNet nyu_geonet listing (30 916 .mat, sorted names sha256 247d4ceb29fb39ef55f1dcce2a5739ddab57971787368e55255908a1ccf33ff3) minus 847 leakage-excluded and 2 corrupt files = 30 067-file pool; session-balanced draw (yavih.freeze.class_balanced_subsample), cap 12 000, seed 0"
   views: none
   max_depth: 10.0
   target_size: 224

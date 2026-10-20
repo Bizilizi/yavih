@@ -22,6 +22,8 @@ Normative descriptions of current behaviour.
 | [Readouts](readouts.md) | the metric registry, common probe rules, `ProbeConfig`, the `clf` / `seq` / `grid` / `box` readouts, floors, controls, intervals |
 | [Results](results.md) | `result.json`, `yavih report`, comparability in reports, the results store |
 | [Hashing](hashing.md) | version constants, canonicalization, input / scoring / protocol / describe / probe / eval hashes, unit ids, migration through folder changelogs |
+| [Registry](registry.md) | the model registry: scores recorded next to their hash, the entry contract, `yavih registry export` / `check`, `report build --registry`, ties under tolerance |
+| [Conformance](conformance.md) | the per-folder fixture that holds a declared `protocol_version` to its numbers: the generated population, `expected.json`, tolerance, `bench conformance`, the readout bands, claiming a hash from outside yavih |
 | [Configuration](configuration.md) | config layers and tables, data roots, sites, launchers, the `[project]` table, environment variables |
 | [Project layout](project-layout.md) | the `yavih-bench/` folder: what lives where, one project per repository, sites instead of per-cluster copies, what may live elsewhere, `yavih init`, the `doctor` findings |
 | [CLI](cli.md) | every command and flag, the `--json` envelope, exit codes |

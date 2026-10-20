@@ -228,7 +228,9 @@ def row_key(result: dict, aliases: Mapping[str, str] | None = None) -> tuple[str
 
 def comparable(a: dict, b: dict, aliases: Mapping[str, str] | None = None) -> bool:
     """Same benchmark (after alias), same ``eval_hash`` and both ``standard``. Nothing the bridge
-    decided enters: two configurations of one model are comparable, and so are two models."""
+    decided enters: two configurations of one model are comparable, and so are two models; a registry entry
+    (``yavih.registry``) is compared by the same rule, and differences below a metric's recorded conformance
+    tolerance are ties."""
     if aliases is None:
         aliases = _alias_map()
     return bool(a.get("standard")) and bool(b.get("standard")) and column_key(a, aliases) == column_key(b, aliases)
@@ -572,8 +574,11 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         flags.append("partial")
     if status != "ok":
         flags.append(status)
-    if len(ok) == 1 and seed is None:
+    n_seeds = sum(int((r.get("registry") or {}).get("n_seeds") or 1) for r in ok)
+    if n_seeds == 1 and seed is None:
         flags.append("single_seed")
+    if any(r.get("registry") for r in results):
+        flags.append("registry")
     for c in _VOIDING_CONTROLS:
         if _control_fired(ok, c):
             flags.append(c)
@@ -606,7 +611,8 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         "not_applicable": na,
         "seed": seed,
         "seeds": sorted({int((r.get("probe") or {}).get("seed", 0)) for r in ok}),
-        "n_seeds": len(ok),
+        "n_seeds": n_seeds,
+        "registry": next((r["registry"].get("id") for r in results if r.get("registry")), None),
         "headline": headline,
         "metrics": metrics,
         "controls": controls,
@@ -913,6 +919,15 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             })
         if column["superseded"]:
             column["flags"].append("superseded")
+        sources = sorted({json.dumps((r.get("benchmark") or {}).get("folder_source"), sort_keys=True) for r in results})
+        if len(sources) > 1:
+            column["flags"].append("folder_source_differs")
+            rep.warnings.append({
+                "code": "W_FOLDER_SOURCE_DIFFERS", "column": column_id,
+                "message": f"{bench}: results under one protocol hash were scored by {len(sources)} different versions of the "
+                           "folder's probe.py / reader.py (benchmark.folder_source); comparable by declaration (the "
+                           "conformance fixture holds them within tolerance), shown for diagnosis",
+            })
 
         rows: list[dict[str, Any]] = []
         min_cov = float(meta.get("min_eval_coverage", DEFAULT_MIN_EVAL_COVERAGE))
@@ -1042,6 +1057,7 @@ def report(
     runs_root: str | Path | None = None,
     write: bool = True,
     suite: Any = None,
+    registry: str | Path | None = None,
 ) -> Report:
     """Index → the per-model lm-eval tables + the comparability columns → rendered text;
     writes ``runs/_index.jsonl`` and, when the runs root is known, ``runs/_report/report.<fmt>`` +
@@ -1061,6 +1077,12 @@ def report(
 
         the_suite = load_suite(suite)  # an unknown or invalid suite fails before anything is indexed
     records = build_index(globs, runs_root=runs_root)
+    if registry is not None:
+        # registry entries join the comparison as rows under the same rule (same benchmark, same eval_hash, both standard);
+        # their seeds and provenance are theirs, their model name is namespaced <org>/<model>
+        from yavih.registry import records as registry_records
+
+        records = [*records, *registry_records(registry)]
     rep = build_report(records, fmt=fmt, seeds=seeds, allow_coverage_diff=allow_coverage_diff, detail=detail)
     records = [r for r in records if not r.get(MOVED_ASIDE)]
     root = Path(runs_root) if runs_root is not None else runs_root_of([Path(r["path"]) for r in records])

@@ -298,7 +298,7 @@ def test_readouts_md_covers_readouts_and_results():
     text = (SKILL_ROOT / "references" / "readouts.md").read_text(encoding="utf-8")
     for n in ("media coordinates", "T = 10", "t_bins", "min_cell_coverage", "target region", "0.25", "full-frame",
               "external", "E_EXTERNAL_MISSING", "E_EXTERNAL_VERSION", "vggsounder==1.0", "result.json",
-              "\"schema_version\": 3", "\"eval_hash\"", "\"model\"", "\"reading\"", "results_<timestamp>.json",
+              "\"schema_version\": 4", "\"eval_hash\"", "\"model\"", "\"reading\"", "results_<timestamp>.json",
               "samples_<benchmark>_<reading>_<timestamp>.jsonl", "<benchmark>:<reading>", "\"results_version\": 2",
               "(benchmark, reading, eval_hash)", "W_BRIDGE_CHANGED", "W_FEATURES_DIFFER", "higher_is_better",
               "--merge-results", "floor_of", "not_applicable"):

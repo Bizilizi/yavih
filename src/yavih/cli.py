@@ -1231,6 +1231,88 @@ def cmd_bench_lint(ns: argparse.Namespace) -> Envelope:
                     exit_code=EXIT_OK if ok else EXIT_CONTRACT, text="\n".join(lines) + "\n")
 
 
+def cmd_bench_conformance(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench conformance <name|path>... [--all] [--record [--same-version --reason TEXT] [--force]]``: check (or
+    record) each folder's ``conformance/expected.json`` (``yavih.conformance``). A drift, a stale or a missing fixture
+    exits 2; a folder whose pinned external package is absent here is a warning (nothing compared)."""
+    from yavih.benchmark import Benchmark, UnknownBenchmark
+    from yavih.conformance import ConformanceError, check, record
+
+    refs = list(ns.refs or [])
+    if ns.all:
+        refs += [r for r in _bench_refs() if r not in refs]
+    if not refs:
+        raise CliError("E_USAGE", "bench conformance needs a benchmark name or path (or --all)")
+    if ns.same_version and not ns.record:
+        raise CliError("E_USAGE", "--same-version applies to --record")
+    data, errors, warnings, lines = [], [], [], []
+    for ref in refs:
+        try:
+            bench = Benchmark.load(ref)
+        except UnknownBenchmark as e:
+            raise CliError("E_USAGE", str(e), EXIT_USAGE) from e
+        if ns.record:
+            try:
+                rec = record(bench, same_version=bool(ns.same_version), reason=ns.reason, force=bool(ns.force))
+            except ConformanceError as e:
+                if e.code.startswith("W_"):
+                    warnings.append(_finding(e.code, e.message, where=bench.name))
+                    lines.append(f"{bench.name}: not recorded ({e.code}: {e.message})")
+                    data.append({"name": bench.name, "recorded": False, "code": e.code})
+                    continue
+                errors.append(_finding(e.code, e.message, where=bench.name))
+                lines.append(f"{bench.name}: FAIL {e.code}: {e.message}")
+                data.append({"name": bench.name, "recorded": False, "code": e.code})
+                continue
+            n = sum(len(v.get("metrics") or {}) + len(v.get("floors") or {}) + len(v.get("controls") or {}) for v in rec["values"].values())
+            lines.append(f"{bench.name}: recorded {n} values at protocol_version {rec['protocol_version']} -> {bench.folder}/conformance/expected.json")
+            data.append({"name": bench.name, "recorded": True, "protocol_version": rec["protocol_version"], "values": n,
+                         "readings": sorted(rec["values"]), "population": rec["population"]})
+            continue
+        rep = check(bench)
+        data.append(rep.to_dict())
+        for f in rep.errors:
+            errors.append(_finding(f.code, f.message, where=bench.name))
+        for f in rep.warnings:
+            warnings.append(_finding(f.code, f.message, where=bench.name))
+        state = "skipped" if rep.skipped else ("ok" if rep.ok else "FAIL")
+        lines.append(f"{bench.name}: {state} ({rep.compared} values compared at protocol_version {rep.protocol_version})")
+        for f in rep.findings:
+            lines.append(f"  {f.severity:<7} {f.code:<22} {f.message}")
+    ok = not errors
+    return Envelope(status="ok" if ok else "error", data=data, errors=errors, warnings=warnings,
+                    exit_code=EXIT_OK if ok else EXIT_CONTRACT, text="\n".join(lines) + "\n")
+
+
+def cmd_bench_hash(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench hash <name|path> [--explain]``: the folder's ``protocol_hash``, ``input_hash`` and ``scoring_hash``;
+    with ``--explain`` the canonical text and digest of every hashed component (``ProtocolHashes.explain``), enough
+    to recompute the hashes with stdlib only, and the folder's ``folder_source`` provenance."""
+    from yavih.benchmark import Benchmark, UnknownBenchmark
+
+    try:
+        bench = Benchmark.load(ns.ref)
+    except UnknownBenchmark as e:
+        raise CliError("E_USAGE", str(e), EXIT_USAGE) from e
+    data: dict[str, Any] = {
+        "name": bench.name, "protocol_version": bench.spec.protocol_version, "protocol_hash": bench.protocol_hash,
+        "input_hash": bench.input_hash, "scoring_hash": bench.scoring_hash, "manifest_hash": bench.manifest_hash,
+        "folder_source": dict(bench.folder_source),
+    }
+    lines = [f"{bench.name} (protocol_version {bench.spec.protocol_version})",
+             f"  protocol_hash  {bench.protocol_hash}", f"  input_hash     {bench.input_hash}",
+             f"  scoring_hash   {bench.scoring_hash}", f"  manifest_hash  {bench.manifest_hash}",
+             f"  folder_source  probe={bench.folder_source.get('probe') or 'null'} reader={bench.folder_source.get('reader') or 'null'}"]
+    if ns.explain:
+        ex = bench.hashes.explain()
+        data["explain"] = ex
+        for side in ("input", "scoring"):
+            lines.append(f"  {side} components ({ex[side]['hash'][:12]}…):")
+            for name, c in ex[side]["components"].items():
+                lines.append(f"    {name:<16} {c['digest'][:12]}…  {c['canon']}")
+    return Envelope(status="ok", data=data, exit_code=EXIT_OK, text="\n".join(lines) + "\n")
+
+
 def cmd_bench_new(ns: argparse.Namespace) -> Envelope:
     """``yavih bench new <name> [--readout R] [--like B] [--dir D]``: a scaffold folder that passes ``bench lint``
     (``yavih.scaffold``), with ``TODO`` wherever the new benchmark must supply a fact."""
@@ -1554,7 +1636,8 @@ def cmd_report_build(ns: argparse.Namespace) -> Envelope:
         join = {kind: _kv_pairs(pairs)}
     rep = report(ns.globs, fmt=ns.fmt, seeds=ns.seeds, allow_coverage_diff=ns.allow_coverage_diff, join=join, detail=ns.detail,
                  results_root=getattr(ns, "results", None), merge_results=bool(getattr(ns, "merge_results", False)),
-                 **({"suite": ns.suite} if getattr(ns, "suite", None) else {}))
+                 **({"suite": ns.suite} if getattr(ns, "suite", None) else {}),
+                 **({"registry": ns.registry} if getattr(ns, "registry", None) else {}))
     paths: dict[str, Any] = {}
     if rep.merged:
         paths["merged"] = list(rep.merged)
@@ -1574,6 +1657,39 @@ def cmd_report_build(ns: argparse.Namespace) -> Envelope:
     warnings = [_finding(str(w.get("code")), str(w.get("message", "")), w.get("column") or w.get("where"))
                 for w in (getattr(rep, "warnings", None) or []) if isinstance(w, dict) and w.get("code")]
     return Envelope(data=rep.to_json(), warnings=warnings, paths=paths, text=rep.text if rep.text.endswith("\n") else rep.text + "\n")
+
+
+def cmd_registry_export(ns: argparse.Namespace) -> Envelope:
+    """``yavih registry export <results_root|file> --org ORG --out DIR [--model NAME]... [--include-nonstandard]``:
+    registry entries from a results store (``yavih.registry.export``)."""
+    from yavih.registry import RegistryError, export
+
+    try:
+        out = export(ns.source, org=ns.org, out=ns.out, include_nonstandard=bool(ns.include_nonstandard), models=ns.model)
+    except RegistryError as e:
+        raise CliError(e.code, e.message, EXIT_USAGE) from e
+    lines = [f"{len(out['entries'])} entries, {len(out['protocols'])} protocol payloads written under {ns.out}"]
+    lines += [f"  {p}" for p in out["entries"]]
+    warnings = [_finding("W_REGISTRY_SKIPPED", f"{s['key']}: {s['reason']}") for s in out["skipped"]]
+    lines += [f"  skipped {s['key']}: {s['reason']}" for s in out["skipped"]]
+    unverified = [p for p in out["entries"] if '"passed": true' not in Path(p).read_text(encoding="utf-8")]
+    for p in unverified:
+        warnings.append(_finding("W_REGISTRY_UNVERIFIED", f"{p}: conformance not passed here; `yavih registry check` refuses it until it is", where=p))
+    return Envelope(data=out, warnings=warnings, paths={"out": str(ns.out)}, text="\n".join(lines) + "\n")
+
+
+def cmd_registry_check(ns: argparse.Namespace) -> Envelope:
+    """``yavih registry check DIR``: every entry parses, is filed under its id, carries consistent hashes, a protocol
+    payload that recomputes them, a passed conformance and a tolerance (``yavih.registry.check``); errors exit 2."""
+    from yavih.registry import check
+
+    rep = check(ns.root)
+    errors = [_finding(f.code, f.message, where=f.entry) for f in rep.errors]
+    warnings = [_finding(f.code, f.message, where=f.entry) for f in rep.warnings]
+    lines = [f"{ns.root}: {'ok' if rep.ok else 'FAIL'} ({rep.n_entries} entries, {rep.n_protocols} protocol payloads, {len(errors)} errors, {len(warnings)} warnings)"]
+    lines += [f"  {f.severity:<7} {f.code:<24} {f.message}" for f in rep.findings]
+    return Envelope(status="ok" if rep.ok else "error", data=rep.to_dict(), errors=errors, warnings=warnings,
+                    exit_code=EXIT_OK if rep.ok else EXIT_CONTRACT, text="\n".join(lines) + "\n")
 
 
 def cmd_plan_build(ns: argparse.Namespace) -> Envelope:
@@ -1917,6 +2033,18 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--all", action="store_true", help="every discoverable benchmark folder")
     s.add_argument("--skip", action="append", default=[], metavar="CHECK", help="skip a check by id (e.g. imports)")
     s.set_defaults(func=cmd_bench_lint)
+    s = bsub.add_parser("conformance", parents=[common_r], help="check (or --record) a folder's conformance fixture: the numbers its scoring path produces on a generated population, at its protocol_version")
+    s.add_argument("refs", nargs="*", metavar="name|path")
+    s.add_argument("--all", action="store_true", help="every discoverable benchmark folder")
+    s.add_argument("--record", action="store_true", help="write conformance/expected.json from the current scoring path")
+    s.add_argument("--same-version", action="store_true", help="with --record: overwrite differing values at the same protocol_version (needs --reason)")
+    s.add_argument("--reason", default=None, metavar="TEXT", help="with --same-version: why the numbers moved without a protocol change (stored)")
+    s.add_argument("--force", action="store_true", help="with --record: overwrite without comparing")
+    s.set_defaults(func=cmd_bench_conformance)
+    s = bsub.add_parser("hash", parents=[common_r], help="a folder's protocol / input / scoring hashes; --explain prints every hashed component's canonical text")
+    s.add_argument("ref", metavar="name|path")
+    s.add_argument("--explain", action="store_true", help="the canonical JSON and digest of every component (recompute the hashes with stdlib only)")
+    s.set_defaults(func=cmd_bench_hash)
     s = bsub.add_parser("new", parents=[common_r], help="scaffold a benchmark folder that passes bench lint (TODO where facts are needed)")
     s.add_argument("name")
     s.add_argument("--readout", default=None, help="the readout (clf, seq, grid, box or a registered one); picks the default --like")
@@ -2042,7 +2170,23 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--results", default=None, metavar="DIR", help="results-store root for --join / --merge-results")
     s.add_argument("--merge-results", action="store_true", help="merge every model's results_*.json into one results_<timestamp>.json")
     s.add_argument("--suite", default=None, metavar="S", help="append the suite's completeness per model (done / missing / join-missing)")
+    s.add_argument("--registry", default=None, metavar="DIR", help="a model registry (yavih registry export): its accepted entries join the table as rows, under the same comparability rule")
     s.set_defaults(func=cmd_report_build)
+
+    # registry
+    sp = sub.add_parser("registry", parents=[common_r], help="the model registry: export scores from a results store, check a registry")
+    rgsub = sp.add_subparsers(dest="subcommand", metavar="<subcommand>")
+    rgsub.required = True
+    s = rgsub.add_parser("export", parents=[common_r], help="write registry entries (and protocol payloads) from a results root or one results file")
+    s.add_argument("source", metavar="<results_root|results_file>")
+    s.add_argument("--org", required=True, help="the namespace the entries are filed under (<org>/<model>): your group or organisation")
+    s.add_argument("--out", required=True, metavar="DIR", help="the registry directory (entries/ and protocols/ are created under it)")
+    s.add_argument("--model", action="append", default=None, metavar="NAME", help="only these model names (repeatable)")
+    s.add_argument("--include-nonstandard", action="store_true", help="also register non-standard probe configurations (shown as such, never ranked)")
+    s.set_defaults(func=cmd_registry_export)
+    s = rgsub.add_parser("check", parents=[common_r], help="check every entry of a registry directory (what the registry repository's CI runs)")
+    s.add_argument("root", metavar="DIR")
+    s.set_defaults(func=cmd_registry_check)
 
     # plan
     sp = sub.add_parser("plan", parents=[common_r], help="build / status / calibrate / run (--local) unit plans")

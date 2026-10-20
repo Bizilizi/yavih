@@ -315,6 +315,7 @@ def benchmark_entry(results: Sequence[Mapping[str, Any]], *, bench: Any = None, 
         "protocol_hash": bmeta.get("protocol_hash"),
         "probe_hash": (first.get("probe") or {}).get("hash"),
         "manifest_hash": bmeta.get("manifest_hash"),
+        "folder_source": bmeta.get("folder_source"),  # provenance: the folder's probe.py / reader.py digests
         "roles": roles,
         "metrics": {
             "headline": getattr(metrics_cfg, "headline", None) or block.get("headline"),

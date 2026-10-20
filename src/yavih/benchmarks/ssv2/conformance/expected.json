@@ -1,0 +1,46 @@
+{
+ "benchmark": "ssv2",
+ "generator": 1,
+ "population": {
+  "eval": 256,
+  "floor": 0,
+  "folds": 0,
+  "train": 256
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "externals": {},
+  "folder_source": {
+   "probe": null,
+   "reader": null
+  },
+  "protocol_hash": "641928e796bd0eda4ac0df9bdac78e77b0b7b115bb91466bf72dec2d79c0d9c7",
+  "scoring_hash": "1b4f70adc4dcbb34a20d473fc12e6953b54ccfaa5a23898b99dc089247e741dc",
+  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "acc": 0.001,
+  "acc_floor": 0.001,
+  "n_eval": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "acc": [
+     0.0006898821669617927,
+     0.021790975380582514
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "acc_floor": 0.0
+   },
+   "metrics": {
+    "acc": 0.00390625,
+    "n_eval": 256
+   }
+  }
+ }
+}

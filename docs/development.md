@@ -106,9 +106,10 @@ Any change that can change a number must move a hash, and nothing else may. In p
 - Editing a hashed part of a folder (see [hashing](hashing.md)) moves its `input_hash` or `scoring_hash`,
   and the folder's `changelog` must record it: [hashing: migration](hashing.md#migration) says when to bump
   `protocol_version` and when to list the old hash under `supersedes`.
-- `probe.py` and `reader.py` are hashed as normalized syntax trees: comments and docstrings are free to
-  edit, but **string literals and code are hashed** (an error message in a folder's `probe.py` is part of the
-  scoring hash).
+- `probe.py`, `reader.py`, the readouts and `yavih.metrics` are never hashed: their behaviour is held by every
+  folder's conformance fixture (`yavih bench conformance --all`, [conformance](conformance.md)). A change that
+  moves a fixture's numbers beyond tolerance fails until `protocol_version` (a folder's code) or the readout's
+  `VERSION` (yavih's code) is bumped and the fixtures re-recorded.
 - Changing a payload shape bumps the matching schema constant in `versions.py`; changing a readout's head,
   loss, floor or metric bumps its `VERSION`.
 - `tests/test_hashing.py` pins the hash payloads and formulas and checks that every packaged folder's

@@ -1,0 +1,71 @@
+{
+ "benchmark": "vggss_box",
+ "generator": 1,
+ "population": {
+  "eval": 128,
+  "floor": 0,
+  "folds": 0,
+  "train": 128
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "externals": {},
+  "folder_source": {
+   "probe": null,
+   "reader": null
+  },
+  "protocol_hash": "f108458e24156e0d49c873b3abb7101f61e077abf664a5282aa43d54b36a7799",
+  "scoring_hash": "c26be40437e1429e116f16f7b6ef0801a2ab478253ae3f1b60f53591b835c41b",
+  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "acc@0.3": 0.001,
+  "acc@0.5": 0.001,
+  "audio_blind": 0.001,
+  "center_in_gt": 0.001,
+  "iou_floor": 0.001,
+  "iou_mean": 0.001,
+  "iou_shuffled": 0.001,
+  "n_eval": 0.001,
+  "n_excluded_degenerate": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "acc@0.3": [
+     0.021657844171923776,
+     0.09849752245094322
+    ],
+    "acc@0.5": [
+     0.0,
+     0.029136956273508416
+    ],
+    "center_in_gt": [
+     0.41465224626050723,
+     0.5853477537394928
+    ],
+    "iou_mean": [
+     0.06488150789156151,
+     0.09715404889564112
+    ]
+   },
+   "controls": {
+    "audio_blind": true,
+    "iou_shuffled": 0.08219093781512293
+   },
+   "floors": {
+    "iou_floor": 0.3441447893219538
+   },
+   "metrics": {
+    "acc@0.3": 0.046875,
+    "acc@0.5": 0.0,
+    "center_in_gt": 0.5,
+    "iou_mean": 0.08034102693251385,
+    "n_eval": 128,
+    "n_excluded_degenerate": 0
+   }
+  }
+ }
+}
