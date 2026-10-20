@@ -5,10 +5,11 @@ description: >
   yavih (frozen-feature benchmark harness): reading a benchmark's setup.md, writing a yavih bridge
   that turns the benchmark's raw files into tokens, extracting features, running the standardized
   probe readouts (clf / seq / grid / box) and reporting with floors. Use whenever the request
-  mentions yavih, a bridge, frozen-feature or linear/attentive probing, or one of the benchmarks
-  K400, SSv2, ESC-50, AudioSet-20K, FSD50K, VGGSounder, IN1K, AVSync, AVE, NYUv2 depth or VGG-SS
-  boxes, or a benchmark suite ("benchmark my model" = the default suite). Nine steps, each with the
-  exact command and the output that must be seen before moving on; contracts live in references/.
+  mentions yavih, a bridge, frozen-feature or linear/attentive probing, a benchmark suite
+  ("benchmark my model" = the default suite), evaluating an encoder's audio, visual, audio-visual,
+  temporal or spatial capabilities, or any benchmark in `yavih bench list` (by name or alias). Nine
+  steps, each with the exact command and the output that must be seen before moving on; contracts
+  live in references/.
 ---
 
 # yavih — nine steps, one stop condition each
@@ -50,7 +51,7 @@ checkout for them: a wheel install has no checkout, and these commands answer th
 
 ```bash
 yavih suite list                          # benchmark sets: default, minimal (`suite show <s>`, `suite new <s>`)
-yavih bench list                          # all benchmarks: readout, clips, obtain tier, data status
+yavih bench list                          # all benchmarks: readout, capability, clips, obtain tier, data status
 yavih bench files <b>                     # every shipped file, absolute path + kind (--json)
 yavih bench show <b> setup                # contracts, data, gotchas: read first
 yavih bench show <b> readme|yaml|probe    # paper/protocol, machine spec, extra metrics (probe.py: only some benchmarks)
