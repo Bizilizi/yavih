@@ -48,8 +48,8 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih bench list` | every discoverable benchmark: aliases, readout, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their `capability` and `readings` |
-| `yavih bench info` | a benchmark's README plus its hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
+| `yavih bench list` | every discoverable benchmark: aliases, readout, `capability` tags, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their suite group (`suite_capability`) and `readings` |
+| `yavih bench info` | a benchmark's README plus its `capability` tags, hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
 | `yavih bench path` | print the benchmark folder, or the absolute path of one shipped file | `<name> [<what>]` (`what` as for `bench show`) |
 | `yavih bench files` | every shipped file of a folder with absolute path, kind and size | `<name>` |
 | `yavih bench show` | print one shipped file | `<name> <what>`: `readme`, `setup`, `yaml`, `template`, `probe`, `classes`, `prepare/<file>` or a path inside the folder |

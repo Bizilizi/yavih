@@ -236,8 +236,9 @@ def test_bench_list_suite_filters(capsys):
     assert rc == 0
     rows = env["data"]
     assert [r["name"] for r in rows] == ["esc50", "ssv2", "vggsounder"]
-    assert [(r["capability"], r["readings"]) for r in rows] == [("audio", ["a"]), ("visual", ["v"]),
-                                                               ("audio-visual", ["a", "v", "av", "a+v+av"])]
+    assert [(r["suite_capability"], r["readings"]) for r in rows] == [("audio", ["a"]), ("visual", ["v"]),
+                                                                     ("audio-visual", ["a", "v", "av", "a+v+av"])]
+    assert [r["capability"] for r in rows] == [["audio"], ["visual"], ["audio-visual"]]  # the folders' own tags
     assert cli.main(["bench", "list", "--suite", "default"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("suite default (shipped)") and "capability" in out and "vggss_box" in out and "nyuv2_depth" not in out

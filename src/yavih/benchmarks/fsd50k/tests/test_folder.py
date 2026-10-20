@@ -67,7 +67,7 @@ def test_folder_lint_clean():
 
 def test_schema2_top_level_and_no_removed_keys(spec: dict):
     assert spec["schema_version"] == 2 and spec["name"] == "fsd50k" == HERE.name
-    assert list(spec) == ["schema_version", "name", "aliases", "title", "header", "readout", "protocol_version", "changelog", "source", "obtain",
+    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "readout", "protocol_version", "changelog", "source", "obtain",
                           "budget", "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract",
                           "external", "protocol", "metrics", "readout_params"]
     assert "requires" not in spec  # moved into output_contract.requires

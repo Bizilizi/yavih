@@ -4,6 +4,7 @@ schema_version: 2
 name: ave
 aliases: []
 title: AVE audio-visual event localization (28 events + background, per-second labels)
+capability: [audio-visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 readout: seq
 protocol_version: 1
 changelog:

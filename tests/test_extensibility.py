@@ -194,6 +194,10 @@ def test_bench_new_marks_copied_scripts_and_skips_curation(tmp_path):
     rep = lint_folder(folder)
     assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"}
     assert {"probe.py", "tests/test_folder.py", "prepare/01_obtain.sh"} <= {f.file for f in rep.warnings}
+    # capability: --like's tags, under a TODO comment the lint counts
+    assert Benchmark.load(str(folder)).spec.capability == ("visual", "spatial")
+    cap_line = next(ln for ln in (folder / "benchmark.yaml").read_text(encoding="utf-8").splitlines() if ln.startswith("capability:"))
+    assert cap_line.startswith("capability:  # TODO: still nyuv2_depth's"), cap_line
 
 
 @pytest.mark.parametrize("like", ["esc50", "nyuv2_depth"])

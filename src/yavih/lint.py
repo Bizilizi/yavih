@@ -28,6 +28,9 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   the prepare steps run as ``yavih bench prepare <name> <step>``; ``source.revision`` in "## Obtain the data".
 - ``external``: every ``external[].pip`` is a runnable ``pip install …`` command.
 - ``obtain``: the ``obtain: {tier, how}`` block.
+- ``capability``: a non-empty ``capability:`` list of ``yavih.suites.CAPABILITIES`` ids (``E_CAPABILITY``; optional for
+  the loader); a shipped suite that lists the benchmark under a capability it does not carry is a warning
+  (``W_SUITE_CAPABILITY``).
 - ``template``: ``bridge_template.py`` declares a literal ``describe()["model"]`` and a ``reading`` in a/v/av.
 - ``citations``: the shipped docs cite nothing a pip-installed user cannot open (the repository's docs/ pages by
   relative path, the retired SPEC / DESIGN documents, repo notes,
@@ -513,6 +516,47 @@ def _c_obtain(c: _Ctx) -> Iterator[Finding]:
         yield _err("obtain", "E_OBTAIN", f"obtain.tier {ob['tier']!r} not in {sorted(OBTAIN_TIERS)}", "benchmark.yaml")
     if not str(ob.get("how") or "").strip():
         yield _err("obtain", "E_OBTAIN", "obtain.how is empty", "benchmark.yaml")
+
+
+def _shipped_suite_groups() -> list[tuple[str, str, list[str]]]:
+    """``(suite file name, group capability, benchmark names)`` of every shipped suite, read raw (pyyaml; a group
+    that does not parse is skipped: ``yavih suite show`` reports it)."""
+    from yavih.suites import shipped_dir
+
+    out: list[tuple[str, str, list[str]]] = []
+    for p in sorted(shipped_dir().glob("*.yaml")):
+        try:
+            d = yaml.safe_load(p.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        groups = d.get("groups") if isinstance(d, dict) else None
+        for g in groups if isinstance(groups, list) else []:
+            if isinstance(g, dict):
+                out.append((p.name, str(g.get("capability")),
+                            [str(e.get("benchmark")) for e in g.get("entries") or [] if isinstance(e, dict)]))
+    return out
+
+
+@_check("capability")
+def _c_capability(c: _Ctx) -> Iterator[Finding]:
+    if c.raw is None:
+        return
+    from yavih.suites import CAPABILITIES
+
+    caps = c.raw.get("capability")
+    if not isinstance(caps, list) or not caps:
+        yield _err("capability", "E_CAPABILITY", "benchmark.yaml needs `capability: [...]`, one or more of "
+                   f"{', '.join(CAPABILITIES)} (the README and the benchmarks index group benchmarks by it)", "benchmark.yaml")
+        return
+    bad = [x for x in caps if x not in CAPABILITIES]
+    if bad:
+        yield _err("capability", "E_CAPABILITY", f"capability {bad} not in the vocabulary {', '.join(CAPABILITIES)}", "benchmark.yaml")
+        return
+    names = {c.name, *map(str, c.raw.get("aliases") or [])}
+    for suite, cap, benches in _shipped_suite_groups():
+        if names & set(benches) and cap not in caps:
+            yield _warn("capability", "W_SUITE_CAPABILITY", f"the shipped suite {suite} lists {c.name} under capability "
+                        f"{cap!r}, which is not among its capability tags {caps}", "benchmark.yaml")
 
 
 def template_readings(src: str) -> set[str]:

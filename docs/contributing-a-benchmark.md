@@ -44,7 +44,7 @@ What the scaffold holds, and what has to be replaced:
 | `manifest.csv.gz`, `classes.csv` | copied from `--like` (a loadable folder needs them) | your frozen manifest (step 3) |
 | `bridge_template.py` | copied from `--like` | your benchmark's template (step 6) |
 | `reader.py`, `probe.py` | copied from `--like` when it has them, with a `# TODO: copied verbatim from <like> by yavih bench new` banner as the first lines | your own, or delete them (steps 3 and 7) |
-| `benchmark.yaml` | `--like`'s yaml renamed: `protocol_version: 1`, one `changelog` entry with the hashes the scaffold computes, `aliases: []`, a `header:` block and `obtain.how` with `TODO` | your protocol (step 2) |
+| `benchmark.yaml` | `--like`'s yaml renamed: `protocol_version: 1`, one `changelog` entry with the hashes the scaffold computes, `aliases: []`, a `header:` block and `obtain.how` with `TODO`, `--like`'s `capability` under a `TODO` comment | your protocol (step 2) |
 | `README.md`, `setup.md` | written from the folder contract, `TODO` in every section | your docs (step 5) |
 | `make_manifest.py`, `prepare/01_obtain.sh` | stubs that exit 2 | your freeze and prepare steps (steps 3 and 4) |
 | `tests/test_folder.py` | generated: the shared checks of `yavih.testing.folder`, `--like`'s values pinned, two tests that skip with a `TODO:` reason | your folder tests (step 9) |
@@ -83,13 +83,18 @@ Every key is described in the [schema](benchmark-folder.md#benchmarkyaml). Decid
 8. **The header.** `header: {name, title, venue, abstract}`: the display name, the paper title,
    `"<authors> · <venue> <year>"` and a neutral abstract of at most 60 words. The README header image is rendered
    from it (step 11).
-9. **Budgets.** `budget.clips` equals the frozen rows per split (checked); `media_gb` is measured on the staged
+9. **Capability.** `capability: [...]`: what the benchmark measures, one or more of `audio`, `visual`,
+   `audio-visual`, `temporal`, `spatial`, `retrieval` (`yavih.suites.CAPABILITIES`, the vocabulary suites group
+   by). The benchmarks index and `yavih bench list` group by it; tag every capability a suite might list the
+   benchmark under (a synchronisation task is `[audio-visual, temporal]`). The scaffold keeps the `--like`
+   folder's tags under a `TODO` comment. Not hashed.
+10. **Budgets.** `budget.clips` equals the frozen rows per split (checked); `media_gb` is measured on the staged
    media; `extract_min_per_1k_clips_ref` and `probe_minutes_ref` (one entry for the readout) are measured, never
    guessed. Write first values from your own bridge check (`clips_per_s`) and probe wall time; the trial run
    (step 13) checks them.
 
 **Done when:** `yavih bench info <name>` loads the folder, and `yavih bench lint <name>` reports no `E_SCHEMA`,
-`E_OBTAIN`, `E_HEADER` or `E_EXTERNAL`.
+`E_OBTAIN`, `E_HEADER`, `E_CAPABILITY` or `E_EXTERNAL`.
 
 ## 3. Freeze the manifest: `make_manifest.py`
 

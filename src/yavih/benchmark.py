@@ -46,6 +46,7 @@ from yavih import hashing
 from yavih.metrics import registry as _registry
 from yavih.sample import INFO_VOCAB, MediaInfoTable, Sample, media_info_path
 from yavih.shipped import bench_file, bench_file_text, bench_files, prepare_steps
+from yavih.suites import CAPABILITIES
 from yavih.versions import BENCHMARK_SCHEMA_VERSION
 
 __all__ = [
@@ -98,6 +99,7 @@ __all__ = [
     "OBTAIN_TIERS",
     "ObtainSpec",
     "HeaderSpec",
+    "CAPABILITIES",
     "HEADER_KEYS",
     "HEADER_ABSTRACT_MAX_WORDS",
     "LAYOUTS",
@@ -552,6 +554,9 @@ class BenchmarkSpec:
     obtain: ObtainSpec | None = field(default=None, compare=False)
     #: ``header`` (optional; not hashed)
     header: HeaderSpec | None = field(default=None, compare=False)
+    #: ``capability`` (optional in the schema, required by ``bench lint``; not hashed): ids of
+    #: ``yavih.suites.CAPABILITIES`` the benchmark measures, in the yaml's order; ``()`` when absent
+    capability: tuple[str, ...] = field(default=(), compare=False)
 
     @property
     def requires(self) -> RequiresSpec:
@@ -773,6 +778,21 @@ def _parse_header(v: Any, path: str) -> HeaderSpec | None:
     if n > HEADER_ABSTRACT_MAX_WORDS:
         raise SchemaError(f"{path}.abstract: {n} words, at most {HEADER_ABSTRACT_MAX_WORDS} fit the header")
     return HeaderSpec(**vals)
+
+
+def _parse_capability(v: Any, path: str) -> tuple[str, ...]:
+    """``capability``: absent or a non-empty list of distinct ids of :data:`yavih.suites.CAPABILITIES` (the one
+    vocabulary suites group by); ``()`` when absent (``bench lint`` requires it)."""
+    if v is None:
+        return ()
+    caps = _str_list(v, path)
+    if not caps:
+        raise SchemaError(f"{path}: must be a non-empty list of capability ids ({', '.join(CAPABILITIES)})")
+    for c in caps:
+        if c not in CAPABILITIES:
+            raise SchemaError(f"{path}: {c!r} is not a capability; the vocabulary is {', '.join(CAPABILITIES)} "
+                              "(yavih.suites.CAPABILITIES)")
+    return caps
 
 
 def _parse_budget(v: Any, path: str, readout: str) -> BudgetSpec:
@@ -1525,7 +1545,7 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
     ``probe.py`` ``METRICS`` / ``PROTOCOL_KEYS`` (``load_yaml`` reads them next to the yaml)."""
     hooks = hooks or FolderHooks()
     d = _expect_mapping(raw, "")
-    _check_keys(d, "", _TOP_KEYS, ["obtain", "header"])
+    _check_keys(d, "", _TOP_KEYS, ["obtain", "header", "capability"])
     sv = _int(d["schema_version"], "schema_version")
     if sv != BENCHMARK_SCHEMA_VERSION:
         raise SchemaError(f"schema_version: {sv} != BENCHMARK_SCHEMA_VERSION {BENCHMARK_SCHEMA_VERSION} ({origin})")
@@ -1548,6 +1568,7 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
     source = _parse_source(d["source"], "source")
     obtain = _parse_obtain(d.get("obtain"), "obtain")
     header = _parse_header(d.get("header"), "header")
+    capability = _parse_capability(d.get("capability"), "capability")
     budget = _parse_budget(d["budget"], "budget", readout)
     manifest = _parse_manifest(d["manifest"], "manifest")
     splits = _parse_splits(d["splits"], "splits")
@@ -1619,6 +1640,7 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
         folder_metrics=tuple(sorted(n for n in resolved if n in hooks.metrics)),
         obtain=obtain,
         header=header,
+        capability=capability,
     )
 
 
@@ -2792,7 +2814,7 @@ def list_benchmarks(*, data: dict | None = None, scan: bool = True) -> list[dict
         try:
             bench = Benchmark.from_dir(folder, data=data)
         except BenchmarkError as e:
-            rows.append({"name": name, "aliases": [], "readout": None, "clips": {}, "media_gb": None, "source_kind": None, "obtain": None, "status": "invalid", "error": f"{type(e).__name__}: {e}", "folder": str(folder)})
+            rows.append({"name": name, "aliases": [], "readout": None, "capability": [], "clips": {}, "media_gb": None, "source_kind": None, "obtain": None, "status": "invalid", "error": f"{type(e).__name__}: {e}", "folder": str(folder)})
             continue
         status = _status_word(bench, scan=scan)
         rows.append(
@@ -2800,6 +2822,7 @@ def list_benchmarks(*, data: dict | None = None, scan: bool = True) -> list[dict
                 "name": bench.name,
                 "aliases": list(bench.spec.aliases),
                 "readout": bench.spec.readout,
+                "capability": list(bench.spec.capability),
                 "clips": {s: bench.n_rows(s) for s in bench.spec.splits.read_values()},
                 "media_gb": bench.spec.budget.media_gb,
                 "source_kind": bench.spec.source.kind,
@@ -2853,6 +2876,7 @@ def bench_info(ref: str, *, readme_only: bool = False, setup: bool = False, data
         "name": bench.name,
         "aliases": list(bench.spec.aliases),
         "title": bench.spec.title,
+        "capability": list(bench.spec.capability),
         "readout": bench.spec.readout,
         "protocol_version": bench.spec.protocol_version,
         "manifest_hash": bench.manifest_hash,

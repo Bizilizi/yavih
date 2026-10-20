@@ -5,6 +5,7 @@ schema_version: 2
 name: k400
 aliases: []
 title: Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe)
+capability: [visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: Kinetics-400
   title: The Kinetics Human Action Video Dataset

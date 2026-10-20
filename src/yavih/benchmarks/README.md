@@ -5,19 +5,50 @@ the bridge its raw stored files and states two contracts in its `setup.md`; ever
 model-side is the bridge's declared decision. Click a name for the
 benchmark's README (description, citation, the protocol in yavih).
 
+## Benchmarks by capability
+
+Grouped by each folder's `benchmark.yaml` `capability` tags (the vocabulary suites use); a benchmark with several
+capabilities is listed under each.
+
 <!-- yavih:bench-table index begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
+### audio (2)
+
+| Benchmark | Description | Readout | Media | Source |
+|---|---|---|---|---|
+| [esc50](esc50/README.md) | ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy) | clf | audio | public (obtain: auto) |
+| [fsd50k](fsd50k/README.md) | FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP) | clf | audio | public (obtain: auto) |
+
+### visual (4)
+
+| Benchmark | Description | Readout | Media | Source |
+|---|---|---|---|---|
+| [in1k](in1k/README.md) | ImageNet-1K image classification (frozen 50/class train draw, full 50k val); aliases `imagenet1k`, `imagenet` | clf | image | manual portal (obtain: needs-licence) |
+| [k400](k400/README.md) | Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe) | clf | video | torrent (obtain: auto) |
+| [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
+| [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
+
+### audio-visual (5)
+
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [audioset20k](audioset20k/README.md) | AudioSet-20K (balanced) 527-class multi-label audio-visual tagging, published raw clips (macro mAP) | clf | video + audio | public (obtain: auto) |
 | [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
-| [esc50](esc50/README.md) | ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy) | clf | audio | public (obtain: auto) |
-| [fsd50k](fsd50k/README.md) | FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP) | clf | audio | public (obtain: auto) |
-| [in1k](in1k/README.md) | ImageNet-1K image classification (frozen 50/class train draw, full 50k val); aliases `imagenet1k`, `imagenet` | clf | image | manual portal (obtain: needs-licence) |
-| [k400](k400/README.md) | Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe) | clf | video | torrent (obtain: auto) |
-| [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
-| [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
 | [vggsounder](vggsounder/README.md) | VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes) | clf | video + audio | public (obtain: needs-data-owner) |
+| [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
+
+### temporal (2)
+
+| Benchmark | Description | Readout | Media | Source |
+|---|---|---|---|---|
+| [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
+| [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
+
+### spatial (2)
+
+| Benchmark | Description | Readout | Media | Source |
+|---|---|---|---|---|
+| [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 <!-- yavih:bench-table index end -->
 
@@ -70,7 +101,8 @@ the skill's from the folders' `benchmark.yaml`. A folder outside the package loa
 
 `yavih bench lint` checks, for every folder: the required files and no `__init__.py`; a strict `benchmark.yaml`
 whose `name` is the folder's, with a `header:` block (name, paper title, venue, a short abstract) from which
-`python -m yavih.headers <name>` renders the README's header image in the source repository; README.md opens with
+`python -m yavih.headers <name>` renders the README's header image in the source repository, and a `capability:`
+list (the groups above); README.md opens with
 that image and a links line, and its `##` headings are exactly Description, Citation (with a fenced `bibtex` block),
 In yavih (in order; "## In yavih" names `protocol_version` and `metrics.headline`). setup.md's H1 is
 `# <name> — setup` and its `##` headings are exactly Obtain the data, Dependencies, Input contract, Output contract,
