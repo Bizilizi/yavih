@@ -69,7 +69,7 @@ def test_the_documented_generator_spec_reproduces_the_stream():
         out: list[float] = []
         i = 0
         while len(out) < n:
-            digest = hashlib.sha256(f"{tag}:{i}".encode("utf-8")).digest()
+            digest = hashlib.sha256(f"{tag}:{i}".encode()).digest()
             for k in range(4):
                 out.append((int.from_bytes(digest[8 * k: 8 * k + 8], "big") >> 11) * 2.0 ** -53)
             i += 1
@@ -78,7 +78,7 @@ def test_the_documented_generator_spec_reproduces_the_stream():
     def spec_rows(manifest_hash: str, split: str, role: str, n_rows: int, n: int) -> list[int]:
         if n >= n_rows:
             return list(range(n_rows))
-        key = {r: hashlib.sha256(f"{manifest_hash}:conformance:{split}:{role}:{r}".encode("utf-8")).digest() for r in range(n_rows)}
+        key = {r: hashlib.sha256(f"{manifest_hash}:conformance:{split}:{role}:{r}".encode()).digest() for r in range(n_rows)}
         return sorted(sorted(range(n_rows), key=key.__getitem__)[:n])
 
     def spec_derangement(tag: str, n: int) -> list[int]:
