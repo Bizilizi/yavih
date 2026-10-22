@@ -401,8 +401,14 @@ a cycle stops where it closes.
 `report.migrate.migrate(result)` returns a current-schema copy of a `result.json` record, in memory only; the file
 on disk is never rewritten. A record of the current `RESULT_SCHEMA_VERSION` is copied unchanged; a newer one raises
 `MigrationError` ("newer than this yavih"), and so does an older one for which no upgrade step is registered
-("older than this yavih"). A future schema bump registers one step `_UPGRADES[old] = fn` that turns a record of
-schema `old` into one of `old + 1`; at 1.0 `_UPGRADES` is empty.
+("older than this yavih"). A schema bump registers one step `_UPGRADES[old] = fn` that turns a record of schema
+`old` into one of `old + 1`. Registered steps:
+
+| step | change |
+|---|---|
+| 3 → 4 | adds `benchmark.folder_source = null` (unknown: never reported as a differing source) |
+
+Schemas 1 and 2 are not read.
 
 Then, for every record, `benchmark.protocol_hash` is mapped to the newest hash of its benchmark through the
 changelog `supersedes` lists, and when it moved, `eval_hash` is recomputed. For example, a folder whose newest

@@ -61,7 +61,7 @@ Values are illustrative.
 | `status`, `reason` | `reason` is null for `ok`, a string otherwise |
 | `standard` | true iff the probe config's `probe_hash` equals the pinned one |
 | `eval_hash` | full hex; must equal the hash of `benchmark.protocol_hash` and `probe.hash` |
-| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash`, `folder_source` (`{probe, reader}` normalized-source digests of the folder's `probe.py` / `reader.py` at scoring: provenance, never a key) |
+| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash`, `folder_source` (`{probe, reader}` normalized-source digests of the folder's `probe.py` / `reader.py` at scoring: provenance, never a key; `null` in a schema-3 record read through [`report.migrate`](hashing.md#reportmigrate)) |
 | `model`, `reading` | from the bridge's `describe()`; `model` matches `[A-Za-z0-9][A-Za-z0-9_.-]{0,63}`, `reading` `[A-Za-z0-9][A-Za-z0-9_-]{0,31}` |
 | `bridge` | exactly `name`, `describe`, `describe_sha256` (current describe schema), `source_sha256`; recorded, never a key |
 | `features` | exactly `fingerprint` (the split's, or a sha256 over the per-split ones), `dtype`, `N`, `D`, `pos_mode`, `bytes` (summed), `backend` (`ram` / `memmap`), `canary_max_rel_l2`, `batch_tolerance`, `rules_checked` (per stream: the temporal rule or `"custom"`, the spatial check). Null for a plan-time `not_applicable`; every key present with null geometry for a bridge-declared one |
@@ -239,7 +239,7 @@ is `missing` with the note `partial only`.
 |---|---|
 | `W_BRIDGE_CHANGED` | a row key holds several bridge configurations; newest shown |
 | `W_FEATURES_DIFFER` | the shown configuration holds several feature sets; newest shown, never averaged |
-| `W_FOLDER_SOURCE_DIFFERS` | results in a column were scored by different versions of the folder's `probe.py` / `reader.py` (`benchmark.folder_source`); comparable by declaration, listed for diagnosis |
+| `W_FOLDER_SOURCE_DIFFERS` | results in a column were scored by different versions of the folder's `probe.py` / `reader.py` (`benchmark.folder_source`); comparable by declaration, listed for diagnosis. A result without a recorded source (`null`: schema 3, a registry entry without one) is unknown and not compared |
 | `W_POPULATION_DIFFERS` | eval populations differ within a column |
 | `W_MISSING_READING` | a model lacks an expected reading in a column |
 | `W_NONSTANDARD` | a column of non-pinned probe configs: comparable with nothing |

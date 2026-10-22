@@ -188,7 +188,7 @@ def test_migrate_refuses_a_missing_or_older_schema():
     with pytest.raises(MigrationError):
         migrate(r)
     with pytest.raises(MigrationError, match="older"):
-        migrate({**make_result(), "schema_version": RESULT_SCHEMA_VERSION - 1})
+        migrate({**make_result(), "schema_version": 2})  # 3 has an upgrade step; 2 and earlier have none
 
 
 @pytest.fixture
@@ -344,6 +344,42 @@ def test_build_index_skips_unreadable_and_newer_schema(runs: Path, capsys):
     assert [r["path"] for r in recs] == [str(good.resolve())]
     err = capsys.readouterr().err
     assert "newer" in err and "skipping" in err
+
+
+def test_a_schema_3_result_loads_and_reports(runs: Path):
+    """Schema 4 added ``benchmark.folder_source``; a schema-3 ``result.json`` is upgraded in memory (``null``: unknown)
+    and reported next to a current one, with no W_FOLDER_SOURCE_DIFFERS (an unknown source is not a different one)."""
+    old = make_result(model="m1", acc=0.4)
+    old["schema_version"] = 3
+    del old["benchmark"]["folder_source"]
+    up = migrate(old)
+    assert up["schema_version"] == RESULT_SCHEMA_VERSION == 4 and up["benchmark"]["folder_source"] is None
+    assert "folder_source" not in old["benchmark"]  # in memory only
+    cur = make_result(model="m2", acc=0.6)
+    cur["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
+    write_result(runs, old)
+    write_result(runs, cur)
+    rep = report([str(runs / "*")], write=False)
+    assert rep.n_results == 2 and len(rep.columns) == 1
+    assert {r["model"]: r["metrics"]["acc"]["value"] for r in rep.rows} == {"m1": pytest.approx(0.4), "m2": pytest.approx(0.6)}
+    assert "W_FOLDER_SOURCE_DIFFERS" not in {w["code"] for w in rep.warnings}
+    with pytest.raises(MigrationError, match="older than this yavih"):
+        migrate({**old, "schema_version": 2})
+
+
+def test_folder_source_differs_compares_known_sources_only():
+    """Two known, different sources in one column warn; a missing one next to known ones that agree does not."""
+    a, b, c = (make_result(model=m) for m in ("m1", "m2", "m3"))
+    a["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
+    b["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
+    c["benchmark"]["folder_source"] = None
+    rep = build_report(_records(a, b, c))
+    assert "W_FOLDER_SOURCE_DIFFERS" not in {w["code"] for w in rep.warnings}
+    assert "folder_source_differs" not in rep.columns[0]["flags"]
+    b["benchmark"]["folder_source"] = {"probe": "2" * 64, "reader": None}
+    rep = build_report(_records(a, b, c))
+    assert [w["code"] for w in rep.warnings].count("W_FOLDER_SOURCE_DIFFERS") == 1
+    assert "folder_source_differs" in rep.columns[0]["flags"]
 
 
 def test_runs_root_inference(runs: Path):

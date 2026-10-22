@@ -67,8 +67,19 @@ def upgrade_protocol_hash(protocol_hash: Any) -> Any:
     return _history.upgrade_protocol_hash(protocol_hash)
 
 
-#: ``{from_version: upgrade}``; each step produces ``from_version + 1``. Empty: no older schema is read.
-_UPGRADES: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
+def _v3_to_v4(record: dict[str, Any]) -> dict[str, Any]:
+    """Schema 4 added ``benchmark.folder_source`` (the folder's ``probe.py`` / ``reader.py`` digests at scoring,
+    provenance only). A schema-3 record did not record them: ``null``, which the report reads as unknown (never as a
+    differing source). Its ``protocol_hash`` (computed under an earlier protocol schema) is moved to the current
+    column by :func:`_current_hashes` through the folders' ``supersedes`` lists."""
+    bench = record.get("benchmark")
+    if isinstance(bench, dict):
+        bench.setdefault("folder_source", None)
+    return record
+
+
+#: ``{from_version: upgrade}``; each step produces ``from_version + 1``. Schemas 1 and 2 are not read.
+_UPGRADES: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {3: _v3_to_v4}
 
 
 def migrate(result: dict) -> dict:

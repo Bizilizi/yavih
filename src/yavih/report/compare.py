@@ -919,7 +919,10 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             })
         if column["superseded"]:
             column["flags"].append("superseded")
-        sources = sorted({json.dumps((r.get("benchmark") or {}).get("folder_source"), sort_keys=True) for r in results})
+        # a record without folder_source (a schema-3 result, a registry entry exported without it) is unknown, not
+        # different: only the known sources are compared
+        sources = sorted({json.dumps(fs, sort_keys=True) for r in results
+                          if isinstance(fs := (r.get("benchmark") or {}).get("folder_source"), dict) and fs})
         if len(sources) > 1:
             column["flags"].append("folder_source_differs")
             rep.warnings.append({
