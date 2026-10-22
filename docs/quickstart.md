@@ -40,12 +40,14 @@ A repository keeps everything yavih-related in one folder, `yavih-bench/` (`yavi
 
 ## 3. Write a bridge
 
-Copy the benchmark's template and fill it in (shipped files are reached through `yavih bench files|show|prepare`,
-`yavih bridge new` and `yavih skill show`, the same from a wheel and a checkout):
+Run every command below from the repository root; every path is relative to it. Create the project folder once,
+then copy the benchmark's template into it and fill it in (shipped files are reached through `yavih bench
+files|show|prepare`, `yavih bridge new` and `yavih skill show`, the same from a wheel and a checkout):
 
 ```bash
+yavih init                                                 # once per repository: yavih-bench/ (config, bridges/, matrices/, suites/, benchmarks/, tools/)
 yavih bench show vggsounder setup                          # the contract (= yavih bench info vggsounder --setup)
-yavih bridge new vggsounder --model mymodel                # → bridges/mymodel_vggsounder.py, model name filled in
+yavih bridge new vggsounder --model mymodel                # → yavih-bench/bridges/mymodel_vggsounder.py, model name filled in
 ```
 
 ```python
@@ -102,38 +104,41 @@ class Bridge(yavih.Bridge):
         return np.stack(feats), np.stack(pos), used
 ```
 
-The bridge never sees labels; every model-side decision (frames, crop, normalization and its source, decoder, tap, pooling, precision) is declared in `describe()` and recorded with every number. It is never part of a path, a key or what makes numbers comparable: results are filed under `runs/<benchmark>/<model>/<reading>/` and compared by `eval_hash` (benchmark + probe). Its digest `describe_sha256` keeps one feature set to one configuration: an argument, rule, precision or weights change re-extracts on resume and shows as a new configuration of the same `(model, reading)` row (`W_BRIDGE_CHANGED`, newest shown; the replaced configuration's output is moved to `probe/_stale/` and listed under `--detail`); a path, batch-size or decoder-build change does nothing. Two configurations you want side by side (another layer, another checkpoint) are two `model` names.
+The bridge never sees labels; every model-side decision (frames, crop, normalization and its source, decoder, tap, pooling, precision) is declared in `describe()` and recorded with every number. It is never part of a path, a key or what makes numbers comparable: results are filed under `<runs root>/<benchmark>/<model>/<reading>/` and compared by `eval_hash` (benchmark + probe). Its digest `describe_sha256` keeps one feature set to one configuration: an argument, rule, precision or weights change re-extracts on resume and shows as a new configuration of the same `(model, reading)` row (`W_BRIDGE_CHANGED`, newest shown; the replaced configuration's output is moved to `probe/_stale/` and listed under `--detail`); a path, batch-size or decoder-build change does nothing. Two configurations you want side by side (another layer, another checkpoint) are two `model` names.
 
 ## 4. Smoke-test, then extract
 
 ```bash
-yavih bridge check bridges/mymodel_vggsounder.py --bench vggsounder --arg ckpt=/ckpts/mymodel.pt \
-      --out bridges/mymodel-vggsounder.profile.json
-# 32-clip smoke: describe(), hard checks (rerun bit-identical, batch- and order-invariance), the declared rules
-# against `used`, positions in media coordinates, clips/s, profile.json (model, reading, describe_sha256)
-yavih bridge check bridges/mymodel_vggsounder.py --bench vggsounder --synthetic
-# the same checks on tiny generated media with vggsounder's streams and facts: before any data is staged, no profile
+yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --synthetic
+# smoke checks on tiny generated media with vggsounder's streams and facts: before any data is staged, no profile
+yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --arg ckpt=/ckpts/mymodel.pt \
+      --out yavih-bench/matrices/mymodel.profiles/mymodel-vggsounder.profile.json
+# 32-clip smoke on the staged data: describe(), hard checks (rerun bit-identical, batch- and order-invariance), the
+# declared rules against `used`, positions in media coordinates, clips/s, and the profile (model, reading,
+# describe_sha256) of the matrix entry mymodel-vggsounder below, next to its matrix
 ```
 
-Single machine (`--out` is the run directory; features land in `<out>/features/<split>/`):
+Single machine (`--out` is the run directory under the runs root; features land in `<out>/features/<split>/`):
 
 ```bash
-RUN=runs/vggsounder/mymodel/v
-yavih extract --bench vggsounder --bridge bridges/mymodel_vggsounder.py --split train --shard 0/1 --out $RUN --arg ckpt=/ckpts/mymodel.pt
-yavih extract --bench vggsounder --bridge bridges/mymodel_vggsounder.py --split test  --shard 0/1 --out $RUN --arg ckpt=/ckpts/mymodel.pt
+RUNS=$(yavih config get runs.root)        # the configured runs root (never inside the repository)
+RUN=$RUNS/vggsounder/mymodel/v
+yavih extract --bench vggsounder --bridge yavih-bench/bridges/mymodel_vggsounder.py --split train --shard 0/1 --out $RUN --arg ckpt=/ckpts/mymodel.pt
+yavih extract --bench vggsounder --bridge yavih-bench/bridges/mymodel_vggsounder.py --split test  --shard 0/1 --out $RUN --arg ckpt=/ckpts/mymodel.pt
 ```
 
 Cluster: describe models × benchmarks once, let yavih cut it into units, run them as an array. A suite is a named
-benchmark set (`default` is what "benchmark my model" means, `minimal` a smoke pass; [suites](suites.md)),
-and `plan init` writes its matrix and one bridge stub per benchmark:
+benchmark set (`default` is what "benchmark my model" means, `minimal` a smoke pass; [suites](suites.md)).
+For a whole suite, `plan init` writes the matrix and one bridge stub per benchmark (keeping the bridge written
+above), and prints the `bridge check --out <profile>` command of every entry and the `plan build` command:
 
 ```bash
-yavih init                                # once per repository: yavih-bench/ (config, bridges/, matrices/, suites/, benchmarks/, tools/)
 yavih suite show default                  # capabilities, benchmarks, readings
-yavih plan init --suite default --model mymodel   # -> yavih-bench/matrices/mymodel.yaml + bridges/mymodel_<b>.py (--launcher unless the site config names one)
+yavih plan init --suite default --model mymodel   # -> yavih-bench/matrices/mymodel.yaml + yavih-bench/bridges/mymodel_<b>.py (--launcher unless the site config names one)
 ```
 
-or by hand, one entry per bridge and benchmark:
+or by hand, one entry per bridge and benchmark (paths in a matrix are relative to the matrix file; this one uses
+the bridge and the profile of steps 3 and 4):
 
 ```yaml
 # yavih-bench/matrices/mymodel.yaml
@@ -147,19 +152,20 @@ bridges:
 
 ```bash
 M=yavih-bench/matrices/mymodel.yaml
-yavih plan build $M --sample 32 --out trial.jsonl && yavih plan run trial.jsonl --local   # capped run first: 32 rows per split
-yavih plan build $M --out plan.jsonl                     # extract shards (GPU) -> probe (CPU/GPU) -> report
-yavih exec plan.jsonl --index $SLURM_ARRAY_TASK_ID --deadline slurm   # one unit; idempotent; exit 4 = resubmit
-yavih plan status plan.jsonl
+P=$RUNS/_plans                            # plan files are run state: under the runs root, never in yavih-bench/
+yavih plan build $M --sample 32 --out $P/mymodel-trial.jsonl && yavih plan run $P/mymodel-trial.jsonl --local   # capped run first: 32 rows per split
+yavih plan build $M --out $P/mymodel.jsonl                 # extract shards (GPU) -> probe (CPU/GPU) -> report
+yavih exec $P/mymodel.jsonl --index $SLURM_ARRAY_TASK_ID --deadline slurm   # one unit; idempotent; exit 4 = resubmit
+yavih plan status $P/mymodel.jsonl
 yavih suite missing default --model mymodel                 # what the suite still lacks for this model
 ```
 
 ## 5. Validate, probe, report
 
 ```bash
-yavih features validate runs/vggsounder/mymodel/v/features
-yavih probe run        runs/vggsounder/mymodel/v --seeds 0,1,2
-yavih report build     'runs/*' --fmt md
+yavih features validate $RUN/features
+yavih probe run        $RUN --seeds 0,1,2
+yavih report build     "$RUNS/*" --fmt md
 ```
 
 Every command takes `--json` and returns one envelope `{status, data, errors, warnings, paths}`; exit codes are `0` done / `1` usage / `2` contract violation to fix / `3` not ready / `4` deadline or preemption (resubmit) / `5` internal.
