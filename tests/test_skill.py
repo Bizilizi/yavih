@@ -83,8 +83,24 @@ def test_frontmatter_name_and_description():
     head = text.split("---", 2)[1]
     assert re.search(r"^name:\s*yavih\s*$", head, re.M)
     assert "description:" in head
-    for trigger in ("yavih", "bridge", "frozen", "setup.md", "K400", "SSv2", "ESC-50", "AVE", "NYUv2"):
+    for trigger in ("yavih", "bridge", "frozen", "setup.md", "probing", "probe", "benchmark suite", "benchmark my model",
+                    "video", "audio-visual", "`yavih bench list`"):
         assert trigger in head, f"description must trigger on {trigger!r}"
+
+
+def test_frontmatter_enumerates_no_benchmark():
+    """The benchmark set grows by adding folders: the description triggers on `yavih bench list`, never on a list of
+    names that would go stale (no packaged name, alias or header display name)."""
+    import yaml
+
+    from yavih.benchmarks import packaged_folder, packaged_names
+
+    head = SKILL_MD.read_text(encoding="utf-8").split("---", 2)[1]
+    for name in packaged_names():
+        y = yaml.safe_load((packaged_folder(name) / "benchmark.yaml").read_text(encoding="utf-8"))
+        for word in (name, *(y.get("aliases") or []), (y.get("header") or {}).get("name") or name):
+            assert not re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", head, flags=re.I), \
+                f"the SKILL.md description names benchmark {word!r}"
 
 
 def test_nine_steps_present_in_order():
@@ -470,10 +486,10 @@ def _yaml_blocks(text: str) -> list[str]:
     return re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
 
 
-@pytest.mark.parametrize("doc", ["references/slurm.md", "README.md"])
+@pytest.mark.parametrize("doc", ["references/slurm.md", "docs/quickstart.md"])
 def test_matrix_examples_parse_with_plan_build(tmp_path, doc):
     """The ``matrix.yaml`` examples of the skill (``references/slurm.md`` "matrix.yaml", which SKILL.md points to) and
-    README.md are accepted by ``plan build``'s parser."""
+    docs/quickstart.md are accepted by ``plan build``'s parser."""
     from yavih.plan.matrix import load_matrix
 
     path = SKILL_ROOT / doc if doc.startswith("references/") else REPO / doc
@@ -516,12 +532,12 @@ def test_in1k_image_as_video_gotcha_says_top_level():
 
 
 def test_readme_example_reading_uses_the_benchmarks_vocabulary():
-    """The README's vggsounder bridge declares ``reading`` in vggsounder's {a, v, av}."""
+    """The quickstart's vggsounder bridge declares ``reading`` in vggsounder's {a, v, av}."""
     from yavih.benchmarks import packaged_folder
 
-    readme = REPO / "README.md"
+    readme = REPO / "docs" / "quickstart.md"
     if not readme.is_file():
-        pytest.skip("README.md not available")
+        pytest.skip("docs/quickstart.md not available")
     m = re.search(r'"reading": "([a-z]+)"', readme.read_text(encoding="utf-8"))
     assert m and m.group(1) == "v"
     assert "`describe()[\"reading\"]` ∈ {`a`, `v`, `av`}" in (packaged_folder("vggsounder") / "setup.md").read_text(encoding="utf-8")

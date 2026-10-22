@@ -4,6 +4,7 @@ schema_version: 2
 name: nyuv2_depth
 aliases: []
 title: NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid)
+capability: [visual, spatial]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 readout: grid
 protocol_version: 1
 header:

@@ -948,6 +948,7 @@ def _bench_row(bench: Any) -> dict[str, Any]:
         "name": bench.name,
         "aliases": list(raw.get("aliases") or []),
         "readout": raw.get("readout"),
+        "capability": [str(c) for c in raw.get("capability") or []],
         "clips": dict(budget.get("clips") or {}),
         "media_gb": budget.get("media_gb"),
         "source_kind": (raw.get("source") or {}).get("kind"),
@@ -957,8 +958,8 @@ def _bench_row(bench: Any) -> dict[str, Any]:
 
 
 def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any]], list[str]]:
-    """``bench list --suite S``: ``(suite, packaged benchmark names in suite order, {name: {capability, readings}},
-    pending names)``."""
+    """``bench list --suite S``: ``(suite, packaged benchmark names in suite order, {name: {suite_capability,
+    readings}}, pending names)``; ``suite_capability`` is the suite group, ``capability`` stays the folder's tags."""
     from yavih.suites import load_suite
 
     suite = load_suite(suite_ref)
@@ -968,7 +969,7 @@ def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any
         if e.status != "packaged":
             pending.append(e.benchmark)
             continue
-        rec = facts.setdefault(e.benchmark, {"capability": cap, "readings": []})
+        rec = facts.setdefault(e.benchmark, {"suite_capability": cap, "readings": []})
         rec["readings"] += [r for r in e.readings if r not in rec["readings"]]
         if e.join:
             rec["readings"].append(str(e.join_reading))
@@ -976,8 +977,9 @@ def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any
 
 
 def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
-    """``yavih bench list [--fmt text|md] [--suite S]``: every discoverable benchmark, or with ``--suite`` the
-    suite's packaged benchmarks in suite order with their ``capability`` and ``readings``."""
+    """``yavih bench list [--fmt text|md] [--suite S]``: every discoverable benchmark with its ``capability`` tags
+    (``benchmark.yaml``), or with ``--suite`` the suite's packaged benchmarks in suite order with the suite group
+    (``suite_capability``) and ``readings``."""
     rows = []
     warnings = []
     suite, refs, facts, pending = (None, _bench_refs(), {}, [])
@@ -999,13 +1001,15 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
         if suite is not None:
             row.update(facts[ref])
         rows.append(row)
-    head = f"{'capability':<14}{'readings':<16}" if suite is not None else ""
-    lines = [f"{head}{'name':<16}{'readout':<8}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
+    head = f"{'group':<14}{'readings':<16}" if suite is not None else ""
+    lines = [f"{head}{'name':<16}{'readout':<8}{'capability':<23}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
     for r in rows:
         clips = ", ".join(f"{k}={v}" for k, v in r["clips"].items())
         tier = (r.get("obtain") or {}).get("tier") or "-"
-        pre = f"{r['capability']:<14}{','.join(r['readings']):<16}" if suite is not None else ""
-        lines.append(f"{pre}{r['name']:<16}{str(r['readout']):<8}{clips:<28}{str(r['media_gb']):>9}  {str(r['source_kind']):<15}{tier:<17}{r['status']}")
+        caps = ",".join(r.get("capability") or []) or "-"
+        pre = f"{r['suite_capability']:<14}{','.join(r['readings']):<16}" if suite is not None else ""
+        lines.append(f"{pre}{r['name']:<16}{str(r['readout']):<8}{caps:<23}{clips:<28}{str(r['media_gb']):>9}  "
+                     f"{str(r['source_kind']):<15}{tier:<17}{r['status']}")
     if suite is not None:
         lines.insert(0, f"suite {suite.name} ({suite.origin}): {suite.description}")
         if pending:
@@ -1049,6 +1053,7 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
     data = {
         "name": bench.name,
         "title": raw.get("title"),
+        "capability": [str(c) for c in raw.get("capability") or []],
         "readout": raw.get("readout"),
         "protocol_version": raw.get("protocol_version"),
         "protocol_hash": bench.protocol_hash,
@@ -1068,8 +1073,9 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
     summary = json.dumps(_jsonable({k: v for k, v in data.items() if k != "readme"}), indent=2, sort_keys=True)
     ob = data["obtain"] if isinstance(data["obtain"], dict) else {}
     obtain_line = f"obtain: {ob.get('tier')} — {ob.get('how')}\n" if ob else ""
+    cap_line = f"capability: {', '.join(data['capability'])}\n" if data["capability"] else ""
     return Envelope(data=data, paths={"folder": str(bench.folder)},
-                    text=readme + ("\n" if readme and not readme.endswith("\n") else "") + obtain_line + summary + "\n")
+                    text=readme + ("\n" if readme and not readme.endswith("\n") else "") + cap_line + obtain_line + summary + "\n")
 
 
 def cmd_bench_path(ns: argparse.Namespace) -> Envelope:
@@ -1990,7 +1996,7 @@ def build_parser() -> argparse.ArgumentParser:
     bsub.required = True
     s = bsub.add_parser("list", parents=[common_r])
     s.add_argument("--fmt", choices=["text", "md"], default="text", help="md: the markdown table the docs embed (no data scan)")
-    s.add_argument("--suite", default=None, metavar="S", help="only the suite's benchmarks, with their capability and readings")
+    s.add_argument("--suite", default=None, metavar="S", help="only the suite's benchmarks, with their suite group and readings")
     s.set_defaults(func=cmd_bench_list)
     s = bsub.add_parser("info", parents=[common_r])
     s.add_argument("name")

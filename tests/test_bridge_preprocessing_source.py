@@ -113,7 +113,7 @@ def test_filling_each_template_slot_as_instructed_passes(path: Path):
 
 
 def _readme_bridge_docstring() -> str:
-    text = (ROOT / "README.md").read_text()
+    text = (ROOT / "docs" / "quickstart.md").read_text()
     block = re.search(r"```python\n(.*?)```", text, re.DOTALL)
     assert block is not None
     tree = ast.parse(block.group(1))

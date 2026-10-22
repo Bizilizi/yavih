@@ -201,7 +201,8 @@ How features become numbers; none of it reaches the bridge (`hashing.scoring_com
 - Over-inclusion is allowed (a stream's layout is hashed although a tar copy of the same bytes would score the
   same); omitting a number-changing benchmark input is not.
 
-Deliberately not hashed: `title`, `aliases` (one protocol, several names), `changelog` (it records the hashes),
+Deliberately not hashed: `title`, `aliases` (one protocol, several names), `capability` and `header` (how the
+benchmark is grouped and presented), `changelog` (it records the hashes),
 `source` (provenance; the staged copy is checked by `bench verify` and `W_MEDIA_FP`), `budget`, `data` (site roots,
 tar-index paths, derived-file listings), `obtain`, `manifest.file`, `manifest.sha256`, `classes`,
 `classes_sha256` (their content is `manifest_hash`), `manifest.upstream` (including `draw`), the `source` / `root`

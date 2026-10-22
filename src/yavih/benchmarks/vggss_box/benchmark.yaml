@@ -4,6 +4,7 @@ schema_version: 2
 name: vggss_box
 aliases: []
 title: VGG-SS audio-conditioned single-box regression
+capability: [audio-visual, spatial]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: VGG-SS
   title: Localizing Visual Sounds the Hard Way

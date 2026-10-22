@@ -4,6 +4,7 @@ schema_version: 2
 name: fsd50k
 aliases: []
 title: FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP)
+capability: [audio]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: FSD50K
   title: "FSD50K: An Open Dataset of Human-Labeled Sound Events"

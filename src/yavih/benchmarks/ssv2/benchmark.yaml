@@ -4,6 +4,7 @@ schema_version: 2
 name: ssv2
 aliases: []
 title: Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val)
+capability: [visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: Something-Something v2
   title: The "Something Something" Video Database for Learning and Evaluating Visual Common Sense

@@ -365,7 +365,7 @@ def test_bench_list(capsys, fake_benchmark_module, yavih_home):
     rc, env = run_json(capsys, ["bench", "list"])
     assert rc == 0 and len(env["data"]) == 1
     row = env["data"][0]
-    assert set(row) == {"name", "aliases", "readout", "clips", "media_gb", "source_kind", "obtain", "status"}
+    assert set(row) == {"name", "aliases", "readout", "capability", "clips", "media_gb", "source_kind", "obtain", "status"}
     assert row["name"] == "synth_clf" and row["readout"] == "clf" and row["clips"] == {"train": 8, "val": 4} and row["status"] == "verified"
     assert row["source_kind"] == "derived" and row["aliases"] == ["synth_clf_alias"]
     rc = cli.main(["bench", "list"])
