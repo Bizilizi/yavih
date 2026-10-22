@@ -520,9 +520,9 @@ yavih plan status plan.jsonl
   not started.
 
 Lower-level pieces for your own runner: `yavih exec plan.jsonl --range 0:40` (in order, one process),
-`yavih exec plan.jsonl --index 7`, or GNU parallel with one GPU per job slot. In a container, keep
-`plan.jsonl` inside the mounted project (its paths are relative to the plan file) or pass
-`--root /workspace`; CPU quotas are read from the cgroup. A Kubernetes Indexed Job runs
+`yavih exec plan.jsonl --index 7`, or GNU parallel with one GPU per job slot. In a container, mount the
+plan file and the matrix directory so that they keep their relative position (the plan stores each unit's `cwd`
+relative to itself) or pass `--root /workspace`; CPU quotas are read from the cgroup. A Kubernetes Indexed Job runs
 `yavih exec plan.jsonl --index $JOB_COMPLETION_INDEX --deadline +<seconds>`.
 
 ## Running under SLURM

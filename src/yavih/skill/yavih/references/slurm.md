@@ -314,8 +314,9 @@ Lower-level pieces, for your own runner:
   deadline); add `--slots 4` for four at a time. `yavih exec plan.jsonl --index 7` runs one.
 - GNU parallel with one GPU per job slot (`{%}` = slot number 1…J):
   `parallel -j2 'CUDA_VISIBLE_DEVICES=$(({%}-1)) yavih exec pending.extract.jsonl --deps plan.jsonl --index {}' ::: $(seq 0 $((N-1)))`.
-- Docker / Podman: mount the project and keep `plan.jsonl` inside it — the plan stores paths
-  relative to the plan file, so `docker run -v $PWD:/workspace … yavih exec /workspace/plan.jsonl
+- Docker / Podman: mount the plan file and the matrix directory at the same relative position
+  (one mount holding both, e.g. a work tree with the project and the runs root) — the plan stores
+  paths relative to the plan file, so `docker run -v $PWD:/workspace … yavih exec /workspace/plan.jsonl
   --index 0` works although it was built on the host. A plan kept elsewhere takes `--root
   /workspace`. CPU quotas (`--cpus 4`) are read from the cgroup; `exec --cpus N` overrides
   (decode workers `N − 1`). With `--gpus device=4,5`, `--slots 2` uses devices 4 and 5.
