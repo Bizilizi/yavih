@@ -54,9 +54,9 @@ file itself, it is read once.
 
 ```toml
 # ~/.config/yavih/config.toml (user) or yavih-bench/yavih.toml (project)
+launcher = "/envs/mymodel/bin/python"   # the default launcher of extract units (top-level: before any table)
 [project]                               # project file only
 yavih = ">=1,<2"                        # the yavih the project expects (doctor warns on a mismatch)
-launcher = "/envs/mymodel/bin/python"   # the default launcher of extract units
 [launchers]
 vjepa = "/envs/vjepa/bin/python"        # a matrix entry's `launcher: vjepa`
 [data]

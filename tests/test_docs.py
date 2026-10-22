@@ -102,6 +102,45 @@ def test_exit_codes_and_envelope_are_documented() -> None:
         assert re.search(rf"^\| `?{code}`? \|", text, flags=re.M), f"exit code {code} has no row in docs/cli.md"
 
 
+# ----------------------------------------------------------------------------- configuration examples
+
+#: The first line of a ```toml block that is not a yavih configuration file (a plugin's pyproject.toml).
+_NOT_YAVIH_CONFIG = "(not a yavih configuration file)"
+
+
+def _toml_blocks() -> list[tuple[str, str]]:
+    """Every fenced ```toml block (indented ones included) in docs/*.md, README.md and the shipped skill pages."""
+    pages = PAGES + [REPO / "README.md"] + sorted((PKG / "skill").rglob("*.md"))
+    out = []
+    for page in pages:
+        text = _read(page)
+        for m in re.finditer(r"^( *)```toml\n(.*?)^\1```", text, re.M | re.S):
+            body = re.sub(rf"^{m.group(1)}", "", m.group(2), flags=re.M)
+            if _NOT_YAVIH_CONFIG in body.splitlines()[0]:
+                continue
+            out.append((f"{page.relative_to(REPO)}:{text[: m.start()].count(chr(10)) + 1}", body))
+    return out
+
+
+_TOML_BLOCKS = _toml_blocks()
+
+
+@pytest.mark.parametrize("body", [b for _, b in _TOML_BLOCKS], ids=[w for w, _ in _TOML_BLOCKS])
+def test_toml_examples_load_under_the_strict_schema(body: str, tmp_path: Path) -> None:
+    """A copyable configuration example parses as TOML and passes the strict schema (a key written after a table
+    header belongs to that table, so a top-level ``launcher`` below ``[project]`` is refused)."""
+    import tomllib
+
+    from yavih import config
+
+    data = tomllib.loads(body)
+    config.load(config=data, env={"GROUP": "/group", "HOME": str(tmp_path)}, cwd=tmp_path, lenient=False)
+
+
+def test_toml_examples_are_found() -> None:
+    assert len(_TOML_BLOCKS) >= 4
+
+
 # ----------------------------------------------------------------------------- links
 
 

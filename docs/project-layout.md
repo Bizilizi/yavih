@@ -62,6 +62,8 @@ of the root project; each then has its own folder and discovery below it finds i
 ## The project file
 
 ```toml
+launcher = "/envs/mymodel/bin/python"      # the default launcher (a top-level key: before any table header)
+
 [project]
 yavih = ">=1,<2"              # the yavih this project expects; doctor warns (never fails) on a mismatch
 # bridges = "bridges"         # relocate a directory (relative to this file); also matrices, suites, benchmarks
@@ -70,7 +72,6 @@ yavih = ">=1,<2"              # the yavih this project expects; doctor warns (ne
 [data]
 root = "/data/datasets"       # ${data.root}; per benchmark: [data.<bench>] <root> = "..."
 
-launcher = "/envs/mymodel/bin/python"      # the default launcher
 [launchers]
 vjepa = "/envs/vjepa/bin/python"           # a matrix entry says `launcher: vjepa`
 

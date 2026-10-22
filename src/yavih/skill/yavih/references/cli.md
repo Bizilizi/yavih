@@ -245,10 +245,10 @@ One `Settings` object per process, built from these layers (later wins, key by k
 
 ```toml
 # ~/.config/yavih/config.toml (user: personal roots) or yavih-bench/yavih.toml (project); every key is optional
+launcher = "/envs/mymodel/bin/python"   # default launcher of extract units (a python path or a prefix command); top-level keys come before any table
 [project]                               # project file only
 yavih = ">=1,<2"                        # the yavih the project expects; doctor warns W_PROJECT_VERSION, never fails
 # bridges = "bridges"                   # relocate a project directory; also matrices, suites, benchmarks; subprojects = [...]
-launcher = "/envs/mymodel/bin/python"   # default launcher of extract units (a python path or a prefix command)
 [launchers]
 vjepa = "/envs/vjepa/bin/python"        # a matrix entry's `launcher: vjepa`; per site under [site.<id>.launchers]
 [data]
