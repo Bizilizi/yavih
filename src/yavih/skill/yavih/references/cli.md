@@ -31,14 +31,14 @@ yavih [--json] [--version] [--config FILE] [--runs-root DIR] [--results DIR] [--
 | `yavih skill show` | `[--all \| --ref NAME]` | prints SKILL.md; `--all` appends every `references/*.md`; `--ref bridge` prints that one reference (bridge, cli, data, readouts, slurm) |
 | `yavih bench list` | `[--fmt text\|md] [--suite S]` (`md`: the generated markdown table the docs embed, no data scan; `--suite`: only the suite's benchmarks, adding the suite group `suite_capability` and `readings`) | rows `{name, aliases, readout, capability: [ids of yavih.suites.CAPABILITIES], clips: {split: n}, media_gb, source_kind, obtain: {tier, how}, status: "missing" \| "partial 61%" \| "verified"}`; `obtain.tier`: `auto` (fetchable unattended), `manual-download` (a person downloads it from an official portal or the authors' links), `needs-licence` (a human signs a licence for their own account), `needs-data-owner` (ask the person who holds it), `site-only` |
 | `yavih bench info` | `<name> [--readme-only \| --setup]` | README text (or setup.md with `--setup`, the same file as `bench show <name> setup`) + `{protocol_version, protocol_hash, input_hash, scoring_hash, manifest_hash, roles: {role: {nominal, present}}, floors, metrics, source, obtain, budget, external, history}` (`input_hash`: what features are checked against; `scoring_hash`: metrics, pins, `probe.py`); `paths.folder` = the benchmark folder (holds `bridge_template.py`) |
-| `yavih bench files` | `<name>` | `{name, folder, files: [{rel, path, kind, size}]}`: every shipped file of the folder with its absolute path; `kind` ∈ readme, setup, yaml, template, probe, manifest, classes, prepare, test, other (no maintainer notes, bytecode or hidden files: the listing is the same from a wheel and a checkout) |
-| `yavih bench show` | `<name> <what>` | prints one shipped file; `what` = `readme`, `setup`, `yaml`, `template`, `probe`, `classes`, `prepare/<file>` or any path inside the folder; `--json`: `{path, text}`. A path leaving the folder or naming a maintainer note is `E_PATH`, a binary file (`manifest.csv.gz`) `E_BINARY`, a missing one `E_NOT_FOUND` (exit 1) |
+| `yavih bench files` | `<name>` | `{name, folder, files: [{rel, path, kind, size}]}`: every shipped file of the folder with its absolute path; `kind` ∈ readme, setup, yaml, template, probe, manifest, classes, conformance, prepare, test, other (no maintainer notes, bytecode or hidden files: the listing is the same from a wheel and a checkout) |
+| `yavih bench show` | `<name> <what>` | prints one shipped file; `what` = `readme`, `setup`, `yaml`, `template`, `probe`, `classes`, `conformance` (`conformance/expected.json`), `prepare/<file>` or any path inside the folder; `--json`: `{path, text}`. A path leaving the folder or naming a maintainer note is `E_PATH`, a binary file (`manifest.csv.gz`) `E_BINARY`, a missing one `E_NOT_FOUND` (exit 1) |
 | `yavih bench path` | `<name> [<what>]` | `{name, folder}`; prints the folder (`FOLDER=$(yavih bench path <b>)`), or with `<what>` (as `bench show`) that file's absolute path, e.g. for `sbatch "$(yavih bench path k400 prepare/01_download_torrent.sh)"` |
 | `yavih bench prepare` | `<name> [<step> [-- args…]]` | without a step: `{name, folder, steps: [{step, name, file, path, interpreter, doc}]}`, the numbered `prepare/NN_*.{sh,py}` scripts; with one (`01`, `1`, `download`, `01_download.sh`, or another file under `prepare/`): runs it with this python (`.py`) or `bash` (`.sh`) in the current directory, environment + `FOLDER=<folder>` + `YAVIH_BENCH=<name>`; exits with the step's own code (`E_PREPARE_FAILED` when non-zero) |
 | `yavih bridge new` | `<bench> --model M [--reading R] [--out DIR\|FILE] [--force]` | `{bench, model, reading, path, template, filled, next}`: the folder's `bridge_template.py` copied to the project's `bridges/<M>_<bench>.py` (`./bridges/` without a project) with `describe()["model"]` (and `Bridge.name`, and the reading when given) filled and a header naming `yavih bench show <bench> setup`; refuses an existing file (`E_EXISTS`) unless `--force`. Everything else stays `TODO`, so `bridge check` refuses the copy (`E_TEMPLATE_UNFILLED`) until it is filled |
-| `yavih bench lint` | `<name\|path>... [--all] [--skip CHECK]` | `[{name, folder, ok, errors, warnings}]`: the folder contract (`yavih.lint`): required files, strict `benchmark.yaml`, README.md / setup.md headings and pins, contract yaml copies, budget vs frozen rows, `obtain`, bridge template, citations a pip install can open (no shipped folder file may point into the folder's maintainer notes, which stay in the source repository: `E_NOTES_LINK`), `probe.py` (and an optional `reader.py`) importable without torch, `hashed`: no prose inside a hashed yaml view (`E_HASHED_PROSE`), and `hashes`: the newest `changelog` entry records the `protocol_hash` and `input_hash` the folder computes (`E_CHANGELOG_HASH` prints the exact lines to write, and when to list the old hash under `supersedes` / `supersedes_input`); errors exit 2, `TODO` markers are warnings. Run it on every folder you write or edit |
+| `yavih bench lint` | `<name\|path>... [--all] [--skip CHECK]` | `[{name, folder, ok, errors, warnings}]`: the folder contract (`yavih.lint`): required files, strict `benchmark.yaml`, README.md / setup.md headings and pins, contract yaml copies, budget vs frozen rows, `obtain`, bridge template, citations a pip install can open (no shipped folder file may point into the folder's maintainer notes, which stay in the source repository: `E_NOTES_LINK`), `probe.py` (and an optional `reader.py`) importable without torch, `capability`: `capability: [...]` from the vocabulary (`E_CAPABILITY`) and listed so by the shipped suites (`W_SUITE_CAPABILITY`), `conformance`: the folder's `conformance/expected.json` is current (the `bench conformance` codes), `hashed`: no prose inside a hashed yaml view (`E_HASHED_PROSE`), and `hashes`: the newest `changelog` entry records the `protocol_hash` and `input_hash` the folder computes (`E_CHANGELOG_HASH` prints the exact lines to write, and when to list the old hash under `supersedes` / `supersedes_input`); errors exit 2, `TODO` markers are warnings. Run it on every folder you write or edit |
 | `yavih bench new` | `<name> [--readout clf\|seq\|grid\|box] [--like B] [--dir D]` | `{name, folder, lint, todo}`: a scaffold copied from `--like` (default per readout: esc50, ave, nyuv2_depth, vggss_box) with a fresh README.md / setup.md / `make_manifest.py` / `prepare/` / `tests/` and `TODO` wherever a fact is needed; it passes `bench lint`. Written to `D/<name>` (default: the project's `benchmarks/`, else the first `$YAVIH_BENCH_PATH` directory, else `.`); folders in the project's `benchmarks/`, on `$YAVIH_BENCH_PATH` and in pip-installed packs (entry-point group `yavih.benchmarks`) resolve by name after `$YAVIH_HOME/benchmarks` and the packaged ones, never shadowing a packaged name. Contributing one: https://github.com/Bizilizi/yavih/blob/main/docs/contributing-a-benchmark.md |
-| `yavih bench trial` | `<name\|folder> --synthetic [--readout-fast] [--keep DIR]` | `{benchmark, readout, ok, exit_code, stages: [{stage, status, seconds, detail, error}], headline: {metric, value, ci95, floor_name, floor, clears_floor}, failed, paths, limits}`: the folder's whole chain in process (stand-in, oracle bridge, `bridge check`, extract, validate, probe without a results file, report) on a generated stand-in; never touches the runs root, results store, `$YAVIH_HOME` or configuration. `--synthetic` is required (without it: exit 1, pointing at https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md); `--readout-fast` uses the test-only fast `ProbeConfig` and the headline must clear its floor. `E_TRIAL` (exit 2) a stage failed, `E_TRIAL_NOT_READY` (exit 3) no stand-in can be built, `W_TRIAL_HEADLINE` the headline missed its floor without `--readout-fast`. Single-label stand-in: the folder's `probe.py` hooks and `external` packages are not exercised |
+| `yavih bench trial` | `<name\|folder> --synthetic [--readout-fast] [--keep DIR]` | `{benchmark, readout, ok, exit_code, stages: [{stage, status, seconds, detail, error}], headline: {metric, value, ci95, floor_name, floor, clears_floor}, failed, paths, limits}`: the folder's whole chain in process, stage by stage: `conformance` (the folder's fixture), `stand_in`, `bridge` (the oracle bridge), `bridge_check`, `extract`, `validate`, `probe` (without a results file), `report`, `headline` on a generated stand-in; never touches the runs root, results store, `$YAVIH_HOME` or configuration. `--synthetic` is required (without it: exit 1, pointing at https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md); `--readout-fast` uses the test-only fast `ProbeConfig` and the headline must clear its floor. `E_TRIAL` (exit 2) a stage failed, `E_TRIAL_NOT_READY` (exit 3) no stand-in can be built, `W_TRIAL_HEADLINE` the headline missed its floor without `--readout-fast`. Single-label stand-in: the folder's `probe.py` hooks and `external` packages are not exercised |
 | `yavih bench conformance` | `<name\|path>... [--all] [--record [--same-version --reason TEXT] [--force]]` | check (or record) the folder's `conformance/expected.json`: the numbers its scoring path (readout, metrics, `probe.py`, pinned external package) produces on a generated population, at its `protocol_version`, within the per-metric tolerance (`metrics.tolerance`, default 0.001). `E_CONFORMANCE_DRIFT` = the numbers moved at the same version (bump `protocol_version`, re-record), `E_CONFORMANCE_STALE` = recorded at another version, `E_CONFORMANCE_MISSING` = no fixture; `W_CONFORMANCE_SKIPPED` = the external package is absent here. Code is never hashed; this fixture is what holds a declared version to its numbers |
 | `yavih bench hash` | `<name\|path> [--explain]` | `{protocol_hash, input_hash, scoring_hash, manifest_hash, folder_source}`; `--explain` adds the canonical JSON and digest of every hashed component, enough to recompute the hashes with stdlib only (what a third party matches to claim the hash) |
 | `yavih registry export` | `<results_root\|results_file> --org ORG --out DIR [--model NAME]... [--include-nonstandard]` | registry entries (`entries/<benchmark>/<eval_hash12>/<org>/<model>/<reading>.json`) + protocol payloads from a results store; `W_REGISTRY_UNVERIFIED` = the folder's conformance fixture did not pass here (the entry is written, `check` refuses it) |
@@ -217,6 +217,100 @@ audio / video / both (`E_JOIN_ROUTING`), readings of different `model` names (`E
 probes (`E_JOIN_PROBE`) (exit 2) and a missing package (exit 3); different weights fingerprints are
 the warning `W_JOIN_WEIGHTS`.
 
+
+### Every command (the envelope's fallback codes)
+
+An exception without its own code is reported by class: `E_USAGE` (exit 1: configuration, schema, an unknown
+benchmark or argument) · `E_CONTRACT` (exit 2: validation, manifest, describe or format errors) · `E_NOT_READY`
+(exit 3: data, media or a decoder missing) · `E_DEADLINE` (exit 4: a timeout or `--deadline`) · `E_INTERRUPTED` (exit
+4: an interrupt; the probe checkpoints first) · `E_NOT_IMPLEMENTED` (exit 5) · `E_INTERNAL` (exit 5, traceback on
+stderr in text mode). `W_INTERNAL`: a non-essential `doctor` probe crashed (reported, not fatal).
+
+### Extract and the probe (beyond the lists above)
+
+Extract: `E_BRIDGE` (exit 5) the bridge raised inside `encode` / `prepare` (a bridge bug is not coverage) ·
+`E_FEATURES` `encode()` returned a wrong shape or `pos` for the declared `pos_mode` · `E_PRECISION_DRIFT` torch
+precision flags differ after `encode` from the declaration · `E_PREPARE_NONDETERMINISTIC` (bridge check) `prepare()`
+twice on one sample differs · `E_ORACLE` (bridge check) the test oracle bridge outside `YAVIH_TESTING=1` ·
+`E_READER` (exit 5) the folder's `reader.py` yielded rows out of order or outside the shard range · `E_READ_INTERNAL`
+(exit 5) reading the stored bytes raised · `E_WRITE` (exit 5) a row's features or provenance cannot be serialized ·
+`E_PREEMPTED` (exit 4) SIGTERM / SIGUSR1: shard abandoned, nothing partial · `W_MISSING_ROWS` (bridge check) sampled
+rows with missing or undecodable media. Probe (exit 2 unless noted): `E_READOUT` (exit 1) a `--readout` other than
+the benchmark's · `E_PROBE_PY` (exit 1) the folder's `probe.py` does not import · `E_SPLIT_MISSING` a role split
+without features · `E_META_STALE` a shard written by another configuration than `_meta.json` describes: re-run
+validate · `E_ELIGIBILITY_MISMATCH` splits disagree on eligibility · `E_HASH_PROBE` a planned unit's `probe_hash` /
+`eval_hash` differ from the config's · `E_PLAN_PROFILE` (exit 1) a plan-time `not_applicable` unit without a usable
+profile · `E_LABELS` a row with not exactly one label on a single-label readout, or a label outside `classes.csv` ·
+`E_STREAM` a stream outside `describe()["streams"]` · `E_POS_MISSING` a readout that needs `pos` got none ·
+`E_POS_SHUFFLE` (box) the shuffled control's partners carry different token counts · `E_DURATIONS` (seq) tokens with
+`pos.t` but no `media.duration_s` · `E_EXTERNAL` (exit 3) the base of `E_EXTERNAL_MISSING` / `E_EXTERNAL_VERSION`.
+`plan build`: `E_PLAN` (exit 1) a plan that cannot be built or read (two entries on one run directory, a frozen layout
+against a `shards` pin, another plan schema, duplicate ids) · `W_NO_CENSUS` frame streams without a census: shard
+sizes are estimated.
+
+### `report`, joins and the registry
+
+Report warnings: `W_NONSTANDARD` a column of non-pinned probe configs (comparable with nothing) ·
+`W_POPULATION_DIFFERS` eval `ids_sha256` differ within a column · `W_MISSING_READING` a model lacks an expected
+reading in a column · `W_FOLDER_SOURCE_DIFFERS` results in one column scored by different versions of the folder's
+`probe.py` / `reader.py` (`benchmark.folder_source`; a result without one is unknown, not different): comparable,
+listed for diagnosis. `--join`: `E_JOIN_USAGE` (exit 1) no `<reading>=RUN` pairs · `E_JOIN_UNKNOWN` (exit 1) no such
+benchmark · `E_JOIN_UNSUPPORTED` (exit 1) the folder defines no join · `E_JOIN_MISSING` a run, seed or DONE result
+not found · `E_JOIN_AMBIGUOUS` a run holding several probe columns (name one) · `E_JOIN_STATUS` a reading whose
+status is not `ok` · `E_JOIN_SHAPE` saved eval outputs disagree with the eval rows. Registry (`registry export` /
+`check`, errors exit 2): `E_REGISTRY_SCHEMA` an entry or protocol payload that does not parse, is another schema,
+or records no tolerance (also a bad `--org`, a non-ok or join entry at export) · `E_REGISTRY_ID` a file not filed
+under its id · `E_REGISTRY_HASH` `eval_hash` ≠ `H(protocol_hash, probe_hash)` · `E_REGISTRY_PROTOCOL` a protocol
+payload that does not recompute `protocol_hash` · `E_REGISTRY_CONFORMANCE` conformance not passed (skipped or
+unverified is refused) · `W_REGISTRY_NONSTANDARD` a non-standard entry (stored, never ranked) ·
+`W_REGISTRY_COVERAGE` eval coverage below `min_eval_coverage` (shown partial, never ranked) ·
+`W_REGISTRY_UNVERIFIED` exported although conformance did not pass here (`check` refuses it) ·
+`W_REGISTRY_SKIPPED` a results-store entry export skipped (a join, a non-ok or non-standard entry).
+
+### Benchmark folders: `bench lint`, `bench conformance`, `bench trial`, `bench verify`, fetched copies
+
+`bench lint` (errors exit 2), by check: `yaml` `E_YAML` unreadable, `E_SCHEMA` schema violation, `E_NAME` name ≠
+folder · `hashes` `E_CHANGELOG_HASH` · `hashed` `E_HASHED_PROSE` · `budget` `E_MANIFEST` unreadable manifest,
+`E_BUDGET` `budget.clips` ≠ frozen rows, `E_CURATION` `manifest.upstream.curation` missing or its sums wrong ·
+`header` `E_HEADER` no `header` block, `W_HEADER_STALE` header image not rendered from the current header ·
+`readme` / `setup` `E_README` / `E_SETUP` headings, header line, links, pins; `E_README_HASH` a quoted
+`protocol_hash` that is not current · `external` `E_EXTERNAL` a pin without a full `pip install` line · `obtain`
+`E_OBTAIN` · `capability` `E_CAPABILITY` missing or outside the vocabulary, `W_SUITE_CAPABILITY` a shipped suite
+lists the folder under a capability it does not carry · `template` `E_TEMPLATE` no literal `model`, or a `reading`
+outside a | v | av · `citations` `E_CITATION` a citation a pip install cannot open, `E_NOTES_LINK` · `imports`
+`E_IMPORT` `reader.py` / `probe.py` need torch or an external package at import · `todo` `W_TODO` · `E_LINT_CRASH` a
+check crashed. `bench conformance` and the lint check `conformance`: `E_CONFORMANCE_MISSING` no
+`conformance/expected.json` (record one) · `E_CONFORMANCE_STALE` recorded at another `protocol_version` or
+generator · `E_CONFORMANCE_DRIFT` a value outside its tolerance at the same version (names the first six) ·
+`E_CONFORMANCE_SCHEMA` the file does not parse, is another schema or records another benchmark ·
+`E_CONFORMANCE_UNSUPPORTED` a readout without a population, or a scoring refusal unrelated to an external
+package · `W_CONFORMANCE_SKIPPED` a pinned external package is absent or fails the folder's guard: nothing
+compared. `bench trial`: `E_TRIAL` (exit 2) a stage failed · `E_TRIAL_NOT_READY` (exit 3) no stand-in ·
+`W_TRIAL_HEADLINE`. `bench verify` warnings: `W_DECODE_SAMPLE` sampled rows that do not decode · `W_CURATION`
+curation sums do not hold · `W_TARGETS` / `W_DERIVED` derived targets or files missing or of another sha256 ·
+`W_EXTERNAL` an external package missing or off its pin (probe env). A copy under `$YAVIH_HOME/benchmarks`:
+`E_HOME_BENCH_STALE` (exit 1; `W_HOME_BENCH_STALE` with `--lenient`) the packaged folder changed since it was
+fetched · `W_HOME_BENCH_UNSTAMPED` no fetch stamp · `W_HOME_READONLY` `$YAVIH_HOME` not writable (caches not kept).
+`suite`: `E_SUITE` (exit 1) an unknown or invalid suite, `W_SUITE_INVALID` (`suite list`) a suite file that does
+not load. `bench list`: `W_BENCH_LOAD` a folder that does not load (listed, the others still shown).
+
+### `init`, `doctor`, configuration, `skill`
+
+`init`: `E_PROJECT_EXISTS` (exit 1) another project file already governs the directory. `doctor`:
+`W_PROJECT_NESTED` a second project file in the repository · `W_PROJECT_STRAY` a matrix outside the project folder ·
+`W_PROJECT_VERSION` the installed yavih outside `[project] yavih` · `N_PROJECT` no project folder, a development
+build or a capped scan · `W_DATA_ROOT` a data root that does not resolve or exist (`N_DATA_ROOT_PREPARE` for a
+`prepare_only` root) · `W_MEDIA_READ` / `W_MEDIA_INFO` the media read sample or the media-info table failed ·
+`W_TOOL_PIN` a prepare tool off its pinned build · `W_EXTRA_MISSING` an extra incomplete · `W_TORCH_TOUCHED` pip may
+have replaced the model env's torch · `W_DECODER` a decoder probe failed · `W_SELFTEST` `--selftest` failed ·
+`W_CONFIG` / `W_CONFIG_MISSING` the configuration does not load, or names a file that does not exist ·
+`W_LAUNCHER_UNSET` (`plan init`) no launcher given or configured. Configuration (exit 1 strict; warnings with
+`--lenient`): `W_CONFIG_UNKNOWN` an unknown table or key · `W_CONFIG_TYPE` a value of the wrong type ·
+`W_CONFIG_UNKNOWN_BENCH` / `W_CONFIG_UNKNOWN_ROOT` a benchmark or data root nothing declares ·
+`W_CONFIG_UNSET_VAR` an unset `$VAR` · `W_CONFIG_ENV` an unknown `YAVIH_*` variable · `W_CONFIG_SITE` `YAVIH_SITE`
+names no table (or several sites match: a warning). `skill`: `E_SKILL_MISSING` (exit 5) the packaged skill is
+missing · `W_SKILL_INCOMPLETE` it has no SKILL.md.
+
 ## Results store
 
 `<results_root>/<model>/results_<timestamp>.json` per probe invocation (written after DONE;
@@ -293,12 +387,15 @@ caches are not kept.
 `YAVIH_RUNS` (`[runs] root`; default `./runs`) · `YAVIH_RESULTS` (`[results] root`) · `YAVIH_SCRATCH`
 (staged shards for the probe; `[scratch] root`; else `SLURM_TMPDIR`; never an implicit `TMPDIR`; with none
 the probe reads the features in place, `W_SIZE`) · `YAVIH_CONFIG` (the project file,
-like `--config`) · `YAVIH_SITE` (the active `[site.<id>]`) · `YAVIH_LENIENT=1` ·
+like `--config`) · `YAVIH_SITE` (the active `[site.<id>]`) · `YAVIH_LENIENT=1` · `YAVIH_LAUNCHER` (the default
+launcher, `launcher`) · `YAVIH_BENCH_PATH` (colon-separated directories of out-of-tree benchmark folders) ·
+`YAVIH_SUITES` (the project suites directory) ·
 `YAVIH_DATA__<BENCH>__<ROOT>=<path>` (one root; upper-case names, double underscores) · `YAVIH_DATA__ROOT`
 (`[data] root`) · `YAVIH_DATASETS__<NAME>` (`[datasets] <name>`) · `YAVIH_RAM_BUDGET_GB`
 (`[resources] ram_budget_gb`) · `YAVIH_CPUS` (`[resources] cpus`: CPUs this process may use; set by
 `exec --cpus` / `--slots` for its children; decode workers `YAVIH_CPUS − 1`; else SLURM / PBS / the affinity
-mask / cgroup quota) · `YAVIH_DECODE_WORKERS` (`[resources] decode_workers`) · `YAVIH_SLOT_GPU` (set by
+mask / cgroup quota) · `YAVIH_DECODE_WORKERS` (`[resources] decode_workers`) · `YAVIH_VALIDATE_WORKERS` (threads scanning shards in
+`features validate`) · `YAVIH_SLOT_GPU` (set by
 `--slots`: the slot's device mask, applied after the unit's `env`) · `YAVIH_CLAIM_LEASE_S` (shard-claim
 heartbeat lease, default 900 s) · `YAVIH_PROBE_CKPT_EVERY_S` (seconds between probe checkpoints, default
 600) · `YAVIH_JSON=1` · `YAVIH_DEADLINE` and `YAVIH_UNIT_ID` (set by `exec` for the child) · `YAVIH_BENCH` (set by `bench prepare` for

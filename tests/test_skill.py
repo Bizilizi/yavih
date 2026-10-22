@@ -541,3 +541,39 @@ def test_readme_example_reading_uses_the_benchmarks_vocabulary():
     m = re.search(r'"reading": "([a-z]+)"', readme.read_text(encoding="utf-8"))
     assert m and m.group(1) == "v"
     assert "`describe()[\"reading\"]` ∈ {`a`, `v`, `av`}" in (packaged_folder("vggsounder") / "setup.md").read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------------------------------- the complete code list
+
+
+def _code_constants() -> dict[str, list[str]]:
+    """Every ``E_*`` / ``W_*`` / ``N_*`` string literal in the yavih sources (folder tests excluded): ``{code: files}``."""
+    pkg = SKILL_ROOT.parents[1]
+    out: dict[str, list[str]] = {}
+    for path in sorted(pkg.rglob("*.py")):
+        if "tests" in path.parts or "__pycache__" in path.parts:
+            continue
+        for m in re.finditer(r"""["']([EWN]_[A-Z][A-Z0-9_]*[A-Z0-9])["']""", path.read_text(encoding="utf-8")):
+            out.setdefault(m.group(1), []).append(str(path.relative_to(pkg)))
+    return out
+
+
+def test_every_code_the_sources_define_is_in_the_cli_reference_codes():
+    """``yavih skill show --ref cli`` is the one complete list (docs/cli.md says so): every code literal in the sources
+    appears in its "Codes" section."""
+    codes = _section((SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8"), "Codes")
+    constants = _code_constants()
+    assert len(constants) > 150
+    missing = sorted(c for c in constants if not re.search(rf"(?<![A-Z0-9_]){c}(?![A-Z0-9_])", codes))
+    assert not missing, "codes missing from references/cli.md ## Codes: " + ", ".join(f"{c} ({constants[c][0]})" for c in missing)
+
+
+def test_the_cli_reference_environment_lists_every_variable():
+    """references/cli.md "Environment" names every variable of ``yavih.config.ENV_VARS`` (the strict configuration
+    refuses any other ``YAVIH_*`` name)."""
+    from yavih.config import ENV_VARS
+
+    env = _section((SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8"), "Environment")
+    missing = [name for name in ENV_VARS if f"`{name}" not in env]
+    assert not missing, f"references/cli.md ## Environment lacks {missing}"
+    assert "`YAVIH_DATA__<BENCH>__<ROOT>" in env and "`YAVIH_DATASETS__<NAME>`" in env
