@@ -117,7 +117,8 @@ def test_protocol_holds_label_facts_only(spec: dict):
     p = spec["protocol"]
     assert set(p) == {"clip_seconds", "train_draw", "views"}
     assert p["clip_seconds"] == 10.0 and p["views"] == "none"
-    assert p["train_draw"] == {"cap": 20000, "seed": 0, "balance": "first_label", "drawn_from": p["train_draw"]["drawn_from"]}
+    assert p["train_draw"] == {"cap": 20000, "seed": 0, "balance": "first_label"}  # the prose source: manifest.upstream.draw
+    assert spec["manifest"]["upstream"]["draw"]
 
 
 # ----------------------------------------------------------------------------- manifest + classes
@@ -186,7 +187,7 @@ def test_curation_sums(spec: dict, rows: list[dict[str, str]]):
     assert cur["excluded"] == {"draw_remainder": 20966}
     assert cur["short_clips"] == sum(1 for r in rows if float(r["duration_s"]) < spec["protocol"]["clip_seconds"]) == 20315
     mm = _load(HERE / "make_manifest.py", "fsd50k_make_manifest")
-    assert up["sha256"] == mm.GROUND_TRUTH_SHA256["dev.csv"] and up["sha256"] in spec["protocol"]["train_draw"]["drawn_from"]
+    assert up["sha256"] == mm.GROUND_TRUTH_SHA256["dev.csv"] and up["sha256"] in up["draw"]
     assert up["upstream_files"] == {f"FSD50K.ground_truth/{k}": v for k, v in mm.GROUND_TRUTH_SHA256.items()}
 
 

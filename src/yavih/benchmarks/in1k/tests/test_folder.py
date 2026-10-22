@@ -161,8 +161,8 @@ def test_curation_json_matches_yaml(spec):
     assert side["curation"] == up["curation"] and side["upstream_files"] == up["upstream_files"]
     assert side["manifest_sha256"] == spec["manifest"]["sha256"] and side["classes_sha256"] == spec["manifest"]["classes_sha256"]
     td = spec["protocol"]["train_draw"]
-    assert side["train_draw"] == {k: td[k] for k in ("cap", "seed", "balance", "drawn_from")}
-    assert td["drawn_from"] == mm.DRAWN_FROM and (td["cap"], td["seed"]) == (mm.TRAIN_CAP, mm.TRAIN_SEED)
+    assert side["train_draw"] == {**{k: td[k] for k in ("cap", "seed", "balance")}, "drawn_from": up["draw"]}
+    assert up["draw"] == mm.DRAWN_FROM and (td["cap"], td["seed"]) == (mm.TRAIN_CAP, mm.TRAIN_SEED)
     assert up["upstream_files"] == {mm.DEVKIT_NAME: mm.DEVKIT_SHA256, "train file list": mm.TRAIN_LIST_SHA256}
     assert spec["source"]["sha256"][mm.DEVKIT_NAME] == mm.DEVKIT_SHA256
 

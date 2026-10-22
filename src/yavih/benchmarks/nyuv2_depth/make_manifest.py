@@ -100,7 +100,8 @@ LEAKAGE_AUDIT = ("the 654 labeled NYUv2 test images (test_SN40.json), compared b
 
 
 def drawn_from(listing_sha256: str = GEONET_LISTING_SHA256) -> str:
-    """``protocol.train_draw.drawn_from`` (hashed in benchmark.yaml; curation.json carries the same string)."""
+    """``manifest.upstream.draw`` in benchmark.yaml (prose, never hashed); curation.json carries the same string as
+    ``train_draw.drawn_from``."""
     return (f"GeoNet nyu_geonet listing (30 916 .mat, sorted names sha256 {listing_sha256}) minus 847 "
             "leakage-excluded and 2 corrupt files = 30 067-file pool; session-balanced draw "
             "(yavih.freeze.class_balanced_subsample), cap 12 000, seed 0")

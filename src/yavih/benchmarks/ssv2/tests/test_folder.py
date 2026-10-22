@@ -88,16 +88,18 @@ def test_changelog(spec):
 
 
 def test_train_draw_names_the_public_source(spec):
-    """The draw is re-derived from the official train.json; drawn_from, curation.json and make_manifest agree."""
+    """The draw is re-derived from the official train.json; manifest.upstream.draw, curation.json and make_manifest
+    agree."""
     draw = spec["protocol"]["train_draw"]
     assert (draw["cap"], draw["seed"], draw["balance"]) == (20000, 0, "class")
+    drawn_from = spec["manifest"]["upstream"]["draw"]
     sha = spec["source"]["sha256"]["labels/train.json"]
-    assert sha in draw["drawn_from"] and "class_balanced_subsample" in draw["drawn_from"]
+    assert sha in drawn_from and "class_balanced_subsample" in drawn_from
     cur = json.loads((HERE / "curation.json").read_text(encoding="utf-8"))
-    assert cur["train_draw"] == draw
+    assert cur["train_draw"] == {**draw, "drawn_from": drawn_from}
     assert cur["train_per_class"] == {"min": 91, "max": 116}
     mod = _load_make_manifest()
-    assert mod.DRAWN_FROM == draw["drawn_from"]
+    assert mod.DRAWN_FROM == drawn_from
     labels = {k: v for k, v in spec["source"]["sha256"].items() if k in ("labels/labels.json", "labels/train.json", "labels/validation.json")}
     assert mod.LABEL_FILES_SHA256 == labels == spec["manifest"]["upstream"]["upstream_files"]
     assert spec["manifest"]["upstream"]["sha256"] == sha

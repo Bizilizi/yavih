@@ -141,11 +141,11 @@ def test_curation_sums_and_json(spec, rows):
     up = spec["manifest"]["upstream"]
     assert cj["curation"] == up["curation"] and cj["manifest_sha256"] == spec["manifest"]["sha256"]
     assert cj["upstream_files"] == up["upstream_files"]
-    assert cj["train_draw"]["drawn_from"] == spec["protocol"]["train_draw"]["drawn_from"]
+    assert cj["train_draw"]["drawn_from"] == up["draw"]
     td = spec["protocol"]["train_draw"]
-    assert (td["cap"], td["seed"], td["balance"]) == (12000, 0, "session") and up["sha256"] in td["drawn_from"]
+    assert (td["cap"], td["seed"], td["balance"]) == (12000, 0, "session") and up["sha256"] in up["draw"]
     mm = _make_manifest()
-    assert td["drawn_from"] == mm.drawn_from() and up["sha256"] == mm.GEONET_LISTING_SHA256
+    assert up["draw"] == mm.drawn_from() and up["sha256"] == mm.GEONET_LISTING_SHA256
     assert up["upstream_files"] == {"nyu_geonet listing": mm.GEONET_LISTING_SHA256,
                                     "eval_meta.json (without source_mat)": mm.EVAL_META_SHA256}
     assert cur["leakage_audit"]["against"] == mm.LEAKAGE_AUDIT
