@@ -145,11 +145,14 @@ Bridges shipped inside a model package (`script: mymodel.yavih:Bridge`), a bench
 of the repository (`[project] benchmarks`) and job scripts kept with the rest of the project's infrastructure are
 fine outside this folder; a second `yavih.toml` or a stray `matrix.yaml` elsewhere is what `yavih doctor` warns about.
 
-Commands: `yavih doctor` (checks this folder), `yavih plan init --suite default --model <name>`,
-`yavih plan build matrices/<name>.yaml`. Layout reference: {docs}
+Commands: `yavih doctor` (checks this folder), `yavih plan init --suite default --model <name>` (it prints the
+`yavih bridge check` and `yavih plan build matrices/<name>.yaml --out <runs root>/_plans/<name>.jsonl` commands).
+Layout reference: {docs}
 """
 
-GITIGNORE = "__pycache__/\n*.pyc\nlogs/\n_stale/\n"
+#: ``*.jsonl``: plan files belong under the runs root (``plan init`` prints ``--out <runs root>/_plans/<model>.jsonl``);
+#: a plan built here anyway is run state, not a project fact.
+GITIGNORE = "__pycache__/\n*.pyc\nlogs/\n_stale/\n# plan files (yavih plan build --out) are run state: keep them under the runs root\n*.jsonl\n"
 
 USER_CONFIG = """# yavih user configuration (`yavih init`): personal roots, kept out of the committed project file.
 # Site tables work here too ([site.<id>] with hosts = [...]). Schema: `yavih config show`.

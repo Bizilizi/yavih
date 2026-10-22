@@ -167,7 +167,10 @@ writes the starting point for running one model on a [suite](suites.md). In a pr
 
 The output lists what to run next: one `yavih bridge check <script> --bench <benchmark> [--arg reading=<r>] --out
 <profile>` per entry (after the bridge's TODOs are filled, on the staged data), then `yavih plan build <matrix>
---out plan.jsonl`. Until every profile exists `plan build` refuses the matrix (`E_PROFILE`).
+--out <runs root>/_plans/<M>.jsonl` (`plan` in `--json`). A plan file is run state, so it sits under the runs
+root, never in the project folder (whose `.gitignore` ignores `*.jsonl` as a backstop); the plan stores each
+unit's `cwd` relative to itself, so it runs from there. Until every profile exists `plan build` refuses the matrix
+(`E_PROFILE`).
 
 ## `matrix.yaml`
 

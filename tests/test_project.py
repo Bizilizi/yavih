@@ -49,6 +49,7 @@ def test_init_writes_the_folder_and_the_user_config(repo, capsys):
                  "benchmarks/.gitkeep", "tools/.gitkeep"):
         assert (folder / name).is_file(), name
     assert env["data"]["user_config_written"] is True and env["paths"]["dir"] == str(folder)
+    assert "*.jsonl" in (folder / ".gitignore").read_text(encoding="utf-8").splitlines()  # plan files are run state
     user = Path(env["data"]["user_config"])
     assert user.is_file() and "[runs]" in user.read_text(encoding="utf-8")
     s = config.load(refresh=True)

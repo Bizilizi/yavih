@@ -22,7 +22,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-__all__ = ["write_matrix_skeleton", "plan_init", "skeleton_entries", "project_defaults"]
+__all__ = ["write_matrix_skeleton", "plan_init", "skeleton_entries", "project_defaults", "plan_file", "PLANS_DIR"]
 
 _PLAIN = re.compile(r"^[A-Za-z0-9_./-]+$")
 
@@ -175,8 +175,8 @@ def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str |
     (:func:`write_matrix_skeleton`; ``force`` overwrites the matrix only). ``out`` and ``bridges_dir`` default to the
     project's ``matrices/<model>.yaml`` and ``bridges/`` (:func:`project_defaults`), else ``matrix.yaml`` and ``bridges``
     in the current directory. Returns the skeleton record plus ``bridges: [{benchmark, path, action: created|kept}]``,
-    ``project``, ``launcher_configured`` and ``next``: one ``yavih bridge check`` command per entry, then the
-    ``plan build`` command, with paths as seen from the current directory."""
+    ``project``, ``launcher_configured``, ``plan`` (:func:`plan_file`) and ``next``: one ``yavih bridge check`` command
+    per entry, then the ``plan build --out <plan>`` command, with paths as seen from the current directory."""
     from yavih.shipped import ShippedFileError, bridge_new
     from yavih.suites import SuiteError, load_suite
 
@@ -210,9 +210,28 @@ def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str |
         script, profile = _shown(root / ent["script"]), _shown(root / ent["profile"])
         arg = f" --arg reading={ent['reading']}" if ent["args"] else ""
         commands.append(f"yavih bridge check {script} --bench {ent['benchmark']}{arg} --out {profile}")
-    commands.append(f"yavih plan build {_shown(path)} --out {_shown(root / 'plan.jsonl')}")
+    rec["plan"] = str(plan_file(model).resolve())
+    commands.append(f"yavih plan build {_shown(path)} --out {_shown(Path(rec['plan']))}")
     rec["next"] = commands
     return rec
+
+
+#: The directory below the runs root that holds plan files (``plan_file``): plan state, never in the project folder.
+PLANS_DIR = "_plans"
+
+
+def plan_file(model: str) -> Path:
+    """Where ``plan init`` points ``plan build --out``: ``<runs root>/_plans/<model>.jsonl``. A plan is run state (it
+    changes with every ``--pending`` rebuild), so it lives with the runs, not in the committed ``yavih-bench/`` folder;
+    ``write_plan`` stores each unit's ``cwd`` relative to it, so the project is found from there. An invalid
+    configuration falls back to ``./runs`` (``plan init`` still works)."""
+    from yavih import config
+
+    try:
+        runs = config.load().runs_root()
+    except config.ConfigError:
+        runs = Path("runs")
+    return runs / PLANS_DIR / f"{model}.jsonl"
 
 
 def _script_path(bridges_dir: str, bench: str, model: str) -> Path:

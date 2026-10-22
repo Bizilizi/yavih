@@ -13,7 +13,7 @@ features, results, scratch and plan state are written at the configured roots
 yavih-bench/
   yavih.toml      the project configuration: [project], data roots, one [site.<id>] per cluster
   README.md       what lives here and where runs go (written by init)
-  .gitignore      __pycache__/, logs/, _stale/
+  .gitignore      __pycache__/, logs/, _stale/, *.jsonl (plan files belong under the runs root)
   bridges/        one file per (model, benchmark) plus the shared <model>_common.py
   matrices/       one matrix per model, <model>.yaml, with its profiles in <model>.profiles/
   suites/         project suites (yavih suite new)
