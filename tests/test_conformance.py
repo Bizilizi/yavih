@@ -60,6 +60,57 @@ def test_derangement_has_no_fixed_point():
         assert np.array_equal(C._derangement(n, "t"), p)
 
 
+def test_the_documented_generator_spec_reproduces_the_stream():
+    """A re-implementation written only from docs/conformance.md "Generator specification" (hashlib and Python floats;
+    numpy only for the documented float32 casts) gives the same stream, arrays, row draw and derangement as
+    ``yavih.conformance``."""
+
+    def spec_stream(tag: str, n: int) -> list[float]:
+        out: list[float] = []
+        i = 0
+        while len(out) < n:
+            digest = hashlib.sha256(f"{tag}:{i}".encode("utf-8")).digest()
+            for k in range(4):
+                out.append((int.from_bytes(digest[8 * k: 8 * k + 8], "big") >> 11) * 2.0 ** -53)
+            i += 1
+        return out[:n]
+
+    def spec_rows(manifest_hash: str, split: str, role: str, n_rows: int, n: int) -> list[int]:
+        if n >= n_rows:
+            return list(range(n_rows))
+        key = {r: hashlib.sha256(f"{manifest_hash}:conformance:{split}:{role}:{r}".encode("utf-8")).digest() for r in range(n_rows)}
+        return sorted(sorted(range(n_rows), key=key.__getitem__)[:n])
+
+    def spec_derangement(tag: str, n: int) -> list[int]:
+        if n < 2:
+            return list(range(n))
+        u = spec_stream(tag, n)
+        perm = list(range(n))
+        for i in range(n - 1, 0, -1):
+            j = int(u[i] * (i + 1))
+            perm[i], perm[j] = perm[j], perm[i]
+        for k in [k for k in range(n) if perm[k] == k]:
+            perm[k], perm[(k + 1) % n] = perm[(k + 1) % n], perm[k]
+        if any(perm[i] == i for i in range(n)):
+            perm = [(i - 1) % n for i in range(n)]
+        return perm
+
+    mh = hashlib.sha256(b"a manifest").hexdigest()
+    T = f"{mh}:conformance:{C.GENERATOR_VERSION}"
+    for tag, n in ((f"{T}:outputs", 1027), (f"{T}:fold3:outputs", 5), (f"{T}:train:depth", 64), (f"{T}:eval:holes", 3),
+                   (f"{T}:floor:outputs", 1)):
+        assert C.stream(tag, n).tolist() == spec_stream(tag, n), tag
+    # an array takes the stream in row-major order; logits and boxes as tabled
+    assert C._logits(f"{T}:outputs", (3, 7)).ravel().tolist() == [float(np.float32((u - 0.5) * 6)) for u in spec_stream(f"{T}:outputs", 21)]
+    u = spec_stream(f"{T}:outputs", 8)
+    assert C._boxes(f"{T}:outputs", 2).tolist() == [
+        [float(np.float32(a + b * u[4 * r + c])) for c, (a, b) in enumerate(((0.2, 0.6), (0.2, 0.6), (0.1, 0.3), (0.1, 0.3)))] for r in range(2)]
+    for split, role, n_rows, n in (("test", "eval", 500, 64), ("train", "train", 300, 256), ("val", "floor", 10, 64)):
+        assert C.select_rows(mh, split, n_rows, n, salt=role).tolist() == spec_rows(mh, split, role, n_rows, n)
+    for n in (2, 3, 17, 128):
+        assert C._derangement(n, f"{T}:eval").tolist() == spec_derangement(f"{T}:eval:derangement", n)
+
+
 # ----------------------------------------------------------------------------- compute / record / check
 
 

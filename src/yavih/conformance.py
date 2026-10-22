@@ -132,7 +132,10 @@ class ConformanceReport:
 
 def stream(tag: str, n: int) -> np.ndarray:
     """``float64 [n]`` uniform in ``[0, 1)`` from sha256 in counter mode over ``tag``: the same values on every
-    platform, numpy and Python version (no numpy RNG method is involved). Eight values per digest."""
+    platform, numpy and Python version (no numpy RNG method is involved). Block ``i`` is
+    ``sha256(f"{tag}:{i}".encode())``; each digest gives four values, its 8-byte big-endian words in order, each
+    ``(word >> 11) * 2**-53``; the first ``n`` values of blocks ``0, 1, ...`` are returned ("Generator specification"
+    in https://github.com/Bizilizi/yavih/blob/main/docs/conformance.md)."""
     n = int(n)
     if n <= 0:
         return np.empty((0,), dtype=np.float64)

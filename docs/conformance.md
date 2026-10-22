@@ -62,6 +62,49 @@ tens of MB (the depth maps); on disk only `expected.json` exists. `GENERATOR_VER
 fabrication; bumping it makes every fixture stale (`E_CONFORMANCE_STALE`) and every folder re-records at its
 current version.
 
+### Generator specification
+
+Everything a third party needs to rebuild the population of `GENERATOR_VERSION = 1` bit for bit, with sha256 and
+IEEE-754 doubles only (`tests/test_conformance.py` re-implements it from this text and compares).
+
+**The stream.** `stream(tag, n)` returns `n` doubles in `[0, 1)`. Block `i = 0, 1, 2, …` is
+`sha256(f"{tag}:{i}".encode("utf-8"))` (the tag, a colon, the decimal counter); each 32-byte digest yields four
+values, its four 8-byte words in order, each read as an unsigned **big-endian** 64-bit integer `w` and mapped to
+`(w >> 11) * 2**-53` (the top 53 bits, exact in a double). The first `n` values of the concatenated blocks are the
+stream (`ceil(n / 4)` digests). An array of shape `[a, b, …]` takes `stream(tag, a * b * …)` in row-major (C) order.
+
+**The tags.** `T = f"{manifest_hash}:conformance:{GENERATOR_VERSION}"`, with `manifest_hash` the folder's full hex
+manifest hash. Each fabricated array has its own tag:
+
+| readout | tag | shape | value from `u` |
+|---|---|---|---|
+| `clf` | `T:outputs` | `[n_eval, C]` | logits `float32((u - 0.5) * 6)` |
+| `clf` under folds | `T:fold{k}:outputs` (`k` = 0-based index of the eval fold in `splits` order) | `[n_k, C]` | logits as above |
+| `clf` with a floor role | `T:floor:outputs` | `[n_floor, C]` | logits as above |
+| `seq` | `T:outputs` | `[n_eval, protocol.segments_scored, C]` | logits as above |
+| `grid` targets | `T:train:depth`, `T:train:holes`; `T:eval:depth`, `T:eval:holes` | `[n, S, S]`, `S = protocol.target_size` | `float32(0.0 if u_holes < 0.05 else (0.02 + 0.98 * u_depth) * max_depth)` |
+| `grid` outputs | `T:outputs` | `[n_eval, S, S]` | `float32(0.05 + 0.95 * u)`, then multiplied by `max_depth` in float32 |
+| `box` | `T:outputs`; the shuffled-control arm `T:shuffled` | `[n_eval, 4]` | `float32` `(cx, cy, w, h) = (0.2 + 0.6 u0, 0.2 + 0.6 u1, 0.1 + 0.3 u2, 0.1 + 0.3 u3)` per row |
+| `box` shuffled control | `T:train:derangement`, `T:eval:derangement` | `[n_train]`, `[n_eval]` | the derangement below |
+
+`C` is the number of classes (`classes.csv`), `max_depth` = `protocol.max_depth`.
+
+**The rows.** For each role (`train`, `eval`, `floor`) and each of the role's splits in `splits` order, the `n`
+rows of the split (population table above; the whole split when it has `n` rows or fewer) whose digests
+`sha256(f"{manifest_hash}:conformance:{split}:{role}:{row}")` (`row` the 0-based row index within the split's
+manifest) are the smallest, compared as bytes, taken in ascending row order. A role over several splits
+concatenates them in `splits` order. Under folds, fold `k` scores the eval draw (`role = eval`, 64 rows) of its own
+split, and its training targets are the train draws (`role = train`, 64 rows each) of every other fold split; the
+folds' eval rows, targets and outputs are concatenated in fold order. `grid` draws its one train and one eval split
+with `role` = `train` / `eval`. Targets are what the readout builds from those manifest rows (or the folder's
+`probe.py` `targets` hook); `grid` targets are the fabricated maps above. The floor outputs are the readout's own
+(`Readout.floor_outputs`) on the drawn train targets.
+
+**The derangement** of `n >= 2` items from tag `D` (`n < 2`: the identity): `u = stream(D, n)`, `perm = [0, …, n-1]`;
+for `i = n-1` down to `1`: `j = floor(u[i] * (i + 1))`, swap `perm[i]` and `perm[j]`. Then, for each index `k`
+with `perm[k] == k` (collected once, ascending), swap `perm[k]` and `perm[(k + 1) % n]`. Should a fixed point remain,
+`perm[i] = (i - 1) mod n`.
+
 ## Tolerance
 
 Absolute, per metric, on the metric's reported scale. Default `conformance.DEFAULT_TOLERANCE` = `0.001` (a tenth
@@ -156,9 +199,9 @@ reproducing two things:
 1. the hash itself: `yavih bench hash <name> --explain` prints the canonical JSON and digest of every hashed
    component and the combination formula ([hashing](hashing.md#protocol_hash--hinput_hash-scoring_hash)); the
    payload is plain JSON and sha256, recomputable with any language's standard library;
-2. the fixture: generate the population exactly as `yavih.conformance` does (the sha256 stream and the row draw
-   are specified above and pinned by `tests/test_conformance.py`), score it, and match `expected.json` within the
-   recorded tolerance.
+2. the fixture: generate the population exactly as `yavih.conformance` does ([generator
+   specification](#generator-specification), pinned by `tests/test_conformance.py`), score it, and match
+   `expected.json` within the recorded tolerance.
 
 A registry entry carries the conformance result it was produced under; an implementation that matches the fixture
 is, for the registry, the same protocol.
