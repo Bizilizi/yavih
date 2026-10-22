@@ -8,8 +8,7 @@ description: >
   mentions yavih, a bridge, frozen-feature or linear/attentive probing, a benchmark suite
   ("benchmark my model" = the default suite), evaluating an encoder's audio, visual, audio-visual,
   temporal or spatial capabilities, or any benchmark in `yavih bench list` (by name or alias). Nine
-  steps, each with the exact command and the output that must be seen before moving on; contracts
-  live in references/.
+  steps, each with the exact command and the output to see before moving on; contracts in references/.
 ---
 
 # yavih — nine steps, one stop condition each
