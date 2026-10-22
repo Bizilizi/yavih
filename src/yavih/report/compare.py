@@ -27,6 +27,10 @@ A result of a capped run (``plan build --sample N``: ``result["sample"]``) is ne
 row key it forms its own ``partial`` row (view 1 and view 2), marked in every format (``partial: true`` and the flag
 ``partial`` in json, the ``(partial)`` suffix on its values in md, the ``partial`` column and flag in csv). Such a
 result never reaches the results store, so ``--merge-results`` never sees it.
+
+Ties: in a standard column, the values of one metric that lie within that metric's conformance tolerance of the best
+value are a tie, not an order (:func:`_mark_ties`): each such cell carries ``tie: true`` (json), the ``tie`` column
+(csv) or a leading ``≈`` (md), and tied rows are never ordered by value.
 stdlib only (the folder ``join`` is a lazy import).
 """
 
@@ -74,6 +78,9 @@ DEFAULT_MIN_EVAL_COVERAGE = 0.95
 REPORT_DIR = "_report"
 #: Controls whose truthiness voids the headline (avsync / vggss_box).
 _VOIDING_CONTROLS = ("floor_violated", "audio_blind")
+#: ``yavih.conformance.DEFAULT_TOLERANCE``, repeated here because this module is stdlib only (the conformance module
+#: needs numpy); ``tests/test_report.py`` checks that the two agree.
+DEFAULT_TOLERANCE = 0.001
 #: Disclosure-like names never chosen as a fallback headline.
 _COUNT_PREFIX = "n_"
 
@@ -165,9 +172,9 @@ def _packaged_spec(name: str, load_yaml) -> Any | None:
 
 
 def _bench_meta(name: str) -> dict[str, Any]:
-    """``{headline, table, min_eval_coverage, protocol_version, stream_kinds}`` from the packaged yaml when
-    loadable (``table`` only when ``metrics.table`` is declared); ``{}`` otherwise (the report then falls back to
-    defaults and heuristics)."""
+    """``{headline, table, tolerance, min_eval_coverage, protocol_version, stream_kinds}`` from the packaged yaml when
+    loadable (``table`` / ``tolerance`` only when ``metrics.table`` / ``metrics.tolerance`` is declared); ``{}``
+    otherwise (the report then falls back to defaults and heuristics)."""
     try:
         from yavih.benchmark import load_yaml
 
@@ -182,6 +189,9 @@ def _bench_meta(name: str) -> dict[str, Any]:
         table = getattr(metrics, "table", None)
         if table:
             out["table"] = [str(m) for m in table]
+        tolerance = getattr(metrics, "tolerance", None)
+        if tolerance:
+            out["tolerance"] = {str(k): float(v) for k, v in tolerance.items()}
         splits = getattr(spec, "splits", None)
         mec = getattr(splits, "min_eval_coverage", None)
         if isinstance(mec, (int, float)):
@@ -229,8 +239,8 @@ def row_key(result: dict, aliases: Mapping[str, str] | None = None) -> tuple[str
 def comparable(a: dict, b: dict, aliases: Mapping[str, str] | None = None) -> bool:
     """Same benchmark (after alias), same ``eval_hash`` and both ``standard``. Nothing the bridge
     decided enters: two configurations of one model are comparable, and so are two models; a registry entry
-    (``yavih.registry``) is compared by the same rule, and differences below a metric's recorded conformance
-    tolerance are ties."""
+    (``yavih.registry``) is compared by the same rule, and differences within a metric's recorded conformance
+    tolerance are ties (:func:`_mark_ties`)."""
     if aliases is None:
         aliases = _alias_map()
     return bool(a.get("standard")) and bool(b.get("standard")) and column_key(a, aliases) == column_key(b, aliases)
@@ -668,11 +678,61 @@ def _missing_row(column: dict[str, Any], model: str, reading: str) -> dict[str, 
     }
 
 
+def _rankable(row: dict[str, Any]) -> bool:
+    """A row whose values take part in a tie: ok, the full population at coverage, not greyed."""
+    flags = row.get("flags") or []
+    return (row.get("status") == "ok" and not row.get("missing") and not row.get("partial") and not row.get("greyed")
+            and "low_coverage" not in flags)
+
+
+def _mark_ties(rows: Sequence[dict[str, Any]], results: Sequence[dict], metric_names: Sequence[str],
+               meta: Mapping[str, Any]) -> None:
+    """Ties within one standard column ("Ties" in https://github.com/Bizilizi/yavih/blob/main/docs/results.md). Per metric with a direction (``higher_is_better``
+    from the metric registry, or recorded by a registry entry; a disclosure has none), over the rankable rows
+    (:func:`_rankable`) with a scalar value: the cells within the metric's tolerance of the best value are a tie when
+    there are at least two of them; each gets ``tie: True`` and every other rankable cell ``tie: False`` (no key on
+    other cells). Tolerance: the packaged folder's ``metrics.tolerance``, else the largest one a
+    registry entry of the column recorded (``conformance.tolerance``), else :data:`DEFAULT_TOLERANCE`."""
+    from yavih.report.store import metric_info
+
+    ranked = [row for row in rows if _rankable(row)]
+    if len(ranked) < 2:
+        return
+    info = metric_info(metric_names)
+    folder_tol = dict(meta.get("tolerance") or {})
+    for m in metric_names:
+        hib = info.get(m, {}).get("higher_is_better")
+        recorded = [((r.get("registry") or {}).get("higher_is_better") or {}).get(m) for r in results]
+        recorded = [v for v in recorded if isinstance(v, bool)]
+        if recorded:
+            hib = recorded[0]
+        if hib is None:
+            continue
+        cells = [(row["metrics"].get(m) or {}) for row in ranked]
+        cells = [c for c in cells if isinstance(c.get("value"), (int, float)) and not isinstance(c.get("value"), bool)
+                 and math.isfinite(float(c["value"]))]
+        if len(cells) < 2:
+            continue
+        if m in folder_tol:
+            tol = folder_tol[m]
+        else:
+            entry_tols = [((r.get("registry") or {}).get("tolerance") or {}).get(m) for r in results]
+            entry_tols = [float(v) for v in entry_tols if isinstance(v, (int, float)) and not isinstance(v, bool)]
+            tol = max(entry_tols) if entry_tols else DEFAULT_TOLERANCE
+        best = (max if hib else min)(float(c["value"]) for c in cells)
+        tied = [abs(float(c["value"]) - best) <= tol + 1e-12 for c in cells]
+        several = sum(tied) >= 2
+        for c, is_tied in zip(cells, tied, strict=True):
+            c["tie"] = bool(several and is_tied)
+
+
 def _sort_key_rows(row: dict[str, Any]) -> tuple:
     h = row.get("headline")
     cell = row["metrics"].get(h) if h else None
     value = cell.get("value") if isinstance(cell, dict) else None
     v = -float(value) if isinstance(value, (int, float)) else math.inf
+    if isinstance(cell, dict) and cell.get("tie"):
+        v = -math.inf  # tied with the best: never ordered by value (the seed decides among them)
     return (row["model"], row["reading"], bool(row.get("partial")), row["missing"], v, row["seed"] if row["seed"] is not None else -1)
 
 
@@ -989,6 +1049,11 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
                 "code": "W_POPULATION_DIFFERS", "column": column_id,
                 "message": f"eval ids_sha256 differ between rows ({len(ids)} populations); numbers are not on one population",
             })
+
+        if std:
+            _mark_ties(rows, [r for sel in selections.values() for r in sel.shown], metric_names, meta)
+            if any(cell.get("tie") for row in rows for cell in (row.get("metrics") or {}).values() if isinstance(cell, dict)):
+                column["flags"].append("ties")
 
         # model / reading grouping with MISSING cells
         present: dict[str, set[str]] = {}

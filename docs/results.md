@@ -197,6 +197,18 @@ No row is greyed, flagged or footnoted because its bridge declared a `custom` ru
 unfingerprinted (`W_WEIGHTS_UNFINGERPRINTED` is listed once among the report's warnings), or because of any
 other bridge decision.
 
+### Ties
+
+Two values under one `eval_hash` that differ by no more than the metric's conformance tolerance
+([conformance](conformance.md#tolerance)) are a tie, not an order. In a standard column, per metric with a
+direction (`higher_is_better`; a disclosure such as `n_eval` has none), over the rows that are `ok`, full, at
+coverage and not greyed: the values within the tolerance of the best one are tied when there are at least two of
+them. md prefixes each tied value with `≈` and notes it under the column title (the column flag `ties`); json
+cells carry `"tie": true` (every other ranked cell `"tie": false`); csv has a `tie` column (`true` / `false`, empty
+where nothing is ranked). Tied rows are never ordered by value. The tolerance is the packaged folder's
+`metrics.tolerance` (default `0.001`), else, for a folder not packaged here, the largest one recorded by a registry
+entry of the column (`conformance.tolerance`, [registry](registry.md)).
+
 ### The † waived mark
 
 A row whose results record validation waivers (`result.json` `waived`) is marked, not greyed: md puts `†` after
@@ -225,7 +237,8 @@ is `missing` with the note `partial only`.
 - `csv`: view 2 in long format, one line per (row, metric) plus one per control, with `benchmark`, `eval_hash`,
   `protocol_hash`, `probe_hash`, `model`, `reading`, `describe_sha256`, `features_fingerprint`, `bridge_name`,
   `status`, `seed`, `n_seeds`, coverage, `metric`, `kind`, `value`, `std`, `floor`, `ci_lo`, `ci_hi`,
-  `chance`, `partial` (`true` / `false`), `flag` (`;`-joined flags, e.g. `below_floor`) and `waived`.
+  `chance`, `tie` ([ties](#ties)), `partial` (`true` / `false`), `flag` (`;`-joined flags, e.g. `below_floor`)
+  and `waived`.
 - `json`: `lm_eval` (view 1), `columns`, `rows`, `warnings`, `superseded`, `detail`, `joins`, `merged`, `suite`, `paths`.
 - csv carries view 2 only: the superseded, join, warning and suite completeness sections are in md and json.
 - `--detail`: per row, the shown configuration's `describe()` and `describe_sha256`, `rules_checked`, the
@@ -379,7 +392,8 @@ With `--log-samples`, one JSON line per scored row, seed and fold: `{"clip_id", 
 `report build --registry DIR` adds the accepted entries of a model registry ([registry](registry.md)) to the
 comparison as rows: model `<org>/<model>`, flag `registry`, one record per recorded seed, under the same
 comparability rule as every local result (same benchmark, same `eval_hash`, both standard). An entry whose
-conformance did not pass is not a row. Differences below a metric's recorded conformance tolerance are ties.
+conformance did not pass is not a row. Differences within a metric's recorded conformance tolerance are ties
+([ties](#ties)).
 
 ### --merge-results
 

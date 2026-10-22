@@ -495,7 +495,10 @@ def records(root: str | os.PathLike, *, accepted_only: bool = True) -> list[dict
                          "N": None, "D": None, "pos_mode": None, "bytes": None, "backend": None, "canary_max_rel_l2": None, "batch_tolerance": None, "rules_checked": None},
             "chance": {}, "coverage": coverage, "not_applicable": None, "timing": {}, "env": prov.get("env") or {}, "created": str(prov.get("date") or ""),
             "warnings": [], "external": prov.get("external") or {}, "waived": list(s.get("waived") or []),
-            "registry": {"id": e.get("id"), "org": m.get("org"), "n_seeds": int(s.get("n_seeds") or 1), "path": str(path)},
+            "registry": {"id": e.get("id"), "org": m.get("org"), "n_seeds": int(s.get("n_seeds") or 1), "path": str(path),
+                         # what the report's ties read when the folder does not resolve here
+                         "tolerance": dict((e.get("conformance") or {}).get("tolerance") or {}),
+                         "higher_is_better": dict(s.get("higher_is_better") or {})},
         }
         per_seed = [sd for sd in (s.get("seeds") or []) if isinstance(sd.get("metrics"), dict) and sd["metrics"]]
         if per_seed:

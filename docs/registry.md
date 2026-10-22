@@ -52,7 +52,9 @@ that resolves the folder at that hash.
   (`yavih.report.compare.comparable`). Non-standard entries are stored, shown as `(nonstandard)`, never ranked.
 - **Coverage**: an entry whose eval coverage is below the folder's `splits.min_eval_coverage` is shown as partial,
   never ranked (`W_REGISTRY_COVERAGE`).
-- **Ties**: differences below a metric's recorded conformance tolerance are ties; a table must not order them.
+- **Ties**: differences within a metric's recorded conformance tolerance are ties; a table must not order them.
+  `report build` marks them (`≈` in md, `tie` in json and csv) and never orders tied rows by value
+  ([results: ties](results.md#ties)).
 - **Provenance differs, comparability does not**: entries under one `eval_hash` with different `folder_source` or
   yavih versions are comparable by construction (the fixture held both) and flagged for diagnosis
   (`W_FOLDER_SOURCE_DIFFERS` in the report).

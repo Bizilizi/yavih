@@ -127,8 +127,16 @@ def test_report_build_compares_local_rows_with_the_registry(world, tmp_path):
     assert theirs["n_seeds"] == 2 and theirs["metrics"]["acc"]["value"] == pytest.approx(0.61) and theirs["registry"].endswith("/lab/toy/v")
     assert mine["metrics"]["acc"]["value"] == 0.7
     assert len(rep.columns) == 1 and rep.columns[0]["n_rows"] == 2
-    # an entry whose conformance did not pass is not a row
+    # 0.70 vs 0.61 is an order under the recorded default tolerance, a tie under a recorded tolerance of 0.1
+    assert (mine["metrics"]["acc"]["tie"], theirs["metrics"]["acc"]["tie"]) == (False, False)
     path = next((reg / "entries").rglob("*.json"))
+    e = json.loads(path.read_text())
+    assert e["conformance"]["tolerance"]["acc"] == C.DEFAULT_TOLERANCE
+    e["conformance"]["tolerance"]["acc"] = 0.1
+    path.write_text(json.dumps(e))
+    rows = {r["model"]: r for r in report([str(runs2 / "*")], registry=reg, write=False).rows}
+    assert rows["mine"]["metrics"]["acc"]["tie"] is True and rows["lab/toy"]["metrics"]["acc"]["tie"] is True
+    # an entry whose conformance did not pass is not a row
     e = json.loads(path.read_text())
     e["conformance"]["passed"] = False
     path.write_text(json.dumps(e))

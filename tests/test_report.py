@@ -382,6 +382,39 @@ def test_folder_source_differs_compares_known_sources_only():
     assert "folder_source_differs" in rep.columns[0]["flags"]
 
 
+def test_values_within_the_conformance_tolerance_are_ties_not_an_order():
+    """Within a column, values within the metric's tolerance (default ``conformance.DEFAULT_TOLERANCE``) of the best
+    one are ties: ``tie`` in json, the ``tie`` column in csv, ``≈`` in md; a disclosure is never ranked; tied rows are
+    never ordered by value."""
+    import csv
+    import io
+
+    from yavih import conformance
+    from yavih.report import compare
+
+    assert compare.DEFAULT_TOLERANCE == conformance.DEFAULT_TOLERANCE
+    recs = _records(make_result(model="m1", acc=0.5004), make_result(model="m2", acc=0.5), make_result(model="m3", acc=0.4))
+    rep = build_report(recs, fmt="json")
+    ties = {r["model"]: r["metrics"]["acc"].get("tie") for r in rep.rows}
+    assert ties == {"m1": True, "m2": True, "m3": False}
+    assert all("tie" not in r["metrics"]["n_eval"] for r in rep.rows)  # a disclosure has no direction
+    assert "ties" in rep.columns[0]["flags"]
+    md = build_report(recs, fmt="md").text
+    assert md.count("| ≈ 0.5") == 2 and "| 0.4 (" in md and "tied with the best value" in md
+    rows = list(csv.DictReader(io.StringIO(build_report(recs, fmt="csv").text)))
+    assert {(r["model"], r["tie"]) for r in rows if r["metric"] == "acc"} == {("m1", "true"), ("m2", "true"), ("m3", "false")}
+    # a single best value is not a tie; nor is a non-standard column ever ranked
+    rep = build_report(_records(make_result(model="m1", acc=0.6), make_result(model="m2", acc=0.5)))
+    assert [r["metrics"]["acc"]["tie"] for r in rep.rows] == [False, False] and "ties" not in rep.columns[0]["flags"]
+    rep = build_report(_records(make_result(model="m1", acc=0.5, standard=False), make_result(model="m2", acc=0.5, standard=False)))
+    assert all("tie" not in r["metrics"]["acc"] for r in rep.rows)
+    # per-seed rows of one model, tied: ordered by seed, not by value
+    rep = build_report(_records(make_result(model="m1", seed=0, acc=0.5), make_result(model="m1", seed=1, acc=0.5008)), seeds="list")
+    assert [r["seed"] for r in rep.rows] == [0, 1] and all(r["metrics"]["acc"]["tie"] for r in rep.rows)
+    rep = build_report(_records(make_result(model="m1", seed=0, acc=0.5), make_result(model="m1", seed=1, acc=0.6)), seeds="list")
+    assert [r["seed"] for r in rep.rows] == [1, 0]  # outside the tolerance the value still orders
+
+
 def test_runs_root_inference(runs: Path):
     p = write_result(runs, make_result())
     assert p.parents[6] == runs and runs_root_of([p]) == runs.resolve()
