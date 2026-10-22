@@ -1894,7 +1894,7 @@ def build_parser() -> argparse.ArgumentParser:
         # The configuration layer of every command (yavih.config): before or after the subcommand. SUPPRESS so a
         # subparser does not reset what the main parser saw; distinct dests so `probe run --results` keeps its own.
         parser.add_argument("--config", dest="cfg_config", default=argparse.SUPPRESS, metavar="FILE",
-                            help="project config file (beats ./yavih.toml discovery; exported as YAVIH_CONFIG)")
+                            help="project config file (beats $YAVIH_CONFIG and the yavih-bench/yavih.toml discovery; exported as YAVIH_CONFIG)")
         parser.add_argument("--runs-root", dest="cfg_runs_root", default=argparse.SUPPRESS, metavar="DIR",
                             help="runs root (beats YAVIH_RUNS and [runs] root)")
         if results:

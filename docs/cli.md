@@ -21,7 +21,7 @@ These are accepted by every command, before or after the subcommand.
 |---|---|
 | `--json` | emit exactly one JSON envelope on stdout ([below](#the---json-envelope)); also `YAVIH_JSON=1` |
 | `--version` | print the version and exit 0 |
-| `--config FILE` | the project config file (beats `$YAVIH_CONFIG` and `./yavih.toml` discovery) |
+| `--config FILE` | the project config file (beats `$YAVIH_CONFIG` and the discovery of the nearest `yavih-bench/yavih.toml`, else `yavih.toml`, up to the repository root) |
 | `--runs-root DIR` | runs root (beats `YAVIH_RUNS` and `[runs] root`) |
 | `--results DIR` | results-store root (beats `YAVIH_RESULTS` and `[results] root`) |
 | `--data BENCH.ROOT=PATH` | one data root override, repeatable; also `root=PATH` and `datasets.NAME=PATH` |
@@ -52,15 +52,15 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 | `yavih bench list` | every discoverable benchmark: aliases, readout, `capability` tags, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their suite group (`suite_capability`) and `readings` |
 | `yavih bench info` | a benchmark's README plus its `capability` tags, hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
 | `yavih bench path` | print the benchmark folder, or the absolute path of one shipped file | `<name> [<what>]` (`what` as for `bench show`) |
-| `yavih bench files` | every shipped file of a folder with absolute path, kind and size | `<name>` |
-| `yavih bench show` | print one shipped file | `<name> <what>`: `readme`, `setup`, `yaml`, `template`, `probe`, `classes`, `prepare/<file>` or a path inside the folder |
+| `yavih bench files` | every shipped file of a folder with absolute path, kind (`readme`, `setup`, `yaml`, `template`, `probe`, `manifest`, `classes`, `conformance`, `prepare`, `test`, `other`) and size | `<name>` |
+| `yavih bench show` | print one shipped file | `<name> <what>`: `readme`, `setup`, `yaml`, `template`, `probe`, `classes`, `conformance` (`conformance/expected.json`), `prepare/<file>` or a path inside the folder |
 | `yavih bench prepare` | list the numbered `prepare/NN_*.{sh,py}` steps, or run one | `<name> [<step> [-- args…]]`; the step runs with `FOLDER` and `YAVIH_BENCH` set and the command exits with the step's own code |
 | `yavih bench fetch` | build or download the manifest into `$YAVIH_HOME` and verify its sha256 | `--refresh` overwrites locally edited files of the home copy with the packaged ones |
 | `yavih bench verify` | presence scan, byte reads of a seeded sample, an optional decode health check, derived / target sha256s, curation sums; writes `data_status.json` | `--census` probes every present file and writes the media-info table; `--decode-sample N` (32); `--fingerprint-sample N` (256) |
 | `yavih bench lint` | check folders against the folder contract | `<name\|path>...`; `--all` every discoverable folder; `--skip CHECK` (repeatable); errors exit 2, `TODO` markers are warnings |
 | `yavih bench conformance` | check (or record) a folder's conformance fixture: the numbers its scoring path produces on a generated population, at its `protocol_version` ([conformance](conformance.md)) | `<name\|path>...`; `--all`; `--record` writes `conformance/expected.json`; `--same-version --reason TEXT` overwrites differing values at the same version; `--force`; a drift, stale or missing fixture exits 2, an absent external package is a warning |
 | `yavih bench hash` | a folder's `protocol_hash`, `input_hash`, `scoring_hash`, `manifest_hash` and `folder_source` | `<name\|path>`; `--explain` prints the canonical JSON and digest of every hashed component (recompute the hashes with stdlib only) |
-| `yavih bench new` | scaffold a folder that passes `bench lint`, with `TODO` where facts are needed | `<name>`; `--readout R`; `--like B` (the folder copied); `--dir D` (default: the first `$YAVIH_BENCH_PATH` entry, else `.`) |
+| `yavih bench new` | scaffold a folder that passes `bench lint`, with `TODO` where facts are needed | `<name>`; `--readout R`; `--like B` (the folder copied); `--dir D` (default: the project's `benchmarks/`, else the first `$YAVIH_BENCH_PATH` entry, else `.`) |
 | `yavih bench trial` | run a folder's whole pipeline in process on a tiny synthetic stand-in: conformance fixture, stand-in, oracle bridge, `bridge check`, extract, validate, probe, report, headline against its floor; per-stage status | `<name\|folder> --synthetic` (required); `--readout-fast` (the test-only fast `ProbeConfig`; the headline must then clear its floor); `--keep DIR` (work in a new or empty `DIR` and keep it; `paths` names the stand-in, bridge, profile, run directory and report) |
 
 The folder contract, `benchmark.yaml` and the lint checks are described in
