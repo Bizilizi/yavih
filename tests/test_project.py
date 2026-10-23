@@ -357,30 +357,47 @@ def test_plan_init_out_elsewhere_keeps_the_project_bridges(repo, runs_dir, capsy
     assert raw["bridges"]["toy-esc50-a"]["profile"] == "toy.profiles/toy-esc50-a.profile.json"
 
 
-def test_named_launchers_alone_do_not_silence_the_unset_warning(repo, runs_dir, capsys):
-    init_project(user_file=False)
-    (repo / "yavih-bench" / "yavih.toml").write_text('[launchers]\nvjepa = "/envs/vjepa/bin/python"\n', encoding="utf-8")
+def test_launcher_anywhere_in_the_configuration_silences_the_unset_warning(repo, runs_dir, capsys, monkeypatch):
+    """``plan init`` warns ``W_LAUNCHER_UNSET`` only when no launcher is defined anywhere: a launcher under another
+    site's table (a login node that is active on no site) or a ``[launchers]`` entry counts as configured."""
+    init_project()
+    toml = repo / "yavih-bench" / "yavih.toml"
+    toml.write_text("", encoding="utf-8")
     rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy"])
-    assert rc == 0 and [w["code"] for w in env["warnings"]] == ["W_LAUNCHER_UNSET"]
+    assert rc == 0 and [w["code"] for w in env["warnings"]] == ["W_LAUNCHER_UNSET"] and not env["data"]["launcher_configured"]
+    assert "anywhere in the configuration" in env["warnings"][0]["message"]
+    # two sites, this host active on neither: the launchers are theirs, not missing
+    toml.write_text('[site.a]\nhosts = ["no-such-host-a*"]\nlauncher = "/a/bin/python"\n'
+                    '[site.b]\nhosts = ["no-such-host-b*"]\n[site.b.launchers]\nvjepa = "/b/vjepa/bin/python"\n', encoding="utf-8")
+    s = config.load(refresh=True)
+    assert s.site is None and s.launcher() is None and s.launchers() == {} and s.any_site_launcher()
+    rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--force"])
+    assert rc == 0 and env["warnings"] == [] and env["data"]["launcher_configured"] is True
+    toml.write_text('[site.b]\nhosts = ["no-such-host-b*"]\n[site.b.launchers]\nvjepa = "/b/vjepa/bin/python"\n', encoding="utf-8")
+    assert config.load(refresh=True).any_site_launcher()  # a named entry alone, in an inactive site table
+    toml.write_text('[launchers]\nvjepa = "/envs/vjepa/bin/python"\n', encoding="utf-8")
+    assert config.load(refresh=True).any_site_launcher()  # or at the top level
     rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--force", "--launcher", "vjepa"])
     assert rc == 0 and env["warnings"] == [] and env["data"]["launcher"] == "vjepa"
+    toml.write_text('[site.b]\nhosts = ["no-such-host-b*"]\n[site.b.data]\nroot = "/d"\n', encoding="utf-8")
+    assert not config.load(refresh=True).any_site_launcher()  # a site table without a launcher defines none
 
 
 def test_init_launcher_without_site_and_hosts_without_site(repo, capsys, tmp_path):
     rc, env = _json(capsys, ["init", "--hosts", "*"])
     assert rc == 1 and env["errors"][0]["code"] == "E_ARG" and "--site" in env["errors"][0]["message"]
-    rc, env = _json(capsys, ["init", "--launcher", "/envs/m/bin/python", "--no-user-config"])
+    rc, env = _json(capsys, ["init", "--launcher", "/envs/m/bin/python"])
     assert rc == 0 and config.load(refresh=True).launcher() == "/envs/m/bin/python"
     # --dir: the new project is validated from its own directory, not from the cwd
     other = tmp_path / "other"
     (other / ".git").mkdir(parents=True)
-    rc, env = _json(capsys, ["init", "--dir", str(other), "--site", "c", "--launcher", "/o/bin/python", "--no-user-config"])
+    rc, env = _json(capsys, ["init", "--dir", str(other), "--site", "c", "--launcher", "/o/bin/python"])
     assert rc == 0 and env["paths"]["dir"] == str(other / "yavih-bench")
     assert config.load(refresh=True, cwd=other).launcher() == "/o/bin/python"
 
 
 def test_relocated_directories_are_not_strays_and_show_never_raises(repo, runs_dir):
-    init_project(user_file=False)
+    init_project()
     (repo / "experiments" / "matrices").mkdir(parents=True)
     (repo / "experiments" / "matrices" / "matrix.yaml").write_text("schema_version: 1\n", encoding="utf-8")
     (repo / "yavih-bench" / "yavih.toml").write_text('[project]\nmatrices = "../experiments/matrices"\n', encoding="utf-8")

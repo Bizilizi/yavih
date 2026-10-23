@@ -165,7 +165,7 @@ def project_defaults(model: str, out: str | os.PathLike | None = None) -> dict[s
     except ValueError:  # another drive (Windows)
         rel = bridges.as_posix()
     return {"project": str(project), "out": str(out_path), "bridges_dir": rel,
-            "launcher_configured": settings.launcher() is not None}
+            "launcher_configured": settings.any_site_launcher()}
 
 
 def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str | os.PathLike | None = None,

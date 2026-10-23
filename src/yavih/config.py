@@ -745,6 +745,27 @@ class Settings:
         """Every named launcher of the active layers, ``name -> command``."""
         return {k[1]: os.path.expanduser(str(v.value)) for k, v in sorted(self.values.items()) if k[0] == "launchers"}
 
+    def any_site_launcher(self) -> bool:
+        """Whether a launcher is defined anywhere in the configuration: the active layers (``launcher``, ``[launchers]``,
+        ``YAVIH_LAUNCHER``), or the top level or ANY ``[site.<id>]`` table of a config file, active here or not. A
+        launcher written for another cluster's site table is that cluster's, not missing: ``plan init`` warns
+        ``W_LAUNCHER_UNSET`` only when this is false."""
+        if self.launcher() is not None or self.launchers():
+            return True
+
+        def defines(table: Any) -> bool:
+            if not isinstance(table, Mapping):
+                return False
+            lv, named = table.get("launcher"), table.get("launchers")
+            return (isinstance(lv, str) and bool(lv.strip())) or (isinstance(named, Mapping) and bool(named))
+
+        for f in self.files:
+            data = f.data if isinstance(f.data, Mapping) else {}
+            sites = data.get("site")
+            if defines(data) or (isinstance(sites, Mapping) and any(defines(b) for b in sites.values())):
+                return True
+        return False
+
     def edit_hint(self) -> str:
         project = next((f for f in self.files if f.layer == "project" and f.exists), None)
         user = next((f for f in self.files if f.layer == "user"), None)
