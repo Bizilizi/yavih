@@ -205,11 +205,11 @@ direction (`higher_is_better`; a disclosure such as `n_eval` has none), over the
 coverage and not greyed: the values within the tolerance of the best one are tied when there are at least two of
 them. md prefixes each tied value with `≈` and notes it under the column title (the column flag `ties`); json
 cells carry `"tie": true` (every other ranked cell `"tie": false`); csv has a `tie` column (`true` / `false`, empty
-where nothing is ranked). Tied rows are never ordered by value. When the benchmark's folder is packaged with
-this yavih, its tolerance always applies: the metric's `metrics.tolerance` entry if
-declared, else yavih's default `0.001`; a tolerance recorded by a registry entry (`conformance.tolerance`,
-[registry](registry.md)) never overrides it. Only for a benchmark not packaged here is the largest tolerance
-recorded by the column's registry entries used (else the default).
+where nothing is ranked). Tied rows are never ordered by value. When the benchmark's folder is resolvable here
+(packaged with this yavih, project-local, on `$YAVIH_BENCH_PATH` or in a pack), its tolerance always applies: the
+metric's `metrics.tolerance` entry if declared, else yavih's default `0.001`; a tolerance recorded by a registry
+entry (`conformance.tolerance`, [registry](registry.md)) never overrides it. Only for a benchmark no folder here
+resolves is the largest tolerance recorded by the column's registry entries used (else the default).
 
 ### The † waived mark
 
@@ -395,7 +395,7 @@ With `--log-samples`, one JSON line per scored row, seed and fold: `{"clip_id", 
 comparison as rows: model `<org>/<model>`, flag `registry`, one record per recorded seed, under the same
 comparability rule as every local result (same benchmark, same `eval_hash`, both standard). An entry whose
 conformance did not pass is not a row. Differences within the metric's tolerance are ties ([ties](#ties): the
-packaged folder's tolerance, a recorded one only for a benchmark not packaged here). An entry whose eval
+tolerance of the folder resolvable here, a recorded one only for a benchmark no folder resolves). An entry whose eval
 coverage (`present / nominal`, else its recorded `fraction`) is below `min_eval_coverage` is flagged
 `low_coverage` and takes no part in ties.
 

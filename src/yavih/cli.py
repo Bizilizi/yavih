@@ -1677,7 +1677,14 @@ def cmd_registry_export(ns: argparse.Namespace) -> Envelope:
     lines += [f"  {p}" for p in out["entries"]]
     warnings = [_finding("W_REGISTRY_SKIPPED", f"{s['key']}: {s['reason']}") for s in out["skipped"]]
     lines += [f"  skipped {s['key']}: {s['reason']}" for s in out["skipped"]]
-    unverified = [p for p in out["entries"] if '"passed": true' not in Path(p).read_text(encoding="utf-8")]
+    unverified = []
+    for p in out["entries"]:
+        try:
+            entry = json.loads(Path(p).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            entry = {}
+        if ((entry.get("conformance") or {}) if isinstance(entry, dict) else {}).get("passed") is not True:
+            unverified.append(p)
     for p in unverified:
         warnings.append(_finding("W_REGISTRY_UNVERIFIED", f"{p}: conformance not passed here; `yavih registry check` refuses it until it is", where=p))
     return Envelope(data=out, warnings=warnings, paths={"out": str(ns.out)}, text="\n".join(lines) + "\n")

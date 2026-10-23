@@ -108,7 +108,7 @@ def test_export_skips_what_is_not_a_score(world, tmp_path):
         R.export(world["results_root"], org="not valid!", out=tmp_path / "r3")
 
 
-def test_report_build_compares_local_rows_with_the_registry(world, tmp_path):
+def test_report_build_compares_local_rows_with_the_registry(world, tmp_path, monkeypatch):
     from yavih.report import report
 
     reg = tmp_path / "registry"
@@ -127,7 +127,8 @@ def test_report_build_compares_local_rows_with_the_registry(world, tmp_path):
     assert theirs["n_seeds"] == 2 and theirs["metrics"]["acc"]["value"] == pytest.approx(0.61) and theirs["registry"].endswith("/lab/toy/v")
     assert mine["metrics"]["acc"]["value"] == 0.7
     assert len(rep.columns) == 1 and rep.columns[0]["n_rows"] == 2
-    # 0.70 vs 0.61 is an order under the recorded default tolerance, a tie under a recorded tolerance of 0.1
+    # 0.70 vs 0.61 is an order under the folder's tolerance (the default): the folder resolves here (YAVIH_BENCH_PATH),
+    # so a tolerance the entry recorded never overrides it; only where no folder resolves does the recorded 0.1 tie them
     assert (mine["metrics"]["acc"]["tie"], theirs["metrics"]["acc"]["tie"]) == (False, False)
     path = next((reg / "entries").rglob("*.json"))
     e = json.loads(path.read_text())
@@ -135,7 +136,11 @@ def test_report_build_compares_local_rows_with_the_registry(world, tmp_path):
     e["conformance"]["tolerance"]["acc"] = 0.1
     path.write_text(json.dumps(e))
     rows = {r["model"]: r for r in report([str(runs2 / "*")], registry=reg, write=False).rows}
+    assert rows["mine"]["metrics"]["acc"]["tie"] is False and rows["lab/toy"]["metrics"]["acc"]["tie"] is False
+    monkeypatch.delenv("YAVIH_BENCH_PATH")
+    rows = {r["model"]: r for r in report([str(runs2 / "*")], registry=reg, write=False).rows}
     assert rows["mine"]["metrics"]["acc"]["tie"] is True and rows["lab/toy"]["metrics"]["acc"]["tie"] is True
+    monkeypatch.setenv("YAVIH_BENCH_PATH", str(tmp_path / "folders"))
     # an entry whose conformance did not pass is not a row
     e = json.loads(path.read_text())
     e["conformance"]["passed"] = False
@@ -158,6 +163,67 @@ def test_cli_registry_export_and_check(world, tmp_path, capsys):
     assert rc == 0 and env["data"]["ok"] is True and env["data"]["n_entries"] == 1
     rc, env = run(["report", "build", str(world["runs"] / "*"), "--registry", str(reg), "--fmt", "json"])
     assert rc == 0 and any(r.get("registry") for r in env["data"]["rows"])
+
+
+def test_cli_export_reads_the_entry_conformance_not_the_file_text(world, tmp_path, capsys, monkeypatch):
+    """``W_REGISTRY_UNVERIFIED`` comes from ``entry["conformance"]["passed"]``, not from the text ``"passed": true``
+    appearing anywhere in the file (a describe block may carry exactly that)."""
+    from yavih import cli
+
+    def run(argv):
+        rc = cli.main(["--json", *argv])
+        return rc, json.loads(capsys.readouterr().out)
+
+    real_check = C.check
+
+    def failing_check(bench, *a, **k):
+        rep = real_check(bench, *a, **k)
+        rep.ok = False
+        return rep
+
+    monkeypatch.setattr(C, "check", failing_check)
+    reg = tmp_path / "registry"
+    rc, env = run(["registry", "export", str(world["results_root"]), "--org", "lab", "--out", str(reg)])
+    assert rc == 0 and len(env["data"]["entries"]) == 1
+    assert [w["code"] for w in env["warnings"]] == ["W_REGISTRY_UNVERIFIED"]
+    path = Path(env["data"]["entries"][0])
+    e = json.loads(path.read_text())
+    assert e["conformance"]["passed"] is False
+    e["provenance"]["probe_config"] = {"note": {"passed": True}}  # the literal `"passed": true` in another block
+    path.write_text(json.dumps(e, indent=1))
+    monkeypatch.setattr(C, "check", real_check)
+    monkeypatch.setattr(R, "export", lambda *a, **k: {"entries": [str(path)], "protocols": [], "skipped": []})
+    rc, env = run(["registry", "export", str(world["results_root"]), "--org", "lab", "--out", str(reg)])
+    assert '"passed": true' in path.read_text() and [w["code"] for w in env["warnings"]] == ["W_REGISTRY_UNVERIFIED"]
+
+
+def test_report_moves_a_registry_entry_under_a_superseded_hash_into_the_current_column(world, tmp_path):
+    """A registry entry filed under a protocol hash the folder's changelog ``supersedes`` is read under the current one
+    (``report.migrate``, as every local record), so it joins the local rows' column."""
+    from yavih import hash_history
+    from yavih.report import report
+
+    bench, qh = world["bench"], world["qh"]
+    reg = tmp_path / "registry"
+    out = R.export(world["results_root"], org="lab", out=reg)
+    path = Path(out["entries"][0])
+    e = json.loads(path.read_text())
+    old_ph = "0123" * 16
+    e["identity"]["protocol_hash"] = old_ph
+    e["identity"]["eval_hash"] = hashing.eval_hash(old_ph, qh)
+    path.write_text(json.dumps(e))
+    cur = hashing.eval_hash(bench.protocol_hash, qh)
+    try:
+        hash_history.register(bench.name, (), [{"version": bench.spec.protocol_version, "protocol_hash": bench.protocol_hash,
+                                                "input_hash": bench.input_hash, "supersedes": [old_ph]}])
+        rep = report([str(world["runs"] / "*")], registry=reg, write=False)
+        rows = [r for r in rep.rows if r.get("registry")]
+        assert rows and {r["eval_hash"] for r in rows} == {cur} == {r["eval_hash"] for r in rep.rows}
+    finally:
+        hash_history.reset()
+    # without the chain the entry keeps its own column
+    rep = report([str(world["runs"] / "*")], registry=reg, write=False)
+    assert {r["eval_hash"] for r in rep.rows if r.get("registry")} == {hashing.eval_hash(old_ph, qh)}
 
 
 def test_export_runs_the_conformance_fixture_once_per_benchmark(world, tmp_path, monkeypatch):

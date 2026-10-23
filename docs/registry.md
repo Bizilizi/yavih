@@ -54,9 +54,9 @@ that resolves the folder at that hash.
   folder's `splits.min_eval_coverage` is shown as partial, never ranked (`W_REGISTRY_COVERAGE`; `report build
   --registry` flags it `low_coverage` and leaves it out of ties).
 - **Ties**: differences within a metric's tolerance are ties; a table must not order them. The tolerance is the
-  packaged folder's when the yavih building the table ships it (its `metrics.tolerance` entry, else the default
-  `0.001`); an entry's recorded `conformance.tolerance` is used only for a benchmark not packaged there (the
-  largest recorded). `report build` marks them (`≈` in md, `tie` in json and csv) and never orders tied rows by value
+  folder's when the yavih building the table resolves one (packaged, project-local or on `$YAVIH_BENCH_PATH`: its
+  `metrics.tolerance` entry, else the default `0.001`); an entry's recorded `conformance.tolerance` is used only for
+  a benchmark no folder resolves there (the largest recorded). `report build` marks them (`≈` in md, `tie` in json and csv) and never orders tied rows by value
   ([results: ties](results.md#ties)).
 - **Provenance differs, comparability does not**: entries under one `eval_hash` with different `folder_source` or
   yavih versions are comparable by construction (the fixture held both) and flagged for diagnosis

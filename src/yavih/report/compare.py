@@ -171,14 +171,29 @@ def _packaged_spec(name: str, load_yaml) -> Any | None:
         return None
 
 
+def _resolved_spec(name: str, load_yaml) -> Any | None:
+    """The ``benchmark.yaml`` of the folder ``name`` resolves to here (``yavih.benchmark.resolve_folder``: ``$YAVIH_HOME``,
+    packaged, the project's ``benchmarks/``, ``$YAVIH_BENCH_PATH``, packs, aliases), else ``None``."""
+    try:
+        from yavih.benchmark import resolve_folder
+
+        folder = resolve_folder(name)
+        if folder is None or not (folder / "benchmark.yaml").is_file():
+            return None
+        return load_yaml(str(folder / "benchmark.yaml"))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _bench_meta(name: str) -> dict[str, Any]:
-    """``{headline, table, tolerance, min_eval_coverage, protocol_version, stream_kinds}`` from the packaged yaml when
-    loadable (``table`` / ``tolerance`` only when ``metrics.table`` / ``metrics.tolerance`` is declared); ``{}``
-    otherwise (the report then falls back to defaults and heuristics)."""
+    """``{headline, table, tolerance, min_eval_coverage, protocol_version, stream_kinds}`` from the yaml of any folder
+    that resolves here (packaged, project-local, ``$YAVIH_BENCH_PATH``; ``table`` / ``tolerance`` only when
+    ``metrics.table`` / ``metrics.tolerance`` is declared); ``{}`` otherwise (the report then falls back to defaults
+    and heuristics)."""
     try:
         from yavih.benchmark import load_yaml
 
-        spec = _packaged_spec(name, load_yaml)
+        spec = _resolved_spec(name, load_yaml)
         if spec is None:
             return {}
         out: dict[str, Any] = {}
@@ -692,9 +707,9 @@ def _mark_ties(rows: Sequence[dict[str, Any]], results: Sequence[dict], metric_n
     from the metric registry, or recorded by a registry entry; a disclosure has none), over the rankable rows
     (:func:`_rankable`) with a scalar value: the cells within the metric's tolerance of the best value are a tie when
     there are at least two of them; each gets ``tie: True`` and every other rankable cell ``tie: False`` (no key on
-    other cells). Tolerance: for a packaged benchmark (``meta`` from :func:`_bench_meta` non-empty), the
-    folder's ``metrics.tolerance`` entry, else :data:`DEFAULT_TOLERANCE`; a tolerance a registry entry recorded
-    (``conformance.tolerance``) is used only for a benchmark not packaged here (the largest recorded, else the
+    other cells). Tolerance: for a benchmark whose folder resolves here (``meta`` from :func:`_bench_meta` non-empty),
+    the folder's ``metrics.tolerance`` entry, else :data:`DEFAULT_TOLERANCE`; a tolerance a registry entry recorded
+    (``conformance.tolerance``) is used only for a benchmark no folder here resolves (the largest recorded, else the
     default)."""
     from yavih.report.store import metric_info
 
@@ -702,7 +717,7 @@ def _mark_ties(rows: Sequence[dict[str, Any]], results: Sequence[dict], metric_n
     if len(ranked) < 2:
         return
     info = metric_info(metric_names)
-    packaged = bool(meta)  # _bench_meta returns {} only when no packaged folder of that name loads
+    resolvable = bool(meta)  # _bench_meta returns {} only when no folder of that name resolves here
     folder_tol = dict(meta.get("tolerance") or {})
     for m in metric_names:
         hib = info.get(m, {}).get("higher_is_better")
@@ -717,7 +732,7 @@ def _mark_ties(rows: Sequence[dict[str, Any]], results: Sequence[dict], metric_n
                  and math.isfinite(float(c["value"]))]
         if len(cells) < 2:
             continue
-        if packaged:
+        if resolvable:
             tol = float(folder_tol.get(m, DEFAULT_TOLERANCE))
         else:
             entry_tols = [((r.get("registry") or {}).get("tolerance") or {}).get(m) for r in results]
@@ -1153,8 +1168,19 @@ def report(
         # registry entries join the comparison as rows under the same rule (same benchmark, same eval_hash, both standard);
         # their seeds and provenance are theirs, their model name is namespaced <org>/<model>
         from yavih.registry import records as registry_records
+        from yavih.report.migrate import MigrationError, migrate
 
-        records = [*records, *registry_records(registry)]
+        # the same in-memory upgrade every indexed record gets (``build_index``): an entry filed under a superseded
+        # protocol hash joins the current column through the folders' ``supersedes`` chains
+        migrated = []
+        for r in registry_records(registry):
+            try:
+                r["result"] = migrate(r["result"])
+            except (MigrationError, TypeError) as exc:
+                print(f"[yavih.report] skipping registry entry {r.get('path')}: {exc}", file=sys.stderr)
+                continue
+            migrated.append(r)
+        records = [*records, *migrated]
     rep = build_report(records, fmt=fmt, seeds=seeds, allow_coverage_diff=allow_coverage_diff, detail=detail)
     records = [r for r in records if not r.get(MOVED_ASIDE)]
     root = Path(runs_root) if runs_root is not None else runs_root_of([Path(r["path"]) for r in records])

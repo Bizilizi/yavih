@@ -932,6 +932,30 @@ def test_lone_low_coverage_result_is_flagged():
     assert "low_coverage" not in build_report([{"path": "/r/f", "result": full}]).rows[0]["flags"]
 
 
+def test_bench_meta_resolves_a_folder_on_the_bench_path(tmp_path, monkeypatch):
+    """``_bench_meta`` goes through the folder resolver: a benchmark on ``$YAVIH_BENCH_PATH`` (or project-local) brings
+    its declared ``metrics.tolerance``, ``table`` and ``headline``, not the ``{}`` that would tie it at the default."""
+    import yaml
+
+    from yavih import hash_history
+    from yavih import testing as T
+    from yavih.report import compare
+
+    folder = T.make_synthetic_benchmark(tmp_path / "packs", "clf", n_train=8, n_eval=4, media="none")
+    spec = yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))
+    spec["metrics"]["tolerance"] = {"acc": 0.05}
+    (folder / "benchmark.yaml").write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+    hash_history.reset()
+    assert compare._bench_meta(folder.name) == {}  # not resolvable yet
+    monkeypatch.setenv("YAVIH_BENCH_PATH", str(tmp_path / "packs"))
+    meta = compare._bench_meta(folder.name)
+    assert meta["tolerance"] == {"acc": 0.05} and meta["headline"] == spec["metrics"]["headline"] and meta["protocol_version"] == spec["protocol_version"]
+    rows = [{"status": "ok", "missing": False, "partial": False, "greyed": False, "flags": [], "metrics": {"acc": {"value": v}}} for v in (0.70, 0.66)]
+    compare._mark_ties(rows, [{"registry": {"tolerance": {"acc": 0.0001}}}, {}], ["acc"], meta)
+    assert [r["metrics"]["acc"]["tie"] for r in rows] == [True, True]  # the folder's 0.05 decides, not the recorded one
+    hash_history.reset()
+
+
 def test_packaged_tolerance_beats_a_recorded_one():
     """A packaged folder's tolerance (its ``metrics.tolerance`` entry, else the default) always decides ties; a
     registry-recorded tolerance only applies to a benchmark not packaged here (the largest recorded)."""
