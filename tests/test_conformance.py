@@ -114,6 +114,23 @@ def test_the_documented_generator_spec_reproduces_the_stream():
 # ----------------------------------------------------------------------------- compute / record / check
 
 
+def _bump_to_v2(folder: Path) -> None:
+    _edit_yaml(folder, lambda y: (y.__setitem__("protocol_version", 2), y["changelog"].append(
+        {"version": 2, "date": "2026-10-20", "reason": "bump", "invalidates": True})))
+
+
+def _shift_acc(monkeypatch, delta: float = 0.05) -> None:
+    """Move the registered ``acc`` metric by ``delta``: a scoring change beyond the default tolerance."""
+    import dataclasses
+
+    from yavih.metrics import registry
+
+    spec = registry.REGISTRY["acc"]
+    original = spec.fn
+    shifted = dataclasses.replace(spec, fn=lambda outputs, targets, protocol, split_meta: float(original(outputs, targets, protocol, split_meta)) + delta)
+    monkeypatch.setitem(registry.REGISTRY, "acc", shifted)
+
+
 @pytest.mark.parametrize("readout", ["clf", "seq", "grid", "box"])
 def test_record_and_check_round_trip(tmp_path, readout):
     b = _bench(tmp_path, readout)
@@ -138,8 +155,7 @@ def test_missing_and_stale_fixture(tmp_path):
     rep = C.check(b)
     assert not rep.ok and [f.code for f in rep.errors] == [C.E_MISSING] and "--record" in rep.errors[0].message
     C.record(b)
-    _edit_yaml(b.folder, lambda y: (y.__setitem__("protocol_version", 2), y["changelog"].append(
-        {"version": 2, "date": "2026-10-20", "reason": "bump", "invalidates": True})))
+    _bump_to_v2(b.folder)
     b2 = Benchmark.from_dir(b.folder)
     rep = C.check(b2)
     assert not rep.ok and [f.code for f in rep.errors] == [C.E_STALE] and rep.expected_version == 1 and rep.protocol_version == 2
@@ -154,17 +170,13 @@ def test_missing_and_stale_fixture(tmp_path):
 
 def test_drift_is_detected_and_resolved_by_a_version_bump(tmp_path, monkeypatch):
     """A scoring change that moves a number beyond tolerance at the same protocol_version is E_CONFORMANCE_DRIFT;
-    bumping the version (or --same-version --reason) lets it be recorded."""
+    bumping the version (or --same-version --reason) lets it be recorded. The refusal applies from the second
+    changelog entry on (a released folder)."""
     b = _bench(tmp_path)
+    _bump_to_v2(b.folder)
+    b = Benchmark.from_dir(b.folder)
     C.record(b)
-    import dataclasses
-
-    from yavih.metrics import registry
-
-    spec = registry.REGISTRY["acc"]
-    original = spec.fn
-    shifted = dataclasses.replace(spec, fn=lambda outputs, targets, protocol, split_meta: float(original(outputs, targets, protocol, split_meta)) + 0.05)
-    monkeypatch.setitem(registry.REGISTRY, "acc", shifted)
+    _shift_acc(monkeypatch)
     rep = C.check(Benchmark.from_dir(b.folder))
     assert not rep.ok and [f.code for f in rep.errors] == [C.E_DRIFT]
     assert rep.drifted and rep.drifted[0]["metric"] == "acc" and abs(rep.drifted[0]["got"] - rep.drifted[0]["expected"] - 0.05) < 1e-9
@@ -175,6 +187,36 @@ def test_drift_is_detected_and_resolved_by_a_version_bump(tmp_path, monkeypatch)
         C.record(Benchmark.from_dir(b.folder), same_version=True)  # needs a reason
     rec = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="fixture bug")
     assert rec["same_version_reason"] == "fixture bug" and C.check(Benchmark.from_dir(b.folder)).ok
+
+
+def test_unreleased_folder_record_overwrites_without_drift_refusal(tmp_path, monkeypatch):
+    """While the changelog has exactly one entry (a new, unreleased folder), ``record`` overwrites a differing record
+    at the same protocol_version without asking; the check then passes against the new numbers."""
+    b = _bench(tmp_path)
+    assert len(b.spec.changelog) == 1
+    first = C.record(b)
+    _shift_acc(monkeypatch)
+    b = Benchmark.from_dir(b.folder)
+    assert [f.code for f in C.check(b).errors] == [C.E_DRIFT]
+    rec = C.record(b)  # no --same-version, no --force
+    assert abs(rec["values"]["*"]["metrics"]["acc"] - first["values"]["*"]["metrics"]["acc"] - 0.05) < 1e-9
+    assert "same_version_reason" not in rec and C.check(Benchmark.from_dir(b.folder)).ok
+
+
+def test_scoring_refusal_is_wrapped_as_unsupported(tmp_path, monkeypatch):
+    """A ProbeRefused from the scoring path that is not about an external package is E_CONFORMANCE_UNSUPPORTED, with the
+    refusal's own code and message kept in the text."""
+    from yavih.readouts import base
+
+    b = _bench(tmp_path)
+
+    def refuse(*a, **k):
+        raise base.ProbeRefused("E_LABELS", "labels out of range; more detail")
+
+    monkeypatch.setattr(base, "evaluate_metrics", refuse)
+    with pytest.raises(C.ConformanceError) as ei:
+        C.compute(b)
+    assert ei.value.code == C.E_UNSUPPORTED and "E_LABELS: labels out of range" in str(ei.value)
 
 
 def test_tolerance_from_the_yaml_and_the_comparison_rules(tmp_path):

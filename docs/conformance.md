@@ -149,13 +149,18 @@ yavih bench conformance <name> --record --same-version --reason T  overwrite dif
 yavih bench conformance <name> --record --force                    overwrite without comparing
 ```
 
+`--record` refuses (`E_CONFORMANCE_DRIFT`) to overwrite a record of the same `protocol_version` whose values
+differ, except while the folder's `changelog` has exactly one entry: a new, unreleased folder's record is
+overwritten freely, since no result was filed under it yet. From the second changelog entry on, a moved number
+needs a `protocol_version` bump or `--same-version --reason TEXT`.
+
 | code | level | meaning |
 |---|---|---|
 | `E_CONFORMANCE_MISSING` | error | no `conformance/expected.json`; record one |
 | `E_CONFORMANCE_STALE` | error | recorded at another `protocol_version` or generator; re-record |
 | `E_CONFORMANCE_DRIFT` | error | a value outside its tolerance at the same version; the message names the first six |
 | `E_CONFORMANCE_SCHEMA` | error | the file does not parse, is another schema, or records another benchmark |
-| `E_CONFORMANCE_UNSUPPORTED` | error | a readout without a population, or a scoring refusal unrelated to an external package |
+| `E_CONFORMANCE_UNSUPPORTED` | error | a readout without a population, or a scoring refusal unrelated to an external package (the message keeps the refusal's own code, e.g. `E_LABELS: …`) |
 | `W_CONFORMANCE_SKIPPED` | warning | a pinned external package is absent (or the installed build fails the folder's own guard); nothing compared |
 
 `bench lint` check `conformance` reports the same codes; the repository test

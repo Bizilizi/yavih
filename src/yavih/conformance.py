@@ -493,7 +493,8 @@ def compute(bench: Any) -> dict[str, Any]:
     """Run the folder's scoring path on the generated population and return the fixture values:
     ``{"generator", "population", "externals", "values": {reading or "*": {metrics, floors, controls, ci95}}}``.
     Raises ``ConformanceError`` (``W_CONFORMANCE_SKIPPED`` when an external package is absent,
-    ``E_CONFORMANCE_UNSUPPORTED`` for a readout without a population)."""
+    ``E_CONFORMANCE_UNSUPPORTED`` for a readout without a population or a scoring refusal unrelated to an external
+    package, whose own code and message are kept in the message text)."""
     from yavih.readouts.base import ProbeRefused, evaluate_metrics, folder_probe
 
     readout = bench.spec.readout
@@ -516,7 +517,7 @@ def compute(bench: Any) -> dict[str, Any]:
             first = e.message.split("; ")[0]
             if "E_EXTERNAL_" in e.message:  # the folder's own guard on the external package (a wrong build): not checkable here
                 raise ConformanceError(W_SKIPPED, f"{bench.name}: {first}") from e
-            raise ConformanceError(e.code if e.code.startswith("E_") else E_UNSUPPORTED, f"{bench.name}: {first}") from e
+            raise ConformanceError(E_UNSUPPORTED, f"{bench.name}: {e.code}: {first}") from e
         values[reading or "*"] = {k: _plain(blocks.get(k) or {}) for k in ("metrics", "floors", "controls", "ci95")}
         meta = pop["split_meta"]
         population = {"eval": int(meta.get("n_eval", 0)), "train": int(meta.get("n_train", 0)),
@@ -686,10 +687,12 @@ def _fmt(v: Any) -> str:
 def record(bench: Any, *, same_version: bool = False, reason: str | None = None, force: bool = False) -> dict[str, Any]:
     """Compute the fixture and write ``conformance/expected.json``. Refuses (``E_CONFORMANCE_DRIFT``) to overwrite a
     record of the same ``protocol_version`` and generator whose values differ, unless ``same_version`` with a
-    ``reason`` (stored) or ``force``. Returns the record written."""
+    ``reason`` (stored) or ``force``. A folder whose changelog has exactly one entry (new, unreleased) is
+    overwritten freely: its numbers may move with every edit until the first release. Returns the record written."""
     computed = compute(bench)  # W_CONFORMANCE_SKIPPED propagates: nothing can be recorded without the package
     rec = _record_dict(bench, computed, reason=reason if same_version else None)
-    existing = None if force else read_expected(bench)
+    unreleased = len(bench.spec.changelog) == 1
+    existing = None if (force or unreleased) else read_expected(bench)
     if existing is not None:
         same = int(existing["protocol_version"]) == rec["protocol_version"] and int(existing.get("generator", -1)) == GENERATOR_VERSION
         if same:

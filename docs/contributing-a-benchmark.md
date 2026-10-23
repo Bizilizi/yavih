@@ -219,9 +219,10 @@ yavih bench conformance <name> --record
 ```
 
 writes `conformance/expected.json` (the scoring path's numbers on a generated population; a few KB, no inputs
-stored). Re-record after every later edit that moves them, as long as the folder is unmerged; after the merge a
-moved number means a `protocol_version` bump. The scaffold recorded a fixture for the copied protocol; `--record`
-overwrites it (`--force` if lint says it records another benchmark).
+stored). Re-record after every later edit that moves them, as long as the folder is unmerged: while the changelog
+has its one entry, `--record` overwrites the record without comparing, including the fixture the scaffold recorded
+for the copied protocol. Once the folder has a second changelog entry, a moved number means a `protocol_version`
+bump (or `--same-version --reason TEXT`), and `--record` refuses to overwrite differing values otherwise.
 
 **Done when:** `yavih bench lint <name>` reports no `E_CHANGELOG_HASH` and no `E_CONFORMANCE_*`, and
 `python -m pytest tests/test_hashing.py tests/test_conformance.py -q -p no:cacheprovider -o addopts="--import-mode=importlib"` passes.
