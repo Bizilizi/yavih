@@ -61,7 +61,7 @@ TEMPORAL = {"rule": "uniform", "n": 16, "span": "full"}          # which frames:
 SPATIAL = {"resize": {"short": 256}, "crop": {"kind": "center", "size": [224, 224]}, "interp": "bilinear", "antialias": True}
 
 class Bridge(yavih.Bridge):
-    """My model, video reading.
+    """My model: video only. The reading is an argument (vggsounder scores a, v and av; `plan init` plans all three).
 
     Preprocessing source:
         TODO <repo>@<commit> <file>::<function>, then the model's own eval transform, verbatim, as this indented
@@ -73,14 +73,18 @@ class Bridge(yavih.Bridge):
     dtype = "float16"
     pos_mode = "per_sample"         # durations and frame sizes differ per clip
     streams = ("video",)
-    ARGS = {"ckpt": ArgSpec(type=str, default="/ckpts/mymodel.pt")}
+    ARGS = {"reading": ArgSpec(type=str, default="v", choices=("a", "v", "av"), help="which streams the model reads"),
+            "ckpt": ArgSpec(type=str, default="/ckpts/mymodel.pt")}
 
     def __init__(self, bench, args):
         super().__init__(bench, args)
+        self.reading = self.args["reading"]
+        if self.reading != "v":     # a video-only model: the a and av entries are recorded as not_applicable
+            raise yavih.NotApplicable(f"video-only model: no {self.reading!r} reading")
         self.model = load_my_model(self.args["ckpt"]).eval().cuda()   # weights before the first sample
 
     def describe(self):             # recorded with every number; never what makes numbers comparable
-        return {"model": "mymodel", "reading": "v",       # the name results are filed under (same in every bridge of the model)
+        return {"model": "mymodel", "reading": self.reading,   # the name results are filed under (same in every bridge of the model)
                 "weights_sha256": fingerprint_state_dict(self.model), "weights_ref": self.args["ckpt"],
                 "dtype": self.dtype, "batch_size": self.batch_size, "streams": list(self.streams), "pos_mode": self.pos_mode,
                 "layer": "last", "pooling": "none", "views": 1,
@@ -111,11 +115,11 @@ The bridge never sees labels; every model-side decision (frames, crop, normaliza
 ```bash
 yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --synthetic
 # smoke checks on tiny generated media with vggsounder's streams and facts: before any data is staged, no profile
-yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --arg ckpt=/ckpts/mymodel.pt \
-      --out yavih-bench/matrices/mymodel.profiles/mymodel-vggsounder.profile.json
+yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --arg reading=v --out yavih-bench/matrices/mymodel.profiles/mymodel-vggsounder-v.profile.json
 # 32-clip smoke on the staged data: describe(), hard checks (rerun bit-identical, batch- and order-invariance), the
 # declared rules against `used`, positions in media coordinates, clips/s, and the profile (model, reading,
-# describe_sha256) of the matrix entry mymodel-vggsounder below, next to its matrix
+# describe_sha256) of the matrix entry mymodel-vggsounder-v below, next to its matrix (the command `plan init`
+# prints for that entry; with --arg reading=a or av the bridge raises NotApplicable and the profile records it)
 ```
 
 Single machine (`--out` is the run directory under the runs root; features land in `<out>/features/<split>/`):
@@ -123,8 +127,8 @@ Single machine (`--out` is the run directory under the runs root; features land 
 ```bash
 RUNS=$(yavih config get runs.root)        # the configured runs root (never inside the repository)
 RUN=$RUNS/vggsounder/mymodel/v
-yavih extract --bench vggsounder --bridge yavih-bench/bridges/mymodel_vggsounder.py --split train --shard 0/1 --out $RUN --arg ckpt=/ckpts/mymodel.pt
-yavih extract --bench vggsounder --bridge yavih-bench/bridges/mymodel_vggsounder.py --split test  --shard 0/1 --out $RUN --arg ckpt=/ckpts/mymodel.pt
+yavih extract --bench vggsounder --bridge yavih-bench/bridges/mymodel_vggsounder.py --split train --shard 0/1 --out $RUN --arg reading=v
+yavih extract --bench vggsounder --bridge yavih-bench/bridges/mymodel_vggsounder.py --split test  --shard 0/1 --out $RUN --arg reading=v
 ```
 
 Cluster: describe models × benchmarks once, let yavih cut it into units, run them as an array. A suite is a named
@@ -146,8 +150,8 @@ schema_version: 1
 out: null                                 # the configured runs root
 defaults: {launcher: mymodel, cpus: 8}    # a [launchers] name from yavih.toml (per site), a python path, or null
 bridges:
-  mymodel-vggsounder: {script: ../bridges/mymodel_vggsounder.py, benchmark: vggsounder,
-                       args: {ckpt: /ckpts/mymodel.pt}, profile: mymodel.profiles/mymodel-vggsounder.profile.json}
+  mymodel-vggsounder-v: {script: ../bridges/mymodel_vggsounder.py, benchmark: vggsounder,
+                         args: {reading: v}, profile: mymodel.profiles/mymodel-vggsounder-v.profile.json}
 ```
 
 ```bash

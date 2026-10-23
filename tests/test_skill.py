@@ -532,14 +532,19 @@ def test_in1k_image_as_video_gotcha_says_top_level():
 
 
 def test_readme_example_reading_uses_the_benchmarks_vocabulary():
-    """The quickstart's vggsounder bridge declares ``reading`` in vggsounder's {a, v, av}."""
+    """The quickstart's vggsounder bridge takes ``reading`` as an argument over vggsounder's {a, v, av} (the readings
+    ``plan init`` plans), records it in ``describe()``, and its step-4 ``bridge check`` is the one printed for ``v``."""
     from yavih.benchmarks import packaged_folder
 
     readme = REPO / "docs" / "quickstart.md"
     if not readme.is_file():
         pytest.skip("docs/quickstart.md not available")
-    m = re.search(r'"reading": "([a-z]+)"', readme.read_text(encoding="utf-8"))
-    assert m and m.group(1) == "v"
+    text = readme.read_text(encoding="utf-8")
+    m = re.search(r'"reading": ArgSpec\([^)]*choices=\(([^)]*)\)', text)
+    assert m and {c.strip().strip('"') for c in m.group(1).split(",")} == {"a", "v", "av"}
+    assert '"reading": self.reading' in text
+    assert ("yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --arg reading=v "
+            "--out yavih-bench/matrices/mymodel.profiles/mymodel-vggsounder-v.profile.json") in text
     assert "`describe()[\"reading\"]` ∈ {`a`, `v`, `av`}" in (packaged_folder("vggsounder") / "setup.md").read_text(encoding="utf-8")
 
 
