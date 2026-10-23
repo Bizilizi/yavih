@@ -41,27 +41,66 @@ def _json(capsys, argv) -> tuple[int, dict]:
 # ----------------------------------------------------------------------------- init and discovery
 
 
-def test_init_writes_the_folder_and_the_user_config(repo, capsys):
+def test_init_writes_the_folder_and_never_the_user_config(repo, capsys):
     rc, env = _json(capsys, ["init", "--site", "c1", "--hosts", "*", "--launcher", "/envs/m/bin/python"])
     assert rc == 0, env["errors"]
     folder = repo / "yavih-bench"
     for name in ("yavih.toml", "README.md", ".gitignore", "bridges/.gitkeep", "matrices/.gitkeep", "suites/.gitkeep",
                  "benchmarks/.gitkeep", "tools/.gitkeep"):
         assert (folder / name).is_file(), name
-    assert env["data"]["user_config_written"] is True and env["paths"]["dir"] == str(folder)
-    assert "*.jsonl" in (folder / ".gitignore").read_text(encoding="utf-8").splitlines()  # plan files are run state
-    user = Path(env["data"]["user_config"])
-    assert user.is_file() and "[runs]" in user.read_text(encoding="utf-8")
+    assert env["paths"]["dir"] == str(folder)
+    # only what yavih itself creates inside the folder; results/ is committed, so it is not listed
+    assert (folder / ".gitignore").read_text(encoding="utf-8") == "runs/\nlogs/\n__pycache__/\n"
+    user = Path(config.user_config_path()[0])
+    assert not user.exists() and env["data"]["user_config"] == str(user)  # the user file holds personal overrides only
     s = config.load(refresh=True)
     assert s.project_dir() == folder and s.project_file().how == "discovered"
     assert s.site == "c1" and s.launcher() == "/envs/m/bin/python" and s.launchers() == {}
     assert s.project_requirement() and s.project_requirement().startswith(">=")
     assert s.project_path("suites") == folder / "suites" and s.project_path("benchmarks") == folder / "benchmarks"
-    # the committed project file carries no personal root: runs come from the user file
-    assert s.get("runs", "root").source.startswith(f"file:{user}")
-    assert s.runs_root() == Path("~/yavih/runs").expanduser()
+    # runs and results default to the project folder (absolute), and init reports them
+    assert s.get("runs", "root") is None and s.runs_root() == folder / "runs" and s.results_root() == folder / "results"
+    assert env["data"]["runs_root"] == str(folder / "runs") and env["data"]["results_root"] == str(folder / "results")
     shown = s.show()
     assert shown["project"]["dir"] == str(folder) and shown["values"]["launcher"]["value"] == "/envs/m/bin/python"
+    assert shown["values"]["runs.root"] == {"value": str(folder / "runs"), "source": "default (project)"}
+    assert shown["values"]["results.root"] == {"value": str(folder / "results"), "source": "default (project)"}
+    assert cli.main(["init"]) == 1  # E_EXISTS without --force
+    capsys.readouterr()
+    rc, env = _json(capsys, ["config", "get", "runs.root"])
+    assert rc == 0 and env["data"] == {"key": "runs.root", "value": str(folder / "runs"), "source": "default (project)"}
+
+
+def test_default_roots_outside_a_project_are_absolute(repo, monkeypatch, tmp_path):
+    """Without a project the fallback is ``runs`` under the current directory, absolute, and ``results`` next to it;
+    ``config show`` says so."""
+    s = config.load(refresh=True)
+    assert s.project_dir() is None
+    assert s.runs_root() == repo / "runs" and s.runs_root().is_absolute() and s.results_root() == repo / "results"
+    assert s.show()["values"]["runs.root"]["source"] == "default (./runs)"
+    assert s.show()["values"]["results.root"]["source"] == "default (<runs root>/../results)"
+    # a configured runs root without a results root: results next to it (no project to anchor them)
+    monkeypatch.setenv("YAVIH_RUNS", str(tmp_path / "scratch" / "runs"))
+    s = config.load(refresh=True)
+    assert s.runs_root() == tmp_path / "scratch" / "runs" and s.results_root() == tmp_path / "scratch" / "results"
+    # inside a project a configured runs root leaves results with the project
+    monkeypatch.delenv("YAVIH_RUNS")
+    init_project()
+    (repo / "yavih-bench" / "yavih.toml").write_text('[runs]\nroot = "/scratch/me/runs"\n', encoding="utf-8")
+    s = config.load(refresh=True)
+    assert s.runs_root() == Path("/scratch/me/runs") and s.results_root() == repo / "yavih-bench" / "results"
+    assert s.runs_root_source().startswith("file:") and s.results_root_source() == "default (project)"
+    assert s.results_root("/elsewhere/runs") == repo / "yavih-bench" / "results"  # a probe's run root changes nothing in a project
+
+
+def test_matrix_out_null_is_the_config_runs_root(repo, capsys):
+    """A matrix without ``out`` lands where ``config get runs.root`` points: the project default, absolute."""
+    init_project()
+    m = repo / "yavih-bench" / "matrices" / "m.yaml"
+    m.write_text("schema_version: 1\nbridges:\n  a: {script: s.py, benchmark: k400, profile: p.json}\n", encoding="utf-8")
+    config.load(refresh=True)
+    rc, env = _json(capsys, ["config", "get", "runs.root"])
+    assert rc == 0 and load_matrix(str(m)).out == env["data"]["value"] == str(repo / "yavih-bench" / "runs")
 
 
 def test_discovery_prefers_the_folder_and_stops_at_the_git_root(repo, tmp_path):
@@ -170,7 +209,7 @@ def test_launchers_by_name_per_site(repo, monkeypatch):
 
 
 def test_plan_init_bridge_new_suites_and_bench_new_default_into_the_project(repo, runs_dir, capsys, monkeypatch):
-    init_project(user_file=False)
+    init_project()
     folder = repo / "yavih-bench"
     work = repo / "experiments" / "wave1"
     work.mkdir(parents=True)
@@ -208,7 +247,7 @@ def test_plan_init_bridge_new_suites_and_bench_new_default_into_the_project(repo
 def test_init_of_a_listed_subproject(repo, capsys, monkeypatch, runs_dir):
     """A directory the governing project lists in ``[project] subprojects`` (relative to that project file) may get its
     own project folder; discovery inside it then finds the subproject's file, and doctor warns from neither side."""
-    init_project(user_file=False)
+    init_project()
     root_file = repo / "yavih-bench" / "yavih.toml"
     sub = repo / "services" / "asr"
     sibling = repo / "services" / "tts"
@@ -217,7 +256,7 @@ def test_init_of_a_listed_subproject(repo, capsys, monkeypatch, runs_dir):
     (repo / "yavih-bench" / "matrices" / "matrix.old.yaml").write_text("schema_version: 1\n", encoding="utf-8")  # the root's: no stray from the subproject
     root_file.write_text('[project]\nsubprojects = ["../services/asr", "../services/tts"]\n', encoding="utf-8")
     monkeypatch.chdir(sub)
-    rec = init_project(user_file=False)
+    rec = init_project()
     assert rec["file"] == str(sub / "yavih-bench" / "yavih.toml") and rec["existing"] == str(root_file)
     assert config._discover_project(sub) == sub / "yavih-bench" / "yavih.toml"
     assert config._discover_project(sub / "deeper") == sub / "yavih-bench" / "yavih.toml"
@@ -234,7 +273,7 @@ def test_init_of_a_listed_subproject(repo, capsys, monkeypatch, runs_dir):
     other.mkdir()
     monkeypatch.chdir(other)
     with pytest.raises(ProjectError) as ei:
-        init_project(user_file=False)
+        init_project()
     assert ei.value.code == "E_PROJECT_EXISTS" and "subprojects" in str(ei.value)
     # from inside the subproject, an unlisted project file elsewhere is still nested
     (other / "yavih.toml").write_text("[runs]\nroot = \"r\"\n", encoding="utf-8")
@@ -243,7 +282,7 @@ def test_init_of_a_listed_subproject(repo, capsys, monkeypatch, runs_dir):
 
 
 def test_layout_report_and_doctor_findings(repo, runs_dir):
-    init_project(user_file=False)
+    init_project()
     s = config.load(refresh=True)
     rep = layout_report(s)
     assert rep["dir"] == str(repo / "yavih-bench") and rep["root"] == str(repo) and rep["nested"] == [] and rep["stray"] == []
@@ -270,13 +309,68 @@ def test_layout_report_and_doctor_findings(repo, runs_dir):
     assert data["requirement"]["ok"] is False and [c for c, _m, _w in warnings] == ["W_PROJECT_VERSION"]
 
 
+def test_doctor_skips_the_default_roots_and_warns_on_a_large_runs_root(repo, monkeypatch):
+    """The layout scan never enters the runs and results roots in effect, configured or the project defaults (a
+    results file or a plan's matrix copy there is not a stray); ``W_RUNS_SIZE`` when the project-default runs root
+    exceeds ``RUNS_SIZE_WARN_GB``, never for a runs root configured elsewhere."""
+    from yavih import project as P
+
+    init_project()
+    s = config.load(refresh=True)
+    runs, results = s.runs_root(), s.results_root()
+    assert runs == repo / "yavih-bench" / "runs" and results == repo / "yavih-bench" / "results"
+    for d in (runs / "_plans", results / "m"):
+        d.mkdir(parents=True)
+        (d / "matrix.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+    (results / "m" / "results_1.json").write_text("{}", encoding="utf-8")
+    data, warnings, _n = doctor_block(s)
+    assert data["stray"] == [] and warnings == []
+    # the same roots relocated outside the project folder, by configuration: still skipped
+    (repo / "yavih-bench" / "yavih.toml").write_text('[runs]\nroot = "../scratch/runs"\n[results]\nroot = "../scratch/results"\n', encoding="utf-8")
+    s = config.load(refresh=True)
+    for d in (s.runs_root() / "_plans", s.results_root()):
+        d.mkdir(parents=True)
+        (d / "matrix.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+    (repo / "scratch" / "matrix.other.yaml").write_text("schema_version: 1\n", encoding="utf-8")  # outside both: a stray
+    data, warnings, _n = doctor_block(s)
+    assert data["stray"] == [str(repo / "scratch" / "matrix.other.yaml")] and [c for c, _m, _w in warnings] == ["W_PROJECT_STRAY"]
+    # size: the project default over the threshold warns and says how to move it; a configured root elsewhere never does
+    monkeypatch.setattr(P, "runs_size", lambda root, stop_at=None: int(P.RUNS_SIZE_WARN_GB * 1e9) + 1)
+    data, warnings, _n = doctor_block(s)
+    assert [c for c, _m, _w in warnings] == ["W_PROJECT_STRAY"]
+    import shutil
+
+    shutil.rmtree(repo / "scratch")
+    (repo / "yavih-bench" / "yavih.toml").write_text("", encoding="utf-8")
+    s = config.load(refresh=True)
+    data, warnings, _n = doctor_block(s)
+    assert [c for c, _m, _w in warnings] == ["W_RUNS_SIZE"]
+    code, msg, where = warnings[0]
+    assert where == str(runs) and "[runs] root" in msg and "mv " in msg and str(results) in msg
+    monkeypatch.setattr(P, "runs_size", lambda root, stop_at=None: int(P.RUNS_SIZE_WARN_GB * 1e9))
+    assert doctor_block(config.load(refresh=True))[1] == []
+
+
+def test_runs_size_walks_files_and_stops_early(tmp_path):
+    from yavih.project import runs_size
+
+    root = tmp_path / "runs"
+    (root / "a" / "b").mkdir(parents=True)
+    (root / "a" / "b" / "f1").write_bytes(b"x" * 1000)
+    (root / "a" / "f2").write_bytes(b"y" * 500)
+    (root / "link").symlink_to(root / "a")  # symlinks are not followed, so nothing is counted twice
+    assert runs_size(root) == 1500
+    assert runs_size(root, stop_at=100) >= 500  # stops once over the threshold, never below it
+    assert runs_size(tmp_path / "absent") == 0
+
+
 def test_doctor_without_a_project_notes_init(repo, runs_dir):
     data, warnings, notes = doctor_block(config.load(refresh=True))
     assert data["dir"] is None and warnings == [] and any("yavih init" in n for n in notes)
 
 
 def test_doctor_cli_carries_the_project_block(repo, runs_dir, capsys, monkeypatch):
-    init_project(user_file=False)
+    init_project()
     (repo / "stray").mkdir()
     (repo / "stray" / "matrix.yaml").write_text("schema_version: 1\n", encoding="utf-8")
     rc, env = _json(capsys, ["doctor"])
@@ -323,7 +417,7 @@ def test_exec_resolves_the_launcher_from_the_unit_cwd_before_running(repo, tmp_p
     from yavih.plan import units as U
     from yavih.plan.units import write_plan
 
-    init_project(user_file=False)
+    init_project()
     (repo / "yavih-bench" / "yavih.toml").write_text(f'[launchers]\nvjepa = {json.dumps(python_launcher())}\n', encoding="utf-8")
     ws = repo / "ws"
     ws.mkdir()
@@ -346,7 +440,7 @@ def test_exec_resolves_the_launcher_from_the_unit_cwd_before_running(repo, tmp_p
 
 
 def test_plan_init_out_elsewhere_keeps_the_project_bridges(repo, runs_dir, capsys, tmp_path):
-    init_project(user_file=False)
+    init_project()
     out = tmp_path / "elsewhere" / "toy.yaml"
     rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--out", str(out)])
     assert rc == 0, env["errors"]
@@ -426,7 +520,7 @@ def test_discovery_walks_through_a_submodule_but_stops_at_a_worktree(repo, tmp_p
 
 
 def test_project_file_is_parsed_once_per_version(repo, monkeypatch):
-    init_project(user_file=False)
+    init_project()
     calls = []
     real = config._read_file
 

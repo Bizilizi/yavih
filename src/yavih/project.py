@@ -6,15 +6,19 @@ One folder per repository holds everything a project keeps for yavih, text only:
       yavih.toml      [project] (the yavih requirement, relocations, subprojects), data roots, one [site.<id>] per
                       cluster with its launcher(s)
       README.md       what lives here and where runs go
-      .gitignore      __pycache__/, logs/, _stale/
+      .gitignore      runs/, logs/, __pycache__/ (results/ is committed)
       bridges/        one file per (model, benchmark) plus the shared <model>_common.py
       matrices/       <model>.yaml and <model>.profiles/ next to it
       suites/         project suites
       benchmarks/     project-local benchmark folders
       tools/          the project's own glue (drivers, generators, sync scripts); yavih never reads it
+      runs/           the default runs root (ignored by git; plan files under runs/_plans/)
+      results/        the default results root: results/<model>/results_<timestamp>.json, small text, committed
 
-Runs, results, scratch and plan state live at the configured roots, never here. Personal roots belong in the
-user file (``~/.config/yavih/config.toml``), which ``init`` writes when absent, so the project file can be committed.
+Runs and results default to ``yavih-bench/runs`` and ``yavih-bench/results`` (:meth:`yavih.config.Settings.runs_root`);
+a ``[runs] root`` in the user file (``~/.config/yavih/config.toml``) or in a ``[site.<id>]`` table puts the runs of a
+large suite on scratch. ``init`` never writes the user file: it holds personal overrides only. ``doctor`` warns
+(``W_RUNS_SIZE``) when the project-default runs root has grown past :data:`RUNS_SIZE_WARN_GB`.
 
 Discovery (``yavih.config``) takes the nearest ``yavih-bench/yavih.toml`` (else ``yavih.toml``) walking up from the
 current directory and stops at the git root: a repository has one project. ``doctor`` warns about a second project
@@ -44,7 +48,8 @@ from yavih.config import (
     user_config_path,
 )
 
-__all__ = ["ProjectError", "init_project", "layout_report", "check_requirement", "doctor_block", "DOCS"]
+__all__ = ["ProjectError", "init_project", "layout_report", "check_requirement", "doctor_block", "runs_size", "DOCS",
+           "RUNS_SIZE_WARN_GB"]
 
 DOCS = "https://github.com/Bizilizi/yavih/blob/main/docs/project-layout.md"
 
@@ -55,6 +60,8 @@ _SKIP_DIRS = {"__pycache__", "node_modules", "site-packages", "dist", "build", "
 _MATRIX_FILE = re.compile(r"^matrix[A-Za-z0-9_.-]*\.ya?ml$")
 _SCAN_MAX_DEPTH = 8
 _SCAN_MAX_DIRS = 50_000
+#: ``doctor`` warns ``W_RUNS_SIZE`` when the project-default runs root (``yavih-bench/runs``) holds more than this.
+RUNS_SIZE_WARN_GB = 50.0
 
 
 class ProjectError(ValueError):
@@ -116,8 +123,8 @@ def project_toml(*, version: str, site: str | None = None, hosts: Iterable[str] 
     lines = [
         "# yavih project configuration (`yavih init`). Layers, lowest first: the user file (~/.config/yavih/config.toml) →",
         "# this file → its active [site.<id>] table → YAVIH_* variables → command-line flags.",
-        "# Project facts only: the yavih version, data roots, the model environments. Personal roots (runs, results,",
-        "# scratch) belong in the user file, so this file can be committed. Schema: `yavih config show`,",
+        "# Project facts only: the yavih version, data roots, the model environments. Runs and results default to",
+        "# yavih-bench/runs and yavih-bench/results; a personal [runs] root belongs in the user file. Schema: `yavih config show`,",
         "# https://github.com/Bizilizi/yavih/blob/main/docs/configuration.md.",
         "",
         "# The launcher is how a model environment's python is started (a path, or a prefix such as `conda run -n m python`):",
@@ -165,9 +172,11 @@ repository; `yavih` finds it from any directory below the repository root.
 | `suites/` | project benchmark suites (`yavih suite new`) |
 | `benchmarks/` | project-local benchmark folders (`yavih bench new`), resolved by name |
 | `tools/` | the project's own glue: drivers, matrix generators, sync scripts; yavih never reads it |
+| `runs/` | the default runs root: run directories, features, plan files (`runs/_plans/`); ignored by git |
+| `results/` | the default results root: `results/<model>/results_<timestamp>.json`, small text files, committed |
 
-Runs, features, results, scratch and plan state are written at the configured roots, never here
-(`yavih config show` prints them; personal roots belong in `~/.config/yavih/config.toml`).
+`yavih config show` prints the roots in effect. For a large suite set `[runs] root` in the user file
+(`~/.config/yavih/config.toml`) or in a `[site.<id>]` table to put the runs on scratch; results stay here.
 
 Bridges shipped inside a model package (`script: mymodel.yavih:Bridge`), a benchmark folder kept at the top level
 of the repository (`[project] benchmarks`) and job scripts kept with the rest of the project's infrastructure are
@@ -178,30 +187,21 @@ Commands: `yavih doctor` (checks this folder), `yavih plan init --suite default 
 Layout reference: {docs}
 """
 
-#: ``*.jsonl``: plan files belong under the runs root (``plan init`` prints ``--out <runs root>/_plans/<model>.jsonl``);
-#: a plan built here anyway is run state, not a project fact.
-GITIGNORE = "__pycache__/\n*.pyc\nlogs/\n_stale/\n# plan files (yavih plan build --out) are run state: keep them under the runs root\n*.jsonl\n"
-
-USER_CONFIG = """# yavih user configuration (`yavih init`): personal roots, kept out of the committed project file.
-# Site tables work here too ([site.<id>] with hosts = [...]). Schema: `yavih config show`.
-[runs]
-root = "~/yavih/runs"                   # run directories <runs root>/<benchmark>/<model>/<reading>/
-[results]
-root = "~/yavih/results"                # the results store, results/<model>/results_<timestamp>.json
-# [scratch]
-# root = "/scratch/$USER/yavih"         # staged probe shards; default $SLURM_TMPDIR
-"""
+#: Only what yavih itself creates inside the folder: the default runs root (features, plan files), the sbatch logs
+#: and bytecode. ``results/`` is not listed: results files are small text, committed with the project.
+GITIGNORE = "runs/\nlogs/\n__pycache__/\n"
 
 
 def init_project(dir: str | os.PathLike | None = None, *, site: str | None = None, hosts: Iterable[str] = (),
-                 launcher: str | None = None, force: bool = False, user_file: bool = True) -> dict[str, Any]:
+                 launcher: str | None = None, force: bool = False) -> dict[str, Any]:
     """Write ``<dir>/yavih-bench/`` (``dir`` default: the current directory): ``yavih.toml`` (never overwritten),
-    ``README.md`` and ``.gitignore`` (rewritten with ``force``), the subdirectories with a ``.gitkeep`` each, and the
-    user config file with personal roots when it does not exist (``user_file``). Refuses (``E_PROJECT_EXISTS``) when
-    another project file already governs ``dir`` and does not list it (or a folder containing it) in ``[project]
-    subprojects`` (one project per repository; a listed subproject gets its own folder, which discovery from inside
-    it then finds first), and (``E_EXISTS``) when the folder's ``yavih.toml`` exists, unless ``force`` refreshes the other
-    files. Returns ``{dir, file, written, kept, user_config, user_config_written, existing}``."""
+    ``README.md`` and ``.gitignore`` (rewritten with ``force``) and the subdirectories with a ``.gitkeep`` each. The
+    user file (``~/.config/yavih/config.toml``) is never written: runs and results default to the folder's ``runs/``
+    and ``results/``. Refuses (``E_PROJECT_EXISTS``) when another project file already governs ``dir`` and does not
+    list it (or a folder containing it) in ``[project] subprojects`` (one project per repository; a listed subproject
+    gets its own folder, which discovery from inside it then finds first), and (``E_EXISTS``) when the folder's
+    ``yavih.toml`` exists, unless ``force`` refreshes the other files. Returns ``{dir, file, written, kept, existing,
+    runs_root, results_root, next}``."""
     from yavih import config
     from yavih.versions import __version__
 
@@ -242,18 +242,14 @@ def init_project(dir: str | os.PathLike | None = None, *, site: str | None = Non
         if not keep.exists() and not any(d.iterdir()):
             keep.write_text("", encoding="utf-8")
             written.append(str(keep))
-    upath, _how = user_config_path()
-    user_written = False
-    if user_file and not upath.exists():
-        upath.parent.mkdir(parents=True, exist_ok=True)
-        upath.write_text(USER_CONFIG, encoding="utf-8")
-        user_written = True
     try:
-        config.load(refresh=True, cwd=base)  # the new file (discovered from its own repository) must parse under the strict schema
+        settings = config.load(refresh=True, cwd=base)  # the new file (discovered from its own repository) must parse under the strict schema
     except ConfigError as e:  # pragma: no cover - the template is valid; a pre-existing user file may not be
         raise ProjectError(f"{file} written, but the configuration does not load: {e}") from e
-    return {"dir": str(folder), "file": str(file), "written": written, "kept": kept, "user_config": str(upath),
-            "user_config_written": user_written, "existing": str(existing) if existing is not None else None,
+    return {"dir": str(folder), "file": str(file), "written": written, "kept": kept,
+            "existing": str(existing) if existing is not None else None,
+            "runs_root": str(settings.runs_root()), "results_root": str(settings.results_root()),
+            "user_config": str(user_config_path()[0]),
             "next": [f"edit {file}: data roots and one [site.<id>] per cluster with its launcher",
                      "yavih doctor", "yavih plan init --suite default --model <name>"]}
 
@@ -336,9 +332,10 @@ def layout_report(settings: Any, cwd: str | os.PathLike | None = None) -> dict[s
     """``{dir, file, root, nested, stray, skipped}``: the project folder, the repository root the scan covers, other
     project files inside it (``nested``: not listed in ``[project] subprojects``) and matrix files outside the project
     folder and its relocated directories (``stray``). A project file that lists this project in its own ``[project]
-    subprojects`` is its parent, not nested: its folder, relocated directories and other subprojects are not reported. The scan never enters dot-directories, virtual environments, ``__pycache__``, build and
-    ``node_modules`` trees, the configured runs / results roots, or deeper than 8 levels; ``skipped`` says when the
-    directory cap stopped it."""
+    subprojects`` is its parent, not nested: its folder, relocated directories and other subprojects are not reported.
+    The scan never enters dot-directories, virtual environments, ``__pycache__``, build and ``node_modules`` trees, the
+    runs and results roots in effect (configured or the project defaults), or deeper than 8 levels; ``skipped`` says
+    when the directory cap stopped it."""
     from yavih import config
 
     cwd_path = Path(cwd) if cwd is not None else config._cwd()
@@ -404,9 +401,52 @@ def layout_report(settings: Any, cwd: str | os.PathLike | None = None) -> dict[s
     return out
 
 
+def runs_size(root: str | os.PathLike, *, stop_at: float | None = None) -> int:
+    """Bytes under ``root`` (``du``-style: regular files, symlinks not followed, a missing root is 0). With ``stop_at``
+    the walk stops as soon as the total exceeds it, so a root far over the threshold costs little to check."""
+    total = 0
+    stack = [str(root)]
+    while stack:
+        here = stack.pop()
+        try:
+            with os.scandir(here) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                        elif entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+        if stop_at is not None and total > stop_at:
+            break
+    return total
+
+
+def _runs_size_finding(settings: Any, project: Path) -> tuple[str, str, str] | None:
+    """``W_RUNS_SIZE`` when the runs root is the project default (under the project folder) and holds more than
+    :data:`RUNS_SIZE_WARN_GB`; ``None`` for a configured root elsewhere or a small one."""
+    try:
+        root = Path(settings.runs_root()).resolve()
+    except (ConfigError, OSError):
+        return None
+    if not (project.resolve() == root or project.resolve() in root.parents) or not root.is_dir():
+        return None
+    limit = RUNS_SIZE_WARN_GB * 1e9
+    size = runs_size(root, stop_at=limit)
+    if size <= limit:
+        return None
+    return ("W_RUNS_SIZE", f"the runs root {root} holds more than {RUNS_SIZE_WARN_GB:g} GB inside the project folder. Move it "
+            f"to scratch: set `[runs] root = \"/scratch/<you>/yavih-runs\"` in {user_config_path(settings.env)[0]} (or under a "
+            f"[site.<id>] table), `mv {root} <that path>`, then rebuild the plans (`yavih plan build … --out "
+            f"<new root>/_plans/<model>.jsonl`); results stay in {Path(settings.results_root())}", str(root))
+
+
 def doctor_block(settings: Any, cwd: str | os.PathLike | None = None) -> tuple[dict[str, Any], list[tuple[str, str, str | None]], list[str]]:
-    """The ``project`` block of ``yavih doctor``: the layout report plus the version check, with the warnings
-    (``(code, message, where)``) and notes to attach."""
+    """The ``project`` block of ``yavih doctor``: the layout report plus the version check and the runs-root size
+    check (``W_RUNS_SIZE``), with the warnings (``(code, message, where)``) and notes to attach."""
     from yavih.versions import __version__
 
     warnings: list[tuple[str, str, str | None]] = []
@@ -433,4 +473,7 @@ def doctor_block(settings: Any, cwd: str | os.PathLike | None = None) -> tuple[d
                          f"{settings.project_path('matrices')} (`yavih plan init` writes them there)", p))
     if data["skipped"]:
         notes.append(f"layout scan stopped after {_SCAN_MAX_DIRS} directories under {data['root']}")
+    size = _runs_size_finding(settings, Path(data["dir"]))
+    if size is not None:
+        warnings.append(size)
     return data, warnings, notes

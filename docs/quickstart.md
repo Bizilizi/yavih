@@ -125,7 +125,7 @@ yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder 
 Single machine (`--out` is the run directory under the runs root; features land in `<out>/features/<split>/`):
 
 ```bash
-RUNS=$(yavih config get runs.root)        # the configured runs root (never inside the repository)
+RUNS=$(yavih config get runs.root)        # the runs root: yavih-bench/runs unless [runs] root puts it on scratch
 RUN=$RUNS/vggsounder/mymodel/v
 yavih extract --bench vggsounder --bridge yavih-bench/bridges/mymodel_vggsounder.py --split train --shard 0/1 --out $RUN --arg reading=v
 yavih extract --bench vggsounder --bridge yavih-bench/bridges/mymodel_vggsounder.py --split test  --shard 0/1 --out $RUN --arg reading=v
@@ -147,7 +147,7 @@ the bridge and the profile of steps 3 and 4):
 ```yaml
 # yavih-bench/matrices/mymodel.yaml
 schema_version: 1
-out: null                                 # the configured runs root
+out: null                                 # the configured runs root (default yavih-bench/runs)
 defaults: {launcher: mymodel, cpus: 8}    # a [launchers] name from yavih.toml (per site), a python path, or null
 bridges:
   mymodel-vggsounder-v: {script: ../bridges/mymodel_vggsounder.py, benchmark: vggsounder,

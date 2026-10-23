@@ -47,9 +47,9 @@ A relative path given on the command line is made absolute against the current d
 ## Files
 
 Both files are TOML with the same schema, and every key is optional. The user file is the place for
-per-person values (runs, results and scratch roots); the project file `yavih-bench/yavih.toml`
-([project layout](project-layout.md); `yavih init` writes both) carries the project's facts (data
-roots, model environments, the yavih version) and layers over it. When the project file is the user
+per-person overrides (a runs root on scratch, a scratch root); the project file `yavih-bench/yavih.toml`
+([project layout](project-layout.md); `yavih init` writes it, never the user file) carries the project's
+facts (data roots, model environments, the yavih version) and layers over it. When the project file is the user
 file itself, it is read once.
 
 ```toml
@@ -66,9 +66,9 @@ media_root = "$GROUP/imagenet2012"      # ~ and $VAR expand; a relative path is 
 [datasets]
 vggsound = "/data/vggsound"             # ${datasets.vggsound}: shared by several benchmarks
 [runs]
-root = "~/yavih/runs"                   # never inside the repository; a relative path is relative to THIS file
+root = "/scratch/me/yavih-runs"         # default yavih-bench/runs (ignored by git); a relative path is relative to THIS file
 [results]
-root = "/data/yavih-results"            # default: <runs root>/../results
+root = "/data/yavih-results"            # default yavih-bench/results (committed), else <runs root>/../results
 [scratch]
 root = "/tmp/yavih"                     # staged probe shards; default SLURM_TMPDIR; never TMPDIR
 [home]
@@ -91,8 +91,8 @@ root = "/project/datasets"
 | table | key | meaning | default |
 |---|---|---|---|
 | `[home]` | `root` | yavih home: fetched benchmark copies (`benchmarks/`), `data_status/`, `media_info/` | `~/.yavih` |
-| `[runs]` | `root` | runs root: run directories `<runs root>/<benchmark>/<model>/<reading>/` | `./runs` (relative to the current directory) |
-| `[results]` | `root` | results-store root ([results](results.md)) | `results/` next to the runs root (`<runs root>/../results`) |
+| `[runs]` | `root` | runs root: run directories `<runs root>/<benchmark>/<model>/<reading>/`, plan files `_plans/` | `yavih-bench/runs` in a project ([runs and results](project-layout.md#runs-and-results)), else `runs` under the current directory; always absolute |
+| `[results]` | `root` | results-store root ([results](results.md)) | `yavih-bench/results` in a project (committed with it), else `results/` next to the runs root (`<runs root>/../results`) |
 | `[scratch]` | `root` | where a probe stages shards that exceed the RAM budget | `$SLURM_TMPDIR`; else none (the probe reads features in place) |
 | `[data]` | `root` | the site data root, `${data.root}` | none |
 | `[data.<bench>]` | `<root>` | one declared data root of benchmark `<bench>` (name or alias) | the root's `default` in `benchmark.yaml` |
@@ -162,7 +162,7 @@ media_root = "/shared/mirrors/imagenet2012"
 [runs]
 root = "/scratch/me/yavih-runs"
 [results]
-root = "/scratch/me/yavih-results"   # optional; default <runs root>/../results = /scratch/me/results
+root = "/scratch/me/yavih-results"   # optional; default yavih-bench/results in a project, else <runs root>/../results
 [datasets]
 vggsound = "/data/me/datasets/vggsound"
 ```
@@ -208,8 +208,8 @@ fixed names: `YAVIH_DATA__<BENCH>__<ROOT>` (one data root) and `YAVIH_DATASETS__
 | variable | meaning |
 |---|---|
 | `YAVIH_HOME` | yavih home (fetched benchmarks, data_status/, media_info/); config [home] root; default ~/.yavih |
-| `YAVIH_RUNS` | runs root; config [runs] root; default ./runs |
-| `YAVIH_RESULTS` | results-store root; config [results] root; default <runs root>/../results |
+| `YAVIH_RUNS` | runs root; config [runs] root; default <project dir>/runs (yavih-bench/runs), else ./runs |
+| `YAVIH_RESULTS` | results-store root; config [results] root; default <project dir>/results (yavih-bench/results), else <runs root>/../results |
 | `YAVIH_SCRATCH` | scratch for staged shards; config [scratch] root; else SLURM_TMPDIR; never TMPDIR |
 | `YAVIH_CONFIG` | the project config file (beats the yavih-bench/yavih.toml discovery); same as --config |
 | `YAVIH_SITE` | the active [site.<id>] table (else the first whose hosts glob matches the hostname) |

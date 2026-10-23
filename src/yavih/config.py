@@ -114,8 +114,8 @@ _LAUNCHER_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,63}$")
 #: is an error (a warning with ``--lenient``), so a typo or an unknown variable never goes unnoticed.
 ENV_VARS: dict[str, str] = {
     "YAVIH_HOME": "yavih home (fetched benchmarks, data_status/, media_info/); config [home] root; default ~/.yavih",
-    "YAVIH_RUNS": "runs root; config [runs] root; default ./runs",
-    "YAVIH_RESULTS": "results-store root; config [results] root; default <runs root>/../results",
+    "YAVIH_RUNS": "runs root; config [runs] root; default <project dir>/runs (yavih-bench/runs), else ./runs",
+    "YAVIH_RESULTS": "results-store root; config [results] root; default <project dir>/results (yavih-bench/results), else <runs root>/../results",
     "YAVIH_SCRATCH": "scratch for staged shards; config [scratch] root; else SLURM_TMPDIR; never TMPDIR",
     "YAVIH_CONFIG": "the project config file (beats the yavih-bench/yavih.toml discovery); same as --config",
     "YAVIH_SITE": "the active [site.<id>] table (else the first whose hosts glob matches the hostname)",
@@ -621,8 +621,23 @@ class Settings:
         return Path(self.path_of(v)) if v else Path.home() / ".yavih"
 
     def runs_root(self) -> Path:
+        """``--runs-root`` → ``$YAVIH_RUNS`` → ``[runs] root`` → ``<project dir>/runs`` (a project is discovered) →
+        ``<current directory>/runs``. Always absolute, so a matrix ``out: null`` and ``config get runs.root`` name the
+        same directory."""
         v = self.get("runs", "root")
-        return Path(self.path_of(v)) if v else Path("runs")
+        if v:
+            return Path(self.path_of(v))
+        project = self.project_dir()
+        if project is not None:
+            return project / "runs"
+        return Path(os.path.abspath(Path(self.cwd) / "runs"))
+
+    def runs_root_source(self) -> str:
+        """The ``source`` of :meth:`runs_root`: the configured value's, else ``default (project)`` / ``default (./runs)``."""
+        v = self.get("runs", "root")
+        if v:
+            return v.source
+        return "default (project)" if self.project_dir() is not None else "default (./runs)"
 
     def configured_results_root(self) -> Path | None:
         """``--results`` / ``$YAVIH_RESULTS`` / ``[results] root``, else ``None``."""
@@ -630,11 +645,25 @@ class Settings:
         return Path(self.path_of(v)) if v else None
 
     def results_root(self, runs_root_path: str | os.PathLike | None = None) -> Path:
+        """``--results`` → ``$YAVIH_RESULTS`` → ``[results] root`` → ``<project dir>/results`` (a project is discovered;
+        results files are small text, kept with the project) → ``results/`` next to ``runs_root_path`` (the runs root a
+        probe's run directory lives under), else next to :meth:`runs_root`."""
         configured = self.configured_results_root()
         if configured is not None:
             return configured
+        project = self.project_dir()
+        if project is not None:
+            return project / "results"
         base = Path(runs_root_path).expanduser() if runs_root_path is not None else self.runs_root()
         return base.absolute().parent / "results"
+
+    def results_root_source(self) -> str:
+        """The ``source`` of :meth:`results_root`: the configured value's, else ``default (project)`` /
+        ``default (<runs root>/../results)``."""
+        v = self.get("results", "root")
+        if v:
+            return v.source
+        return "default (project)" if self.project_dir() is not None else "default (<runs root>/../results)"
 
     def configured_scratch_root(self) -> Path | None:
         """``YAVIH_SCRATCH`` / ``[scratch] root`` (env beats files: explicit configuration beats the site's
@@ -862,9 +891,8 @@ class Settings:
 
         vals: dict[str, Any] = {}
         vals["home.root"] = {"value": str(self.yavih_home()), "source": (self.get("home", "root") or Value(None, "default")).source}
-        vals["runs.root"] = {"value": str(self.runs_root()), "source": (self.get("runs", "root") or Value(None, "default (./runs)")).source}
-        rv = self.get("results", "root")
-        vals["results.root"] = {"value": str(self.results_root()), "source": rv.source if rv else "default (<runs root>/../results)"}
+        vals["runs.root"] = {"value": str(self.runs_root()), "source": self.runs_root_source()}
+        vals["results.root"] = {"value": str(self.results_root()), "source": self.results_root_source()}
         try:
             vals["scratch.root"] = {"value": str(self.scratch_root()), "source": (self.get("scratch", "root") or Value(None, "env:SLURM_TMPDIR")).source}
         except ConfigError:
@@ -1288,7 +1316,8 @@ def yavih_home(env: Mapping[str, str] | None = None) -> Path:
 
 
 def runs_root(env: Mapping[str, str] | None = None, config: dict | None = None) -> Path:
-    """``--runs-root`` → ``$YAVIH_RUNS`` → ``[runs] root`` (project, then user file) → ``./runs``."""
+    """``--runs-root`` → ``$YAVIH_RUNS`` → ``[runs] root`` (project, then user file) → ``<project dir>/runs`` →
+    ``<current directory>/runs``; always absolute (:meth:`Settings.runs_root`)."""
     return _settings(env, config).runs_root()
 
 
@@ -1304,8 +1333,8 @@ def results_root(
     config: dict | None = None,
 ) -> Path:
     """The lm-evaluation-harness style results store: ``--results`` → ``$YAVIH_RESULTS`` →
-    ``[results] root`` → ``Path(runs_root).parent / "results"``. ``runs_root_path`` is the runs root of
-    the invocation (a probe passes the root its run directory lives under); ``None`` = :func:`runs_root`."""
+    ``[results] root`` → ``<project dir>/results`` → ``Path(runs_root).parent / "results"``. ``runs_root_path`` is the
+    runs root of the invocation (a probe passes the root its run directory lives under); ``None`` = :func:`runs_root`."""
     return _settings(env, config).results_root(runs_root_path)
 
 

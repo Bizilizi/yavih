@@ -455,20 +455,19 @@ def _tools_block(bench: Any, *, timeout: float = 30.0) -> dict[str, dict[str, An
 
 
 def cmd_init(ns: argparse.Namespace) -> Envelope:
-    """``yavih init [--dir D] [--site ID [--hosts GLOB]... [--launcher CMD]] [--no-user-config] [--force]``: the project
-    folder ``yavih-bench/`` (``yavih.project.init_project``); refuses a folder already governed by another project
-    file (``E_PROJECT_EXISTS``) and an existing ``yavih.toml`` (``E_EXISTS``) unless ``--force`` refreshes the rest."""
+    """``yavih init [--dir D] [--site ID [--hosts GLOB]... [--launcher CMD]] [--force]``: the project folder
+    ``yavih-bench/`` (``yavih.project.init_project``); refuses a folder already governed by another project file
+    (``E_PROJECT_EXISTS``) and an existing ``yavih.toml`` (``E_EXISTS``) unless ``--force`` refreshes the rest. The user
+    file is never written: runs and results default to the folder's ``runs/`` (ignored by git) and ``results/``."""
     from yavih.project import init_project
 
-    rec = init_project(ns.dir, site=ns.site, hosts=ns.hosts, launcher=ns.launcher, force=bool(ns.force),
-                       user_file=not ns.no_user_config)
+    rec = init_project(ns.dir, site=ns.site, hosts=ns.hosts, launcher=ns.launcher, force=bool(ns.force))
     lines = [f"project folder {rec['dir']}"]
     lines += [f"  wrote {w}" for w in rec["written"]]
     lines += [f"  kept  {k}" for k in rec["kept"]]
-    if rec["user_config_written"]:
-        lines.append(f"  wrote {rec['user_config']} (personal runs / results roots; edit them)")
-    else:
-        lines.append(f"  user config {rec['user_config']} left as it is")
+    lines.append(f"  runs    {rec['runs_root']} (default; ignored by git. For a large suite set [runs] root in {rec['user_config']} "
+                 f"or under a [site.<id>] table to put the runs on scratch)")
+    lines.append(f"  results {rec['results_root']} (default; small text files, committed with the project)")
     lines.append("next: " + "; then ".join(rec["next"]))
     return Envelope(data=rec, paths={"dir": rec["dir"], "file": rec["file"]}, text="\n".join(lines) + "\n")
 
@@ -476,7 +475,7 @@ def cmd_init(ns: argparse.Namespace) -> Envelope:
 def cmd_doctor(ns: argparse.Namespace) -> Envelope:
     """``yavih doctor [--bench B] [--selftest]``: extras, torch, decoders, decode sample, data
     roots, GPUs, launcher, decode-worker default, ``$YAVIH_HOME``, the runs root and the project folder
-    (``yavih.project.doctor_block``: ``W_PROJECT_VERSION``, ``W_PROJECT_NESTED``, ``W_PROJECT_STRAY``)."""
+    (``yavih.project.doctor_block``: ``W_PROJECT_VERSION``, ``W_PROJECT_NESTED``, ``W_PROJECT_STRAY``, ``W_RUNS_SIZE``)."""
     from yavih import config as _cfg
     from yavih.extract import default_decode_workers
     from yavih.media import decoder_info
@@ -692,7 +691,7 @@ def cmd_config_get(ns: argparse.Namespace) -> Envelope:
                  "home.root": lambda: settings.yavih_home(), "scratch.root": lambda: settings.scratch_root(),
                  "data.root": lambda: settings.data_root()}[key]()
         v = settings.get(*key.split("."))
-        source = v.source if v else "default"
+        source = {"runs.root": settings.runs_root_source, "results.root": settings.results_root_source}.get(key, lambda: v.source if v else "default")()
         if value is None:
             raise _cfg.ConfigError(f"{key} is not configured (set [data] root in {settings.edit_hint()} or YAVIH_DATA__ROOT)")
     elif head == "datasets":
@@ -1927,12 +1926,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.required = True
 
     # init
-    sp = sub.add_parser("init", parents=[common_r], help="write the project folder yavih-bench/ (yavih.toml, bridges/, matrices/, suites/, benchmarks/, tools/) and the user config when absent")
+    sp = sub.add_parser("init", parents=[common_r], help="write the project folder yavih-bench/ (yavih.toml, bridges/, matrices/, suites/, benchmarks/, tools/); runs and results default to runs/ and results/ inside it")
     sp.add_argument("--dir", default=None, metavar="D", help="the repository root the folder goes under (default: the current directory)")
     sp.add_argument("--site", default=None, metavar="ID", help="write a [site.ID] table for this cluster")
     sp.add_argument("--hosts", action="append", default=[], metavar="GLOB", help="hostname glob(s) of --site (default: this host's name)")
     sp.add_argument("--launcher", default=None, metavar="CMD", help="the site's default launcher (the model env's python or a prefix command)")
-    sp.add_argument("--no-user-config", action="store_true", help="do not write ~/.config/yavih/config.toml when it is absent")
     sp.add_argument("--force", action="store_true", help="refresh README.md, .gitignore and the directories of an existing folder (yavih.toml is never overwritten)")
     sp.set_defaults(func=cmd_init)
 

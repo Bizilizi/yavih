@@ -47,10 +47,10 @@ yavih doctor --bench <b>
 repository, found from any directory below the root; `yavih doctor` warns `W_PROJECT_NESTED` / `W_PROJECT_STRAY`
 / `W_PROJECT_VERSION`): `yavih.toml` with one `[site.<id>]` per cluster (data roots, `launcher`, `[launchers]`),
 `bridges/`, `matrices/<model>.yaml` + `<model>.profiles/`, `suites/`, `benchmarks/`, `tools/` (your drivers and
-scripts; yavih never reads them). Clusters are site tables, never separate folders or copies; runs and results go
-to the configured roots, never into the repository; personal roots belong in `~/.config/yavih/config.toml`. Fine
-outside the folder: a bridge shipped in a model package (`script: pkg.mod:Class`), a benchmark folder that is the
-repository's deliverable (`[project] benchmarks`), job scripts kept with the project's infrastructure.
+scripts; yavih never reads them). Clusters are site tables, never separate folders or copies. Runs default to
+`yavih-bench/runs` (ignored by git; a `[runs] root` in `~/.config/yavih/config.toml` or a `[site.<id>]` table puts
+them on scratch) and results to `yavih-bench/results` (small text, committed). Fine outside the folder: a bridge in a
+model package (`script: pkg.mod:Class`), a deliverable benchmark folder (`[project] benchmarks`), job scripts.
 
 **Hard rule — shipped files.** Everything yavih ships (setup.md, README.md, benchmark.yaml, `bridge_template.py`,
 `prepare/` scripts, this skill's references) is reached ONLY through `yavih bench files <b>` (list, absolute paths),
