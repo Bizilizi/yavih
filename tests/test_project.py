@@ -205,6 +205,43 @@ def test_plan_init_bridge_new_suites_and_bench_new_default_into_the_project(repo
 # ----------------------------------------------------------------------------- doctor: layout and version
 
 
+def test_init_of_a_listed_subproject(repo, capsys, monkeypatch, runs_dir):
+    """A directory the governing project lists in ``[project] subprojects`` (relative to that project file) may get its
+    own project folder; discovery inside it then finds the subproject's file, and doctor warns from neither side."""
+    init_project(user_file=False)
+    root_file = repo / "yavih-bench" / "yavih.toml"
+    sub = repo / "services" / "asr"
+    sibling = repo / "services" / "tts"
+    for d in (sub, sibling):
+        d.mkdir(parents=True)
+    (repo / "yavih-bench" / "matrices" / "matrix.old.yaml").write_text("schema_version: 1\n", encoding="utf-8")  # the root's: no stray from the subproject
+    root_file.write_text('[project]\nsubprojects = ["../services/asr", "../services/tts"]\n', encoding="utf-8")
+    monkeypatch.chdir(sub)
+    rec = init_project(user_file=False)
+    assert rec["file"] == str(sub / "yavih-bench" / "yavih.toml") and rec["existing"] == str(root_file)
+    assert config._discover_project(sub) == sub / "yavih-bench" / "yavih.toml"
+    assert config._discover_project(sub / "deeper") == sub / "yavih-bench" / "yavih.toml"
+    (sibling / "yavih.toml").write_text("[runs]\nroot = \"r\"\n", encoding="utf-8")
+    s = config.load(refresh=True, cwd=sub)
+    assert s.project_dir() == sub / "yavih-bench"
+    data, warnings, _n = doctor_block(s, cwd=sub)
+    assert data["nested"] == [] and data["stray"] == [] and warnings == []
+    monkeypatch.chdir(repo)
+    data, warnings, _n = doctor_block(config.load(refresh=True))
+    assert data["nested"] == [] and warnings == []
+    # an unlisted directory is still refused, with the same message
+    other = repo / "services" / "other"
+    other.mkdir()
+    monkeypatch.chdir(other)
+    with pytest.raises(ProjectError) as ei:
+        init_project(user_file=False)
+    assert ei.value.code == "E_PROJECT_EXISTS" and "subprojects" in str(ei.value)
+    # from inside the subproject, an unlisted project file elsewhere is still nested
+    (other / "yavih.toml").write_text("[runs]\nroot = \"r\"\n", encoding="utf-8")
+    data, warnings, _n = doctor_block(config.load(refresh=True, cwd=sub), cwd=sub)
+    assert data["nested"] == [str(other / "yavih.toml")] and [c for c, _m, _w in warnings] == ["W_PROJECT_NESTED"]
+
+
 def test_layout_report_and_doctor_findings(repo, runs_dir):
     init_project(user_file=False)
     s = config.load(refresh=True)

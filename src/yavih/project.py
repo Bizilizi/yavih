@@ -69,6 +69,34 @@ class ProjectError(ValueError):
 # ----------------------------------------------------------------------------- init
 
 
+def _listed_dirs(file: Path) -> tuple[list[Path], list[Path]]:
+    """``([project] subprojects, relocated [project] directories)`` of project file ``file``, resolved against the
+    file's directory as those keys are documented (``~`` expanded); ``([], [])`` when the file does not parse."""
+    import tomllib
+
+    try:
+        table = tomllib.loads(file.read_text(encoding="utf-8")).get("project") or {}
+    except (OSError, ValueError):
+        return [], []
+
+    def anchor(v: Any) -> Path | None:
+        if not isinstance(v, str) or not v:
+            return None
+        q = Path(os.path.expanduser(v))
+        return (q if q.is_absolute() else file.parent / q).resolve()
+
+    subs = table.get("subprojects") if isinstance(table, dict) else None
+    listed = [a for a in (anchor(v) for v in (subs if isinstance(subs, list) else [])) if a is not None]
+    relocated = [a for a in (anchor(table.get(k)) for k in PROJECT_KINDS) if a is not None] if isinstance(table, dict) else []
+    return listed, relocated
+
+
+def _covered(path: Path, dirs: Iterable[Path]) -> bool:
+    """``path`` is one of ``dirs`` or inside one."""
+    r = path.resolve()
+    return any(r == d or d in r.parents for d in dirs)
+
+
 def _requirement_for(version: str) -> str:
     """``">=M,<M+1"`` for the installed major version ``M`` (``0`` for a pre-release checkout)."""
     m = re.match(r"(\d+)", version or "")
@@ -170,8 +198,9 @@ def init_project(dir: str | os.PathLike | None = None, *, site: str | None = Non
     """Write ``<dir>/yavih-bench/`` (``dir`` default: the current directory): ``yavih.toml`` (never overwritten),
     ``README.md`` and ``.gitignore`` (rewritten with ``force``), the subdirectories with a ``.gitkeep`` each, and the
     user config file with personal roots when it does not exist (``user_file``). Refuses (``E_PROJECT_EXISTS``) when
-    another project file already governs ``dir`` (one project per repository; nested ones go in ``[project]
-    subprojects``), and (``E_EXISTS``) when the folder's ``yavih.toml`` exists, unless ``force`` refreshes the other
+    another project file already governs ``dir`` and does not list it (or a folder containing it) in ``[project]
+    subprojects`` (one project per repository; a listed subproject gets its own folder, which discovery from inside
+    it then finds first), and (``E_EXISTS``) when the folder's ``yavih.toml`` exists, unless ``force`` refreshes the other
     files. Returns ``{dir, file, written, kept, user_config, user_config_written, existing}``."""
     from yavih import config
     from yavih.versions import __version__
@@ -185,7 +214,7 @@ def init_project(dir: str | os.PathLike | None = None, *, site: str | None = Non
     if hosts and site is None:
         raise ProjectError("--hosts names the hosts of a site table: pass --site <id> as well", "E_ARG")
     existing = config._discover_project(base)
-    if existing is not None and existing.resolve() != file.resolve():
+    if existing is not None and existing.resolve() != file.resolve() and not _covered(base, _listed_dirs(existing)[0]):
         raise ProjectError(f"{existing} already governs {base} (one project per repository; discovery stops at the git root). "
                            f"Work in that project, or list this folder in its [project] subprojects", "E_PROJECT_EXISTS")
     if file.exists() and not force:
@@ -306,7 +335,8 @@ def _scan_root(settings: Any, cwd: Path) -> Path | None:
 def layout_report(settings: Any, cwd: str | os.PathLike | None = None) -> dict[str, Any]:
     """``{dir, file, root, nested, stray, skipped}``: the project folder, the repository root the scan covers, other
     project files inside it (``nested``: not listed in ``[project] subprojects``) and matrix files outside the project
-    folder and its relocated directories (``stray``). The scan never enters dot-directories, virtual environments, ``__pycache__``, build and
+    folder and its relocated directories (``stray``). A project file that lists this project in its own ``[project]
+    subprojects`` is its parent, not nested: its folder, relocated directories and other subprojects are not reported. The scan never enters dot-directories, virtual environments, ``__pycache__``, build and
     ``node_modules`` trees, the configured runs / results roots, or deeper than 8 levels; ``skipped`` says when the
     directory cap stopped it."""
     from yavih import config
@@ -333,6 +363,8 @@ def layout_report(settings: Any, cwd: str | os.PathLike | None = None) -> dict[s
             avoid.add(Path(getter()).resolve())
         except (ConfigError, OSError):
             pass
+    found: list[Path] = []
+    matrices: list[Path] = []
     n_dirs = 0
     root_depth = len(root.resolve().parts)
     for dirpath, dirnames, filenames in os.walk(root, topdown=True):
@@ -356,15 +388,19 @@ def layout_report(settings: Any, cwd: str | os.PathLike | None = None) -> dict[s
                 continue  # the project folder itself holds the matrices and config by design
             keep.append(d)
         dirnames[:] = keep
-        in_allowed = any(here.resolve() == a or a in here.resolve().parents for a in allowed)
         for name in filenames:
             p = here / name
-            if name == PROJECT_FILE and (pfile is None or p.resolve() != Path(pfile.path).resolve()) and not in_allowed:
-                out["nested"].append(str(p))
-            elif _MATRIX_FILE.match(name) and project is not None and not in_allowed:
-                out["stray"].append(str(p))
-    out["nested"].sort()
-    out["stray"].sort()
+            if name == PROJECT_FILE and (pfile is None or p.resolve() != Path(pfile.path).resolve()):
+                found.append(p)
+            elif _MATRIX_FILE.match(name) and project is not None:
+                matrices.append(p)
+    if project is not None:  # a project that lists this one as a subproject governs its siblings, not a stray
+        for p in found:
+            listed, relocated = _listed_dirs(p)
+            if _covered(project.parent, listed):
+                allowed.update({p.parent.resolve(), *listed, *relocated})
+    out["nested"] = sorted(str(p) for p in found if not _covered(p.parent, allowed))
+    out["stray"] = sorted(str(p) for p in matrices if not _covered(p.parent, allowed))
     return out
 
 

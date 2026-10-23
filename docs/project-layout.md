@@ -41,7 +41,8 @@ linked worktree; a submodule checkout is walked through to its superproject): a 
 deeper in the same repository
 would silently take over for commands run below it, which is how setups fragment into one copy per
 experiment and per cluster. `yavih init` refuses to write a folder already governed by another
-project file (`E_PROJECT_EXISTS`), and `yavih doctor` reports:
+project file (`E_PROJECT_EXISTS`) unless that project lists the folder (or one containing it) in
+`[project] subprojects`, and `yavih doctor` reports:
 
 | finding | meaning |
 |---|---|
@@ -57,7 +58,10 @@ Different clusters are **sites, not folders**: one `[site.<id>]` table per clust
 `yavih.toml`, with that cluster's data roots and launchers. One matrix then runs on every cluster,
 because its entries name a launcher by name (or leave it to the site's default) and the site table
 supplies the command. A monorepo of unrelated projects lists the others in `[project] subprojects`
-of the root project; each then has its own folder and discovery below it finds it.
+of the root project (paths relative to the root project file, e.g. `subprojects = ["../services/asr"]`);
+`yavih init` then writes each one's own folder, discovery below it finds that folder first, and
+`doctor` reports neither the subproject from the root nor the root (its folder and its other
+subprojects) from the subproject.
 
 ## The project file
 
