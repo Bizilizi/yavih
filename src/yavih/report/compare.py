@@ -414,7 +414,8 @@ def _coverage_frac(block: Any) -> float | None:
         return None
     present, nominal = block.get("present"), block.get("nominal")
     if not isinstance(present, (int, float)) or not isinstance(nominal, (int, float)) or nominal <= 0:
-        return None
+        frac = block.get("fraction")  # a registry entry exported without per-seed records keeps only the fraction
+        return float(frac) if isinstance(frac, (int, float)) and not isinstance(frac, bool) else None
     return float(present) / float(nominal)
 
 
@@ -691,14 +692,17 @@ def _mark_ties(rows: Sequence[dict[str, Any]], results: Sequence[dict], metric_n
     from the metric registry, or recorded by a registry entry; a disclosure has none), over the rankable rows
     (:func:`_rankable`) with a scalar value: the cells within the metric's tolerance of the best value are a tie when
     there are at least two of them; each gets ``tie: True`` and every other rankable cell ``tie: False`` (no key on
-    other cells). Tolerance: the packaged folder's ``metrics.tolerance``, else the largest one a
-    registry entry of the column recorded (``conformance.tolerance``), else :data:`DEFAULT_TOLERANCE`."""
+    other cells). Tolerance: for a packaged benchmark (``meta`` from :func:`_bench_meta` non-empty), the
+    folder's ``metrics.tolerance`` entry, else :data:`DEFAULT_TOLERANCE`; a tolerance a registry entry recorded
+    (``conformance.tolerance``) is used only for a benchmark not packaged here (the largest recorded, else the
+    default)."""
     from yavih.report.store import metric_info
 
     ranked = [row for row in rows if _rankable(row)]
     if len(ranked) < 2:
         return
     info = metric_info(metric_names)
+    packaged = bool(meta)  # _bench_meta returns {} only when no packaged folder of that name loads
     folder_tol = dict(meta.get("tolerance") or {})
     for m in metric_names:
         hib = info.get(m, {}).get("higher_is_better")
@@ -713,8 +717,8 @@ def _mark_ties(rows: Sequence[dict[str, Any]], results: Sequence[dict], metric_n
                  and math.isfinite(float(c["value"]))]
         if len(cells) < 2:
             continue
-        if m in folder_tol:
-            tol = folder_tol[m]
+        if packaged:
+            tol = float(folder_tol.get(m, DEFAULT_TOLERANCE))
         else:
             entry_tols = [((r.get("registry") or {}).get("tolerance") or {}).get(m) for r in results]
             entry_tols = [float(v) for v in entry_tols if isinstance(v, (int, float)) and not isinstance(v, bool)]

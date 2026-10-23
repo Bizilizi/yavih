@@ -930,3 +930,26 @@ def test_lone_low_coverage_result_is_flagged():
     assert "low_coverage" in rep.rows[0]["flags"]
     full = make_result(model="full")
     assert "low_coverage" not in build_report([{"path": "/r/f", "result": full}]).rows[0]["flags"]
+
+
+def test_packaged_tolerance_beats_a_recorded_one():
+    """A packaged folder's tolerance (its ``metrics.tolerance`` entry, else the default) always decides ties; a
+    registry-recorded tolerance only applies to a benchmark not packaged here (the largest recorded)."""
+    from yavih.report import compare
+
+    def rows_and_results(recorded: float):
+        rows = [{"status": "ok", "missing": False, "partial": False, "greyed": False, "flags": [],
+                 "metrics": {"acc": {"value": v}}} for v in (0.70, 0.61)]
+        results = [{"registry": {"tolerance": {"acc": recorded}}}, {}]
+        return rows, results
+
+    def ties(meta, recorded):
+        rows, results = rows_and_results(recorded)
+        compare._mark_ties(rows, results, ["acc"], meta)
+        return [r["metrics"]["acc"]["tie"] for r in rows]
+
+    packaged = {"protocol_version": 1}  # what _bench_meta returns for a packaged folder declaring no tolerance
+    assert ties(packaged, 0.1) == [False, False]  # the default 0.001 wins over the larger recorded 0.1
+    assert ties({**packaged, "tolerance": {"acc": 0.2}}, 0.0001) == [True, True]  # the folder's declared entry wins
+    assert ties({}, 0.1) == [True, True]  # not packaged here: the recorded tolerance
+    assert ties({}, 0.0001) == [False, False]
