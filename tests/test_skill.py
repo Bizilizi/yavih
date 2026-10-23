@@ -124,12 +124,12 @@ def test_step_rows_carry_commands_and_stop_conditions():
         "bridge": ("bridge_template.py", "preprocessing source", "`model`", "`reading`", "custom", "one-line description",
                    "views: 1", "precision", "(feats, pos, used)", "media coordinates"),
         "smoke": ("yavih bridge check", "bit-identical", "1e-5", "1e-3", "E_RULE_MISMATCH", "E_TIMES_OUT_OF_MEDIA", "E_NETWORK"),
-        "extract": ("yavih plan build", "yavih plan status", "pending == 0", "preempted == 0", "failed == 0"),
-        "validate": ("yavih features validate runs/<b>/<model>/<reading>/features", "coverage", "N_RULE_CUSTOM",
+        "extract": ("R=$(yavih config get runs.root)", "yavih plan build", "$R/_plans/", "yavih plan status", "pending == 0", "preempted == 0", "failed == 0"),
+        "validate": ("yavih features validate $R/<b>/<model>/<reading>/features", "coverage", "N_RULE_CUSTOM",
                      "W_RULE_UNCHECKED", "not_applicable"),
-        "probe": ("yavih probe run runs/<b>/<model>/<reading>", "--log-samples", "floor", "floor_violated", "audio_blind",
+        "probe": ("yavih probe run $R/<b>/<model>/<reading>", "--log-samples", "floor", "floor_violated", "audio_blind",
                   "external"),
-        "report": ("yavih report build", "results/<model>/results_<timestamp>.json", "`reading`", "`eval_hash`", "ci95",
+        "report": ("yavih report build \"$R/*\"", "$(yavih config get results.root)/<model>/results_<timestamp>.json", "`reading`", "`eval_hash`", "ci95",
                    "floor", "W_BRIDGE_CHANGED"),
     }
     for step, needles in need.items():
