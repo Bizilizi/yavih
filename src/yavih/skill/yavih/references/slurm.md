@@ -1,8 +1,13 @@
 # Execution reference — matrix.yaml, SLURM arrays, driver loop, preemption; local, Docker and Kubernetes runs
 
 No SLURM? Skip to [Without SLURM](#without-slurm-workstation-docker-kubernetes): `yavih plan run
-plan.jsonl --local` runs a plan on one machine in dependency order. yavih never writes or submits
+<plan> --local` runs a plan on one machine in dependency order. yavih never writes or submits
 sbatch; everything below is a template you adapt.
+
+Paths follow the project layout: the matrix is `yavih-bench/matrices/<model>.yaml` (its `out: null` = the
+configured runs root), plan files are run state under `$R/_plans/` with `R=$(yavih config get runs.root)` (never in
+`yavih-bench/`), and the report reads `"$R/*"`. Below, `plan.jsonl` is the full plan `$R/_plans/<model>.jsonl` and
+`pending.<kind>.jsonl` a pending file next to it.
 
 The unit of scheduling is one line of `plan.jsonl`; one array task runs
 `exec yavih exec <pending file> --deps plan.jsonl --index $SLURM_ARRAY_TASK_ID --deadline slurm`.
@@ -36,8 +41,9 @@ Partition, account, QoS, paths and container names below are placeholders (`<par
 one entry per suite `(benchmark, reading)` and the bridge stubs; by hand, one entry per bridge × benchmark:
 
 ```yaml
+# yavih-bench/matrices/model.yaml
 schema_version: 1
-out: runs/
+out: null                    # the configured runs root (`yavih config get runs.root`); a path is relative to this file
 seeds: [0, 1, 2]
 shard_minutes: 30            # target wall per extract unit; many small shards, never one unit per GPU
 canaries: 8
@@ -57,7 +63,7 @@ bridges:
 `plan build` exits 1 if `profile.bench != benchmark`, `profile.args` differ from the entry's `args`,
 `profile.describe` fails the schema, or the profile records no passed hard checks. A profile that
 already misses the output contract yields a plan-time `not_applicable` probe unit, no extracts.
-`yavih plan build matrix.yaml --sample N` plans a capped run first (the first `N` rows per split, under
+`yavih plan build yavih-bench/matrices/<model>.yaml --sample N --out $R/_plans/<model>-trial.jsonl` plans a capped run first (the first `N` rows per split, under
 `<out>-sample<N>`, results never stored, report rows marked partial).
 
 ## Resources per unit → sbatch
@@ -85,25 +91,29 @@ EOF
 
 ```bash
 set -euo pipefail
-cd "$PROJECT"                                     # the directory matrix.yaml paths are relative to
-yavih plan build matrix.yaml --out plan.jsonl     # full plan; plan status reads this one
+cd "$PROJECT"                                     # the repository root (yavih-bench/ below it); sbatch logs/ land here
+MODEL=mymodel                                     # your model name
+M=yavih-bench/matrices/$MODEL.yaml                # paths in the matrix are relative to it
+R=$(yavih config get runs.root)                   # the configured runs root (the matrix's out: null)
+P=$R/_plans                                       # plan files are run state: under the runs root, never in yavih-bench/
+yavih plan build "$M" --out "$P/$MODEL.jsonl"     # full plan; plan status reads this one
 for KIND in extract probe report; do
   while :; do
-    N=$(yavih plan build matrix.yaml --pending --kind "$KIND" --out "pending.$KIND.jsonl" --format count)
+    N=$(yavih plan build "$M" --pending --kind "$KIND" --out "$P/pending.$KIND.jsonl" --format count)
     [ "$N" -eq 0 ] && break
-    eval "$(needs "pending.$KIND.jsonl")"           # COUNT GPU CPUS MEM SCRATCH MIN
+    eval "$(needs "$P/pending.$KIND.jsonl")"        # COUNT GPU CPUS MEM SCRATCH MIN
     sbatch --wait --parsable \
       --array="0-$((COUNT-1))%${THROTTLE:-8}" --gres="gpu:${GPU}" --cpus-per-task="$CPUS" \
       --mem="${MEM}G" --time="$((MIN+20))" \
-      "$KIND.sbatch" "pending.$KIND.jsonl" plan.jsonl || true   # 2nd arg = --deps; a non-zero array exit is expected: preempted / not_ready units
-    yavih plan status plan.jsonl                    # summary: counts per kind, then misconfigured / failed / repeated / not_ready / preempted units with their last message
+      "$KIND.sbatch" "$P/pending.$KIND.jsonl" "$P/$MODEL.jsonl" || true   # 2nd arg = --deps; a non-zero array exit is expected: preempted / not_ready units
+    yavih plan status "$P/$MODEL.jsonl"             # summary: counts per kind, then misconfigured / failed / repeated / not_ready / preempted units with their last message
     # stop on real failures: exit 1 (misconfigured) / 2 / 5 units never heal by resubmission, nor do units that
     # exited 3 or 4 the same way 3+ times in a row (`repeated`: data missing, a deadline too short for one shard)
-    yavih plan status plan.jsonl --json | python -c 'import json,sys; d=json.load(sys.stdin)["data"]; sys.exit(1 if d["failed"] or d["misconfigured"] or d["repeated"] else 0)' \
+    yavih plan status "$P/$MODEL.jsonl" --json | python -c 'import json,sys; d=json.load(sys.stdin)["data"]; sys.exit(1 if d["failed"] or d["misconfigured"] or d["repeated"] else 0)' \
       || { echo "failed / misconfigured / repeated units: see plan status above and their logs"; exit 2; }
   done
 done
-yavih report build 'runs/*'
+yavih report build "$R/*"
 ```
 
 `--pending` re-plans only units whose DONE is missing or stale, so a loop iteration resubmits
@@ -113,7 +123,7 @@ benchmark's input hash and probe units by its protocol hash: after a scoring-sid
 benchmark (`probe.py`, a metric or its pinned package, a readout version) `--pending` re-plans the
 probes and no extraction. A `plan.jsonl` written by an older yavih (older plan schema) is refused:
 rebuild it with `plan build` (finished shards are kept). `--time` is `needs.minutes` plus
-20 min: the 15 min `--deadline-margin` plus start-up. `yavih plan calibrate runs/`
+20 min: the 15 min `--deadline-margin` plus start-up. `yavih plan calibrate "$R"`
 between iterations raises `needs.minutes` ×1.5 for units their own deadline stopped while running
 (not for start refusals or preemptions); keep `--time` inside the partition limit. A shard longer
 than the partition's maximum wall never finishes (extraction resumes per shard, not inside one):
@@ -169,10 +179,10 @@ limit, per-user caps on running and submitted jobs (array tasks usually count in
 #SBATCH --signal=B:TERM@600 --requeue
 #SBATCH --output=logs/%x_%A_%a.log
 set -euo pipefail
-cd "$PROJECT"                                   # where matrix.yaml lives
+cd "$PROJECT"                                   # the repository root: logs/ below it (unit paths come from the plan)
 export YAVIH_SCRATCH="${SLURM_TMPDIR:-/tmp}"  # probe staging (on a tmpfs: size scratch_gb into --mem)
-PLAN="${1:-pending.extract.jsonl}"
-DEPS="${2:-plan.jsonl}"                         # the full plan: dependency lookup for a pending file
+PLAN="${1:?pending file}"                       # $R/_plans/pending.extract.jsonl (the driver loop passes both)
+DEPS="${2:?full plan}"                          # $R/_plans/<model>.jsonl: dependency lookup for a pending file
 # `exec` replaces the shell, so --signal=B:TERM reaches yavih (a bash parent would die without forwarding it)
 exec /path/to/probe-env/bin/yavih exec "$PLAN" --deps "$DEPS" --index "$SLURM_ARRAY_TASK_ID" --deadline slurm
 ```
@@ -206,17 +216,17 @@ python directly, never `uv run` (it re-resolves and can modify a shared venv). U
 #SBATCH --signal=B:TERM@600 --requeue
 #SBATCH --output=logs/%x_%A_%a.log
 set -euo pipefail
-cd "$PROJECT"                                   # where matrix.yaml lives
+cd "$PROJECT"                                   # the repository root: logs/ below it (unit paths come from the plan)
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=/path/to/hf-cache
 export LD_LIBRARY_PATH="/path/to/ffmpeg/lib:${LD_LIBRARY_PATH:-}"   # only if the bridge decodes with torchcodec/torchaudio
 export YAVIH_SCRATCH="$TMPDIR"
 export YAVIH_DATA__K400__MEDIA_ROOT=/path/to/k400_wds   # data roots (or config.toml on this host)
-PLAN="${1:-pending.extract.jsonl}"
-DEPS="${2:-plan.jsonl}"
+PLAN="${1:?pending file}"                       # $R/_plans/pending.extract.jsonl
+DEPS="${2:?full plan}"                          # $R/_plans/<model>.jsonl
 exec /path/to/yavih-env/bin/yavih exec "$PLAN" --deps "$DEPS" --index "$SLURM_ARRAY_TASK_ID" --deadline slurm   # exec: TERM reaches yavih
 ```
 
-`matrix.yaml`: `launcher: "/path/to/model-env/bin/python"`, `cpus: 16`,
+The matrix: `launcher: "/path/to/model-env/bin/python"`, `cpus: 16`,
 `env: {HF_HUB_OFFLINE: "1", OMP_NUM_THREADS: "16"}`.
 
 ## Template C — whole node with 4 GPUs, Apptainer, RAM scratch
@@ -253,13 +263,13 @@ the `/dev/shm` scratch you use. The array has `ceil(COUNT / 4)` tasks.
 #SBATCH --signal=B:TERM@600 --requeue
 #SBATCH --output=logs/%x_%A_%a.log
 set -euo pipefail
-cd "$PROJECT"                                   # where matrix.yaml lives
+cd "$PROJECT"                                   # the repository root: logs/ below it (unit paths come from the plan)
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=/path/to/hf-cache
 export YAVIH_SCRATCH="/dev/shm/yavih-${SLURM_JOB_ID}"; mkdir -p "$YAVIH_SCRATCH"
 trap 'rm -rf "$YAVIH_SCRATCH"' EXIT             # RAM scratch must not outlive the job
 export YAVIH_DATA__ROOT=/path/to/datasets       # or [data] root in config.toml on this host
-PLAN="${1:-pending.extract.jsonl}"
-DEPS="${2:-plan.jsonl}"
+PLAN="${1:?pending file}"                       # $R/_plans/pending.extract.jsonl
+DEPS="${2:?full plan}"                          # $R/_plans/<model>.jsonl
 # `yavih exec` runs on the HOST (a small env with yavih; extract units need only stdlib there): the matrix launcher
 # (`apptainer exec … model.sif python`) wraps each extract child in the container. Running `yavih exec` inside
 # model.sif as well would nest Apptainer in Apptainer. Probe/report arrays run in-process and need yavih[probe]: run
@@ -274,7 +284,7 @@ while kill -0 "$pid" 2>/dev/null; do rc=0; wait "$pid" || rc=$?; done   # ... so
 exit "$rc"
 ```
 
-`matrix.yaml`: `launcher: "apptainer exec --nv --bind /path/to/project /path/to/model.sif python"`
+The matrix: `launcher: "apptainer exec --nv --bind /path/to/project /path/to/model.sif python"`
 (the last token is `python`, so it replaces `cmd[0]`; this is the only Apptainer layer — `yavih
 exec` itself runs on the host), `cpus: 64` (the whole node; `--slots 4` splits it into 4 × 16),
 `shard_minutes: 30`, profiles measured with `--decode-workers 15`. Probe units: a full-token
@@ -299,11 +309,12 @@ a second task on the same shard (a requeue while the first still runs, a pod res
 The plan, `exec` and the records are the same everywhere; only who starts the units differs.
 
 ```bash
-yavih plan build matrix.yaml --out plan.jsonl
-yavih plan run plan.jsonl --local                      # every pending unit, dependencies first, one at a time
-yavih plan run plan.jsonl --local --slots 2            # two at a time, unit g on the g-th visible GPU
-yavih plan run plan.jsonl --local --deadline +8h       # stop starting units 8 h from now (a booked machine)
-yavih plan status plan.jsonl                            # what ran, what is blocked and why
+P=$(yavih config get runs.root)/_plans                 # plan files: under the runs root, never in yavih-bench/
+yavih plan build yavih-bench/matrices/mymodel.yaml --out $P/mymodel.jsonl
+yavih plan run $P/mymodel.jsonl --local                # every pending unit, dependencies first, one at a time
+yavih plan run $P/mymodel.jsonl --local --slots 2      # two at a time, unit g on the g-th visible GPU
+yavih plan run $P/mymodel.jsonl --local --deadline +8h # stop starting units 8 h from now (a booked machine)
+yavih plan status $P/mymodel.jsonl                     # what ran, what is blocked and why
 ```
 
 A failed, misconfigured or not-ready unit is not retried within one `plan run`, and its
@@ -331,7 +342,7 @@ Lower-level pieces, for your own runner:
 
 ## Checklist before `sbatch`
 
-- [ ] `yavih plan build matrix.yaml --pending --kind <k> --format count` > 0 and `plan status` shows no `failed`, `misconfigured` or `repeated`
+- [ ] `yavih plan build yavih-bench/matrices/<model>.yaml --pending --kind <k> --format count` > 0 and `plan status` shows no `failed`, `misconfigured` or `repeated`
 - [ ] `--cpus-per-task` == matrix `cpus` (for whole-node entries matrix cpus is the node's 64; exec splits it by `--slots`); `--mem` ≥ max `needs.mem_gb` (+ scratch on tmpfs sites)
 - [ ] `--time` ≥ max `needs.minutes` + 20 min, inside the partition limit; `--signal=B:TERM@600 --requeue`
 - [ ] the script starts `exec yavih exec …` (or forwards TERM to a background `yavih exec` on the host, Template C — never `yavih exec` inside the launcher's container) and passes `--deps plan.jsonl`
