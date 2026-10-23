@@ -577,3 +577,42 @@ def test_the_cli_reference_environment_lists_every_variable():
     missing = [name for name in ENV_VARS if f"`{name}" not in env]
     assert not missing, f"references/cli.md ## Environment lacks {missing}"
     assert "`YAVIH_DATA__<BENCH>__<ROOT>" in env and "`YAVIH_DATASETS__<NAME>`" in env
+
+
+def _top_level_keys(shape: str) -> set[str]:
+    """The keys at depth 1 of a ``{a: {...}, b?, c: [..] | null}`` shape string (``?`` stripped)."""
+    keys: set[str] = set()
+    depth, cur = 0, ""
+    for ch in shape.strip()[1:-1] + ",":
+        if ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+        if depth == 0 and ch == ",":
+            keys.add(re.split(r"[:\s]", cur.strip(), maxsplit=1)[0].rstrip("?"))
+            cur = ""
+        elif depth == 0 or ch not in ",":
+            cur += ch
+    return {k for k in keys if k}
+
+
+def test_the_config_show_row_matches_the_envelope_keys(tmp_path, monkeypatch):
+    """references/cli.md documents ``config show``'s data with exactly the keys ``Settings.show`` returns (``bench``
+    with ``--bench``), and the ``project`` block with exactly its keys."""
+    from yavih import config
+    from yavih.benchmark import Benchmark
+
+    text = (SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8")
+    row = next(line for line in text.splitlines() if line.startswith("| `yavih config show` |"))
+    m = re.search(r"\| `(\{project: .*?\}\}\}\})`;", row)
+    assert m, "the config show row's data shape"
+    shape = m.group(1).replace("\\|", "|")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "yavih-bench").mkdir()
+    (tmp_path / "yavih-bench" / "yavih.toml").write_text("[project]\n", encoding="utf-8")
+    monkeypatch.delenv("YAVIH_CONFIG", raising=False)
+    shown = config.load(refresh=True, cwd=tmp_path).show(Benchmark.load("esc50"))
+    config.load(refresh=True)
+    assert _top_level_keys(shape) == set(shown)
+    project_shape = re.search(r"project: (\{[^}]*\})", shape).group(1)
+    assert _top_level_keys(project_shape) == set(shown["project"])
