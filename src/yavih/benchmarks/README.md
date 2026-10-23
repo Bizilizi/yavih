@@ -66,9 +66,10 @@ and their facts as `benchmark.yaml` declares them; an out-of-tree folder may add
 an optional `probe.py` (targets, folder-specific metrics with their intervals, and the authors' scorer through an
 assert-import), a `bridge_template.py` to copy, `make_manifest.py` (byte-identical re-freeze, through the shared
 `yavih.freeze` helpers), `prepare/` and `tests/test_folder.py`. A folder is data + scripts, not a Python package: no `__init__.py` in it or
-in its `tests/`; `probe.py` (and an optional `reader.py`) are loaded by path and their normalized source
-(comments and docstrings excluded) enters `protocol_hash = H(input_hash, scoring_hash)`: `reader.py` on the input
-side, `probe.py` on the scoring side, so a `probe.py` edit never invalidates extracted features. The newest
+in its `tests/`; `probe.py` (and an optional `reader.py`) are loaded by path and never hashed:
+`protocol_hash = H(input_hash, scoring_hash)` covers the declaration in `benchmark.yaml` only, and their behaviour
+is held by `protocol_version` plus the conformance fixture (`conformance/expected.json`), so a `probe.py` fix is a
+re-record and a `protocol_version` bump, and never invalidates extracted features. The newest
 `changelog` entry of `benchmark.yaml` records the `protocol_hash` and `input_hash` the folder computes. `Benchmark.load(<name>)` resolves folders through
 `importlib.resources` (`packaged_names()`, `packaged_folder()`).
 

@@ -89,8 +89,8 @@ train ∩ eval clip_ids ≠ ∅ (`E_LEAKAGE`) · eval coverage < `min_eval_cover
 `--allow-low-coverage` records `W_COVERAGE` instead) · `_meta.json` missing or `validation.ok ==
 false` (`E_META_MISSING`, `E_VALIDATION` — run `features validate`) · stale
 `manifest_hash` / input hash (`E_HASH_MANIFEST`, `E_HASH_INPUT` — the benchmark's input side
-changed since extraction; the message names what changed; a scoring-side edit such as `probe.py` or
-a metric pin only re-probes) · role splits extracted under different hashes (`E_HASH_MISMATCH`) ·
+changed since extraction; the message names what changed; a scoring-side change — a `protocol_version` bump
+after a `probe.py` or metric fix, a pin, a readout version — only re-probes) · role splits extracted under different hashes (`E_HASH_MISMATCH`) ·
 a feature format this yavih does not read (`E_FORMAT`: re-extract) · `n_folds ≠ 5` for ESC-50 (`E_FOLDS`) · a `metrics.list`
 name it cannot produce (`E_METRICS_INCOMPLETE`) · features missing (`E_NO_FEATURES`, exit 3) ·
 scratch short (`E_SCRATCH_SPACE`, exit 3) · authors' package missing or mis-versioned (exit 3).

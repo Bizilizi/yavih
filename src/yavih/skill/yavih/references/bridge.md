@@ -447,8 +447,9 @@ python -m yavih.extract --bench <b> --bridge bridges/x.py --split <split> --shar
 `.json` holds `{row, clip_id, media_key, media, used}`. A matching sidecar → skipped (exit 0); one
 written under another configuration (`describe_sha256`, `model`, `reading`) or for another benchmark
 input side (`benchmark.input_hash`: manifest, splits, streams, contracts) is moved to `_stale/<utc>/`
-and re-extracted. A benchmark edit on the scoring side only (`probe.py`, a metric or its pinned
-package, a readout version) never touches finished shards: it re-probes. The first unit of a reconfigured split moves EVERY shard of the old configuration or
+and re-extracted. A benchmark change on the scoring side only (a `protocol_version` bump — how a `probe.py` or
+metric fix lands once its conformance fixture is re-recorded — a pinned package, a readout version) never touches
+finished shards: it re-probes. The first unit of a reconfigured split moves EVERY shard of the old configuration or
 shard count (also the ones the new plan no longer writes) and the old `_meta.json` there in one step;
 with `--expect-profile` nothing moves before the drift check passed (`E_CONFIG_DRIFT`). SIGTERM/SIGUSR1 or the deadline finishes the current
 batch, discards the shard's `.tmp` and exits 4. `--read-ahead` batches of bytes are read (and, with

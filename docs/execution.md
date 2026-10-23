@@ -222,8 +222,10 @@ are merged key by key). `env` values are coerced to strings. Relative `script`, 
 `launcher` is how the model environment's Python is started. `yavih exec` resolves it when the unit
 runs (`yavih.plan.exec.resolve_launcher`): a value with a path separator or whitespace is the command
 itself; a bare name is the `[launchers] <name>` entry of the active configuration (per site; [configuration](configuration.md#sites)),
-else the name when it is a command on PATH, else `E_EXEC`; `null` (or no `launcher` at all) is the
-configured default `launcher`, else the interpreter running `exec`. If the basename of the command's
+else the name when it is a command on PATH; a name that is neither records the unit `misconfigured` (exit 1) before
+anything starts, with a `launcher: …` message naming the known entries, shown by `plan status` and kept in the
+unit's `<out>/logs/last.<id>.json`. `null` (or no `launcher` at all) is the configured default `launcher`, else
+the interpreter running `exec` (`sys.executable`, never whatever `python` is on `PATH`). If the basename of the command's
 last token matches `python*`, it replaces `cmd[0]` (`/envs/vjepa/bin/python`, `conda run -n vjepa python`,
 `apptainer exec --nv --bind /e model.sif python`); otherwise it is a prefix to the whole command.
 `script` may also be `module:Class` for a bridge installed in the model environment
@@ -287,7 +289,8 @@ One JSON object per line, sorted keys:
   `needs.gpu` (GPU units first) and a minutes bucket (15, 30, 60, 120, 240, 480, 720, 1440), keeping
   matrix, split and shard order inside a group, so a plan is deterministic.
 - `write_plan` stores `cwd` relative to the plan file and `read_plan` anchors it there again (or at
-  `--root DIR`), so a plan kept inside the project survives being mounted elsewhere.
+  `--root DIR`), so a plan survives the project being mounted elsewhere; `out` and `done` (under the
+  runs root) are stored absolute and are not re-anchored.
 - A record of an older plan schema is refused (`E_PLAN`: rebuild the plan with `plan build`;
   finished shards are kept because they are checked by input hash); a newer one asks for a newer
   yavih.
@@ -371,8 +374,8 @@ yavih exec plan.jsonl (--index N | --id X | --range a:b) [--deps plan.jsonl]
 
 For one unit, `exec`:
 
-1. reads the plan (checks the schema; `--root DIR` replaces every unit's `cwd`, the directory the
-   plan's relative paths mean on this machine) and, with `--plan-sha HEX`, refuses (exit 1) a plan
+1. reads the plan (checks the schema; `--root DIR` replaces every unit's `cwd`, the only relative
+   path a plan stores, with the directory the project is mounted at on this machine) and, with `--plan-sha HEX`, refuses (exit 1) a plan
    file whose sha256 does not start with `HEX` (8 to 64 hex digits);
 2. checks dependencies: every `depends_on` unit must have a matching DONE marker, else exit 3
    (`not_ready`, nothing written). `--deps plan.jsonl` names the full plan used only to look up
@@ -406,7 +409,7 @@ For one unit, `exec`:
 | `done` | 0 | the unit wrote a matching DONE marker |
 | `skipped` | 0 | the DONE marker already matched |
 | `not_applicable` | 0 | `NOT_APPLICABLE.json` or a `not_applicable` result |
-| `misconfigured` | 1 | the child (or in-process unit) exited 1: a usage or configuration error no resubmission heals (`E_LAYOUT`, a bad `--deadline`) |
+| `misconfigured` | 1 | the child (or in-process unit) exited 1: a usage or configuration error no resubmission heals (`E_LAYOUT`, a bad `--deadline`); also a bare launcher name that is neither a `[launchers]` entry nor a command on `PATH`, recorded before the unit starts |
 | `not_ready` | 3 | a dependency is not done, data or scratch is missing, the shard is claimed |
 | `deadline` | 4 | the unit's deadline stopped it, or it was refused at start; an in-process probe stopped by a forwarded signal is recorded here too |
 | `preempted` | 4 | a signal stopped it: a child killed by a signal (negative return code or 128 + n), a child that exited 4 after a forwarded signal, an in-process unit that failed or returned without DONE after a signal |
@@ -524,9 +527,11 @@ yavih plan status plan.jsonl
 
 Lower-level pieces for your own runner: `yavih exec plan.jsonl --range 0:40` (in order, one process),
 `yavih exec plan.jsonl --index 7`, or GNU parallel with one GPU per job slot. In a container, mount the
-plan file and the matrix directory so that they keep their relative position (the plan stores each unit's `cwd`
-relative to itself) or pass `--root /workspace`; CPU quotas are read from the cgroup. A Kubernetes Indexed Job runs
-`yavih exec plan.jsonl --index $JOB_COMPLETION_INDEX --deadline +<seconds>`.
+runs root at the same absolute path (`-v "$R:$R"`): the plan stores only each unit's `cwd` relative to itself, while
+`out`, `done` and the children's `--out` are absolute paths under the runs root. Mount the project at its path as
+well, or pass `--root /workspace` to re-anchor `cwd` (and only `cwd`) to where the project is mounted; otherwise
+rebuild the plan inside the container. CPU quotas are read from the cgroup. A Kubernetes Indexed Job runs
+`yavih exec $R/_plans/<model>.jsonl --index $JOB_COMPLETION_INDEX --deadline +<seconds>`.
 
 ## Running under SLURM
 
@@ -543,9 +548,9 @@ of scheduling is one line of a plan file, run by one array task:
 #SBATCH --time=00:50:00                # ≥ max needs.minutes + 20 min
 #SBATCH --signal=B:TERM@600            # TERM 600 s before the wall (exec stops on its own 900 s before)
 #SBATCH --requeue                      # preemption and node failure
-#SBATCH --output=logs/%x_%A_%a.log
+#SBATCH --output=yavih-bench/logs/%x_%A_%a.log   # ignored by git; mkdir -p yavih-bench/logs before sbatch
 set -euo pipefail
-cd /path/to/project                    # the repository root: logs/ below it (unit paths come from the plan)
+cd /path/to/project                    # the repository root (yavih-bench/ below it; unit paths come from the plan)
 PLAN="${1:?pending file}"              # <runs root>/_plans/pending.extract.jsonl
 DEPS="${2:?full plan}"                 # <runs root>/_plans/<M>.jsonl
 # `exec` replaces the shell, so SLURM's TERM reaches yavih (bash would not forward it)
@@ -557,6 +562,7 @@ and a driver loop that resubmits until nothing is pending:
 ```bash
 M=yavih-bench/matrices/mymodel.yaml
 R=$(yavih config get runs.root); P=$R/_plans    # plan files are run state: under the runs root
+mkdir -p yavih-bench/logs                       # sbatch --output lands there
 yavih plan build "$M" --out "$P/mymodel.jsonl"
 for KIND in extract probe report; do
   while :; do

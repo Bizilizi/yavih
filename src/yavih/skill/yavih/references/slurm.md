@@ -91,7 +91,8 @@ EOF
 
 ```bash
 set -euo pipefail
-cd "$PROJECT"                                     # the repository root (yavih-bench/ below it); sbatch logs/ land here
+cd "$PROJECT"                                     # the repository root (yavih-bench/ below it)
+mkdir -p yavih-bench/logs                         # sbatch --output lands there (the folder's .gitignore covers logs/)
 MODEL=mymodel                                     # your model name
 M=yavih-bench/matrices/$MODEL.yaml                # paths in the matrix are relative to it
 R=$(yavih config get runs.root)                   # the configured runs root (the matrix's out: null)
@@ -119,9 +120,10 @@ yavih report build "$R/*"
 `--pending` re-plans only units whose DONE is missing or stale, so a loop iteration resubmits
 exactly the `preempted` (exit 4) and `not_ready` (exit 3) units, and units killed without any
 final record (`plan status` lists them under `stale running`). Extract units are keyed by the
-benchmark's input hash and probe units by its protocol hash: after a scoring-side edit of a
-benchmark (`probe.py`, a metric or its pinned package, a readout version) `--pending` re-plans the
-probes and no extraction. A `plan.jsonl` written by an older yavih (older plan schema) is refused:
+benchmark's input hash and probe units by its protocol hash: after a scoring-side change of a
+benchmark (a `protocol_version` bump, which is how a `probe.py` or metric fix lands once its conformance fixture
+is re-recorded; a pinned package or readout version) `--pending` re-plans the probes and no extraction. A
+`probe.py` edit by itself moves no hash and re-plans nothing. A `plan.jsonl` written by an older yavih (older plan schema) is refused:
 rebuild it with `plan build` (finished shards are kept). `--time` is `needs.minutes` plus
 20 min: the 15 min `--deadline-margin` plus start-up. `yavih plan calibrate "$R"`
 between iterations raises `needs.minutes` ×1.5 for units their own deadline stopped while running
@@ -162,7 +164,9 @@ Facts to look up for your site: the partition (and QoS / account, if required), 
 limit, per-user caps on running and submitted jobs (array tasks usually count individually: keep
 `COUNT` under the submit cap per array and loop again), and how to request a GPU type (an untyped
 `--gres=gpu:1` may land on a small or old card: pin a type with the exact `sinfo` gres spelling or a
-`--constraint`). If `/tmp` is a tmpfs it is charged to `--mem`. Make `logs/` before submitting.
+`--constraint`). If `/tmp` is a tmpfs it is charged to `--mem`. Make `yavih-bench/logs/` before submitting
+(`mkdir -p yavih-bench/logs`: `--output` points there, sbatch does not create it, and the project's `.gitignore`
+covers it).
 
 ```bash
 #!/bin/bash
@@ -177,9 +181,9 @@ limit, per-user caps on running and submitted jobs (array tasks usually count in
 ##SBATCH --account=<account>                  # only if your site requires one
 #SBATCH --array=0-31%8                        # %K throttle: K concurrent tasks (stay within your per-user GPU cap)
 #SBATCH --signal=B:TERM@600 --requeue
-#SBATCH --output=logs/%x_%A_%a.log
+#SBATCH --output=yavih-bench/logs/%x_%A_%a.log  # ignored by git; mkdir -p yavih-bench/logs before sbatch
 set -euo pipefail
-cd "$PROJECT"                                   # the repository root: logs/ below it (unit paths come from the plan)
+cd "$PROJECT"                                   # the repository root (yavih-bench/ below it; unit paths come from the plan)
 export YAVIH_SCRATCH="${SLURM_TMPDIR:-/tmp}"  # probe staging (on a tmpfs: size scratch_gb into --mem)
 PLAN="${1:?pending file}"                       # $R/_plans/pending.extract.jsonl (the driver loop passes both)
 DEPS="${2:?full plan}"                          # $R/_plans/<model>.jsonl: dependency lookup for a pending file
@@ -214,9 +218,9 @@ python directly, never `uv run` (it re-resolves and can modify a shared venv). U
 #SBATCH --time=02:00:00                       # inside your partition / QoS limit
 #SBATCH --array=0-39%10                       # throttle to your per-user job cap
 #SBATCH --signal=B:TERM@600 --requeue
-#SBATCH --output=logs/%x_%A_%a.log
+#SBATCH --output=yavih-bench/logs/%x_%A_%a.log  # ignored by git; mkdir -p yavih-bench/logs before sbatch
 set -euo pipefail
-cd "$PROJECT"                                   # the repository root: logs/ below it (unit paths come from the plan)
+cd "$PROJECT"                                   # the repository root (yavih-bench/ below it; unit paths come from the plan)
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=/path/to/hf-cache
 export LD_LIBRARY_PATH="/path/to/ffmpeg/lib:${LD_LIBRARY_PATH:-}"   # only if the bridge decodes with torchcodec/torchaudio
 export YAVIH_SCRATCH="$TMPDIR"
@@ -261,9 +265,9 @@ the `/dev/shm` scratch you use. The array has `ceil(COUNT / 4)` tasks.
 #SBATCH --time=12:00:00                       # your partition's limit; exec --deadline slurm stops units 15 min before
 #SBATCH --array=0-7                           # ceil(COUNT / 4) tasks
 #SBATCH --signal=B:TERM@600 --requeue
-#SBATCH --output=logs/%x_%A_%a.log
+#SBATCH --output=yavih-bench/logs/%x_%A_%a.log  # ignored by git; mkdir -p yavih-bench/logs before sbatch
 set -euo pipefail
-cd "$PROJECT"                                   # the repository root: logs/ below it (unit paths come from the plan)
+cd "$PROJECT"                                   # the repository root (yavih-bench/ below it; unit paths come from the plan)
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=/path/to/hf-cache
 export YAVIH_SCRATCH="/dev/shm/yavih-${SLURM_JOB_ID}"; mkdir -p "$YAVIH_SCRATCH"
 trap 'rm -rf "$YAVIH_SCRATCH"' EXIT             # RAM scratch must not outlive the job
@@ -325,14 +329,19 @@ Lower-level pieces, for your own runner:
   deadline); add `--slots 4` for four at a time. `yavih exec plan.jsonl --index 7` runs one.
 - GNU parallel with one GPU per job slot (`{%}` = slot number 1…J):
   `parallel -j2 'CUDA_VISIBLE_DEVICES=$(({%}-1)) yavih exec pending.extract.jsonl --deps plan.jsonl --index {}' ::: $(seq 0 $((N-1)))`.
-- Docker / Podman: mount the plan file and the matrix directory at the same relative position
-  (one mount holding both, e.g. a work tree with the project and the runs root) — the plan stores
-  paths relative to the plan file, so `docker run -v $PWD:/workspace … yavih exec /workspace/plan.jsonl
-  --index 0` works although it was built on the host. A plan kept elsewhere takes `--root
-  /workspace`. CPU quotas (`--cpus 4`) are read from the cgroup; `exec --cpus N` overrides
+- Docker / Podman: a plan stores only each unit's `cwd` (the project directory, where the bridge
+  scripts and profiles are) relative to the plan file; `out`, `done` and the children's `--out` are
+  ABSOLUTE paths under the runs root, as the host built them. Mount the runs root at the SAME
+  absolute path inside the container and the project at its path too: `R=$(yavih config get runs.root);
+  docker run -v "$R:$R" -v "$PROJECT:$PROJECT" … yavih exec "$R/_plans/<model>.jsonl" --index 0`
+  (the runs root is `yavih-bench/runs` under the project unless `[runs] root` moved it, so one mount of
+  the repository then covers both). A project mounted elsewhere takes `--root <mount>`, which re-anchors
+  `cwd` ONLY; `out` / `done` stay the host's absolute paths, so the runs root still needs its own mount
+  at that path. Otherwise rebuild the plan inside the container (`yavih plan build`) so every path is
+  the container's. CPU quotas (`--cpus 4`) are read from the cgroup; `exec --cpus N` overrides
   (decode workers `N − 1`). With `--gpus device=4,5`, `--slots 2` uses devices 4 and 5.
-- Kubernetes: an Indexed Job with `completions = <units>` runs `yavih exec /workspace/plan.jsonl
-  --index $JOB_COMPLETION_INDEX --deadline +<activeDeadlineSeconds − 900>`; a restarted pod resumes
+- Kubernetes: an Indexed Job with `completions = <units>` runs `yavih exec $R/_plans/<model>.jsonl
+  --index $JOB_COMPLETION_INDEX --deadline +<activeDeadlineSeconds − 900>` with the same mounts; a restarted pod resumes
   (a finished shard is skipped, a probe resumes from its checkpoint). GPU UUIDs in
   `CUDA_VISIBLE_DEVICES` work with `--slots`.
 - CPU-only machines: a profile measured without a GPU (`peak_gpu_gb: 0`) plans `needs.gpu: 0`;
@@ -349,4 +358,4 @@ Lower-level pieces, for your own runner:
 - [ ] `--deadline slurm` only where the cluster exports `SLURM_JOB_END_TIME` (else `--deadline +<seconds>`)
 - [ ] site-required flags present (partition, GPU type, QoS, account); `--slots` matches the GPUs per task
 - [ ] offline env vars and data roots exported (or in that host's `config.toml`); `yavih doctor --bench <b>` passed ON A COMPUTE NODE of that cluster
-- [ ] `logs/` exists; `sbatch --test-only <script>` passes
+- [ ] `yavih-bench/logs/` exists (`--output` points there); `sbatch --test-only <script>` passes
