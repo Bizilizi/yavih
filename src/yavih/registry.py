@@ -24,6 +24,7 @@ stdlib + yavih core; the report integration imports ``yavih.report`` lazily.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -150,8 +151,9 @@ def _seed_records(unit_results: Sequence[str], *, base: Path | None) -> list[dic
     return out
 
 
-def _conformance_block(bench: Any | None, cfg: Mapping[str, Any]) -> dict[str, Any]:
-    """What the exporting yavih can vouch for: the folder's fixture at the entry's protocol hash."""
+def _conformance_block(bench: Any | None, cfg: Mapping[str, Any], cache: dict[str, Any] | None = None) -> dict[str, Any]:
+    """What the exporting yavih can vouch for: the folder's fixture at the entry's protocol hash. ``cache`` (keyed by
+    folder and protocol hash) runs the fixture once per benchmark across the entries of one export."""
     if bench is None:
         return {"passed": None, "skipped": False, "reason": f"no benchmark folder named {cfg.get('benchmark')!r} resolves here"}
     if bench.protocol_hash != cfg.get("protocol_hash"):
@@ -160,20 +162,27 @@ def _conformance_block(bench: Any | None, cfg: Mapping[str, Any]) -> dict[str, A
                           f"{bench.spec.protocol_version}); the entry was scored under {hashing.hash12(str(cfg.get('protocol_hash') or ''))}…"}
     from yavih import conformance
 
+    ckey = f"{bench.folder}:{bench.protocol_hash}"
+    if cache is not None and ckey in cache:
+        return copy.deepcopy(cache[ckey])
     rep = conformance.check(bench)
     exp = conformance.expected_path(bench)
-    return {
+    block = {
         "passed": bool(rep.ok and not rep.skipped), "skipped": bool(rep.skipped), "protocol_version": rep.protocol_version,
         "compared": rep.compared, "tolerance": conformance.tolerances(bench),
         "expected_sha256": _sha256_file(exp) if exp.is_file() else None,
         "checked_with": {"yavih_version": __version__},
         "reason": None if rep.ok else "; ".join(f.message for f in rep.findings)[:500],
     }
+    if cache is not None:
+        cache[ckey] = copy.deepcopy(block)
+    return block
 
 
 def entry_from_results(doc: Mapping[str, Any], key: str, *, org: str, source: str | os.PathLike, bench: Any | None = None,
-                       unit_base: str | os.PathLike | None = None) -> dict[str, Any]:
-    """One registry entry from entry ``key`` of a results-store document (``RESULTS_FILE_VERSION`` 2)."""
+                       unit_base: str | os.PathLike | None = None, conformance_cache: dict[str, Any] | None = None) -> dict[str, Any]:
+    """One registry entry from entry ``key`` of a results-store document (``RESULTS_FILE_VERSION`` 2);
+    ``conformance_cache`` is shared across the entries of one export (see :func:`_conformance_block`)."""
     if not _ORG_RE.match(org):
         raise RegistryError(E_SCHEMA, f"org {org!r}: [A-Za-z0-9][A-Za-z0-9_.-]{{0,63}}")
     cfg = dict((doc.get("configs") or {}).get(key) or {})
@@ -241,7 +250,7 @@ def entry_from_results(doc: Mapping[str, Any], key: str, *, org: str, source: st
             "waived": list(first.get("waived") or []),
         },
         "population": {"coverage": coverage, "features_fingerprint": cfg.get("features_fingerprint")},
-        "conformance": _conformance_block(bench, cfg),
+        "conformance": _conformance_block(bench, cfg, conformance_cache),
         "provenance": {
             "yavih_version": doc.get("yavih_version"), "commit": doc.get("git_hash"), "date": doc.get("date"),
             "folder_source": cfg.get("folder_source"), "external": dict(cfg.get("external") or {}) if isinstance(cfg.get("external"), dict) else cfg.get("external"),
@@ -320,6 +329,7 @@ def export(source: str | os.PathLike, *, org: str, out: str | os.PathLike, inclu
     out_root = Path(out)
     want = set(models) if models is not None else None
     bench_cache: dict[str, Any] = {}
+    conformance_cache: dict[str, Any] = {}  # one fixture check per benchmark folder and hash
     written: list[str] = []
     protocols: list[str] = []
     skipped: list[dict[str, str]] = []
@@ -346,7 +356,8 @@ def export(source: str | os.PathLike, *, org: str, out: str | os.PathLike, inclu
                 continue
             bench = _load_bench(str(cfg.get("benchmark")), bench_cache)
             try:
-                entry = entry_from_results(doc, key, org=org, source=path, bench=bench, unit_base=unit_base)
+                entry = entry_from_results(doc, key, org=org, source=path, bench=bench, unit_base=unit_base,
+                                           conformance_cache=conformance_cache)
             except RegistryError as e:
                 skipped.append({"key": f"{path}:{key}", "reason": e.message})
                 continue

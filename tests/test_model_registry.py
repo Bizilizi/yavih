@@ -158,3 +158,42 @@ def test_cli_registry_export_and_check(world, tmp_path, capsys):
     assert rc == 0 and env["data"]["ok"] is True and env["data"]["n_entries"] == 1
     rc, env = run(["report", "build", str(world["runs"] / "*"), "--registry", str(reg), "--fmt", "json"])
     assert rc == 0 and any(r.get("registry") for r in env["data"]["rows"])
+
+
+def test_export_runs_the_conformance_fixture_once_per_benchmark(world, tmp_path, monkeypatch):
+    """Every entry of one benchmark gets the same conformance block; the fixture is checked once per export."""
+    bench = world["bench"]
+    more = [make_result(bench=bench.name, model="toy2", reading="v", seed=0, acc=0.5, protocol_hash=bench.protocol_hash,
+                        probe_hash=world["qh"], protocol_version=bench.spec.protocol_version)]
+    store.write_invocation(more, results_root=world["results_root"], bench=bench, result_paths=[])
+    calls = []
+    real = C.check
+    monkeypatch.setattr(C, "check", lambda b, *a, **k: calls.append(b.name) or real(b, *a, **k))
+    out = R.export(world["results_root"], org="lab", out=tmp_path / "registry")
+    assert len(out["entries"]) == 2 and calls == [bench.name]
+    blocks = [json.loads(Path(p).read_text())["conformance"] for p in out["entries"]]
+    assert blocks[0] == blocks[1] and blocks[0]["passed"] is True
+
+
+def test_report_flags_a_registry_entry_with_only_a_coverage_fraction(world, tmp_path):
+    """An entry exported without per-seed records keeps eval coverage as ``{present, nominal: None, fraction}``; below
+    ``min_eval_coverage`` it is flagged ``low_coverage`` and takes no part in ties."""
+    from yavih.report import report
+
+    reg = tmp_path / "registry"
+    R.export(world["results_root"], org="lab", out=reg)
+    bench = world["bench"]
+    other = make_result(bench=bench.name, model="mine", reading="v", seed=0, acc=0.61, protocol_hash=bench.protocol_hash,
+                        probe_hash=world["qh"], protocol_version=bench.spec.protocol_version)
+    other["benchmark"]["folder_source"] = dict(bench.folder_source)
+    runs2 = tmp_path / "runs2"
+    write_result(runs2, other)
+    path = next((reg / "entries").rglob("*.json"))
+    e = json.loads(path.read_text())
+    e["population"]["coverage"]["eval"] = {"present": 4, "nominal": None, "ids_sha256": None, "fraction": 0.5}
+    path.write_text(json.dumps(e))
+    assert R.W_COVERAGE in [f.code for f in R.check(reg).warnings]
+    rows = {r["model"]: r for r in report([str(runs2 / "*")], registry=reg, write=False).rows}
+    theirs = rows["lab/toy"]
+    assert "low_coverage" in theirs["flags"] and theirs["coverage"]["eval"] == 0.5
+    assert "tie" not in theirs["metrics"]["acc"] and "tie" not in rows["mine"]["metrics"]["acc"]  # one rankable row left
