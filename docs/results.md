@@ -11,7 +11,7 @@ cover: [hashing](hashing.md). Validation waivers: [validation](validation.md).
 ## result.json
 
 Path: `<run_dir>/probe/<eval_hash12>/seed<k>/result.json`, where a standard run directory is
-`runs/<benchmark>/<model>/<reading>/`. `result.json` is written atomically and schema-checked
+`<runs root>/<benchmark>/<model>/<reading>/`. `result.json` is written atomically and schema-checked
 (`readouts.base.check_result`); for `status` `ok` or `not_applicable` a `DONE` marker follows, carrying
 `result_sha256`, `protocol_hash`, `probe_hash`, `eval_hash`, `model`, `reading`, `describe_sha256`,
 `features_fingerprint`, `yavih_version` and `created`. A `failed` result never gets a DONE.
@@ -127,7 +127,7 @@ CLI: `yavih report build <glob>... [--fmt md|csv|json] [--out PATH] [--seeds agg
 - Every `result.json` at any depth under the globs that has a valid sibling `DONE`: a JSON object whose
   `result_sha256` matches the file and whose recorded hashes, model and reading equal the result's. Anything
   else, including a `failed` result, is skipped.
-- The index `runs/_index.jsonl`: one line per result, cached on `(path, mtime_ns, size)`, so a rerun costs one
+- The index `<runs root>/_index.jsonl`: one line per result, cached on `(path, mtime_ns, size)`, so a rerun costs one
   `stat` per result.
 - Every record passes through `yavih.report.migrate` in memory: a schema newer (or older) than this yavih's is
   refused, and every record's `protocol_hash` is mapped to its benchmark's newest hash through the folders'
@@ -135,7 +135,7 @@ CLI: `yavih report build <glob>... [--fmt md|csv|json] [--out PATH] [--seeds agg
   never rewritten.
 - A result found under a `probe/_stale/` directory is indexed `moved_aside` and is never a row (below).
 
-Outputs: the rendered table is printed and written to `runs/_report/report.<fmt>` with a `DONE` marker;
+Outputs: the rendered table is printed and written to `<runs root>/_report/report.<fmt>` with a `DONE` marker;
 `--out PATH` also writes it to `PATH` (a directory gets `report.<fmt>`). With `--json`, the report's warnings
 are also the envelope's findings ([cli](cli.md)).
 

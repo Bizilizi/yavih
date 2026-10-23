@@ -257,7 +257,7 @@ column says whether the key is covered by `describe_sha256`, the consistency dig
 
 | key | type | digest | meaning |
 |---|---|---|---|
-| `model` | str `[A-Za-z0-9][A-Za-z0-9_.-]{0,63}` | yes | the model's name, shared by every bridge of that model on every benchmark and in every reading. It names `runs/<benchmark>/<model>/<reading>/` and `<results_root>/<model>/`; with `reading` it is the report's row key. Two configurations to show side by side are two names; one name re-run with another configuration is one row, newest shown (`W_BRIDGE_CHANGED`) |
+| `model` | str `[A-Za-z0-9][A-Za-z0-9_.-]{0,63}` | yes | the model's name, shared by every bridge of that model on every benchmark and in every reading. It names `<runs root>/<benchmark>/<model>/<reading>/` and `<results_root>/<model>/`; with `reading` it is the report's row key. Two configurations to show side by side are two names; one name re-run with another configuration is one row, newest shown (`W_BRIDGE_CHANGED`) |
 | `reading` | str `[A-Za-z0-9][A-Za-z0-9_-]{0,31}` | yes | what the model sees: `"a"`, `"v"`, `"av"` (the vocabulary `report --join` routes) or another declared tag. It names the run subdirectory and the results key `<benchmark>:<reading>`, so another spelling is another row |
 | `weights_sha256` | 64 lower-case hex \| null | yes | `fingerprint_state_dict(model_or_state_dict)`: sha256 over sorted `(name, dtype, shape, raw bytes)`. `null` is accepted and surfaces as `W_WEIGHTS_UNFINGERPRINTED`; nothing is gated by it |
 | `weights_ref` | str | no | path or hub id; provenance only |

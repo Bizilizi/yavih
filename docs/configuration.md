@@ -66,7 +66,7 @@ media_root = "$GROUP/imagenet2012"      # ~ and $VAR expand; a relative path is 
 [datasets]
 vggsound = "/data/vggsound"             # ${datasets.vggsound}: shared by several benchmarks
 [runs]
-root = "runs"                           # relative to this file
+root = "~/yavih/runs"                   # never inside the repository; a relative path is relative to THIS file
 [results]
 root = "/data/yavih-results"            # default: <runs root>/../results
 [scratch]

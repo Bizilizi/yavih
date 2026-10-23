@@ -8,7 +8,7 @@ floor = `splits.floor`, `folds` → one probe per held-out fold. Validation = a 
 selection on val loss; early stopping; AdamW, cosine; fp32 probe math; deterministic algorithms
 (`warn_only=True`: on CUDA the attention backward has no deterministic fp32 kernel, so probe reruns
 agree to float rounding, not bit for bit; yavih captures torch's warning, names the ops in
-`probe_fit.json` `determinism` and adds `W_NONDETERMINISTIC` to `result.json`; nothing to do); seed `k` → `runs/<b>/<model>/<reading>/probe/<eval_hash12>/seed<k>/`. A folder's `probe.py` may supply targets,
+`probe_fit.json` `determinism` and adds `W_NONDETERMINISTIC` to `result.json`; nothing to do); seed `k` → `<runs root>/<b>/<model>/<reading>/probe/<eval_hash12>/seed<k>/`. A folder's `probe.py` may supply targets,
 metrics and the authors' scorer; it never defines a head, loss or training loop.
 
 Readouts work in media coordinates and never need to know what your bridge did to the media:

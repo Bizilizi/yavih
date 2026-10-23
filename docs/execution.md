@@ -172,11 +172,14 @@ root, never in the project folder (whose `.gitignore` ignores `*.jsonl` as a bac
 unit's `cwd` relative to itself, so it runs from there. Until every profile exists `plan build` refuses the matrix
 (`E_PROFILE`).
 
+In the commands below, `matrix.yaml` stands for the matrix (`yavih-bench/matrices/<M>.yaml` in a project) and
+`plan.jsonl` / `pending.<kind>.jsonl` for plan files under `<runs root>/_plans/` (`yavih config get runs.root`).
+
 ## `matrix.yaml`
 
 ```yaml
 schema_version: 1
-out: runs/                          # runs root; default: the configured runs root
+out: null                           # runs root (a path is relative to this file); null = the configured runs root
 results: null                       # results-store root for the probe units; null = the usual resolution
 seeds: [0]                          # one probe unit per seed
 shard_minutes: 30                   # target wall per extract unit (--shard-minutes overrides)
@@ -542,25 +545,29 @@ of scheduling is one line of a plan file, run by one array task:
 #SBATCH --requeue                      # preemption and node failure
 #SBATCH --output=logs/%x_%A_%a.log
 set -euo pipefail
-cd /path/to/project                    # where matrix.yaml and plan.jsonl live
-PLAN="${1:-pending.extract.jsonl}"
+cd /path/to/project                    # the repository root: logs/ below it (unit paths come from the plan)
+PLAN="${1:?pending file}"              # <runs root>/_plans/pending.extract.jsonl
+DEPS="${2:?full plan}"                 # <runs root>/_plans/<M>.jsonl
 # `exec` replaces the shell, so SLURM's TERM reaches yavih (bash would not forward it)
-exec yavih exec "$PLAN" --deps plan.jsonl --index "$SLURM_ARRAY_TASK_ID" --deadline slurm
+exec yavih exec "$PLAN" --deps "$DEPS" --index "$SLURM_ARRAY_TASK_ID" --deadline slurm
 ```
 
 and a driver loop that resubmits until nothing is pending:
 
 ```bash
-yavih plan build matrix.yaml --out plan.jsonl
+M=yavih-bench/matrices/mymodel.yaml
+R=$(yavih config get runs.root); P=$R/_plans    # plan files are run state: under the runs root
+yavih plan build "$M" --out "$P/mymodel.jsonl"
 for KIND in extract probe report; do
   while :; do
-    N=$(yavih plan build matrix.yaml --pending --kind "$KIND" --out "pending.$KIND.jsonl" --format count)
+    N=$(yavih plan build "$M" --pending --kind "$KIND" --out "$P/pending.$KIND.jsonl" --format count)
     [ "$N" -eq 0 ] && break
-    sbatch --wait --array="0-$((N-1))%8" "$KIND.sbatch" "pending.$KIND.jsonl" || true
-    yavih plan status plan.jsonl        # stop here on failed / misconfigured / repeated units
-    yavih plan calibrate runs/          # optional: raise minutes of units their deadline stopped
+    sbatch --wait --array="0-$((N-1))%8" "$KIND.sbatch" "$P/pending.$KIND.jsonl" "$P/mymodel.jsonl" || true
+    yavih plan status "$P/mymodel.jsonl"   # stop here on failed / misconfigured / repeated units
+    yavih plan calibrate "$R"              # optional: raise minutes of units their deadline stopped
   done
 done
+yavih report build "$R/*"
 ```
 
 Rules the script must follow:

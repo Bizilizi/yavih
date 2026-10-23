@@ -312,7 +312,7 @@ site-packages, and shipped files never cite documents a pip install cannot open.
 Under a results root there is one directory per model name, holding `results_<timestamp>.json` with every
 benchmark × reading scored in that invocation, keyed `<benchmark>:<reading>` (metrics, configs with the
 `eval_hash`, the bridge's `describe()` and the probe configuration, versions, `higher_is_better`, the
-source commit), and optional per-sample logs. The per-unit `result.json` under `runs/` stays the
+source commit), and optional per-sample logs. The per-unit `result.json` under the runs root stays the
 scheduler's atomic, DONE-marked record. `yavih report` prints the familiar table (benchmark, reading,
 version, `eval_hash`, readout, metric, value ± CI, floor) and never puts non-comparable rows in one
 column. For an audio-visual model all readings are written before any is presented, and a joint number is

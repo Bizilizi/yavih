@@ -247,7 +247,7 @@ A stored digest is compared as stored: a record written under another `DESCRIBE_
 `_meta.json`, `NOT_APPLICABLE.json`, `result.json`, DONE markers, unit records and results files, and are checked
 against their charsets: `model` `[A-Za-z0-9_.-]{1,64}`, `reading` `[A-Za-z0-9_-]{1,32}`, each starting with a
 letter or digit (never `.`, `..`, `_stale` or a hidden name). They are the only model-side part of any key: run
-directory `runs/<benchmark>/<model>/<reading>/`, results directory `<results_root>/<model>/`, report row
+directory `<runs root>/<benchmark>/<model>/<reading>/`, results directory `<results_root>/<model>/`, report row
 `(benchmark, eval_hash, model, reading)`. `plan` takes them from `profile.describe` and never computes them. A null
 `weights_sha256` changes no key; it is the warning `W_WEIGHTS_UNFINGERPRINTED`.
 
@@ -313,7 +313,7 @@ eval_hash = sha256(canon({"protocol_hash": protocol_hash, "probe_hash": probe_ha
 `hashing.eval_hash` has no schema tag of its own (each component carries one) and refuses an empty component. It
 is the comparability key: everything that decides what a number means, the benchmark and the probe, and nothing
 else. Reports show it (12 hex) next to `protocol_version`; it names the probe directory
-`runs/<benchmark>/<model>/<reading>/probe/<eval_hash12>/` and is recorded in `result.json`, DONE markers, probe
+`<runs root>/<benchmark>/<model>/<reading>/probe/<eval_hash12>/` and is recorded in `result.json`, DONE markers, probe
 unit records and results files ([results](results.md)).
 
 Two results are **comparable** iff they have the same `benchmark.name` after alias resolution, the same

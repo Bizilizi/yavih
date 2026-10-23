@@ -117,7 +117,7 @@ An unknown suite or a file that does not validate is `E_SUITE` (exit 1).
 
 A failed hard check, an unfilled template (`E_TEMPLATE_UNFILLED`) or features equal for every smoke
 clip (`E_CONSTANT_FEATURES`) exit 2. The text output names the run directory the plan will use,
-`runs/<bench>/<model>/<reading>/`. See [bridge](bridge.md).
+`<runs root>/<bench>/<model>/<reading>/`. See [bridge](bridge.md).
 
 ## Extraction and features
 

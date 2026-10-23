@@ -1,6 +1,6 @@
 """``yavih plan calibrate runs/``: refine the resource multipliers from ``logs/last.json``,
 ``probe_fit.json`` (``s_per_epoch``) and ``result.json[timing]``; raise ``minutes`` 1.5× for any unit whose
-last attempt was stopped by its deadline while running; write ``runs/_calibration.json``.
+last attempt was stopped by its deadline while running; write ``<runs root>/_calibration.json``.
 
 Only a real deadline stop counts: ``status: deadline`` with ``wall_s > 0`` and
 not refused at start (``refused_at_start``). A start refusal says the job had too little wall left, a preemption

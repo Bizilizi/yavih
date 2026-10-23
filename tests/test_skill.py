@@ -273,7 +273,7 @@ def test_bridge_md_documents_model_and_reading():
     names), ``reading`` names the run subdirectory and the results key; ``describe()`` is recorded, never identity."""
     text = (SKILL_ROOT / "references" / "bridge.md").read_text(encoding="utf-8")
     row = next(ln for ln in text.splitlines() if ln.startswith("| `model` |"))
-    for n in ("[A-Za-z0-9_.-]{1,64}", "runs/<b>/<model>/<reading>/", "results/<model>/", "two names", "W_BRIDGE_CHANGED"):
+    for n in ("[A-Za-z0-9_.-]{1,64}", "<runs root>/<b>/<model>/<reading>/", "<results root>/<model>/", "two names", "W_BRIDGE_CHANGED"):
         assert n in row, f"bridge.md `model` row: {n!r} missing"
     assert "| key | in `describe_sha256` | content |" in text and "| key | identity |" not in text
     for n in ("describe_sha256", "E_CONFIG_DRIFT", "--expect-profile", "W_WEIGHTS_UNFINGERPRINTED", "`notes`"):

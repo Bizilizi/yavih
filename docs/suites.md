@@ -6,9 +6,9 @@ suite. yavih ships two, `minimal` and `default`; a project can add its own or re
 ```
 yavih suite list                                   # every suite and where it comes from
 yavih suite show default                           # its capabilities, benchmarks, readings and joins
-yavih plan init --suite default --model M --launcher /envs/m/bin/python   # matrix.yaml + bridge stubs
+yavih plan init --suite default --model M --launcher /envs/m/bin/python   # yavih-bench/matrices/M.yaml + bridge stubs
 yavih suite missing default --model M              # what M still lacks
-yavih report build runs/ --suite default           # the report with a completeness appendix
+yavih report build "$(yavih config get runs.root)/*" --suite default   # the report with a completeness appendix
 ```
 
 A suite is not a profile: a profile is the `profile.json` that `yavih bridge check --out` writes for one bridge

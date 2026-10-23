@@ -75,7 +75,7 @@ that resolves the folder at that hash.
 ```
 yavih registry export <results_root|results_file> --org ORG --out DIR [--model NAME]... [--include-nonstandard]
 yavih registry check DIR
-yavih report build 'runs/*' --registry DIR
+yavih report build "$(yavih config get runs.root)/*" --registry DIR
 ```
 
 `export` reads every `results_*.json` under `<results_root>/<model>/` (or one file), registers every ok,

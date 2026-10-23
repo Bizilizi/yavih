@@ -24,7 +24,7 @@ again.
   _stale/<utc>/             shards, layouts and _meta.json of another configuration, moved aside (never deleted)
 ```
 
-By convention `<run_dir>` is `runs/<benchmark>/<model>/<reading>/` (see [execution](execution.md)). Nothing
+By convention `<run_dir>` is `<runs root>/<benchmark>/<model>/<reading>/` (see [execution](execution.md)). Nothing
 reads the benchmark, model or reading back from the path: they are recorded in every sidecar.
 
 Every file is written to a tmp file and then renamed, so a killed task leaves only a tmp file. The tmp files of
