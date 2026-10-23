@@ -160,12 +160,14 @@ def resolve_launcher(spec: str | None, cwd: str | os.PathLike | None = None) -> 
 
 def build_command(unit: Any, launcher: str | None = _UNRESOLVED) -> list[str]:
     """``launcher`` (already resolved; default ``resolve_launcher(unit.launcher, unit.cwd)``) + ``cmd``: a launcher whose
-    last token matches ``python*`` replaces ``cmd[0]``; otherwise it is a prefix; none leaves ``cmd`` as it is."""
+    last token matches ``python*`` replaces ``cmd[0]``; otherwise it is a prefix. With no launcher the planned ``cmd[0]``
+    (the literal ``python``) is replaced by ``sys.executable``, the interpreter running ``exec``, never whatever
+    ``python`` is on PATH."""
     cmd = list(unit.cmd)
     if launcher is _UNRESOLVED:
         launcher = resolve_launcher(unit.launcher, getattr(unit, "cwd", None))
     if not launcher or not str(launcher).strip():
-        return cmd
+        return [sys.executable, *cmd[1:]] if cmd else cmd
     toks = shlex.split(str(launcher))
     if toks and fnmatch.fnmatch(os.path.basename(toks[-1]), "python*"):
         return toks + cmd[1:]
