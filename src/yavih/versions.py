@@ -52,6 +52,10 @@ RESULTS_FILE_VERSION: Final[int] = 2
 
 #: Bumped when the registry entry schema changes (``yavih.registry``: ``entries/<benchmark>/<eval_hash12>/<org>/<model>/<reading>.json``).
 REGISTRY_ENTRY_VERSION: Final[int] = 1
+#: Absolute tolerance per metric on its reported scale when a folder's ``metrics.tolerance`` names none: a tenth of a
+#: point. Bounds what the conformance fixture accepts as "same protocol" (``yavih.conformance``) and what the report
+#: shows as a tie (``yavih.report.compare``); not hashed (it changes no number).
+DEFAULT_TOLERANCE: Final[float] = 0.001
 #: Bumped when the unit record (``plan.jsonl``) changes. Extract units are keyed by ``input_hash``, probe and
 #: report units by ``protocol_hash``.
 PLAN_SCHEMA_VERSION: Final[int] = 3
@@ -152,6 +156,7 @@ __all__ = [
     "RESULTS_FILE_VERSION",
     "PLAN_SCHEMA_VERSION",
     "REGISTRY_ENTRY_VERSION",
+    "DEFAULT_TOLERANCE",
     "READOUT_VERSION",
     "PROBE_SCHEMA",
     "PROTOCOL_SCHEMA",

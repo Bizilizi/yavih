@@ -1239,7 +1239,9 @@ def cmd_bench_lint(ns: argparse.Namespace) -> Envelope:
 def cmd_bench_conformance(ns: argparse.Namespace) -> Envelope:
     """``yavih bench conformance <name|path>... [--all] [--record [--same-version --reason TEXT] [--force]]``: check (or
     record) each folder's ``conformance/expected.json`` (``yavih.conformance``). A drift, a stale or a missing fixture
-    exits 2; a folder whose pinned external package is absent here is a warning (nothing compared)."""
+    exits 2; a folder whose pinned external package is absent here is a warning (nothing compared). ``--same-version``,
+    ``--reason`` and ``--force`` without ``--record``, and ``--reason`` without ``--same-version``, are ``E_USAGE``
+    (exit 1): a flag that would be silently ignored is refused."""
     from yavih.benchmark import Benchmark, UnknownBenchmark
     from yavih.conformance import ConformanceError, check, record
 
@@ -1248,8 +1250,12 @@ def cmd_bench_conformance(ns: argparse.Namespace) -> Envelope:
         refs += [r for r in _bench_refs() if r not in refs]
     if not refs:
         raise CliError("E_USAGE", "bench conformance needs a benchmark name or path (or --all)")
-    if ns.same_version and not ns.record:
-        raise CliError("E_USAGE", "--same-version applies to --record")
+    if not ns.record:
+        for flag, given in (("--same-version", ns.same_version), ("--reason", ns.reason is not None), ("--force", ns.force)):
+            if given:
+                raise CliError("E_USAGE", f"{flag} applies to --record")
+    if ns.reason is not None and not ns.same_version:
+        raise CliError("E_USAGE", "--reason applies to --same-version (it explains values that moved at the same protocol_version)")
     data, errors, warnings, lines = [], [], [], []
     for ref in refs:
         try:
@@ -1270,9 +1276,13 @@ def cmd_bench_conformance(ns: argparse.Namespace) -> Envelope:
                 data.append({"name": bench.name, "recorded": False, "code": e.code})
                 continue
             n = sum(len(v.get("metrics") or {}) + len(v.get("floors") or {}) + len(v.get("controls") or {}) for v in rec["values"].values())
-            lines.append(f"{bench.name}: recorded {n} values at protocol_version {rec['protocol_version']} -> {bench.folder}/conformance/expected.json")
+            stored = rec.get("same_version_reason")
+            note = ""
+            if ns.reason is not None and stored is None:
+                note = " (--reason not stored: nothing compared)" if ns.force else " (--reason not stored: no value moved at this version)"
+            lines.append(f"{bench.name}: recorded {n} values at protocol_version {rec['protocol_version']} -> {bench.folder}/conformance/expected.json{note}")
             data.append({"name": bench.name, "recorded": True, "protocol_version": rec["protocol_version"], "values": n,
-                         "readings": sorted(rec["values"]), "population": rec["population"]})
+                         "readings": sorted(rec["values"]), "population": rec["population"], "same_version_reason": stored})
             continue
         rep = check(bench)
         data.append(rep.to_dict())
@@ -2050,7 +2060,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--all", action="store_true", help="every discoverable benchmark folder")
     s.add_argument("--record", action="store_true", help="write conformance/expected.json from the current scoring path")
     s.add_argument("--same-version", action="store_true", help="with --record: overwrite differing values at the same protocol_version (needs --reason)")
-    s.add_argument("--reason", default=None, metavar="TEXT", help="with --same-version: why the numbers moved without a protocol change (stored)")
+    s.add_argument("--reason", default=None, metavar="TEXT", help="with --same-version: why the numbers moved without a protocol change (stored as same_version_reason when values did move)")
     s.add_argument("--force", action="store_true", help="with --record: overwrite without comparing")
     s.set_defaults(func=cmd_bench_conformance)
     s = bsub.add_parser("hash", parents=[common_r], help="a folder's protocol / input / scoring hashes; --explain prints every hashed component's canonical text")

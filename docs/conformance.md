@@ -107,7 +107,7 @@ with `perm[k] == k` (collected once, ascending), swap `perm[k]` and `perm[(k + 1
 
 ## Tolerance
 
-Absolute, per metric, on the metric's reported scale. Default `conformance.DEFAULT_TOLERANCE` = `0.001` (a tenth
+Absolute, per metric, on the metric's reported scale. Default `yavih.versions.DEFAULT_TOLERANCE` = `0.001` (a tenth
 of a point on a fraction); a folder overrides it per metric:
 
 ```yaml
@@ -138,7 +138,9 @@ reading), booleans and lists compare exactly element-wise, NaN equals NaN.
 
 `values` is keyed by reading for a reading-routed scorer (`"a"`, `"v"`, `"av"` for vggsounder), else `"*"`.
 `recorded_with` is provenance: which yavih, commit, hashes, folder source and external package versions produced
-the record. A `same_version_reason` is stored when the record was overwritten at the same version.
+the record. `same_version_reason` is stored only when a `--same-version` re-record actually changed values at the
+same version; a `--reason` given when nothing moved (or with `--force`, which compares nothing) is not stored, and
+the command says so.
 
 ## Commands and codes
 
@@ -152,7 +154,9 @@ yavih bench conformance <name> --record --force                    overwrite wit
 `--record` refuses (`E_CONFORMANCE_DRIFT`) to overwrite a record of the same `protocol_version` whose values
 differ, except while the folder's `changelog` has exactly one entry: a new, unreleased folder's record is
 overwritten freely, since no result was filed under it yet. From the second changelog entry on, a moved number
-needs a `protocol_version` bump or `--same-version --reason TEXT`.
+needs a `protocol_version` bump or `--same-version --reason TEXT`. `--same-version`, `--reason` and `--force`
+apply to `--record`, and `--reason` to `--same-version`: any other combination is `E_USAGE` (exit 1), never
+silently ignored.
 
 | code | level | meaning |
 |---|---|---|

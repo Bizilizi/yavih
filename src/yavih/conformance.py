@@ -34,7 +34,7 @@ from typing import Any
 
 import numpy as np
 
-from yavih.versions import __version__
+from yavih.versions import DEFAULT_TOLERANCE, __version__
 
 __all__ = [
     "CONFORMANCE_SCHEMA",
@@ -59,8 +59,8 @@ __all__ = [
 CONFORMANCE_SCHEMA = "yavih-conformance-1"
 #: Bumped when the population draw or the fabricated outputs change (every folder then re-records at its version).
 GENERATOR_VERSION = 1
-#: Absolute tolerance per metric on its reported scale when ``metrics.tolerance`` names none: a tenth of a point.
-DEFAULT_TOLERANCE = 0.001
+#: ``yavih.versions.DEFAULT_TOLERANCE`` (re-exported): absolute tolerance per metric on its reported scale when
+#: ``metrics.tolerance`` names none, a tenth of a point.
 EXPECTED_FILE = "conformance/expected.json"
 #: Population per role and readout: ``1 / n`` stays above :data:`DEFAULT_TOLERANCE`.
 POPULATION: dict[str, dict[str, int]] = {
@@ -565,11 +565,11 @@ def read_expected(bench: Any) -> dict[str, Any] | None:
     return d
 
 
-def _record_dict(bench: Any, computed: Mapping[str, Any], *, reason: str | None) -> dict[str, Any]:
+def _record_dict(bench: Any, computed: Mapping[str, Any]) -> dict[str, Any]:
     from yavih.versions import writer_stamp
 
     stamp = writer_stamp()
-    rec: dict[str, Any] = {
+    return {
         "schema": CONFORMANCE_SCHEMA,
         "benchmark": bench.name,
         "protocol_version": int(bench.spec.protocol_version),
@@ -584,9 +584,6 @@ def _record_dict(bench: Any, computed: Mapping[str, Any], *, reason: str | None)
             "externals": dict(computed.get("externals") or {}),
         },
     }
-    if reason:
-        rec["same_version_reason"] = str(reason)
-    return rec
 
 
 def _compare(expected: Mapping[str, Any], got: Mapping[str, Any], tol: Mapping[str, float]) -> tuple[int, list[dict[str, Any]]]:
@@ -687,10 +684,12 @@ def _fmt(v: Any) -> str:
 def record(bench: Any, *, same_version: bool = False, reason: str | None = None, force: bool = False) -> dict[str, Any]:
     """Compute the fixture and write ``conformance/expected.json``. Refuses (``E_CONFORMANCE_DRIFT``) to overwrite a
     record of the same ``protocol_version`` and generator whose values differ, unless ``same_version`` with a
-    ``reason`` (stored) or ``force``. A folder whose changelog has exactly one entry (new, unreleased) is
-    overwritten freely: its numbers may move with every edit until the first release. Returns the record written."""
+    ``reason`` or ``force``. ``same_version_reason`` is stored only when a same-version re-record actually changed
+    values (the reason explains those); a reason given when nothing moved, or with ``force`` (nothing compared), is
+    dropped. A folder whose changelog has exactly one entry (new, unreleased) is overwritten freely: its numbers may
+    move with every edit until the first release. Returns the record written."""
     computed = compute(bench)  # W_CONFORMANCE_SKIPPED propagates: nothing can be recorded without the package
-    rec = _record_dict(bench, computed, reason=reason if same_version else None)
+    rec = _record_dict(bench, computed)
     unreleased = len(bench.spec.changelog) == 1
     existing = None if (force or unreleased) else read_expected(bench)
     if existing is not None:
@@ -703,6 +702,8 @@ def record(bench: Any, *, same_version: bool = False, reason: str | None = None,
                                        "protocol_version and record, or pass --same-version --reason TEXT if the protocol did not change")
             if drifted and same_version and not reason:
                 raise ConformanceError(E_DRIFT, "--same-version needs --reason TEXT (why the numbers moved without a protocol change)")
+            if drifted and same_version:
+                rec["same_version_reason"] = str(reason)
     p = expected_path(bench)
     p.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(rec, indent=1, sort_keys=True, ensure_ascii=False) + "\n"

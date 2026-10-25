@@ -187,6 +187,11 @@ def test_drift_is_detected_and_resolved_by_a_version_bump(tmp_path, monkeypatch)
         C.record(Benchmark.from_dir(b.folder), same_version=True)  # needs a reason
     rec = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="fixture bug")
     assert rec["same_version_reason"] == "fixture bug" and C.check(Benchmark.from_dir(b.folder)).ok
+    # the reason explains values that moved: a same-version re-record that changes nothing stores none
+    rec = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="nothing moved")
+    assert "same_version_reason" not in rec and "same_version_reason" not in C.read_expected(Benchmark.from_dir(b.folder))
+    rec = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="forced", force=True)  # nothing compared: not stored
+    assert "same_version_reason" not in rec
 
 
 def test_unreleased_folder_record_overwrites_without_drift_refusal(tmp_path, monkeypatch):
@@ -305,8 +310,16 @@ def test_cli_conformance_and_hash(tmp_path, capsys, monkeypatch):
     assert rc == 0 and env["data"][0]["recorded"] is True and env["data"][0]["values"] > 0
     rc, env = run(["bench", "conformance", str(b.folder)])
     assert rc == 0 and env["data"][0]["ok"] is True and env["data"][0]["compared"] > 0
-    rc, env = run(["bench", "conformance", str(b.folder), "--same-version"])
-    assert rc == 1 and env["errors"][0]["code"] == "E_USAGE"
+    # a flag that would be silently ignored is a usage error
+    for argv in (["--same-version"], ["--reason", "x"], ["--force"], ["--record", "--reason", "x"], ["--record", "--force", "--reason", "x"]):
+        rc, env = run(["bench", "conformance", str(b.folder), *argv])
+        assert rc == 1 and env["errors"][0]["code"] == "E_USAGE", argv
+    # --same-version --reason when nothing moved: recorded, the reason is not stored and the output says so
+    rc, env = run(["bench", "conformance", str(b.folder), "--record", "--same-version", "--reason", "x"])
+    assert rc == 0 and env["data"][0]["recorded"] is True and env["data"][0]["same_version_reason"] is None
+    assert "same_version_reason" not in json.loads((b.folder / "conformance" / "expected.json").read_text(encoding="utf-8"))
+    rc = cli.main(["bench", "conformance", str(b.folder), "--record", "--same-version", "--reason", "x"])
+    assert rc == 0 and "--reason not stored" in capsys.readouterr().out
     rc, env = run(["bench", "hash", str(b.folder), "--explain"])
     assert rc == 0 and env["data"]["protocol_hash"] == b.protocol_hash and env["data"]["folder_source"] == b.folder_source
     ex = env["data"]["explain"]
