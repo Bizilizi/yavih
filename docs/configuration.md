@@ -127,7 +127,9 @@ Notes:
 
 - `~`, `$VAR` and `${VAR}` are expanded in every path value. An unset `$VAR` is a schema error.
 - A relative path in a file is relative to **that file's directory**. A relative path in an
-  environment variable stays relative to the current directory.
+  environment variable (or on the command line) is made absolute against the current directory when
+  the configuration loads, so every root is absolute wherever it is used later: `YAVIH_RUNS=runs` means
+  `<cwd>/runs` for `config get runs.root` and for a matrix `out: null` alike.
 - `${data.root}` and `${datasets.<name>}` are substituted in `benchmark.yaml` defaults and config
   values alike. `[data] root` itself cannot use a placeholder; a `[datasets]` entry may use
   `${data.root}` but not another `${datasets.*}`.

@@ -435,3 +435,28 @@ def test_cgroup_parsers(tmp_path):
     (v1 / "cpu" / "cpu.cfs_period_us").write_text("100000")
     (v1 / "memory" / "memory.limit_in_bytes").write_text(str(2**63 - 4096))  # v1 "unlimited"
     assert resources.cgroup_cpu_quota(v1) == 4 and resources._cgroup_memory(v1) is None
+
+
+def test_relative_env_roots_are_anchored_to_the_cwd_at_load(xdg, capsys, monkeypatch, tmp_path):
+    """A relative ``YAVIH_RUNS`` / ``YAVIH_RESULTS`` / ``YAVIH_SCRATCH`` (a launcher is a command, never a path) names
+    the directory under the cwd the process started in: ``runs_root()`` is absolute, ``config get runs.root`` prints
+    that directory and a matrix ``out: null`` lands there too, not under the matrix file's directory."""
+    from yavih.plan.matrix import load_matrix
+
+    work = Path.cwd()
+    monkeypatch.setenv("YAVIH_RUNS", "runs")
+    monkeypatch.setenv("YAVIH_RESULTS", "res")
+    monkeypatch.setenv("YAVIH_SCRATCH", "scr")
+    monkeypatch.setenv("YAVIH_LAUNCHER", "python")
+    s = config.load(refresh=True)
+    assert s.runs_root() == work / "runs" and s.runs_root().is_absolute()
+    assert s.results_root() == work / "res" and s.configured_scratch_root() == work / "scr"
+    assert s.launcher() == "python" and s.runs_root_source() == "env:YAVIH_RUNS"
+    rc, env = _json(capsys, ["config", "get", "runs.root"])
+    assert rc == 0 and env["data"]["value"] == str(work / "runs")
+    sub = work / "matrices"
+    sub.mkdir()
+    m = sub / "m.yaml"
+    m.write_text("schema_version: 1\nbridges:\n  a: {script: s.py, benchmark: k400, profile: p.json}\n", encoding="utf-8")
+    assert load_matrix(str(m)).out == str(work / "runs")
+    assert config.runs_root(env={"YAVIH_RUNS": "elsewhere"}, config={}) == work / "elsewhere"

@@ -168,8 +168,9 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class Value:
-    """One configured value and where it came from. ``base`` anchors a relative path (the directory of
-    the file that set it); ``None`` leaves a relative path relative to the current directory."""
+    """One configured value and where it came from. ``base`` anchors a relative path: the directory of the file
+    that set it, the current directory for an environment variable (the CLI layer is made absolute when set);
+    ``None`` (a launcher, a non-path) leaves the value as given."""
 
     value: Any
     source: str
@@ -1135,8 +1136,12 @@ def _active_site(files: list[ConfigFile], env: Mapping[str, str], col: _Collecto
     return (ids[0], matches[0][1]) if ids else (None, None)
 
 
-def _env_entries(env: Mapping[str, str], col: _Collector) -> list[tuple[tuple[str, ...], Value]]:
+def _env_entries(env: Mapping[str, str], col: _Collector, cwd: Path) -> list[tuple[tuple[str, ...], Value]]:
+    """The ``YAVIH_*`` layer. A path value (roots, data roots, datasets) is anchored to ``cwd``, the directory the
+    process was started in, so a relative ``YAVIH_RUNS=runs`` names one absolute directory however a caller later
+    resolves it (``config get runs.root`` and a matrix ``out: null`` agree); a launcher is a command, never anchored."""
     out: list[tuple[tuple[str, ...], Value]] = []
+    base = str(cwd)
     for name in sorted(env):
         if not name.startswith("YAVIH_"):
             continue
@@ -1150,8 +1155,10 @@ def _env_entries(env: Mapping[str, str], col: _Collector) -> list[tuple[tuple[st
                     out.append((key, Value(_coerce_resource(key[1], raw), f"env:{name}")))
                 except ConfigError as e:
                     col.errors.append(f"{name}: {e}")
-            else:
+            elif key[0] == "launcher":
                 out.append((key, Value(_expand_env(raw, env, name, col), f"env:{name}")))
+            else:
+                out.append((key, Value(_expand_env(raw, env, name, col), f"env:{name}", base)))
             continue
         if name in ENV_VARS:
             continue
@@ -1159,7 +1166,7 @@ def _env_entries(env: Mapping[str, str], col: _Collector) -> list[tuple[tuple[st
             parts = name[len(DATA_ENV_PREFIX):].split("__")
             if len(parts) == 2 and all(parts):
                 if raw != "":
-                    out.append((("data", parts[0].lower(), parts[1].lower()), Value(_expand_env(raw, env, name, col), f"env:{name}")))
+                    out.append((("data", parts[0].lower(), parts[1].lower()), Value(_expand_env(raw, env, name, col), f"env:{name}", base)))
                 continue
             col.strict("W_CONFIG_ENV", f"{name}: expected YAVIH_DATA__<BENCH>__<ROOT> or YAVIH_DATA__ROOT")
             continue
@@ -1167,7 +1174,7 @@ def _env_entries(env: Mapping[str, str], col: _Collector) -> list[tuple[tuple[st
             ds = name[len(DATASETS_ENV_PREFIX):].lower()
             if _NAME_RE.match(ds):
                 if raw != "":
-                    out.append((("datasets", ds), Value(_expand_env(raw, env, name, col), f"env:{name}")))
+                    out.append((("datasets", ds), Value(_expand_env(raw, env, name, col), f"env:{name}", base)))
                 continue
         close = difflib.get_close_matches(name, list(ENV_VARS), n=1, cutoff=0.75)
         col.strict("W_CONFIG_ENV", f"unknown environment variable {name}" + (f", did you mean {close[0]}?" if close else "")
@@ -1243,7 +1250,7 @@ def _build(env: Mapping[str, str], cwd: Path, cli: Mapping[str, Any], explicit: 
             sub = _schema_entries(f, body, ("site", str(sid)), env, col, in_site=True)
             if str(sid) == site:
                 entries += sub
-    entries += _env_entries(env, col)
+    entries += _env_entries(env, col, cwd)
     for key, raw in (cli.get("entries") or {}).items():
         entries.append((tuple(key), Value(raw, "cli")))
     values: dict[tuple[str, ...], Value] = {}
