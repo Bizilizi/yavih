@@ -1243,7 +1243,7 @@ def cmd_bench_conformance(ns: argparse.Namespace) -> Envelope:
     ``--reason`` and ``--force`` without ``--record``, and ``--reason`` without ``--same-version``, are ``E_USAGE``
     (exit 1): a flag that would be silently ignored is refused."""
     from yavih.benchmark import Benchmark, UnknownBenchmark
-    from yavih.conformance import ConformanceError, check, record
+    from yavih.conformance import REASON_DROPPED, ConformanceError, check, record
 
     refs = list(ns.refs or [])
     if ns.all:
@@ -1264,7 +1264,7 @@ def cmd_bench_conformance(ns: argparse.Namespace) -> Envelope:
             raise CliError("E_USAGE", str(e), EXIT_USAGE) from e
         if ns.record:
             try:
-                rec = record(bench, same_version=bool(ns.same_version), reason=ns.reason, force=bool(ns.force))
+                res = record(bench, same_version=bool(ns.same_version), reason=ns.reason, force=bool(ns.force))
             except ConformanceError as e:
                 if e.code.startswith("W_"):
                     warnings.append(_finding(e.code, e.message, where=bench.name))
@@ -1275,14 +1275,14 @@ def cmd_bench_conformance(ns: argparse.Namespace) -> Envelope:
                 lines.append(f"{bench.name}: FAIL {e.code}: {e.message}")
                 data.append({"name": bench.name, "recorded": False, "code": e.code})
                 continue
+            rec = res.record
             n = sum(len(v.get("metrics") or {}) + len(v.get("floors") or {}) + len(v.get("controls") or {}) for v in rec["values"].values())
             stored = rec.get("same_version_reason")
-            note = ""
-            if ns.reason is not None and stored is None:
-                note = " (--reason not stored: nothing compared)" if ns.force else " (--reason not stored: no value moved at this version)"
+            note = f" (--reason not stored: {REASON_DROPPED[res.reason_dropped]})" if res.reason_dropped else ""
             lines.append(f"{bench.name}: recorded {n} values at protocol_version {rec['protocol_version']} -> {bench.folder}/conformance/expected.json{note}")
             data.append({"name": bench.name, "recorded": True, "protocol_version": rec["protocol_version"], "values": n,
-                         "readings": sorted(rec["values"]), "population": rec["population"], "same_version_reason": stored})
+                         "readings": sorted(rec["values"]), "population": rec["population"], "same_version_reason": stored,
+                         "compared": res.compared, "moved": len(res.moved), "reason_dropped": res.reason_dropped})
             continue
         rep = check(bench)
         data.append(rep.to_dict())

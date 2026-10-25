@@ -134,7 +134,9 @@ def _shift_acc(monkeypatch, delta: float = 0.05) -> None:
 @pytest.mark.parametrize("readout", ["clf", "seq", "grid", "box"])
 def test_record_and_check_round_trip(tmp_path, readout):
     b = _bench(tmp_path, readout)
-    rec = C.record(b)
+    res = C.record(b)
+    rec = res.record
+    assert not res.compared and res.moved == [] and res.reason_dropped is None  # a first record: nothing to compare
     path = C.expected_path(b)
     assert path.is_file() and json.loads(path.read_text()) == rec
     assert rec["schema"] == C.CONFORMANCE_SCHEMA and rec["protocol_version"] == b.spec.protocol_version
@@ -185,13 +187,20 @@ def test_drift_is_detected_and_resolved_by_a_version_bump(tmp_path, monkeypatch)
     assert ei.value.code == C.E_DRIFT
     with pytest.raises(C.ConformanceError):
         C.record(Benchmark.from_dir(b.folder), same_version=True)  # needs a reason
-    rec = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="fixture bug")
-    assert rec["same_version_reason"] == "fixture bug" and C.check(Benchmark.from_dir(b.folder)).ok
-    # the reason explains values that moved: a same-version re-record that changes nothing stores none
-    rec = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="nothing moved")
-    assert "same_version_reason" not in rec and "same_version_reason" not in C.read_expected(Benchmark.from_dir(b.folder))
-    rec = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="forced", force=True)  # nothing compared: not stored
-    assert "same_version_reason" not in rec
+    res = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="fixture bug")
+    assert res.record["same_version_reason"] == "fixture bug" and C.check(Benchmark.from_dir(b.folder)).ok
+    assert res.compared and [d["metric"] for d in res.moved] == ["acc"] and res.reason_dropped is None
+    # the reason explains values that moved: a same-version re-record that changes nothing stores none, and says why
+    res = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="nothing moved")
+    assert "same_version_reason" not in res.record and "same_version_reason" not in C.read_expected(Benchmark.from_dir(b.folder))
+    assert res.compared and res.moved == [] and res.reason_dropped == "unchanged"
+    res = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="forced", force=True)  # nothing compared: not stored
+    assert "same_version_reason" not in res.record and not res.compared and res.reason_dropped == "force"
+    assert C.record(Benchmark.from_dir(b.folder), force=True).reason_dropped is None  # no reason given: nothing dropped
+    _edit_yaml(b.folder, lambda y: (y.__setitem__("protocol_version", 3), y["changelog"].append(  # another version: not compared either
+        {"version": 3, "date": "2026-10-21", "reason": "bump", "invalidates": True})))
+    res = C.record(Benchmark.from_dir(b.folder), same_version=True, reason="x")
+    assert not res.compared and res.reason_dropped == "other_version"
 
 
 def test_unreleased_folder_record_overwrites_without_drift_refusal(tmp_path, monkeypatch):
@@ -199,13 +208,17 @@ def test_unreleased_folder_record_overwrites_without_drift_refusal(tmp_path, mon
     at the same protocol_version without asking; the check then passes against the new numbers."""
     b = _bench(tmp_path)
     assert len(b.spec.changelog) == 1
-    first = C.record(b)
+    first = C.record(b).record
     _shift_acc(monkeypatch)
     b = Benchmark.from_dir(b.folder)
     assert [f.code for f in C.check(b).errors] == [C.E_DRIFT]
-    rec = C.record(b)  # no --same-version, no --force
+    res = C.record(b)  # no --same-version, no --force
+    rec = res.record
     assert abs(rec["values"]["*"]["metrics"]["acc"] - first["values"]["*"]["metrics"]["acc"] - 0.05) < 1e-9
     assert "same_version_reason" not in rec and C.check(Benchmark.from_dir(b.folder)).ok
+    assert not res.compared and res.reason_dropped is None
+    res = C.record(b, same_version=True, reason="why")  # a reason on an unreleased folder: dropped, and it says why
+    assert "same_version_reason" not in res.record and not res.compared and res.reason_dropped == "unreleased"
 
 
 def test_scoring_refusal_is_wrapped_as_unsupported(tmp_path, monkeypatch):
@@ -314,12 +327,28 @@ def test_cli_conformance_and_hash(tmp_path, capsys, monkeypatch):
     for argv in (["--same-version"], ["--reason", "x"], ["--force"], ["--record", "--reason", "x"], ["--record", "--force", "--reason", "x"]):
         rc, env = run(["bench", "conformance", str(b.folder), *argv])
         assert rc == 1 and env["errors"][0]["code"] == "E_USAGE", argv
-    # --same-version --reason when nothing moved: recorded, the reason is not stored and the output says so
+    # --same-version --reason on an unreleased folder (one changelog entry): nothing is compared, the reason is not
+    # stored and the output says which case applied (never "no value moved")
     rc, env = run(["bench", "conformance", str(b.folder), "--record", "--same-version", "--reason", "x"])
     assert rc == 0 and env["data"][0]["recorded"] is True and env["data"][0]["same_version_reason"] is None
+    assert env["data"][0]["compared"] is False and env["data"][0]["reason_dropped"] == "unreleased"
     assert "same_version_reason" not in json.loads((b.folder / "conformance" / "expected.json").read_text(encoding="utf-8"))
     rc = cli.main(["bench", "conformance", str(b.folder), "--record", "--same-version", "--reason", "x"])
-    assert rc == 0 and "--reason not stored" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert rc == 0 and "--reason not stored: an unreleased folder" in out and "no value moved" not in out
+    rc = cli.main(["bench", "conformance", str(b.folder), "--record", "--same-version", "--reason", "x", "--force"])
+    assert rc == 0 and "--reason not stored: --force records without comparison" in capsys.readouterr().out
+    # a released folder (two changelog entries): the record is compared, and an unmoved value is the third case
+    _bump_to_v2(b.folder)
+    rc, env = run(["bench", "conformance", str(b.folder), "--record"])
+    assert rc == 0 and env["data"][0]["compared"] is False and env["data"][0]["reason_dropped"] is None
+    rc, env = run(["bench", "conformance", str(b.folder), "--record", "--same-version", "--reason", "x"])
+    assert rc == 0 and env["data"][0]["compared"] is True and env["data"][0]["moved"] == 0 and env["data"][0]["reason_dropped"] == "unchanged"
+    rc = cli.main(["bench", "conformance", str(b.folder), "--record", "--same-version", "--reason", "x"])
+    assert rc == 0 and "--reason not stored: no value moved at this version" in capsys.readouterr().out
+    rc = cli.main(["bench", "conformance", str(b.folder), "--record"])
+    assert rc == 0 and "--reason not stored" not in capsys.readouterr().out
+    b = Benchmark.from_dir(b.folder)  # the bumped folder's hashes
     rc, env = run(["bench", "hash", str(b.folder), "--explain"])
     assert rc == 0 and env["data"]["protocol_hash"] == b.protocol_hash and env["data"]["folder_source"] == b.folder_source
     ex = env["data"]["explain"]

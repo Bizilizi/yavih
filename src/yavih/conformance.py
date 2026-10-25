@@ -45,6 +45,7 @@ __all__ = [
     "ConformanceError",
     "Finding",
     "ConformanceReport",
+    "RecordResult",
     "stream",
     "select_rows",
     "tolerances",
@@ -681,20 +682,48 @@ def _fmt(v: Any) -> str:
     return str(v)
 
 
-def record(bench: Any, *, same_version: bool = False, reason: str | None = None, force: bool = False) -> dict[str, Any]:
+@dataclass
+class RecordResult:
+    """``record``'s outcome: ``record`` is the fixture written (the content of ``expected.json``); ``compared`` whether
+    the previous record was compared with the new values (false for a first record, an unreleased folder, ``force``
+    or a record at another ``protocol_version`` / generator); ``moved`` the values that differed beyond tolerance
+    when it was; ``reason_dropped`` why a given ``reason`` was not stored (``unreleased``, ``force``, ``no_record``,
+    ``other_version``, ``unchanged``), ``None`` when it was stored or none was given."""
+
+    record: dict[str, Any]
+    compared: bool
+    moved: list[dict[str, Any]] = field(default_factory=list)
+    reason_dropped: str | None = None
+
+
+#: ``RecordResult.reason_dropped`` -> what the command tells the user.
+REASON_DROPPED = {
+    "unreleased": "an unreleased folder (one changelog entry) is re-recorded without comparison",
+    "force": "--force records without comparison",
+    "no_record": "no previous record to compare with",
+    "other_version": "the previous record is at another protocol_version or generator; nothing compared",
+    "unchanged": "no value moved at this version",
+}
+
+
+def record(bench: Any, *, same_version: bool = False, reason: str | None = None, force: bool = False) -> RecordResult:
     """Compute the fixture and write ``conformance/expected.json``. Refuses (``E_CONFORMANCE_DRIFT``) to overwrite a
     record of the same ``protocol_version`` and generator whose values differ, unless ``same_version`` with a
     ``reason`` or ``force``. ``same_version_reason`` is stored only when a same-version re-record actually changed
-    values (the reason explains those); a reason given when nothing moved, or with ``force`` (nothing compared), is
-    dropped. A folder whose changelog has exactly one entry (new, unreleased) is overwritten freely: its numbers may
-    move with every edit until the first release. Returns the record written."""
+    values (the reason explains those); a reason given when nothing moved, or when nothing was compared (``force``, an
+    unreleased folder, no previous record, a record at another version), is dropped and :class:`RecordResult` says
+    why. A folder whose changelog has exactly one entry (new, unreleased) is overwritten freely: its numbers may move
+    with every edit until the first release."""
     computed = compute(bench)  # W_CONFORMANCE_SKIPPED propagates: nothing can be recorded without the package
     rec = _record_dict(bench, computed)
     unreleased = len(bench.spec.changelog) == 1
     existing = None if (force or unreleased) else read_expected(bench)
+    compared, drifted = False, []
+    why = "force" if force else ("unreleased" if unreleased else ("no_record" if existing is None else "other_version"))
     if existing is not None:
         same = int(existing["protocol_version"]) == rec["protocol_version"] and int(existing.get("generator", -1)) == GENERATOR_VERSION
         if same:
+            compared, why = True, "unchanged"
             _, drifted = _compare(existing, rec, tolerances(bench))
             if drifted and not same_version:
                 raise ConformanceError(E_DRIFT, f"{bench.name}: {len(drifted)} value(s) differ from the record at the same protocol_version "
@@ -704,8 +733,9 @@ def record(bench: Any, *, same_version: bool = False, reason: str | None = None,
                 raise ConformanceError(E_DRIFT, "--same-version needs --reason TEXT (why the numbers moved without a protocol change)")
             if drifted and same_version:
                 rec["same_version_reason"] = str(reason)
+                why = None
     p = expected_path(bench)
     p.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(rec, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
     p.write_text(text, encoding="utf-8")
-    return rec
+    return RecordResult(record=rec, compared=compared, moved=list(drifted), reason_dropped=why if reason is not None else None)

@@ -139,8 +139,9 @@ reading), booleans and lists compare exactly element-wise, NaN equals NaN.
 `values` is keyed by reading for a reading-routed scorer (`"a"`, `"v"`, `"av"` for vggsounder), else `"*"`.
 `recorded_with` is provenance: which yavih, commit, hashes, folder source and external package versions produced
 the record. `same_version_reason` is stored only when a `--same-version` re-record actually changed values at the
-same version; a `--reason` given when nothing moved (or with `--force`, which compares nothing) is not stored, and
-the command says so.
+same version. A `--reason` given otherwise is not stored, and the command says which case applied: nothing was
+compared (an unreleased folder with one changelog entry, `--force`, no previous record, a record at another
+version) or the record was compared and no value moved (`--json`: `compared`, `moved`, `reason_dropped`).
 
 ## Commands and codes
 
