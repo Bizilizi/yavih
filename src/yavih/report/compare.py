@@ -1164,6 +1164,9 @@ def report(
 
         the_suite = load_suite(suite)  # an unknown or invalid suite fails before anything is indexed
     records = build_index(globs, runs_root=runs_root)
+    # the runs root (where _report/ goes and what the results store defaults to) follows from the indexed local results
+    # alone: a registry entry's path is in the registry, not under any runs root
+    root = Path(runs_root) if runs_root is not None else runs_root_of([Path(r["path"]) for r in records if not r.get(MOVED_ASIDE)])
     if registry is not None:
         # registry entries join the comparison as rows under the same rule (same benchmark, same eval_hash, both standard);
         # their seeds and provenance are theirs, their model name is namespaced <org>/<model>
@@ -1183,7 +1186,6 @@ def report(
         records = [*records, *migrated]
     rep = build_report(records, fmt=fmt, seeds=seeds, allow_coverage_diff=allow_coverage_diff, detail=detail)
     records = [r for r in records if not r.get(MOVED_ASIDE)]
-    root = Path(runs_root) if runs_root is not None else runs_root_of([Path(r["path"]) for r in records])
     if results_root is None and (join or merge_results or the_suite is not None):
         from yavih.config import results_root as _results_root
 

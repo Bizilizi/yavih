@@ -163,6 +163,9 @@ def test_cli_registry_export_and_check(world, tmp_path, capsys):
     assert rc == 0 and env["data"]["ok"] is True and env["data"]["n_entries"] == 1
     rc, env = run(["report", "build", str(world["runs"] / "*"), "--registry", str(reg), "--fmt", "json"])
     assert rc == 0 and any(r.get("registry") for r in env["data"]["rows"])
+    # the runs root follows from the local results alone: the registry rows do not hide it, so the report file is written
+    report_file = world["runs"] / "_report" / "report.json"
+    assert env["data"]["paths"]["report"] == str(report_file) and report_file.is_file() and (report_file.parent / "DONE").is_file()
 
 
 def test_cli_export_reads_the_entry_conformance_not_the_file_text(world, tmp_path, capsys, monkeypatch):
