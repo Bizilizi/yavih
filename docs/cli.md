@@ -83,8 +83,10 @@ runs, every `YAVIH_*` variable is replaced (home, runs and results under the wor
 `YAVIH_TESTING=1`), the `--config` / `--runs-root` / `--results` / `--data` layer is cleared, and both are restored
 afterwards, also on error. The work directory is temporary unless `--keep DIR`.
 
-What it does not cover: the stand-in is single-label, so a `multi` or `multi_sets` folder trials as single-label
-`acc`; the folder's own `probe.py` hooks and `external` packages are not exercised; speed and numbers on the
+What it does not cover: the `conformance` stage runs the folder's real scoring path (its readout, metrics,
+`probe.py` hooks and pinned `external` package) on the fixture's generated population, but every later stage
+runs on the stand-in, which never reads the real data; it is single-label, so the `probe` stage of a `multi` or
+`multi_sets` folder trials as single-label `acc`; its bridge is the oracle, not yours; speed and numbers on the
 stand-in carry over to nothing. The trial on real data is the fresh-agent [trial run](trial-run.md); without
 `--synthetic` the command is a usage error (exit 1) that points there.
 
