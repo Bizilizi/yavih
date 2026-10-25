@@ -97,6 +97,7 @@ __all__ = [
     "PROJECT_KINDS",
     "git_root",
     "project_benchmarks_dir",
+    "project_config_path",
 ]
 
 DATA_ENV_PREFIX = "YAVIH_DATA__"
@@ -492,6 +493,15 @@ def _discover_project(cwd: Path) -> Path | None:
         if _is_repo_root(d):
             return None
     return None
+
+
+def project_config_path(env: Mapping[str, str] | None = None, cwd: str | os.PathLike | None = None) -> Path | None:
+    """The project config file that exists (``--config``, ``$YAVIH_CONFIG`` or the discovered ``yavih-bench/yavih.toml``)
+    without reading it: what ``doctor`` names when the configuration itself fails to load. ``None`` when there is none."""
+    env = os.environ if env is None else env
+    cwd_path = Path(cwd) if cwd is not None else _cwd()
+    p, _how = _project_path(env, cwd_path, cli_overrides() if env is os.environ else {})
+    return p if p is not None and p.is_file() else None
 
 
 def project_benchmarks_dir(env: Mapping[str, str] | None = None, cwd: str | os.PathLike | None = None) -> Path | None:

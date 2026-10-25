@@ -475,7 +475,9 @@ def cmd_init(ns: argparse.Namespace) -> Envelope:
 def cmd_doctor(ns: argparse.Namespace) -> Envelope:
     """``yavih doctor [--bench B] [--selftest]``: extras, torch, decoders, decode sample, data
     roots, GPUs, launcher, decode-worker default, ``$YAVIH_HOME``, the runs root and the project folder
-    (``yavih.project.doctor_block``: ``W_PROJECT_VERSION``, ``W_PROJECT_NESTED``, ``W_PROJECT_STRAY``, ``W_RUNS_SIZE``)."""
+    (``yavih.project.doctor_block``: ``W_PROJECT_VERSION``, ``W_PROJECT_NESTED``, ``W_PROJECT_STRAY``, ``W_RUNS_SIZE``).
+    A configuration that does not load even leniently is ``W_CONFIG`` plus ``config_error: {message, project_file}``
+    (the project file found without parsing it, if any); the text names that file instead of suggesting ``yavih init``."""
     from yavih import config as _cfg
     from yavih.extract import default_decode_workers
     from yavih.media import decoder_info
@@ -484,6 +486,7 @@ def cmd_doctor(ns: argparse.Namespace) -> Envelope:
     data: dict[str, Any] = {}
     # the configuration (files, site, every value with its source) is a finding, never an abort
     settings = None
+    data["config_error"] = None  # {message, project_file} when the configuration does not load even leniently
     try:
         settings = _cfg.load()
     except _cfg.ConfigError as e:
@@ -492,6 +495,8 @@ def cmd_doctor(ns: argparse.Namespace) -> Envelope:
             settings = _cfg.load(lenient=True)
         except _cfg.ConfigError as e2:
             warnings.append(_finding("W_CONFIG", f"even leniently the configuration does not load: {e2}"))
+            pf = _cfg.project_config_path()
+            data["config_error"] = {"message": str(e), "project_file": str(pf) if pf is not None else None}
     if settings is not None:
         for f in settings.files:
             if f.layer == "project" and not f.exists:
@@ -754,6 +759,13 @@ def _doctor_text(d: dict[str, Any]) -> str:
             lines.append(f"    NESTED project file {q}")
         for q in pj.get("stray") or []:
             lines.append(f"    STRAY matrix {q}")
+    elif d.get("config_error"):  # no project block because the configuration did not load: name the file, never `yavih init`
+        ce = d["config_error"]
+        msg = " ".join(str(ce.get("message") or "").split())
+        if ce.get("project_file"):
+            lines.append(f"  project     {ce['project_file']}: configuration failed to load: {msg}")
+        else:
+            lines.append(f"  project     unknown (configuration failed to load: {msg})")
     else:
         lines.append("  project     none (yavih init)")
     if d.get("config"):

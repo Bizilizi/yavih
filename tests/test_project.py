@@ -395,6 +395,27 @@ def test_doctor_without_a_project_notes_init(repo, runs_dir):
     assert data["dir"] is None and warnings == [] and any("yavih init" in n for n in notes)
 
 
+def test_doctor_names_a_malformed_project_file_instead_of_suggesting_init(repo, runs_dir, capsys):
+    """When the project file does not parse, the configuration loads neither strictly nor leniently: doctor's text names
+    the file and the error (``yavih init`` would be refused with ``E_EXISTS``), ``config_error`` carries both under
+    ``--json`` and ``project`` is null; without any project file the line stays ``none (yavih init)``."""
+    assert cli.main(["doctor"]) == 0
+    assert "  project     none (yavih init)" in capsys.readouterr().out
+    init_project()
+    toml = repo / "yavih-bench" / "yavih.toml"
+    toml.write_text("[project\nyavih = 1\n", encoding="utf-8")
+    assert config.project_config_path() == toml
+    rc, env = _json(capsys, ["doctor"])
+    assert rc == 0 and env["data"]["project"] is None
+    assert env["data"]["config_error"]["project_file"] == str(toml) and "malformed config" in env["data"]["config_error"]["message"]
+    assert [w["code"] for w in env["warnings"] if w["code"] == "W_CONFIG"] == ["W_CONFIG", "W_CONFIG"]
+    assert cli.main(["doctor"]) == 0
+    out = capsys.readouterr().out
+    assert f"  project     {toml}: configuration failed to load: malformed config" in out and "yavih init" not in out
+    rc, env = _json(capsys, ["init"])
+    assert rc == 1 and env["errors"][0]["code"] == "E_EXISTS"
+
+
 def test_doctor_cli_carries_the_project_block(repo, runs_dir, capsys, monkeypatch):
     init_project()
     (repo / "stray").mkdir()
