@@ -364,6 +364,32 @@ def test_runs_size_walks_files_and_stops_early(tmp_path):
     assert runs_size(tmp_path / "absent") == 0
 
 
+def test_sibling_bare_projects_outside_a_repository_are_not_nested(repo, runs_dir, monkeypatch, tmp_path):
+    """Outside any repository the scan covers a bare ``yavih.toml`` project's own directory, so a sibling directory
+    with its own project file and matrices is another project, never ``W_PROJECT_NESTED`` / ``W_PROJECT_STRAY``; a
+    ``yavih-bench/`` folder's scan covers the directory it sits in (its would-be repository root)."""
+    work = tmp_path / "work"
+    for name in ("a", "b"):
+        (work / name).mkdir(parents=True)
+        (work / name / "yavih.toml").write_text("", encoding="utf-8")
+        (work / name / "matrix.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+    assert config.git_root(work / "a") is None
+    monkeypatch.chdir(work / "a")
+    s = config.load(refresh=True)
+    rep = layout_report(s)
+    assert rep["dir"] == str(work / "a") and rep["root"] == str(work / "a") and rep["nested"] == [] and rep["stray"] == []
+    _d, warnings, _n = doctor_block(s)
+    assert [c for c, _m, _w in warnings if c.startswith("W_PROJECT")] == []
+    # a yavih-bench/ folder: the directory above it is the root, a sibling project inside it is nested
+    (work / "c" / "yavih-bench").mkdir(parents=True)
+    (work / "c" / "yavih-bench" / "yavih.toml").write_text("", encoding="utf-8")
+    (work / "c" / "other").mkdir()
+    (work / "c" / "other" / "yavih.toml").write_text("", encoding="utf-8")
+    monkeypatch.chdir(work / "c")
+    rep = layout_report(config.load(refresh=True))
+    assert rep["root"] == str(work / "c") and rep["nested"] == [str(work / "c" / "other" / "yavih.toml")]
+
+
 def test_doctor_without_a_project_notes_init(repo, runs_dir):
     data, warnings, notes = doctor_block(config.load(refresh=True))
     assert data["dir"] is None and warnings == [] and any("yavih init" in n for n in notes)

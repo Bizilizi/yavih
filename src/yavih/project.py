@@ -322,10 +322,17 @@ def check_requirement(spec: str | None, version: str) -> dict[str, Any]:
 
 
 def _scan_root(settings: Any, cwd: Path) -> Path | None:
+    """The directory the layout scan covers: the repository root, else (outside any repository) the directory a
+    ``yavih-bench/`` folder sits in, else the bare project's own directory (a sibling directory with its own
+    ``yavih.toml`` is another project, not a nested one), else ``None``."""
     project = settings.project_dir()
     start = project if project is not None else cwd
     root = git_root(start)
-    return root if root is not None else (project.parent if project is not None else None)
+    if root is not None:
+        return root
+    if project is None:
+        return None
+    return project.parent if project.name == PROJECT_DIR else project
 
 
 def layout_report(settings: Any, cwd: str | os.PathLike | None = None) -> dict[str, Any]:
