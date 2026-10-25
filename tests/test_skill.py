@@ -6,6 +6,7 @@ serve the package data."""
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
 import json
@@ -22,7 +23,7 @@ SKILL_MD = SKILL_ROOT / "SKILL.md"
 REFERENCES = ("bridge", "data", "readouts", "slurm", "cli")
 # the skill's step table: "<i> <step>" in the first column
 STEPS = ("install", "setup.md", "prepare", "bridge", "smoke", "extract", "validate", "probe", "report")
-GROUPS = ("doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec", "suite")
+GROUPS = ("init", "doctor", "config", "skill", "bench", "bridge", "extract", "features", "probe", "report", "registry", "plan", "exec", "suite")
 # the operational rules that follow the guardrail checklist, carried verbatim (whitespace-normalized)
 OPERATIONAL_RULES = (
     "Install with `--no-deps`; never let pip touch the model env's torch; install original-author packages "
@@ -365,6 +366,16 @@ def _parse_help(argv: list[str]) -> int:
         with pytest.raises(SystemExit) as exc:
             parser.parse_args([*argv, "--help"])
     return int(exc.value.code or 0)
+
+
+def test_the_cli_reference_synopsis_lists_every_top_level_command():
+    """The synopsis block at the top of references/cli.md names exactly the parser's top-level commands."""
+    text = (SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8")
+    block = text.split("```", 2)[1]
+    listed = {line.split()[0] for line in block.splitlines()[1:] if line.startswith("  ") and not line.startswith("    ")}
+    sub = next(a for a in cli.build_parser()._actions if isinstance(a, argparse._SubParsersAction))
+    assert listed == set(sub.choices), f"synopsis {sorted(listed)} != parser {sorted(sub.choices)}"
+    assert set(GROUPS) == set(sub.choices)
 
 
 def test_every_mentioned_command_parses_with_argparse():

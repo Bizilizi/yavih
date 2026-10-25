@@ -2,6 +2,7 @@
 
 ```
 yavih [--json] [--version] [--config FILE] [--runs-root DIR] [--results DIR] [--data B.ROOT=PATH]... [--lenient] <command> ...          (also: python -m yavih ...)
+  init      write the project folder yavih-bench/ (yavih.toml, bridges/, matrices/, suites/, benchmarks/, tools/)
   doctor    environment, data roots, the benchmark's authors' packages, GPU, configuration; --selftest runs the reference bridge
   config    show the configuration with the source of every value; get one value (for shell scripts)
   skill     install or show the agent skill (show --ref <name>: one reference)
@@ -13,6 +14,7 @@ yavih [--json] [--version] [--config FILE] [--runs-root DIR] [--results DIR] [--
   features  validate / inspect / diff / stage feature sets
   probe     train and score the standardized readout; writes result.json and the results store
   report    lm-eval table + comparability-checked columns with floors; --merge-results, --join
+  registry  export registry entries from a results store (--org, --out); check a registry directory
   suite     list / show / new / missing: named benchmark sets (default, minimal, project suites) and what a model lacks
   plan      init (matrix.yaml + bridge stubs for a suite) / build (--sample N: a capped run) / status / calibrate;
             run --local runs a plan on this machine
