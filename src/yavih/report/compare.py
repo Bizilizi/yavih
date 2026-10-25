@@ -50,7 +50,7 @@ from typing import Any
 from yavih import hashing
 from yavih.report import tables
 from yavih.report.index import MOVED_ASIDE, build_index, runs_root_of
-from yavih.versions import __version__
+from yavih.versions import DEFAULT_TOLERANCE, __version__
 
 __all__ = [
     "describe_diff",
@@ -78,9 +78,6 @@ DEFAULT_MIN_EVAL_COVERAGE = 0.95
 REPORT_DIR = "_report"
 #: Controls whose truthiness voids the headline (avsync / vggss_box).
 _VOIDING_CONTROLS = ("floor_violated", "audio_blind")
-#: ``yavih.conformance.DEFAULT_TOLERANCE``, repeated here because this module is stdlib only (the conformance module
-#: needs numpy); ``tests/test_report.py`` checks that the two agree.
-DEFAULT_TOLERANCE = 0.001
 #: Disclosure-like names never chosen as a fallback headline.
 _COUNT_PREFIX = "n_"
 

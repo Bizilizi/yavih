@@ -383,16 +383,16 @@ def test_folder_source_differs_compares_known_sources_only():
 
 
 def test_values_within_the_conformance_tolerance_are_ties_not_an_order():
-    """Within a column, values within the metric's tolerance (default ``conformance.DEFAULT_TOLERANCE``) of the best
-    one are ties: ``tie`` in json, the ``tie`` column in csv, ``≈`` in md; a disclosure is never ranked; tied rows are
-    never ordered by value."""
+    """Within a column, values within the metric's tolerance (default ``yavih.versions.DEFAULT_TOLERANCE``) of the
+    best one are ties: ``tie`` in json, the ``tie`` column in csv, ``≈`` in md; a disclosure is never ranked; tied
+    rows are never ordered by value."""
     import csv
     import io
 
-    from yavih import conformance
+    from yavih import conformance, versions
     from yavih.report import compare
 
-    assert compare.DEFAULT_TOLERANCE == conformance.DEFAULT_TOLERANCE
+    assert compare.DEFAULT_TOLERANCE is conformance.DEFAULT_TOLERANCE is versions.DEFAULT_TOLERANCE == 0.001  # one definition
     recs = _records(make_result(model="m1", acc=0.5004), make_result(model="m2", acc=0.5), make_result(model="m3", acc=0.4))
     rep = build_report(recs, fmt="json")
     ties = {r["model"]: r["metrics"]["acc"].get("tie") for r in rep.rows}
