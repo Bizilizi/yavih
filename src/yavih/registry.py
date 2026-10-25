@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from yavih import hashing
-from yavih.versions import REGISTRY_ENTRY_VERSION, __version__
+from yavih.versions import REGISTRY_ENTRY_VERSION, RESULT_SCHEMA_VERSION, __version__
 
 __all__ = [
     "REGISTRY_ENTRY_VERSION",
@@ -425,8 +425,12 @@ def check(root: str | os.PathLike) -> RegistryReport:
         if not isinstance(e, dict) or not _ENTRY_KEYS <= set(e) or not isinstance(e.get("identity"), dict) or not _IDENTITY_KEYS <= set(e["identity"]):
             rep.findings.append(Finding("error", E_SCHEMA, f"{rel}: not a registry entry (keys {sorted(_ENTRY_KEYS)}, identity {sorted(_IDENTITY_KEYS)})", rel))
             continue
-        if int(e.get("registry_version", -1)) > REGISTRY_ENTRY_VERSION:
-            rep.findings.append(Finding("error", E_SCHEMA, f"{rel}: registry_version {e['registry_version']} is newer than this yavih ({REGISTRY_ENTRY_VERSION})", rel))
+        rv = e.get("registry_version")
+        if not isinstance(rv, int) or isinstance(rv, bool):
+            rep.findings.append(Finding("error", E_SCHEMA, f"{rel}: registry_version must be an integer (this yavih writes {REGISTRY_ENTRY_VERSION}), got {rv!r}", rel))
+            continue
+        if rv > REGISTRY_ENTRY_VERSION:
+            rep.findings.append(Finding("error", E_SCHEMA, f"{rel}: registry_version {rv} is newer than this yavih ({REGISTRY_ENTRY_VERSION})", rel))
             continue
         i, m = e["identity"], e.get("model") or {}
         want_id = entry_id(str(i["benchmark"]), str(i["eval_hash"]), str(m.get("org", "")), str(m.get("model", "")), str(i["reading"]))
@@ -482,8 +486,10 @@ def check(root: str | os.PathLike) -> RegistryReport:
 def records(root: str | os.PathLike, *, accepted_only: bool = True) -> list[dict[str, Any]]:
     """Index-like records (``{"path", "result", "registry": {...}}``) for ``yavih.report.compare.build_report``: one
     ``result.json``-shaped record per seed when the entry carries per-seed numbers, else one carrying the aggregate
-    (``registry.n_seeds`` keeps the seed count honest). With ``accepted_only`` entries whose conformance did not
-    pass are left out (what :func:`check` refuses)."""
+    (``registry.n_seeds`` keeps the seed count honest). The record is built in the CURRENT ``result.json`` shape
+    (``RESULT_SCHEMA_VERSION``), so ``yavih.report.migrate`` has nothing to upgrade; it only follows a superseded
+    protocol hash. With ``accepted_only`` entries whose conformance did not pass are left out (what :func:`check`
+    refuses)."""
     from yavih.report.compare import floor_name_for
 
     out: list[dict[str, Any]] = []
@@ -496,7 +502,7 @@ def records(root: str | os.PathLike, *, accepted_only: bool = True) -> list[dict
         floors = {floor_name_for(mn, names, floor_names) or f"{mn}_floor": v for mn, v in (s.get("floors") or {}).items()}
         coverage = (e.get("population") or {}).get("coverage") or {}
         base = {
-            "schema_version": 4, "status": "ok", "reason": None, "standard": bool(i.get("standard")), "eval_hash": i["eval_hash"],
+            "schema_version": RESULT_SCHEMA_VERSION, "status": "ok", "reason": None, "standard": bool(i.get("standard")), "eval_hash": i["eval_hash"],
             "benchmark": {"name": i["benchmark"], "protocol_version": i.get("protocol_version"), "readout": i.get("readout"),
                           "readout_version": i.get("readout_version"), "manifest_hash": i.get("manifest_hash"), "protocol_hash": i["protocol_hash"],
                           "folder_source": prov.get("folder_source")},

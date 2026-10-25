@@ -88,10 +88,34 @@ def test_check_accepts_a_clean_registry_and_names_every_defect(world, tmp_path):
     assert R.W_NONSTANDARD in [f.code for f in with_entry(lambda e: e["identity"].__setitem__("standard", False)).warnings]
     assert R.W_COVERAGE in [f.code for f in with_entry(lambda e: e["population"]["coverage"]["eval"].update(present=50, nominal=100)).warnings]
     assert R.E_SCHEMA in [f.code for f in with_entry(lambda e: e.pop("score")).errors]
+    for bad in ("1", None, True):  # a registry_version that is not an integer is a schema finding, never a crash
+        assert [f.code for f in with_entry(lambda e, bad=bad: e.__setitem__("registry_version", bad)).errors] == [R.E_SCHEMA]
+    assert [f.code for f in with_entry(lambda e: e.__setitem__("registry_version", R.REGISTRY_ENTRY_VERSION + 1)).errors] == [R.E_SCHEMA]
     path.write_text(json.dumps(entry))
     for p in (reg / "protocols").rglob("*.json"):
         p.unlink()
     assert [f.code for f in R.check(reg).errors] == [R.E_PROTOCOL]
+
+
+def test_records_are_current_result_json_records(world, tmp_path):
+    """``records`` builds the current ``result.json`` shape: ``schema_version`` is ``RESULT_SCHEMA_VERSION`` and the
+    in-memory migration the report applies changes nothing (only a superseded protocol hash would)."""
+    import copy
+
+    from yavih.report.migrate import migrate
+    from yavih.versions import RESULT_SCHEMA_VERSION
+
+    reg = tmp_path / "registry"
+    R.export(world["results_root"], org="lab", out=reg)
+    recs = R.records(reg)
+    assert len(recs) == 2 and all(r["result"]["schema_version"] == RESULT_SCHEMA_VERSION for r in recs)
+    for r in recs:
+        assert migrate(copy.deepcopy(r["result"])) == r["result"]
+    # the top-level keys of a probe's result.json: every required one present, nothing the schema does not know
+    from yavih.readouts.base import RESULT_KEYS
+
+    keys = set(recs[0]["result"]) - {"registry"}
+    assert keys <= RESULT_KEYS and RESULT_KEYS - {"sample", "waived", "warnings", "chance"} <= keys
 
 
 def test_export_skips_what_is_not_a_score(world, tmp_path):
