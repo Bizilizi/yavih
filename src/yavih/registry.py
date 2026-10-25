@@ -321,7 +321,9 @@ def export(source: str | os.PathLike, *, org: str, out: str | os.PathLike, inclu
     ``source`` (a results root ``<root>/<model>/results_*.json`` or one file), plus the protocol payload of every
     benchmark whose folder resolves here at the entry's hash. A non-standard probe is skipped unless
     ``include_nonstandard``; a resubmission replaces the file and records the previous one's sha256 under
-    ``provenance.replaces``. Returns ``{"entries": [paths], "protocols": [paths], "skipped": [{key, reason}]}``."""
+    ``provenance.replaces``. Returns ``{"entries": [paths], "protocols": [paths], "skipped": [{key, reason}], "unverified":
+    [paths]}``; ``unverified`` are the written entries whose ``conformance.passed`` is not true (the fixture was skipped or
+    failed here), taken from the entries as written, so a caller never re-reads the files to find them."""
     from yavih.report.store import upgrade_results_file
 
     if not _ORG_RE.match(org):
@@ -333,6 +335,7 @@ def export(source: str | os.PathLike, *, org: str, out: str | os.PathLike, inclu
     written: list[str] = []
     protocols: list[str] = []
     skipped: list[dict[str, str]] = []
+    unverified: list[str] = []
     for path in _results_files(source):
         try:
             doc = upgrade_results_file(json.loads(path.read_text(encoding="utf-8")))
@@ -365,11 +368,13 @@ def export(source: str | os.PathLike, *, org: str, out: str | os.PathLike, inclu
             if dest.is_file():
                 entry["provenance"]["replaces"] = _sha256_file(dest)
             written.append(str(_write_json(dest, entry)))
+            if (entry.get("conformance") or {}).get("passed") is not True:
+                unverified.append(written[-1])
             if bench is not None and bench.protocol_hash == cfg.get("protocol_hash"):
                 pp = protocol_path(out_root, bench.name, bench.protocol_hash)
                 if not pp.is_file():
                     protocols.append(str(_write_json(pp, protocol_payload(bench))))
-    return {"entries": written, "protocols": protocols, "skipped": skipped}
+    return {"entries": written, "protocols": protocols, "skipped": skipped, "unverified": unverified}
 
 
 # --------------------------------------------------------------------------- check

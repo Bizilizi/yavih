@@ -192,9 +192,10 @@ def test_cli_registry_export_and_check(world, tmp_path, capsys):
     assert env["data"]["paths"]["report"] == str(report_file) and report_file.is_file() and (report_file.parent / "DONE").is_file()
 
 
-def test_cli_export_reads_the_entry_conformance_not_the_file_text(world, tmp_path, capsys, monkeypatch):
-    """``W_REGISTRY_UNVERIFIED`` comes from ``entry["conformance"]["passed"]``, not from the text ``"passed": true``
-    appearing anywhere in the file (a describe block may carry exactly that)."""
+def test_cli_export_unverified_comes_from_the_entries_export_wrote(world, tmp_path, capsys, monkeypatch):
+    """``W_REGISTRY_UNVERIFIED`` follows ``export()``'s ``unverified`` list, judged on each entry's
+    ``conformance.passed`` as written; the CLI never re-reads the files, so a file that is gone or says something else
+    by then changes nothing."""
     from yavih import cli
 
     def run(argv):
@@ -211,17 +212,21 @@ def test_cli_export_reads_the_entry_conformance_not_the_file_text(world, tmp_pat
     monkeypatch.setattr(C, "check", failing_check)
     reg = tmp_path / "registry"
     rc, env = run(["registry", "export", str(world["results_root"]), "--org", "lab", "--out", str(reg)])
-    assert rc == 0 and len(env["data"]["entries"]) == 1
+    assert rc == 0 and len(env["data"]["entries"]) == 1 and env["data"]["unverified"] == env["data"]["entries"]
     assert [w["code"] for w in env["warnings"]] == ["W_REGISTRY_UNVERIFIED"]
     path = Path(env["data"]["entries"][0])
-    e = json.loads(path.read_text())
-    assert e["conformance"]["passed"] is False
-    e["provenance"]["probe_config"] = {"note": {"passed": True}}  # the literal `"passed": true` in another block
-    path.write_text(json.dumps(e, indent=1))
+    assert json.loads(path.read_text())["conformance"]["passed"] is False
     monkeypatch.setattr(C, "check", real_check)
-    monkeypatch.setattr(R, "export", lambda *a, **k: {"entries": [str(path)], "protocols": [], "skipped": []})
+    out = R.export(world["results_root"], org="lab", out=reg)  # the fixture passes: nothing unverified
+    assert out["entries"] == [str(path)] and out["unverified"] == [] and json.loads(path.read_text())["conformance"]["passed"] is True
+    # the CLI reports what export() returned, whatever the files say afterwards
+    path.unlink()
+    monkeypatch.setattr(R, "export", lambda *a, **k: {"entries": [str(path)], "protocols": [], "skipped": [], "unverified": []})
     rc, env = run(["registry", "export", str(world["results_root"]), "--org", "lab", "--out", str(reg)])
-    assert '"passed": true' in path.read_text() and [w["code"] for w in env["warnings"]] == ["W_REGISTRY_UNVERIFIED"]
+    assert rc == 0 and env["warnings"] == []
+    monkeypatch.setattr(R, "export", lambda *a, **k: {"entries": [str(path)], "protocols": [], "skipped": [], "unverified": [str(path)]})
+    rc, env = run(["registry", "export", str(world["results_root"]), "--org", "lab", "--out", str(reg)])
+    assert rc == 0 and [(w["code"], w["where"]) for w in env["warnings"]] == [("W_REGISTRY_UNVERIFIED", str(path))]
 
 
 def test_report_moves_a_registry_entry_under_a_superseded_hash_into_the_current_column(world, tmp_path):
