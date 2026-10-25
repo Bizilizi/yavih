@@ -1744,10 +1744,10 @@ def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
     rec = plan_init(ns.suite, model=ns.model, launcher=ns.launcher, out=ns.out, bridges_dir=ns.bridges_dir, force=bool(ns.force))
     warnings: list[dict] = []
     if rec["launcher"] is None and not rec["launcher_configured"]:
-        warnings.append(_finding("W_LAUNCHER_UNSET", "no --launcher and no launcher anywhere in the configuration (neither the top level "
-                                 "nor any [site.<id>] table defines `launcher` or a [launchers] entry): set one in the project yavih.toml, "
-                                 "per site under [site.<id>], or pass --launcher; until then the units run with the python running "
-                                 "`yavih exec`"))
+        warnings.append(_finding("W_LAUNCHER_UNSET", "no --launcher and no default `launcher` anywhere in the configuration (neither the top "
+                                 "level nor any [site.<id>] table defines `launcher`; a [launchers] name applies only to an entry that names "
+                                 "it): set one in the project yavih.toml, per site under [site.<id>], or pass --launcher; until then the "
+                                 "units run with the python running `yavih exec`"))
     lines = [f"wrote {rec['path']}: suite {rec['suite']}, model {rec['model']}, {len(rec['entries'])} entries"
              + (f" (project {rec['project']})" if rec["project"] else "")]
     for b in rec["bridges"]:

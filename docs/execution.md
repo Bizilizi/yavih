@@ -158,7 +158,9 @@ writes the starting point for running one model on a [suite](suites.md). In a pr
   file is kept, never overwritten;
 - the matrix in the layout [below](#matrixyaml): `defaults.launcher` = `--launcher` (a python path or a
   `[launchers]` name), or `null` when omitted so the configured launcher applies on whichever site runs the units
-  (`W_LAUNCHER_UNSET` when the configuration names none either); `out: null` (the configured runs root); and one
+  (`W_LAUNCHER_UNSET` when no default `launcher` is configured either, at the top level or in any `[site.<id>]`
+  table; a `[launchers]` name alone does not count, since `null` never resolves to one); `out: null` (the
+  configured runs root); and one
   entry `<M>-<benchmark>-<reading>` per suite `(benchmark, reading)` with `script`, `benchmark`, `args: {reading:
   <r>}` for a multi-reading template, `profile: <matrix stem>.profiles/<M>-<benchmark>-<reading>.profile.json`
   (profiles belong to matrix entries and sit next to their matrix) and a commented `waive:` line. A join entry adds

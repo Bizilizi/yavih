@@ -775,18 +775,19 @@ class Settings:
         return {k[1]: os.path.expanduser(str(v.value)) for k, v in sorted(self.values.items()) if k[0] == "launchers"}
 
     def any_site_launcher(self) -> bool:
-        """Whether a launcher is defined anywhere in the configuration: the active layers (``launcher``, ``[launchers]``,
+        """Whether a DEFAULT ``launcher`` is defined anywhere in the configuration: the active layers (``launcher``,
         ``YAVIH_LAUNCHER``), or the top level or ANY ``[site.<id>]`` table of a config file, active here or not. A
-        launcher written for another cluster's site table is that cluster's, not missing: ``plan init`` warns
-        ``W_LAUNCHER_UNSET`` only when this is false."""
-        if self.launcher() is not None or self.launchers():
+        default written for another cluster's site table is that cluster's, not missing: ``plan init`` warns
+        ``W_LAUNCHER_UNSET`` only when this is false. ``[launchers]`` names do not count: a matrix ``launcher: null``
+        resolves to the default ``launcher`` only (:func:`yavih.plan.exec.resolve_launcher`), never to a named entry."""
+        if self.launcher() is not None:
             return True
 
         def defines(table: Any) -> bool:
             if not isinstance(table, Mapping):
                 return False
-            lv, named = table.get("launcher"), table.get("launchers")
-            return (isinstance(lv, str) and bool(lv.strip())) or (isinstance(named, Mapping) and bool(named))
+            lv = table.get("launcher")
+            return isinstance(lv, str) and bool(lv.strip())
 
         for f in self.files:
             data = f.data if isinstance(f.data, Mapping) else {}

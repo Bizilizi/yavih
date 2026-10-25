@@ -452,25 +452,31 @@ def test_plan_init_out_elsewhere_keeps_the_project_bridges(repo, runs_dir, capsy
 
 
 def test_launcher_anywhere_in_the_configuration_silences_the_unset_warning(repo, runs_dir, capsys, monkeypatch):
-    """``plan init`` warns ``W_LAUNCHER_UNSET`` only when no launcher is defined anywhere: a launcher under another
-    site's table (a login node that is active on no site) or a ``[launchers]`` entry counts as configured."""
+    """``plan init`` warns ``W_LAUNCHER_UNSET`` only when no DEFAULT ``launcher`` is defined anywhere: one under another
+    site's table (a login node that is active on no site) counts as configured. A ``[launchers]`` name does not: the
+    skeleton's ``launcher: null`` resolves to the default ``launcher`` only, never to a named entry."""
     init_project()
     toml = repo / "yavih-bench" / "yavih.toml"
     toml.write_text("", encoding="utf-8")
     rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy"])
     assert rc == 0 and [w["code"] for w in env["warnings"]] == ["W_LAUNCHER_UNSET"] and not env["data"]["launcher_configured"]
     assert "anywhere in the configuration" in env["warnings"][0]["message"]
-    # two sites, this host active on neither: the launchers are theirs, not missing
+    # two sites, this host active on neither: site a's default launcher is that cluster's, not missing
     toml.write_text('[site.a]\nhosts = ["no-such-host-a*"]\nlauncher = "/a/bin/python"\n'
                     '[site.b]\nhosts = ["no-such-host-b*"]\n[site.b.launchers]\nvjepa = "/b/vjepa/bin/python"\n', encoding="utf-8")
     s = config.load(refresh=True)
     assert s.site is None and s.launcher() is None and s.launchers() == {} and s.any_site_launcher()
     rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--force"])
     assert rc == 0 and env["warnings"] == [] and env["data"]["launcher_configured"] is True
+    # named entries alone, in an inactive site table or at the top level: `null` resolves to none of them, so it warns
     toml.write_text('[site.b]\nhosts = ["no-such-host-b*"]\n[site.b.launchers]\nvjepa = "/b/vjepa/bin/python"\n', encoding="utf-8")
-    assert config.load(refresh=True).any_site_launcher()  # a named entry alone, in an inactive site table
+    assert not config.load(refresh=True).any_site_launcher()
     toml.write_text('[launchers]\nvjepa = "/envs/vjepa/bin/python"\n', encoding="utf-8")
-    assert config.load(refresh=True).any_site_launcher()  # or at the top level
+    s = config.load(refresh=True)
+    assert s.launchers() == {"vjepa": "/envs/vjepa/bin/python"} and resolve_launcher(None) is None and not s.any_site_launcher()
+    rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--force"])
+    assert rc == 0 and [w["code"] for w in env["warnings"]] == ["W_LAUNCHER_UNSET"] and not env["data"]["launcher_configured"]
+    # naming the entry on the command line is a launcher: no warning
     rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--force", "--launcher", "vjepa"])
     assert rc == 0 and env["warnings"] == [] and env["data"]["launcher"] == "vjepa"
     toml.write_text('[site.b]\nhosts = ["no-such-host-b*"]\n[site.b.data]\nroot = "/d"\n', encoding="utf-8")
