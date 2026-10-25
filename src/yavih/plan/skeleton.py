@@ -141,9 +141,11 @@ def project_defaults(model: str, out: str | os.PathLike | None = None) -> dict[s
     outside one ``out`` is ``matrix.yaml`` and ``bridges_dir`` is ``bridges`` in the current directory. ``bridges_dir``
     is the project's bridges directory relative to the directory of ``out`` (the given matrix path, else the project
     default), so an explicit ``--out`` elsewhere still points at the project's bridges. ``launcher_configured`` is
-    whether a default ``launcher`` is configured: a skeleton's ``launcher: null`` resolves to that one only, never to
-    a ``[launchers]`` name. An invalid configuration counts as no project (``plan init`` must still work), but a
-    ``[project]`` path that does not resolve is reported (``E_USAGE``)."""
+    whether a default ``launcher`` is configured anywhere (``Settings.any_site_launcher``: the active layers,
+    ``YAVIH_LAUNCHER``, any site table of the user or project file), inside a project or not: a skeleton's
+    ``launcher: null`` resolves to that one only, never to a ``[launchers]`` name. An invalid configuration counts as
+    no project and no launcher (``plan init`` must still work), but a ``[project]`` path that does not resolve is
+    reported (``E_USAGE``)."""
     from yavih import config
     from yavih.suites import SuiteError
 
@@ -151,10 +153,11 @@ def project_defaults(model: str, out: str | os.PathLike | None = None) -> dict[s
         settings = config.load()
     except config.ConfigError:
         settings = None
+    launcher_configured = settings.any_site_launcher() if settings is not None else False
     project = settings.project_dir() if settings is not None else None
     if project is None:
         return {"project": None, "out": str(out) if out is not None else "matrix.yaml", "bridges_dir": "bridges",
-                "launcher_configured": False}
+                "launcher_configured": launcher_configured}
     try:
         out_path = Path(out) if out is not None else settings.project_path("matrices") / f"{model}.yaml"
         bridges = settings.project_path("bridges")
@@ -164,8 +167,7 @@ def project_defaults(model: str, out: str | os.PathLike | None = None) -> dict[s
         rel = Path(os.path.relpath(bridges, out_path.resolve().parent)).as_posix()
     except ValueError:  # another drive (Windows)
         rel = bridges.as_posix()
-    return {"project": str(project), "out": str(out_path), "bridges_dir": rel,
-            "launcher_configured": settings.any_site_launcher()}
+    return {"project": str(project), "out": str(out_path), "bridges_dir": rel, "launcher_configured": launcher_configured}
 
 
 def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str | os.PathLike | None = None,

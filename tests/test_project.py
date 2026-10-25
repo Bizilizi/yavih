@@ -509,6 +509,25 @@ def test_launcher_anywhere_in_the_configuration_silences_the_unset_warning(repo,
     assert not config.load(refresh=True).any_site_launcher()  # a site table without a launcher defines none
 
 
+def test_plan_init_outside_a_project_sees_a_launcher_configured_anywhere(repo, runs_dir, capsys, monkeypatch, tmp_path):
+    """Without a project ``plan init`` still asks the configuration for a default launcher: the user file, a site table
+    of the user file (active here or not) or ``YAVIH_LAUNCHER`` silences ``W_LAUNCHER_UNSET``; nothing anywhere warns."""
+    monkeypatch.delenv("YAVIH_LAUNCHER", raising=False)
+    user = Path(os.environ["XDG_CONFIG_HOME"]) / "yavih" / "config.toml"
+    assert config.load(refresh=True).project_dir() is None
+    rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--out", str(tmp_path / "m1.yaml")])
+    assert rc == 0 and env["data"]["project"] is None
+    assert [w["code"] for w in env["warnings"]] == ["W_LAUNCHER_UNSET"] and env["data"]["launcher_configured"] is False
+    user.write_text('[site.a]\nhosts = ["no-such-host-a*"]\nlauncher = "/a/bin/python"\n', encoding="utf-8")
+    assert config.load(refresh=True).launcher() is None
+    rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--out", str(tmp_path / "m2.yaml")])
+    assert rc == 0 and env["warnings"] == [] and env["data"]["launcher_configured"] is True and env["data"]["project"] is None
+    user.unlink()
+    monkeypatch.setenv("YAVIH_LAUNCHER", "/envs/m/bin/python")
+    rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--out", str(tmp_path / "m3.yaml")])
+    assert rc == 0 and env["warnings"] == [] and env["data"]["launcher_configured"] is True
+
+
 def test_init_launcher_without_site_and_hosts_without_site(repo, capsys, tmp_path):
     rc, env = _json(capsys, ["init", "--hosts", "*"])
     assert rc == 1 and env["errors"][0]["code"] == "E_ARG" and "--site" in env["errors"][0]["message"]
