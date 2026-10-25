@@ -54,7 +54,7 @@ model package (`script: pkg.mod:Class`), a deliverable benchmark folder (`[proje
 
 **Hard rule — shipped files.** Everything yavih ships (setup.md, README.md, benchmark.yaml, `bridge_template.py`,
 `prepare/` scripts, this skill's references) is reached ONLY through `yavih bench files <b>` (list, absolute paths),
-`yavih bench show <b> setup|readme|yaml|template|prepare/<file>`, `yavih bench prepare <b> [<step>]`,
+`yavih bench show <b> setup|readme|yaml|template|probe|classes|conformance|prepare/<file>`, `yavih bench prepare <b> [<step>]`,
 `yavih bridge new <b> --model <name>` and `yavih skill show --ref <name>`. Never search site-packages or a repository
 checkout for them: a wheel install has no checkout, and these commands answer the same everywhere. Exploring a benchmark:
 
@@ -221,7 +221,7 @@ The run directory is `$R/<b>/<model>/<reading>/` with `features/<split>/shard-NN
 `_meta.json` (written by validate) and `probe/<eval_hash12>/seed<k>/{result.json,DONE}`; the results
 store is `<results root>/<model>/results_<timestamp>.json` (entries keyed `<b>:<reading>`; +
 `samples_<b>_<reading>_<timestamp>.jsonl` with `--log-samples`); `yavih config get results.root` prints that root
-(`[results] root`, `YAVIH_RESULTS` or `--results DIR`, else next to the runs root).
+(`[results] root`, `YAVIH_RESULTS` or `--results DIR`, else `yavih-bench/results` in a project, else `<runs root>/../results`).
 
 The matrix (`yavih plan init` writes `yavih-bench/matrices/<model>.yaml`, one per model): its keys, an example and when `plan
 build` refuses a profile are in references/slurm.md "matrix.yaml".

@@ -304,12 +304,13 @@ prints the same statuses for one model without building a report.
 
 Decided before any training (`yavih.readouts.base.resolve_results_root`): `probe run --results DIR` (a matrix
 `results` key), else `YAVIH_RESULTS`, else config `[results] root` ([configuration](configuration.md)), else
-the directory `results` next to the runs root of a standard run directory: the absolute run directory's last
-three components must be `<benchmark or alias>/<model>/<reading>` of the feature set being probed, and the runs
-root is the directory above them. Any other run directory is refused with `E_RESULTS_ROOT` (exit 1, nothing
-trained). `--no-results` needs no root, and neither does a capped run's probe (`_meta.json` `sample`), which never
-writes the store. `report build` uses `--results`, else the same configured root, else
-`results` next to the runs root of the indexed results.
+`yavih-bench/results` when a project is discovered ([project layout](project-layout.md)), else the directory
+`results` next to the runs root of a standard run directory: the absolute run directory's last three components
+must be `<benchmark or alias>/<model>/<reading>` of the feature set being probed, and the runs root is the
+directory above them. Any other run directory is refused with `E_RESULTS_ROOT` (exit 1, nothing trained).
+`--no-results` needs no root, and neither does a capped run's probe (`_meta.json` `sample`), which never writes
+the store. `report build` uses `--results`, else the same configured or project root, else `results` next to the
+runs root of the indexed results.
 
 ### Layout
 
@@ -348,7 +349,7 @@ One directory per model name, every reading and benchmark of it inside. `<timest
                          "probe": {"config": {…}, "seeds": [0], "standard": true},
                          "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
                          "describe_sha256": "…", "features_fingerprint": "…",
-                         "unit_results": ["runs/ave/vjepa2-l/av/probe/<eval_hash12>/seed0/result.json"]}},
+                         "unit_results": ["<runs root>/ave/vjepa2-l/av/probe/<eval_hash12>/seed0/result.json"]}},
   "versions": {"ave:av": 2},
   "higher_is_better": {"ave:av": {"seg_acc": true, "clip_acc": true, "seg_acc_boundary": true}},
   "n_samples": {"ave:av": {"train": 2624, "eval": 316}},

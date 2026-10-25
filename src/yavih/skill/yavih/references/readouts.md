@@ -146,7 +146,7 @@ weights fingerprints are the warning `W_JOIN_WEIGHTS`).
 inside); with `--log-samples` also
 `samples_<benchmark>_<reading>_<timestamp>.jsonl` (one line per scored row: `clip_id`, `row`, `seed`,
 `role`, `prediction`, `target`). The results root is `--results DIR`, else `YAVIH_RESULTS`, else
-config `[results] root`, else `results/` next to the runs root; `--no-results` skips it
+config `[results] root`, else `yavih-bench/results` in a project, else `results/` next to the runs root; `--no-results` skips it
 (`"results_version": 2`). Entries are keyed `<benchmark>:<reading>` (e.g. `ave:av`; a join
 `vggsounder:a+v+av`); take `benchmark`, `reading` and `eval_hash` from `configs[key]`, never by parsing
 the key. Keys:

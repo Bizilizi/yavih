@@ -258,11 +258,11 @@ One JSON object per line, sorted keys:
  "depends_on": [],
  "needs": {"gpu": 1, "cpus": 8, "mem_gb": 48, "scratch_gb": 0, "minutes": 15},
  "cmd": ["python", "-m", "yavih.extract", "--bench", "k400", "--bridge", "bridges/vjepa_video_k400.py",
-         "--split", "train", "--shard", "3/32", "--out", "runs/k400/vjepa2-l/v", "--arg", "layer=12",
+         "--split", "train", "--shard", "3/32", "--out", "<runs root>/k400/vjepa2-l/v", "--arg", "layer=12",
          "--canaries", "8", "--decode-workers", "7", "--expect-profile", "matrix.profiles/vjepa-video-k400.profile.json"],
  "launcher": "/envs/vjepa/bin/python", "env": {"HF_HUB_OFFLINE": "1"}, "cwd": ".",
- "out": "runs/k400/vjepa2-l/v/features/train",
- "done": "runs/k400/vjepa2-l/v/features/train/shard-000003.json",
+ "out": "<runs root>/k400/vjepa2-l/v/features/train",
+ "done": "<runs root>/k400/vjepa2-l/v/features/train/shard-000003.json",
  "inputs_hash": "…", "expected_status": "ok",
  "profile": "matrix.profiles/vjepa-video-k400.profile.json", "not_applicable": null}
 ```
