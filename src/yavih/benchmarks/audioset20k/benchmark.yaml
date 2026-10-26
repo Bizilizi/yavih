@@ -8,6 +8,7 @@ schema_version: 2
 name: audioset20k
 aliases: []
 title: AudioSet-20K (balanced) 527-class multi-label audio-visual tagging, published raw clips (macro mAP)
+capability: [audio-visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: AudioSet-20K
   title: "Audio Set: An ontology and human-labeled dataset for audio events"
@@ -24,8 +25,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 4eee199ca9c7b4a47fd524418c8841c9685d02ecf95a9346cbb4dfa000e31109
-    input_hash: c387545ad5ffed1a9225b9f1d1a6a8e2dbf927741d58e8ccff45a79229152ce9
+    protocol_hash: 5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7
+    input_hash: 101661559f6902732ab4885f401d2e721ab283badf8526b108af5c71332acb23
     supersedes: []
 
 source:

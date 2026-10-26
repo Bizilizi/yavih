@@ -175,7 +175,7 @@ def write_done_probe(unit: Unit, *, status: str = "ok", probe_hash: str | None =
     """A probe DONE marker."""
     p = Path(U.resolve_path(unit, unit.done))
     p.parent.mkdir(parents=True, exist_ok=True)
-    (p.parent / "result.json").write_text(json.dumps({"schema_version": 3, "status": status, "timing": {"wall_s": 12.0}}), encoding="utf-8")
+    (p.parent / "result.json").write_text(json.dumps({"schema_version": 4, "status": status, "timing": {"wall_s": 12.0}}), encoding="utf-8")
     p.write_text(json.dumps({"result_sha256": "0" * 64, "protocol_hash": unit.protocol_hash,
                              "probe_hash": probe_hash or unit.probe_hash, "eval_hash": unit.eval_hash,
                              "model": model or unit.model, "reading": reading or unit.reading,

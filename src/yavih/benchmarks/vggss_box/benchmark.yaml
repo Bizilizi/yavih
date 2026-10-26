@@ -4,6 +4,7 @@ schema_version: 2
 name: vggss_box
 aliases: []
 title: VGG-SS audio-conditioned single-box regression
+capability: [audio-visual, spatial]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: VGG-SS
   title: Localizing Visual Sounds the Hard Way
@@ -19,8 +20,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: b25878ef51ad69a8bb65108bdc584b0c3298e888a70fe10136fbf2a06b12e30f   # recorded, outside the hashed payload; `yavih bench lint` checks it
-    input_hash: b67bf2de449e26146ee33c37653928d1a846634f1e23d83167a075f5ca14c023
+    protocol_hash: f108458e24156e0d49c873b3abb7101f61e077abf664a5282aa43d54b36a7799   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 835ce236d5d00af35486d9626a1776e2eb3b8ed787435185f9d55f57e5b4b611
     supersedes: []
 
 source:

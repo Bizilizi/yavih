@@ -5,7 +5,7 @@ template, and any ``reader.py`` / ``probe.py`` with a ``# TODO: copied verbatim 
 its ``curation.json``, notes, tests, prepare steps or header image) with ``benchmark.yaml`` renamed and reset to
 ``protocol_version`` 1, and a README.md, setup.md, ``make_manifest.py``, ``prepare/`` and ``tests/test_folder.py``
 written from the folder contract, plus a ``header:`` block for the README header image
-(``python -m yavih.headers <name>``). Every fact the new benchmark must supply is marked ``TODO`` (``TODO:`` in
+(``python -m yavih.headers <name>``); ``capability:`` keeps the ``--like`` folder's tags under a ``TODO`` comment. Every fact the new benchmark must supply is marked ``TODO`` (``TODO:`` in
 ``tests/`` and ``prepare/``). The generated ``tests/test_folder.py`` runs the shared checks of
 ``yavih.testing.folder`` and pins the values the scaffold carries; the tests that need the benchmark's own data
 (``make_manifest.py --check``, the reader smoke) skip with a ``TODO:`` reason. The result passes ``yavih bench lint``
@@ -13,8 +13,9 @@ written from the folder contract, plus a ``header:`` block for the README header
 not a protocol: replace the manifest (``make_manifest.py``), the protocol, the contracts, the copied scripts, the
 tests and the docs, then lint again.
 
-Where it goes: ``--dir D`` (the folder is ``D/<name>``), else the first ``$YAVIH_BENCH_PATH`` directory, else the
-current directory. A folder on ``$YAVIH_BENCH_PATH`` resolves by name; elsewhere use its path.
+Where it goes: ``--dir D`` (the folder is ``D/<name>``), else the project's benchmarks directory
+(``yavih-bench/benchmarks/``), else the first ``$YAVIH_BENCH_PATH`` directory, else the current directory. A folder
+in the project directory or on ``$YAVIH_BENCH_PATH`` resolves by name; elsewhere use its path.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ DEFAULT_LIKE: dict[str, str] = {"clf": "esc50", "seq": "ave", "grid": "nyuv2_dep
 _WRITTEN = {"README.md", "setup.md", "make_manifest.py", "benchmark.yaml"}
 #: Files of the ``--like`` folder that are not copied: its own re-freeze record.
 _NOT_COPIED = {"curation.json"}
-_SKIPPED_DIRS = {"notes", "tests", "prepare", "assets", "__pycache__"}
+_SKIPPED_DIRS = {"notes", "tests", "prepare", "assets", "conformance", "__pycache__"}
 #: Folder scripts copied from ``--like`` (code, not data): a ``TODO`` banner is prepended as their first lines.
 _BANNERED = {
     "reader.py": "the reader of this benchmark's own layout (or delete it: without reader.py the generic "
@@ -279,8 +280,13 @@ def test_reader_smoke_synthetic_raw():
 
 
 def _dest(dir_: str | os.PathLike | None) -> Path:
+    from yavih import config
+
     if dir_:
         return Path(dir_).expanduser()
+    project = config.project_benchmarks_dir()
+    if project is not None:
+        return project
     bp = [p for p in os.environ.get("YAVIH_BENCH_PATH", "").split(os.pathsep) if p]
     return Path(bp[0]).expanduser() if bp else Path.cwd()
 
@@ -339,12 +345,18 @@ def new_benchmark(name: str, *, readout: str | None = None, like: str | None = N
     y["header"] = {"name": name, "title": "TODO: the title of the paper that introduced the benchmark",
                    "venue": "TODO: authors · venue year",
                    "abstract": "TODO: two or three neutral sentences on the data and the task (at most 60 words)."}
+    from yavih.suites import CAPABILITIES
+
     def _write_yaml() -> None:
+        body = yaml.safe_dump(y, sort_keys=False, allow_unicode=True, width=120)
+        # `capability` keeps --like's tags (a valid list) with a TODO marker that `bench lint` reports (W_TODO)
+        body = re.sub(r"^capability:", f"capability:  # TODO: still {like_name}'s; what {name} measures, one or more of "
+                      f"{', '.join(CAPABILITIES)}", body, count=1, flags=re.M)
         (dest / "benchmark.yaml").write_text(
             f"# {name}: scaffolded from {like_name} by `yavih bench new` on {today}. TODO: every value below is {like_name}'s\n"
             "# until this benchmark's manifest, protocol and contracts replace it; run `yavih bench lint` after each edit\n"
             "# (it tells you the changelog's protocol_hash / input_hash to write after a protocol edit).\n"
-            + yaml.safe_dump(y, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+            + body, encoding="utf-8")
 
     _write_yaml()
     # the newest changelog entry records the hashes the folder computes (outside the hashed payload)
@@ -367,4 +379,12 @@ def new_benchmark(name: str, *, readout: str | None = None, like: str | None = N
     readings = sorted(template_readings(tpl.read_text(encoding="utf-8"))) if tpl.is_file() else []
     (dest / "tests" / "test_folder.py").write_text(
         _test_folder(y, like_name, readings=readings, has_probe=(dest / "probe.py").is_file()), encoding="utf-8")
+    # the conformance fixture of the scaffold's (copied) protocol: re-recorded by the author once the protocol is theirs
+    try:
+        from yavih.benchmark import Benchmark
+        from yavih.conformance import record
+
+        record(Benchmark.from_dir(dest), force=True)
+    except Exception:  # noqa: BLE001 - `bench lint` reports E_CONFORMANCE_MISSING with the command to run
+        pass
     return dest

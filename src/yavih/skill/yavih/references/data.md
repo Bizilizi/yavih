@@ -56,7 +56,7 @@ were 3–17 h per benchmark on one GPU.
 ## 2. Data roots per site
 
 Resolution (references/cli.md "Configuration"): `Benchmark.load(data=…)` → `--data
-<bench>.<root>=PATH` → env `YAVIH_DATA__<BENCH>__<ROOT>` → project `yavih.toml` → user
+<bench>.<root>=PATH` → env `YAVIH_DATA__<BENCH>__<ROOT>` → project `yavih-bench/yavih.toml` → user
 `~/.config/yavih/config.toml` `[data.<bench>] <root>` (each file's active `[site.<id>]` table first) →
 `benchmark.yaml` default with `${data.root}` from `[data] root` (or `YAVIH_DATA__ROOT`) and
 `${datasets.<name>}` from `[datasets] <name>` (else `${data.root}/<name>`). `yavih config show --bench
@@ -83,11 +83,11 @@ media_root = "/path/to/imagenet"                             # a dataset kept ou
 media_root = "/path/to/audioset20k"
 [datasets]
 vggsound = "/path/to/datasets/vggsound"                      # one entry for vggsounder, vggss_box and avsync (= the default)
-[site.<id>]
+[site.cluster_a]
 hosts = ["<hostname glob>"]
-[site.<id>.data]
+[site.cluster_a.data]
 root = "/other/path/to/datasets"
-[site.<id>.datasets]
+[site.cluster_a.datasets]
 vggsound = "/other/path/to/datasets/vggsound_wds"
 [runs]
 root = "/path/to/yavih-runs"

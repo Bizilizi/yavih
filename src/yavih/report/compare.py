@@ -27,6 +27,10 @@ A result of a capped run (``plan build --sample N``: ``result["sample"]``) is ne
 row key it forms its own ``partial`` row (view 1 and view 2), marked in every format (``partial: true`` and the flag
 ``partial`` in json, the ``(partial)`` suffix on its values in md, the ``partial`` column and flag in csv). Such a
 result never reaches the results store, so ``--merge-results`` never sees it.
+
+Ties: in a standard column, the values of one metric that lie within that metric's conformance tolerance of the best
+value are a tie, not an order (:func:`_mark_ties`): each such cell carries ``tie: true`` (json), the ``tie`` column
+(csv) or a leading ``≈`` (md), and tied rows are never ordered by value.
 stdlib only (the folder ``join`` is a lazy import).
 """
 
@@ -46,7 +50,7 @@ from typing import Any
 from yavih import hashing
 from yavih.report import tables
 from yavih.report.index import MOVED_ASIDE, build_index, runs_root_of
-from yavih.versions import __version__
+from yavih.versions import DEFAULT_TOLERANCE, __version__
 
 __all__ = [
     "describe_diff",
@@ -164,14 +168,29 @@ def _packaged_spec(name: str, load_yaml) -> Any | None:
         return None
 
 
+def _resolved_spec(name: str, load_yaml) -> Any | None:
+    """The ``benchmark.yaml`` of the folder ``name`` resolves to here (``yavih.benchmark.resolve_folder``: ``$YAVIH_HOME``,
+    packaged, the project's ``benchmarks/``, ``$YAVIH_BENCH_PATH``, packs, aliases), else ``None``."""
+    try:
+        from yavih.benchmark import resolve_folder
+
+        folder = resolve_folder(name)
+        if folder is None or not (folder / "benchmark.yaml").is_file():
+            return None
+        return load_yaml(str(folder / "benchmark.yaml"))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _bench_meta(name: str) -> dict[str, Any]:
-    """``{headline, table, min_eval_coverage, protocol_version, stream_kinds}`` from the packaged yaml when
-    loadable (``table`` only when ``metrics.table`` is declared); ``{}`` otherwise (the report then falls back to
-    defaults and heuristics)."""
+    """``{headline, table, tolerance, min_eval_coverage, protocol_version, stream_kinds}`` from the yaml of any folder
+    that resolves here (packaged, project-local, ``$YAVIH_BENCH_PATH``; ``table`` / ``tolerance`` only when
+    ``metrics.table`` / ``metrics.tolerance`` is declared); ``{}`` otherwise (the report then falls back to defaults
+    and heuristics)."""
     try:
         from yavih.benchmark import load_yaml
 
-        spec = _packaged_spec(name, load_yaml)
+        spec = _resolved_spec(name, load_yaml)
         if spec is None:
             return {}
         out: dict[str, Any] = {}
@@ -182,6 +201,9 @@ def _bench_meta(name: str) -> dict[str, Any]:
         table = getattr(metrics, "table", None)
         if table:
             out["table"] = [str(m) for m in table]
+        tolerance = getattr(metrics, "tolerance", None)
+        if tolerance:
+            out["tolerance"] = {str(k): float(v) for k, v in tolerance.items()}
         splits = getattr(spec, "splits", None)
         mec = getattr(splits, "min_eval_coverage", None)
         if isinstance(mec, (int, float)):
@@ -228,7 +250,9 @@ def row_key(result: dict, aliases: Mapping[str, str] | None = None) -> tuple[str
 
 def comparable(a: dict, b: dict, aliases: Mapping[str, str] | None = None) -> bool:
     """Same benchmark (after alias), same ``eval_hash`` and both ``standard``. Nothing the bridge
-    decided enters: two configurations of one model are comparable, and so are two models."""
+    decided enters: two configurations of one model are comparable, and so are two models; a registry entry
+    (``yavih.registry``) is compared by the same rule, and differences within a metric's recorded conformance
+    tolerance are ties (:func:`_mark_ties`)."""
     if aliases is None:
         aliases = _alias_map()
     return bool(a.get("standard")) and bool(b.get("standard")) and column_key(a, aliases) == column_key(b, aliases)
@@ -402,7 +426,8 @@ def _coverage_frac(block: Any) -> float | None:
         return None
     present, nominal = block.get("present"), block.get("nominal")
     if not isinstance(present, (int, float)) or not isinstance(nominal, (int, float)) or nominal <= 0:
-        return None
+        frac = block.get("fraction")  # a registry entry exported without per-seed records keeps only the fraction
+        return float(frac) if isinstance(frac, (int, float)) and not isinstance(frac, bool) else None
     return float(present) / float(nominal)
 
 
@@ -572,8 +597,11 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         flags.append("partial")
     if status != "ok":
         flags.append(status)
-    if len(ok) == 1 and seed is None:
+    n_seeds = sum(int((r.get("registry") or {}).get("n_seeds") or 1) for r in ok)
+    if n_seeds == 1 and seed is None:
         flags.append("single_seed")
+    if any(r.get("registry") for r in results):
+        flags.append("registry")
     for c in _VOIDING_CONTROLS:
         if _control_fired(ok, c):
             flags.append(c)
@@ -606,7 +634,8 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         "not_applicable": na,
         "seed": seed,
         "seeds": sorted({int((r.get("probe") or {}).get("seed", 0)) for r in ok}),
-        "n_seeds": len(ok),
+        "n_seeds": n_seeds,
+        "registry": next((r["registry"].get("id") for r in results if r.get("registry")), None),
         "headline": headline,
         "metrics": metrics,
         "controls": controls,
@@ -662,11 +691,64 @@ def _missing_row(column: dict[str, Any], model: str, reading: str) -> dict[str, 
     }
 
 
+def _rankable(row: dict[str, Any]) -> bool:
+    """A row whose values take part in a tie: ok, the full population at coverage, not greyed."""
+    flags = row.get("flags") or []
+    return (row.get("status") == "ok" and not row.get("missing") and not row.get("partial") and not row.get("greyed")
+            and "low_coverage" not in flags)
+
+
+def _mark_ties(rows: Sequence[dict[str, Any]], results: Sequence[dict], metric_names: Sequence[str],
+               meta: Mapping[str, Any]) -> None:
+    """Ties within one standard column ("Ties" in https://github.com/Bizilizi/yavih/blob/main/docs/results.md). Per metric with a direction (``higher_is_better``
+    from the metric registry, or recorded by a registry entry; a disclosure has none), over the rankable rows
+    (:func:`_rankable`) with a scalar value: the cells within the metric's tolerance of the best value are a tie when
+    there are at least two of them; each gets ``tie: True`` and every other rankable cell ``tie: False`` (no key on
+    other cells). Tolerance: for a benchmark whose folder resolves here (``meta`` from :func:`_bench_meta` non-empty),
+    the folder's ``metrics.tolerance`` entry, else :data:`DEFAULT_TOLERANCE`; a tolerance a registry entry recorded
+    (``conformance.tolerance``) is used only for a benchmark no folder here resolves (the largest recorded, else the
+    default)."""
+    from yavih.report.store import metric_info
+
+    ranked = [row for row in rows if _rankable(row)]
+    if len(ranked) < 2:
+        return
+    info = metric_info(metric_names)
+    resolvable = bool(meta)  # _bench_meta returns {} only when no folder of that name resolves here
+    folder_tol = dict(meta.get("tolerance") or {})
+    for m in metric_names:
+        hib = info.get(m, {}).get("higher_is_better")
+        recorded = [((r.get("registry") or {}).get("higher_is_better") or {}).get(m) for r in results]
+        recorded = [v for v in recorded if isinstance(v, bool)]
+        if recorded:
+            hib = recorded[0]
+        if hib is None:
+            continue
+        cells = [(row["metrics"].get(m) or {}) for row in ranked]
+        cells = [c for c in cells if isinstance(c.get("value"), (int, float)) and not isinstance(c.get("value"), bool)
+                 and math.isfinite(float(c["value"]))]
+        if len(cells) < 2:
+            continue
+        if resolvable:
+            tol = float(folder_tol.get(m, DEFAULT_TOLERANCE))
+        else:
+            entry_tols = [((r.get("registry") or {}).get("tolerance") or {}).get(m) for r in results]
+            entry_tols = [float(v) for v in entry_tols if isinstance(v, (int, float)) and not isinstance(v, bool)]
+            tol = max(entry_tols) if entry_tols else DEFAULT_TOLERANCE
+        best = (max if hib else min)(float(c["value"]) for c in cells)
+        tied = [abs(float(c["value"]) - best) <= tol + 1e-12 for c in cells]
+        several = sum(tied) >= 2
+        for c, is_tied in zip(cells, tied, strict=True):
+            c["tie"] = bool(several and is_tied)
+
+
 def _sort_key_rows(row: dict[str, Any]) -> tuple:
     h = row.get("headline")
     cell = row["metrics"].get(h) if h else None
     value = cell.get("value") if isinstance(cell, dict) else None
     v = -float(value) if isinstance(value, (int, float)) else math.inf
+    if isinstance(cell, dict) and cell.get("tie"):
+        v = -math.inf  # tied with the best: never ordered by value (the seed decides among them)
     return (row["model"], row["reading"], bool(row.get("partial")), row["missing"], v, row["seed"] if row["seed"] is not None else -1)
 
 
@@ -913,6 +995,18 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             })
         if column["superseded"]:
             column["flags"].append("superseded")
+        # a record without folder_source (a schema-3 result, a registry entry exported without it) is unknown, not
+        # different: only the known sources are compared
+        sources = sorted({json.dumps(fs, sort_keys=True) for r in results
+                          if isinstance(fs := (r.get("benchmark") or {}).get("folder_source"), dict) and fs})
+        if len(sources) > 1:
+            column["flags"].append("folder_source_differs")
+            rep.warnings.append({
+                "code": "W_FOLDER_SOURCE_DIFFERS", "column": column_id,
+                "message": f"{bench}: results under one protocol hash were scored by {len(sources)} different versions of the "
+                           "folder's probe.py / reader.py (benchmark.folder_source); comparable by declaration (the "
+                           "conformance fixture holds them within tolerance), shown for diagnosis",
+            })
 
         rows: list[dict[str, Any]] = []
         min_cov = float(meta.get("min_eval_coverage", DEFAULT_MIN_EVAL_COVERAGE))
@@ -971,6 +1065,11 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
                 "code": "W_POPULATION_DIFFERS", "column": column_id,
                 "message": f"eval ids_sha256 differ between rows ({len(ids)} populations); numbers are not on one population",
             })
+
+        if std:
+            _mark_ties(rows, [r for sel in selections.values() for r in sel.shown], metric_names, meta)
+            if any(cell.get("tie") for row in rows for cell in (row.get("metrics") or {}).values() if isinstance(cell, dict)):
+                column["flags"].append("ties")
 
         # model / reading grouping with MISSING cells
         present: dict[str, set[str]] = {}
@@ -1042,6 +1141,7 @@ def report(
     runs_root: str | Path | None = None,
     write: bool = True,
     suite: Any = None,
+    registry: str | Path | None = None,
 ) -> Report:
     """Index → the per-model lm-eval tables + the comparability columns → rendered text;
     writes ``runs/_index.jsonl`` and, when the runs root is known, ``runs/_report/report.<fmt>`` +
@@ -1061,9 +1161,28 @@ def report(
 
         the_suite = load_suite(suite)  # an unknown or invalid suite fails before anything is indexed
     records = build_index(globs, runs_root=runs_root)
+    # the runs root (where _report/ goes and what the results store defaults to) follows from the indexed local results
+    # alone: a registry entry's path is in the registry, not under any runs root
+    root = Path(runs_root) if runs_root is not None else runs_root_of([Path(r["path"]) for r in records if not r.get(MOVED_ASIDE)])
+    if registry is not None:
+        # registry entries join the comparison as rows under the same rule (same benchmark, same eval_hash, both standard);
+        # their seeds and provenance are theirs, their model name is namespaced <org>/<model>
+        from yavih.registry import records as registry_records
+        from yavih.report.migrate import MigrationError, migrate
+
+        # the same in-memory upgrade every indexed record gets (``build_index``): an entry filed under a superseded
+        # protocol hash joins the current column through the folders' ``supersedes`` chains
+        migrated = []
+        for r in registry_records(registry):
+            try:
+                r["result"] = migrate(r["result"])
+            except (MigrationError, TypeError) as exc:
+                print(f"[yavih.report] skipping registry entry {r.get('path')}: {exc}", file=sys.stderr)
+                continue
+            migrated.append(r)
+        records = [*records, *migrated]
     rep = build_report(records, fmt=fmt, seeds=seeds, allow_coverage_diff=allow_coverage_diff, detail=detail)
     records = [r for r in records if not r.get(MOVED_ASIDE)]
-    root = Path(runs_root) if runs_root is not None else runs_root_of([Path(r["path"]) for r in records])
     if results_root is None and (join or merge_results or the_suite is not None):
         from yavih.config import results_root as _results_root
 

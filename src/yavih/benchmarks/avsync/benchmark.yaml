@@ -4,6 +4,7 @@ schema_version: 2
 name: avsync
 aliases: []
 title: AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor)
+capability: [audio-visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: AVSync
   title: "VGGSound: A Large-scale Audio-Visual Dataset"
@@ -20,8 +21,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: cbd868ad2df35f724711b607cf73c7dcdfce6c8fea40fd3d5103eaaaf41bfbe2   # recorded, outside the hashed payload; `yavih bench lint` checks it
-    input_hash: 8174cdffd5c0c3e5781a458ae6c7ce7ba40efc1bef14587c8a963d319cb58d35
+    protocol_hash: 90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 5d57c2bc211f62189630578d378d442f38ac2ddc08e5a1239fb38a55e44388bd
     supersedes: []
 
 source:
@@ -77,6 +78,7 @@ manifest:
     source: "VGGSound metadata/vggsound.csv + model-free scores of the VGGSound media (make_manifest.py score)"
     sha256: ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
     rows: 32997
+    draw: "VGGSound metadata/vggsound.csv train split: the 12 000 transient clips with the highest av_corr (motion >= 0.065111) x 2 distinct offset bins, balanced draw floor(N/9) per bin from numpy default_rng(0)"
     note: >-
       Rows are (clip, offset) pairs, clip_id = <vggsound_clip>#<offset_bin>. total_upstream counts
       candidate rows: the 199 176 VGGSound clips plus the 12 000 second draws of the selected train clips
@@ -218,7 +220,6 @@ protocol:
     cap: 24000
     seed: 0
     balance: class
-    drawn_from: "VGGSound metadata/vggsound.csv train split: the 12 000 transient clips with the highest av_corr (motion >= 0.065111) x 2 distinct offset bins, balanced draw floor(N/9) per bin from numpy default_rng(0)"
   views: rows
   offsets_seconds: [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
   nominal_window_start: 1.0

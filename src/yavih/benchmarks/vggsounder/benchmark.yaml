@@ -5,6 +5,7 @@ schema_version: 2
 name: vggsounder
 aliases: []
 title: VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes)
+capability: [audio-visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 readout: clf
 protocol_version: 1
 header:
@@ -20,8 +21,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 079179bbf3e15d97aace40b26e3922217097d4ac2affbfa1870aacada94943f5
-    input_hash: bc13c858671db9a1aa8cb5b7e66591e6fe43b627bcbdc720125390feccf01a80
+    protocol_hash: 89c057ccce207b4627b6e5f43394a2cd7f34f892375b087510e22e6e63519530
+    input_hash: 3e5adb9eea1101192e60ed7abc4b840fdcf567cccf06a195784f93a53f330275
     supersedes: []
 
 source:
@@ -79,6 +80,7 @@ manifest:
     source: "vggsounder 1.0 package data/vggsounder.csv (eval, VGGSounder(background_music=False)) + VGGSound vggsound.csv split == train (train draw)"
     sha256: 400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06
     rows: 195738
+    draw: "VGGSound vggsound.csv (sha256 ed9fdeed…), the 183 730 split == train rows in file order, class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0"
     note: >-
       rows = 12 008 VGGSounder eval rows + 183 730 vggsound.csv train rows. Eval rows are the package's 12 014
       videos in file order minus 6 whose YouTube id is a VGGSound-train id; their labels_a / labels_v /
@@ -176,7 +178,6 @@ protocol:
     cap: 20000
     seed: 0
     balance: class
-    drawn_from: "VGGSound vggsound.csv (sha256 ed9fdeed…), the 183 730 split == train rows in file order, class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0"
   views: none
 
 metrics:   # every value is the vggsounder package's own (probe.py); `<metric>` = the reading's set, `<metric>_only` = its exclusive set

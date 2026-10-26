@@ -44,7 +44,7 @@ What the scaffold holds, and what has to be replaced:
 | `manifest.csv.gz`, `classes.csv` | copied from `--like` (a loadable folder needs them) | your frozen manifest (step 3) |
 | `bridge_template.py` | copied from `--like` | your benchmark's template (step 6) |
 | `reader.py`, `probe.py` | copied from `--like` when it has them, with a `# TODO: copied verbatim from <like> by yavih bench new` banner as the first lines | your own, or delete them (steps 3 and 7) |
-| `benchmark.yaml` | `--like`'s yaml renamed: `protocol_version: 1`, one `changelog` entry with the hashes the scaffold computes, `aliases: []`, a `header:` block and `obtain.how` with `TODO` | your protocol (step 2) |
+| `benchmark.yaml` | `--like`'s yaml renamed: `protocol_version: 1`, one `changelog` entry with the hashes the scaffold computes, `aliases: []`, a `header:` block and `obtain.how` with `TODO`, `--like`'s `capability` under a `TODO` comment | your protocol (step 2) |
 | `README.md`, `setup.md` | written from the folder contract, `TODO` in every section | your docs (step 5) |
 | `make_manifest.py`, `prepare/01_obtain.sh` | stubs that exit 2 | your freeze and prepare steps (steps 3 and 4) |
 | `tests/test_folder.py` | generated: the shared checks of `yavih.testing.folder`, `--like`'s values pinned, two tests that skip with a `TODO:` reason | your folder tests (step 9) |
@@ -83,13 +83,18 @@ Every key is described in the [schema](benchmark-folder.md#benchmarkyaml). Decid
 8. **The header.** `header: {name, title, venue, abstract}`: the display name, the paper title,
    `"<authors> · <venue> <year>"` and a neutral abstract of at most 60 words. The README header image is rendered
    from it (step 11).
-9. **Budgets.** `budget.clips` equals the frozen rows per split (checked); `media_gb` is measured on the staged
+9. **Capability.** `capability: [...]`: what the benchmark measures, one or more of `audio`, `visual`,
+   `audio-visual`, `temporal`, `spatial`, `retrieval` (`yavih.suites.CAPABILITIES`, the vocabulary suites group
+   by). The benchmarks index and `yavih bench list` group by it; tag every capability a suite might list the
+   benchmark under (a synchronisation task is `[audio-visual, temporal]`). The scaffold keeps the `--like`
+   folder's tags under a `TODO` comment. Not hashed.
+10. **Budgets.** `budget.clips` equals the frozen rows per split (checked); `media_gb` is measured on the staged
    media; `extract_min_per_1k_clips_ref` and `probe_minutes_ref` (one entry for the readout) are measured, never
    guessed. Write first values from your own bridge check (`clips_per_s`) and probe wall time; the trial run
    (step 13) checks them.
 
 **Done when:** `yavih bench info <name>` loads the folder, and `yavih bench lint <name>` reports no `E_SCHEMA`,
-`E_OBTAIN`, `E_HEADER` or `E_EXTERNAL`.
+`E_OBTAIN`, `E_HEADER`, `E_CAPABILITY` or `E_EXTERNAL`.
 
 ## 3. Freeze the manifest: `make_manifest.py`
 
@@ -197,7 +202,7 @@ the scaffold is deleted when the folder needs none.
 
 **Done when:** `yavih bench lint <name>` reports no `E_IMPORT`, and `test_metric_names_resolve` passes.
 
-## 8. Record the hashes
+## 8. Record the hashes and the conformance fixture
 
 A new folder has one `changelog` entry, `version: 1`, with `protocol_version: 1`. Its `protocol_hash` and
 `input_hash` must be the ones the folder computes; `yavih bench lint <name>` (`E_CHANGELOG_HASH`) prints the exact
@@ -205,8 +210,22 @@ lines to write. Until the pull request is merged, keep that one entry and update
 that moves them; nothing goes under `supersedes`, since no result was ever filed under the earlier digests. Every
 later change to a merged folder follows [hashing: migration](hashing.md#migration).
 
-**Done when:** `yavih bench lint <name>` reports no `E_CHANGELOG_HASH`, and
-`python -m pytest tests/test_hashing.py -q -p no:cacheprovider -o addopts="--import-mode=importlib"` passes.
+The hashes cover the declaration, never the code: what pins the folder's scoring behaviour (its `probe.py`, the
+metrics and readout it uses) to `protocol_version: 1` is the conformance fixture
+([conformance](conformance.md)). Record it once the protocol, `probe.py` and `external` entries are final:
+
+```bash
+yavih bench conformance <name> --record
+```
+
+writes `conformance/expected.json` (the scoring path's numbers on a generated population; a few KB, no inputs
+stored). Re-record after every later edit that moves them, as long as the folder is unmerged: while the changelog
+has its one entry, `--record` overwrites the record without comparing, including the fixture the scaffold recorded
+for the copied protocol. Once the folder has a second changelog entry, a moved number means a `protocol_version`
+bump (or `--same-version --reason TEXT`), and `--record` refuses to overwrite differing values otherwise.
+
+**Done when:** `yavih bench lint <name>` reports no `E_CHANGELOG_HASH` and no `E_CONFORMANCE_*`, and
+`python -m pytest tests/test_hashing.py tests/test_conformance.py -q -p no:cacheprovider -o addopts="--import-mode=importlib"` passes.
 
 ## 9. Folder tests
 
@@ -266,9 +285,10 @@ then, once the pull request is open, download the `headers` artifact of its `hea
 yavih bench trial <name> --synthetic --readout-fast
 ```
 
-runs the whole chain (stand-in, oracle bridge, `bridge check`, extract, validate, probe, report) in process on a
-generated stand-in of the folder ([CLI](cli.md#bench-trial---synthetic)). It does not exercise the real data, the
-folder's `probe.py` hooks or its `external` packages; step 13 does.
+runs the whole chain (conformance fixture, stand-in, oracle bridge, `bridge check`, extract, validate, probe, report)
+in process on a generated stand-in of the folder ([CLI](cli.md#bench-trial---synthetic)). Beyond the conformance
+stage (which runs the real folder's scoring path, `probe.py` and `external` included), it does not exercise the
+real data; step 13 does.
 
 **Done when:** it exits 0, every stage in `data.stages` is `ok`, and the headline clears its floor.
 

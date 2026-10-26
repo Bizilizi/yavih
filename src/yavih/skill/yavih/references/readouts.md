@@ -8,7 +8,7 @@ floor = `splits.floor`, `folds` → one probe per held-out fold. Validation = a 
 selection on val loss; early stopping; AdamW, cosine; fp32 probe math; deterministic algorithms
 (`warn_only=True`: on CUDA the attention backward has no deterministic fp32 kernel, so probe reruns
 agree to float rounding, not bit for bit; yavih captures torch's warning, names the ops in
-`probe_fit.json` `determinism` and adds `W_NONDETERMINISTIC` to `result.json`; nothing to do); seed `k` → `runs/<b>/<model>/<reading>/probe/<eval_hash12>/seed<k>/`. A folder's `probe.py` may supply targets,
+`probe_fit.json` `determinism` and adds `W_NONDETERMINISTIC` to `result.json`; nothing to do); seed `k` → `<runs root>/<b>/<model>/<reading>/probe/<eval_hash12>/seed<k>/`. A folder's `probe.py` may supply targets,
 metrics and the authors' scorer; it never defines a head, loss or training loop.
 
 Readouts work in media coordinates and never need to know what your bridge did to the media:
@@ -89,8 +89,8 @@ train ∩ eval clip_ids ≠ ∅ (`E_LEAKAGE`) · eval coverage < `min_eval_cover
 `--allow-low-coverage` records `W_COVERAGE` instead) · `_meta.json` missing or `validation.ok ==
 false` (`E_META_MISSING`, `E_VALIDATION` — run `features validate`) · stale
 `manifest_hash` / input hash (`E_HASH_MANIFEST`, `E_HASH_INPUT` — the benchmark's input side
-changed since extraction; the message names what changed; a scoring-side edit such as `probe.py` or
-a metric pin only re-probes) · role splits extracted under different hashes (`E_HASH_MISMATCH`) ·
+changed since extraction; the message names what changed; a scoring-side change — a `protocol_version` bump
+after a `probe.py` or metric fix, a pin, a readout version — only re-probes) · role splits extracted under different hashes (`E_HASH_MISMATCH`) ·
 a feature format this yavih does not read (`E_FORMAT`: re-extract) · `n_folds ≠ 5` for ESC-50 (`E_FOLDS`) · a `metrics.list`
 name it cannot produce (`E_METRICS_INCOMPLETE`) · features missing (`E_NO_FEATURES`, exit 3) ·
 scratch short (`E_SCRATCH_SPACE`, exit 3) · authors' package missing or mis-versioned (exit 3).
@@ -104,8 +104,8 @@ the deadline or SIGTERM; only a hard kill (SIGKILL, OOM) loses up to that interv
 ## Reading `result.json`
 
 ```json
-{"schema_version": 3, "status": "ok", "reason": null, "standard": true, "eval_hash": "…",
- "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2, "manifest_hash": "…", "protocol_hash": "…"},
+{"schema_version": 4, "status": "ok", "reason": null, "standard": true, "eval_hash": "…",
+ "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2, "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"probe": "…", "reader": null}},
  "model": "vjepa2-l", "reading": "av",
  "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
  "features": {"fingerprint": "…", "dtype": "float16", "N": 1568, "D": 1024, "pos_mode": "per_sample", "bytes": 5.2e9,
@@ -146,7 +146,7 @@ weights fingerprints are the warning `W_JOIN_WEIGHTS`).
 inside); with `--log-samples` also
 `samples_<benchmark>_<reading>_<timestamp>.jsonl` (one line per scored row: `clip_id`, `row`, `seed`,
 `role`, `prediction`, `target`). The results root is `--results DIR`, else `YAVIH_RESULTS`, else
-config `[results] root`, else `results/` next to the runs root; `--no-results` skips it
+config `[results] root`, else `yavih-bench/results` in a project, else `results/` next to the runs root; `--no-results` skips it
 (`"results_version": 2`). Entries are keyed `<benchmark>:<reading>` (e.g. `ave:av`; a join
 `vggsounder:a+v+av`); take `benchmark`, `reading` and `eval_hash` from `configs[key]`, never by parsing
 the key. Keys:

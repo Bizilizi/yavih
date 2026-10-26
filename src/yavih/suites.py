@@ -16,7 +16,7 @@ A suite is a yaml file naming, per capability, the benchmarks and readings a mod
 <reading>=RUN ...``), whose result is stored under ``<benchmark>:<readings joined by +>``.
 
 Resolution (``load_suite``): an existing ``.yaml`` path; else ``<project suites dir>/<name>.yaml`` (the
-directory ``$YAVIH_SUITES``, else ``suites/`` next to the project ``yavih.toml``, else ``./suites``); else the
+directory ``$YAVIH_SUITES``, else the project's ``suites/`` next to ``yavih-bench/yavih.toml``, else ``./suites``); else the
 shipped ``yavih/suites/<name>.yaml``. A project suite shadows a shipped one of the same name. Suites are files
 only: there is no configuration table for them.
 
@@ -67,7 +67,7 @@ ENTRY_STATUSES: tuple[str, ...] = ("packaged", "pending")
 #: results store) or ``join-unknown`` (no results store to look in).
 COMPLETENESS: tuple[str, ...] = ("done", "missing", "pending", "join-missing", "join-unknown")
 SUITE_SCHEMA_VERSION = 1
-#: The directory of project suites; beats ``suites/`` next to the project ``yavih.toml``.
+#: The directory of project suites; beats the project's ``suites/``.
 SUITES_ENV = "YAVIH_SUITES"
 _SUITES_DIR = "suites"
 _TOP_KEYS = ("schema_version", "name", "description", "groups")
@@ -163,9 +163,9 @@ def shipped_dir() -> Path:
 
 
 def project_suites_dir() -> Path:
-    """Where project suites live and ``suite new`` writes: ``$YAVIH_SUITES``; else ``suites/`` next to the project
-    config file (``--config``, ``$YAVIH_CONFIG`` or the discovered ``yavih.toml``) when it exists; else
-    ``./suites``."""
+    """Where project suites live and ``suite new`` writes: ``$YAVIH_SUITES``; else the project's suites directory
+    (``[project] suites``, else ``suites/`` next to the project config file: ``--config``, ``$YAVIH_CONFIG`` or the
+    discovered ``yavih-bench/yavih.toml``); else ``./suites``."""
     env = os.environ.get(SUITES_ENV)
     if env:
         return Path(os.path.expanduser(env))
@@ -175,10 +175,11 @@ def project_suites_dir() -> Path:
         settings = config.load()
     except config.ConfigError:
         settings = None
-    project = next((f for f in (settings.files if settings else []) if f.layer == "project" and f.exists
-                    and f.how != "config="), None)
-    base = Path(project.path).resolve().parent if project is not None else config._cwd()
-    return base / _SUITES_DIR
+    if settings is not None:
+        p = settings.project_path("suites")
+        if p is not None:
+            return p
+    return config._cwd() / _SUITES_DIR
 
 
 def _yaml_files(d: Path) -> dict[str, Path]:

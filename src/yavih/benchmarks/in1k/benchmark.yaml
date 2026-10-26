@@ -5,6 +5,7 @@ schema_version: 2
 name: in1k
 aliases: [imagenet1k, imagenet]
 title: ImageNet-1K image classification (frozen 50/class train draw, full 50k val)
+capability: [visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: ImageNet-1K
   title: ImageNet Large Scale Visual Recognition Challenge
@@ -20,8 +21,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: "9e1ea5fa2fc9a18e6748dd9dcee3753ac28d2647e3fd510b97ff9fed3e7544fe"
-    input_hash: "a3d7d52e3618b4395721a89fc19afd8fefe620a595a10c5ce4e893a438f1a34f"
+    protocol_hash: "c8814a905192a566ac3b70814cc70fa237c34a39028b8037e39e0ab9404d6dc4"
+    input_hash: "945e3f7836a0835103dc853d7ddbf56717aa075ca6da1368857d8eb7c516280f"
     supersedes: []
 
 source:
@@ -74,6 +75,7 @@ manifest:
     source: "ILSVRC2012 devkit (val ground truth, synset map) + ILSVRC2012 train file list"
     sha256: "858b30e30ec1016a900c9e2e03bba81d7de9e049f6f9e7c8d84afe31a43d6737"
     rows: 1331167
+    draw: "ILSVRC2012 train file list (1 281 167 images, sorted by wnid then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 50 000, seed 0"
     note: >-
       sha256 is over the sorted train file list (lines train/<wnid>/<file>.JPEG). Train rows are the seeded
       class-balanced draw of protocol.train_draw over the 1 281 167 train files
@@ -151,7 +153,6 @@ protocol:
     cap: 50000
     seed: 0
     balance: class
-    drawn_from: "ILSVRC2012 train file list (1 281 167 images, sorted by wnid then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 50 000, seed 0"
   views: none
 
 metrics:

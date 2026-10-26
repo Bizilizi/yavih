@@ -411,7 +411,8 @@ def _ok_record(**over) -> dict:
     rec = {
         "schema_version": RESULT_SCHEMA_VERSION, "status": "ok", "reason": None, "standard": True,
         "eval_hash": hashing.eval_hash("p" * 64, "q" * 64),
-        "benchmark": {"name": "x", "protocol_version": 1, "readout": "clf", "readout_version": READOUT_VERSION["clf"], "manifest_hash": "m" * 64, "protocol_hash": "p" * 64},
+        "benchmark": {"name": "x", "protocol_version": 1, "readout": "clf", "readout_version": READOUT_VERSION["clf"], "manifest_hash": "m" * 64, "protocol_hash": "p" * 64,
+                      "folder_source": {"probe": None, "reader": None}},
         "model": MODEL, "reading": READING,
         "bridge": {"name": "b", "describe": {}, "describe_sha256": "d" * 64, "source_sha256": None},
         "features": {"fingerprint": "f" * 64, "dtype": "float32", "N": 4, "D": 8, "pos_mode": "none", "bytes": 10, "backend": "ram", "canary_max_rel_l2": 0.0,
@@ -520,7 +521,8 @@ def test_probe_clf_ok_end_to_end(tmp_path, fakes):
     assert rec["probe"]["hash"] == hashing.probe_hash(clf_cfg(3)) and rec["probe"]["seed"] == 0
     assert rec["probe"]["n_train"] == 11 and rec["probe"]["n_val"] == 1 and rec["probe"]["stop"] == "patience"
     assert rec["benchmark"] == {"name": "synth_clf", "protocol_version": 2, "readout": "clf", "readout_version": READOUT_VERSION["clf"],
-                                "manifest_hash": bench.manifest_hash, "protocol_hash": bench.protocol_hash}
+                                "manifest_hash": bench.manifest_hash, "protocol_hash": bench.protocol_hash,
+                                "folder_source": {"probe": None, "reader": None}}
     assert (rec["model"], rec["reading"]) == (MODEL, READING) and rec["bridge"]["describe"] == DESCRIBE and rec["features"]["backend"] == "ram"
     assert rec["eval_hash"] == hashing.eval_hash(bench.protocol_hash, rec["probe"]["hash"])
     assert res[0].path.parent.parent.name == rec["eval_hash"][:12]

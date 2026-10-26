@@ -1,10 +1,13 @@
 """Benchmark tables generated from the folders: the folder is the single source of truth.
 
-Every list of the packaged benchmarks is generated: in the repo ``README.md`` (the table, the controls bullet), the
+Every list of the packaged benchmarks is generated: in the repo ``README.md`` (the capability table), the controls
+bullet of https://github.com/Bizilizi/yavih/blob/main/docs/quickstart.md, the
 "Packaged benchmarks" table of https://github.com/Bizilizi/yavih/blob/main/docs/benchmark-folder.md, the index
-``yavih/benchmarks/README.md`` (the table, the ``setup.md`` links) and the skill's ``references/data.md`` (the
-obtainability table, the ``prepare_only`` roots) and ``references/readouts.md`` (the benchmarks per readout). Each
-holds its block between two marker comments::
+``yavih/benchmarks/README.md`` (the tables per capability, the ``setup.md`` links) and the skill's
+``references/data.md`` (the obtainability table, the ``prepare_only`` roots) and ``references/readouts.md`` (the
+benchmarks per readout). The ``capabilities`` kind (one row per capability with a few linked examples and a link to
+the index) is written for the repo README and links by GitHub URL. Each holds its block between two marker
+comments::
 
     <!-- yavih:bench-table index begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
     ...
@@ -27,12 +30,19 @@ from typing import Any
 
 import yaml
 
-__all__ = ["KINDS", "SOURCE_WORDS", "render", "replace_blocks", "repo_documents", "main"]
+__all__ = ["KINDS", "SOURCE_WORDS", "UNTAGGED", "render", "replace_blocks", "repo_documents", "main"]
 
 SOURCE_WORDS: dict[str, str] = {"public_url": "public", "torrent": "torrent", "manual_portal": "manual portal",
                                 "private_mirror": "private mirror", "derived": "derived"}
 _BEGIN = re.compile(r"^<!-- yavih:bench-table (?P<kind>[a-z_]+) begin\b.*-->\s*$")
 _END = "<!-- yavih:bench-table {kind} end -->"
+#: The group of a folder whose ``benchmark.yaml`` declares no ``capability`` (``bench lint`` requires one).
+UNTAGGED = "untagged"
+#: Where the ``capabilities`` kind links: the packaged folders on GitHub (it is written for the repo README, which
+#: PyPI renders too, so relative links would not resolve).
+_BENCH_URL = "https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks"
+#: How many example benchmarks a ``capabilities`` row names.
+_EXAMPLES = 4
 
 
 def _num(n: Any) -> str:
@@ -99,14 +109,48 @@ def _table(header: list[str], rows: list[list[str]]) -> str:
     return "\n".join([_cells(header), "|" + "---|" * len(header), *(_cells(r) for r in rows)])
 
 
-def _index(folders: Mapping[str, Path]) -> str:
-    """The ``benchmarks/README.md`` table: ``| Benchmark | Description | Readout | Media | Source |``."""
-    rows = []
+def _capability_groups(folders: Mapping[str, Path]) -> dict[str, list[str]]:
+    """``{capability: names sorted}`` in ``yavih.suites.CAPABILITIES`` order, only non-empty groups; a benchmark
+    with several capabilities is in each of their groups, one without any in :data:`UNTAGGED` (last)."""
+    from yavih.suites import CAPABILITIES
+
+    groups: dict[str, list[str]] = {c: [] for c in CAPABILITIES}
     for name, folder in folders.items():
-        y = _yaml(folder)
-        rows.append([f"[{name}]({name}/README.md)", f"{y.get('title')}{_aliases(y)}", str(y.get("readout")), _media(y),
-                     f"{_source(y)} (obtain: {_tier(y)})"])
-    return _table(["Benchmark", "Description", "Readout", "Media", "Source"], rows)
+        caps = [str(c) for c in _yaml(folder).get("capability") or []] or [UNTAGGED]
+        for c in dict.fromkeys(caps):
+            groups.setdefault(c, []).append(name)
+    if UNTAGGED in groups:
+        groups[UNTAGGED] = groups.pop(UNTAGGED)
+    return {c: sorted(names) for c, names in groups.items() if names}
+
+
+def _index(folders: Mapping[str, Path]) -> str:
+    """The ``benchmarks/README.md`` index, grouped by capability: per group a ``### <capability> (<n>)`` heading and
+    the table ``| Benchmark | Description | Readout | Media | Source |`` sorted by name. A benchmark with several
+    capabilities is listed under each."""
+    blocks = []
+    for cap, names in _capability_groups(folders).items():
+        rows = []
+        for name in names:
+            y = _yaml(folders[name])
+            rows.append([f"[{name}]({name}/README.md)", f"{y.get('title')}{_aliases(y)}", str(y.get("readout")),
+                         _media(y), f"{_source(y)} (obtain: {_tier(y)})"])
+        blocks.append(f"### {cap} ({len(names)})\n\n" + _table(["Benchmark", "Description", "Readout", "Media", "Source"], rows))
+    return "\n\n".join(blocks)
+
+
+def _capabilities(folders: Mapping[str, Path]) -> str:
+    """The repo README's capability overview: ``| capability | benchmarks | examples |``, one row per capability that
+    has a benchmark (the first four names by name, each linked to its folder README, ``+ N more`` after them), then
+    a link to the full index. Links are GitHub URLs."""
+    rows = []
+    for cap, names in _capability_groups(folders).items():
+        shown = ", ".join(f"[{n}]({_BENCH_URL}/{n}/README.md)" for n in names[:_EXAMPLES])
+        more = f" + {len(names) - _EXAMPLES} more" if len(names) > _EXAMPLES else ""
+        rows.append([f"`{cap}`", str(len(names)), shown + more])
+    n = len(folders)
+    return (_table(["capability", "benchmarks", "examples"], rows)
+            + f"\n\n[All {n} benchmark{'s' if n != 1 else ''} → the index]({_BENCH_URL}/README.md)")
 
 
 def _readme(folders: Mapping[str, Path]) -> str:
@@ -211,6 +255,7 @@ def _controls(folders: Mapping[str, Path]) -> str:
 KINDS: dict[str, Callable[[Mapping[str, Path]], str]] = {
     "names": _names,
     "index": _index,
+    "capabilities": _capabilities,
     "readme": _readme,
     "data": _data,
     "setup_links": _setup_list,
@@ -257,14 +302,14 @@ def replace_blocks(text: str, folders: Mapping[str, Path] | None = None) -> str:
 
 
 def repo_documents() -> list[Path]:
-    """The documents with generated blocks: the packaged index and skill references, plus the repo README and
-    the benchmark-folder page of the repository's docs when the package runs from a source checkout."""
+    """The documents with generated blocks: the packaged index and skill references, plus the repo README, the
+    quickstart and the benchmark-folder page of the repository's docs when the package runs from a source checkout."""
     pkg = Path(__file__).resolve().parent
     refs = pkg / "skill" / "yavih" / "references"
     docs = [pkg / "benchmarks" / "README.md", refs / "data.md", refs / "readouts.md"]
     repo = pkg.parent.parent
     if (repo / "pyproject.toml").is_file():
-        docs = [p for p in (repo / "README.md", repo / "docs" / "benchmark-folder.md") if p.is_file()] + docs
+        docs = [p for p in (repo / "README.md", repo / "docs" / "quickstart.md", repo / "docs" / "benchmark-folder.md") if p.is_file()] + docs
     return docs
 
 

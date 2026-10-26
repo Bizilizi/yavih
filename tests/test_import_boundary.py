@@ -114,7 +114,7 @@ def test_protocol_and_probe_hash_parity_across_envs(tmp_path):
     folder = T.make_synthetic_benchmark(tmp_path, "clf", n_train=4, n_eval=2)
     bench = Benchmark.from_dir(folder)
     want = [bench.protocol_hash, hashing.probe_hash(ProbeConfig.pinned("clf", bench))]
-    assert bench.reader_sha256 is not None  # the folder ships a reader.py: it is part of the hash
+    assert bench.folder_source["reader"] is not None  # the folder ships a reader.py: provenance, computed in both envs
     code = BLOCK + (
         "from yavih.benchmark import Benchmark\n"
         "from yavih import hashing\n"

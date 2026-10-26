@@ -94,7 +94,7 @@ RESULT_KEYS: frozenset[str] = frozenset(
     }
 )
 _METRIC_BLOCKS: tuple[str, ...] = ("metrics", "floors", "controls", "ci95")
-_BENCHMARK_KEYS = frozenset({"name", "protocol_version", "readout", "readout_version", "manifest_hash", "protocol_hash"})
+_BENCHMARK_KEYS = frozenset({"name", "protocol_version", "readout", "readout_version", "manifest_hash", "protocol_hash", "folder_source"})
 #: The result's ``bridge`` block: recorded, never a key.
 _BRIDGE_KEYS = frozenset({"name", "describe", "describe_sha256", "source_sha256"})
 #: Charsets of ``describe()["model"]`` / ``["reading"]`` (they key paths, results files and report rows).
@@ -1124,6 +1124,8 @@ def _benchmark_block(bench: Any) -> dict:
         "readout_version": READOUT_VERSION[bench.spec.readout],
         "manifest_hash": bench.manifest_hash,
         "protocol_hash": bench.protocol_hash,
+        # provenance: the folder's probe.py / reader.py normalized-source digests (never identity)
+        "folder_source": dict(getattr(bench, "folder_source", None) or {"probe": None, "reader": None}),
     }
 
 
@@ -1571,10 +1573,11 @@ def mirror_features(src_run: str | Path, out: str | Path) -> Path:
 def resolve_results_root(run_dir: str | Path, *, bench: Any, model: str | None, reading: str | None,
                          explicit: str | os.PathLike | None = None) -> Path:
     """The results-store root of one probe invocation, decided before any training: ``explicit``
-    (``--results``) → ``YAVIH_RESULTS`` / config ``[results] root`` → ``results/`` next to the runs root of a
-    standard run directory ``<runs root>/<benchmark or alias>/<model>/<reading>`` (the absolute path's last three
-    components name the feature set being probed). Any other layout is ``E_RESULTS_ROOT`` (exit 1): the root is
-    never guessed from directory depth."""
+    (``--results``) → ``YAVIH_RESULTS`` / config ``[results] root`` → ``<project dir>/results`` when a project is
+    discovered → ``results/`` next to the runs root of a standard run directory ``<runs root>/<benchmark or
+    alias>/<model>/<reading>`` (the absolute path's last three components name the feature set being probed;
+    :func:`yavih.config.results_root`). Any other layout is ``E_RESULTS_ROOT`` (exit 1): the root is never guessed
+    from directory depth."""
     from yavih.config import configured_results_root
     from yavih.config import results_root as _results_root
 

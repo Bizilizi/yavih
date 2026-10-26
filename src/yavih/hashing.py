@@ -4,12 +4,17 @@ A comparability key covers only what yavih controls — the benchmark (``protoco
 (``probe_hash``), folded into ``eval_hash``. The bridge's ``describe_sha256`` is a consistency and provenance
 digest, never identity (the model is the user-chosen name ``describe()["model"]``).
 
-``protocol_hash`` (``yavih-protocol-4``) is
-``H(input_hash, scoring_hash)``. ``input_hash`` covers what decides the features a bridge sees and must produce and is
-the only benchmark digest feature sets are checked against; ``scoring_hash`` covers metrics, pins, targets, the readout
-version and ``probe.py``, so a scoring edit re-probes but never re-extracts. ``reader.py`` / ``probe.py`` enter as the
-digest of their normalized source (comments and docstrings do not count). ``describe_sha256`` (``yavih-describe-2``)
-leaves the batch size and the decoder builds out.
+``protocol_hash`` (``yavih-protocol-5``) is ``H(input_hash, scoring_hash)`` and is computable from the benchmark's
+DECLARATION alone: the frozen manifest and classes (by content), typed views of the ``benchmark.yaml`` blocks
+(prose and display keys excluded, see ``protocol_view`` / ``metrics_view`` / ``external_view`` /
+``input_contract_view``) and declared versions (``protocol_version``, ``READOUT_VERSION``). No source file enters
+it: a folder's ``probe.py`` / ``reader.py`` and yavih's own readouts and metrics may be refactored, re-implemented or
+ported without moving the hash, and their behaviour is pinned by ``protocol_version`` and the folder's conformance
+fixture (``yavih.conformance``), not by their bytes. The folder's source digests (``source_sha256`` of the normalized
+AST) are recorded as provenance (``Benchmark.folder_source``), never compared for identity. ``input_hash`` covers
+what decides the features a bridge sees and must produce and is the only benchmark digest feature sets are checked
+against; ``scoring_hash`` covers metrics, pins, targets and the readout version, so a scoring edit re-probes but
+never re-extracts. ``describe_sha256`` (``yavih-describe-2``) leaves the batch size and the decoder builds out.
 
 stdlib + ``yavih.versions`` only: these digests must be computable in the model env
 (no torch, maybe no numpy) and in the probe env with identical results (a
@@ -24,7 +29,7 @@ import hashlib
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Any
 
 from yavih.versions import (
@@ -52,6 +57,15 @@ __all__ = [
     "INPUT_PROTOCOL_KEYS",
     "protocol_manifest",
     "input_readout_view",
+    "TRAIN_DRAW_HASHED_KEYS",
+    "METRICS_HASHED_KEYS",
+    "EXTERNAL_HASHED_KEYS",
+    "INPUT_CONTRACT_HASHED_KEYS",
+    "protocol_view",
+    "metrics_view",
+    "external_view",
+    "input_contract_view",
+    "find_prose",
     "input_components",
     "scoring_components",
     "component_digests",
@@ -186,7 +200,7 @@ def _ast_json(node: Any) -> Any:
 
 
 def normalized_source(text: str | bytes) -> str:
-    """The comparison form of a folder's ``reader.py`` / ``probe.py``: the parsed AST with comments (never
+    """The provenance form of a folder's ``reader.py`` / ``probe.py``: the parsed AST with comments (never
     in an AST) and every docstring / bare string statement removed, serialized field by field without source
     positions and without empty or absent fields, as canonical JSON. A comment, docstring, blank-line or formatting
     edit leaves it unchanged; any change to what the code does changes it. The serialization does not use
@@ -198,7 +212,8 @@ def normalized_source(text: str | bytes) -> str:
 
 
 def source_sha256(text: str | bytes) -> str:
-    """``sha256(normalized_source(text))``: what ``protocol_hash`` folds in for ``reader.py`` / ``probe.py``."""
+    """``sha256(normalized_source(text))``: the PROVENANCE digest of a folder's ``reader.py`` / ``probe.py``
+    (``Benchmark.folder_source``, recorded in sidecars and results); never part of a hash since ``yavih-protocol-5``."""
     return sha256_hex(normalized_source(text).encode("utf-8"))
 
 
@@ -271,6 +286,82 @@ def input_readout_view(*, readout: str, protocol: Mapping[str, Any], readout_par
     }
 
 
+#: ``protocol.train_draw`` keys hashed: the draw's parameters. ``drawn_from`` (prose) lives in
+#: ``manifest.upstream.draw`` and is never hashed.
+TRAIN_DRAW_HASHED_KEYS: tuple[str, ...] = ("cap", "seed", "balance")
+#: ``metrics`` keys hashed, always all of them (an absent optional key hashes as ``null``). ``table`` (the report's
+#: default columns) and ``tolerance`` (the conformance bound) change no number and stay out.
+METRICS_HASHED_KEYS: tuple[str, ...] = ("headline", "list", "floors", "controls", "chance", "ci", "bootstrap", "aggregation")
+#: ``external[i]`` keys hashed: the package and its pinned version. ``pip`` (an install instruction) and ``used_for``
+#: (prose) stay out.
+EXTERNAL_HASHED_KEYS: tuple[str, ...] = ("name", "version_pin")
+#: ``input_contract`` keys hashed: what a bridge is handed as data. ``handed_over`` (one sentence per stream) stays out.
+INPUT_CONTRACT_HASHED_KEYS: tuple[str, ...] = ("info", "facts", "materialize")
+
+
+def protocol_view(protocol: Mapping[str, Any]) -> dict[str, Any]:
+    """The hashed view of ``benchmark.yaml[protocol]``: every key as written, with ``train_draw`` restricted to
+    :data:`TRAIN_DRAW_HASHED_KEYS` (absent keys hash as ``null``)."""
+    if not isinstance(protocol, Mapping):
+        raise TypeError(f"protocol_view: expected the benchmark.yaml protocol block (a mapping), got {type(protocol).__name__}")
+    out = dict(protocol)
+    td = out.get("train_draw")
+    if isinstance(td, Mapping):
+        out["train_draw"] = {k: td.get(k) for k in TRAIN_DRAW_HASHED_KEYS}
+    return out
+
+
+def metrics_view(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    """The hashed view of ``benchmark.yaml[metrics]``: :data:`METRICS_HASHED_KEYS`, absent ones as ``null``."""
+    if not isinstance(metrics, Mapping):
+        raise TypeError(f"metrics_view: expected the benchmark.yaml metrics block (a mapping), got {type(metrics).__name__}")
+    return {k: metrics.get(k) for k in METRICS_HASHED_KEYS}
+
+
+def external_view(external: Sequence[Mapping[str, Any]] | None) -> list[dict[str, Any]]:
+    """The hashed view of ``benchmark.yaml[external]``: ``[{name, version_pin}, …]`` sorted by name."""
+    if external is None:
+        return []
+    if isinstance(external, (str, bytes)) or isinstance(external, Mapping):
+        raise TypeError(f"external_view: expected the benchmark.yaml external list, got {type(external).__name__}")
+    rows = []
+    for e in external:
+        if not isinstance(e, Mapping):
+            raise TypeError(f"external_view: each external entry is a mapping, got {type(e).__name__}")
+        rows.append({k: e.get(k) for k in EXTERNAL_HASHED_KEYS})
+    return sorted(rows, key=lambda r: str(r.get("name")))
+
+
+def input_contract_view(input_contract: Mapping[str, Any]) -> dict[str, Any]:
+    """The hashed view of ``benchmark.yaml[input_contract]``: :data:`INPUT_CONTRACT_HASHED_KEYS`, absent as ``null``."""
+    if not isinstance(input_contract, Mapping):
+        raise TypeError(f"input_contract_view: expected the benchmark.yaml input_contract block (a mapping), got {type(input_contract).__name__}")
+    return {k: input_contract.get(k) for k in INPUT_CONTRACT_HASHED_KEYS}
+
+
+#: A string inside a hashed view is prose when it has at least this many whitespace-separated words …
+PROSE_MIN_WORDS: int = 8
+#: … or is at least this long. Identifiers, file names, enum values and tool arguments stay under both.
+PROSE_MIN_CHARS: int = 80
+
+
+def find_prose(value: Any, path: str = "") -> list[tuple[str, str]]:
+    """``[(dotted path, text), …]`` for every string in ``value`` that reads as prose (:data:`PROSE_MIN_WORDS` words
+    or :data:`PROSE_MIN_CHARS` characters). ``bench lint`` runs it over both hashed sides (``E_HASHED_PROSE``): a
+    sentence in a hashed view would fork the hash on a wording edit, which is what the typed views exist to prevent."""
+    out: list[tuple[str, str]] = []
+    if isinstance(value, str):
+        if len(value.split()) >= PROSE_MIN_WORDS or len(value) >= PROSE_MIN_CHARS:
+            out.append((path or "<root>", value))
+    elif isinstance(value, Mapping):
+        for k, v in value.items():
+            out.extend(find_prose(v, f"{path}.{k}" if path else str(k)))
+    elif isinstance(value, (list, tuple)):
+        for i, v in enumerate(value):
+            out.extend(find_prose(v, f"{path}[{i}]"))
+    return out
+
+
 def input_components(
     *,
     name: str,
@@ -283,14 +374,13 @@ def input_components(
     manifest: Mapping[str, Any],
     manifest_hash: str,
     readout: str,
-    reader_sha256: str | None = None,
 ) -> dict[str, Any]:
     """The INPUT side of a benchmark, one entry per component: everything that decides what a bridge is
     handed and what its features must satisfy — the rows and media (``manifest_hash``, the manifest's ``key`` and
-    ``columns``), the split values and roles, the streams, both contracts, the readout NAME, the input-side protocol
-    / readout_params values (:func:`input_readout_view`) and the folder's ``reader.py`` (normalized source digest,
-    ``None`` = the generic ``yavih.sample.iter_samples``). The behaviour of ``yavih.sample`` itself is covered by the
-    schema tag (``PROTOCOL_SCHEMA``)."""
+    ``columns``), the split values and roles, the streams, the input contract's data keys (:func:`input_contract_view`),
+    the output contract, the readout NAME and the input-side protocol / readout_params values
+    (:func:`input_readout_view`). The behaviour of the reader (``yavih.sample`` or a folder's ``reader.py``) is covered
+    by the schema tag (``PROTOCOL_SCHEMA``) and ``protocol_version``, never by its source."""
     if not isinstance(manifest, Mapping):
         raise TypeError(f"input_components: expected the benchmark.yaml manifest block (a mapping), got {type(manifest).__name__}")
     return {
@@ -299,12 +389,11 @@ def input_components(
         "manifest": {k: manifest.get(k) for k in INPUT_MANIFEST_KEYS},
         "splits": splits,
         "streams": streams,
-        "input_contract": input_contract,
+        "input_contract": input_contract_view(input_contract),
         "output_contract": output_contract,
         "readout": readout,
         "readout_inputs": input_readout_view(readout=readout, protocol=protocol, readout_params=readout_params,
                                              input_contract=input_contract, output_contract=output_contract),
-        "reader": reader_sha256,
     }
 
 
@@ -318,12 +407,11 @@ def scoring_components(
     targets: Mapping[str, Mapping[str, Any]] | Sequence[Mapping[str, Any]] | None,
     manifest: Mapping[str, Any],
     readout: str,
-    probe_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """The SCORING side of a benchmark: how the features are turned into numbers — ``protocol_version``,
-    the whole ``protocol`` and ``readout_params`` blocks, ``metrics``, ``external`` (with its ``version_pin``s),
-    ``targets``, the manifest's ``label`` read rule, the readout name and ``READOUT_VERSION``, and the folder's
-    ``probe.py`` (normalized source digest). None of it reaches the bridge."""
+    """The SCORING side of a benchmark: how the features are turned into numbers — ``protocol_version`` (the
+    declared version of the folder's scoring behaviour), the ``protocol`` view, the whole ``readout_params`` block,
+    the ``metrics`` view, the ``external`` pins, ``targets``, the manifest's ``label`` read rule and the readout name
+    and ``READOUT_VERSION``. None of it reaches the bridge; none of it is source."""
     if readout not in READOUT_VERSION:
         raise ValueError(f"unknown readout {readout!r}; known: {sorted(READOUT_VERSION)}")
     if not isinstance(manifest, Mapping):
@@ -334,14 +422,13 @@ def scoring_components(
         targets_view = [dict(t) for t in targets]
     return {
         "protocol_version": protocol_version,
-        "protocol": protocol,
+        "protocol": protocol_view(protocol),
         "readout_params": readout_params,
-        "metrics": metrics,
-        "external": external,
+        "metrics": metrics_view(metrics),
+        "external": external_view(external),
         "targets": targets_view,
         "label": manifest.get("label"),
         "readout": {"name": readout, "version": READOUT_VERSION[readout]},
-        "probe": probe_sha256,
     }
 
 
@@ -375,14 +462,27 @@ def combine_protocol_hash(input_hash: str, scoring_hash: str) -> str:
 
 @dataclass(frozen=True)
 class ProtocolHashes:
-    """Every digest of one benchmark's protocol: ``protocol_hash = H(input_hash, scoring_hash)`` and the
-    per-component digests of each side (what ``E_HASH_INPUT`` diffs)."""
+    """Every digest of one benchmark's protocol: ``protocol_hash = H(input_hash, scoring_hash)``, the
+    per-component digests of each side (what ``E_HASH_INPUT`` diffs) and the component VALUES themselves
+    (``input_values`` / ``scoring_values``: the exact hashed payloads, printed by ``yavih bench hash --explain``
+    and scanned by ``bench lint`` for prose)."""
 
     protocol_hash: str
     input_hash: str
     scoring_hash: str
     input_components: dict[str, str]
     scoring_components: dict[str, str]
+    input_values: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
+    scoring_values: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
+
+    def explain(self) -> dict[str, Any]:
+        """``{"schema", "protocol_hash", "input": {"hash", "components": {name: {"digest", "canon"}}}, "scoring": …}``:
+        the canonical text of every hashed component, enough to recompute every digest with stdlib only."""
+        def side(h: str, digests: Mapping[str, str], values: Mapping[str, Any]) -> dict[str, Any]:
+            return {"hash": h, "components": {k: {"digest": digests[k], "canon": canon(values[k])} for k in sorted(digests)}}
+        return {"schema": PROTOCOL_SCHEMA, "protocol_hash": self.protocol_hash,
+                "input": side(self.input_hash, self.input_components, self.input_values),
+                "scoring": side(self.scoring_hash, self.scoring_components, self.scoring_values)}
 
 
 def protocol_hashes(
@@ -401,22 +501,21 @@ def protocol_hashes(
     manifest: Mapping[str, Any],
     manifest_hash: str,
     readout: str,
-    reader_sha256: str | None = None,
-    probe_sha256: str | None = None,
 ) -> ProtocolHashes:
-    """``yavih-protocol-4``: the input side, the scoring side and their combination. Everything hashed is
-    the benchmark's: nothing bridge- or site-side. ``reader_sha256`` / ``probe_sha256`` are
-    :func:`source_sha256` digests of the folder's ``reader.py`` / ``probe.py`` (``None`` when absent)."""
+    """``yavih-protocol-5``: the input side, the scoring side and their combination, from the benchmark's
+    declaration only (raw yaml blocks, the manifest digest, the readout name and ``yavih.versions``). Nothing
+    bridge- or site-side, no source file."""
     if manifest is None:
         raise TypeError("protocol_hashes: manifest (the benchmark.yaml manifest block) is required")
     inp = input_components(name=name, splits=splits, streams=streams, input_contract=input_contract, output_contract=output_contract,
                            protocol=protocol, readout_params=readout_params, manifest=manifest, manifest_hash=manifest_hash,
-                           readout=readout, reader_sha256=reader_sha256)
+                           readout=readout)
     sco = scoring_components(protocol_version=protocol_version, protocol=protocol, external=external, metrics=metrics,
-                             readout_params=readout_params, targets=targets, manifest=manifest, readout=readout, probe_sha256=probe_sha256)
+                             readout_params=readout_params, targets=targets, manifest=manifest, readout=readout)
     ih, sh = input_hash_of(inp), scoring_hash_of(sco)
     return ProtocolHashes(protocol_hash=combine_protocol_hash(ih, sh), input_hash=ih, scoring_hash=sh,
-                          input_components=component_digests(inp), scoring_components=component_digests(sco))
+                          input_components=component_digests(inp), scoring_components=component_digests(sco),
+                          input_values=dict(inp), scoring_values=dict(sco))
 
 
 def protocol_hash(**kw: Any) -> str:

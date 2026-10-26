@@ -454,9 +454,30 @@ def _tools_block(bench: Any, *, timeout: float = 30.0) -> dict[str, dict[str, An
     return {name: rec}
 
 
+def cmd_init(ns: argparse.Namespace) -> Envelope:
+    """``yavih init [--dir D] [--site ID [--hosts GLOB]... [--launcher CMD]] [--force]``: the project folder
+    ``yavih-bench/`` (``yavih.project.init_project``); refuses a folder already governed by another project file
+    (``E_PROJECT_EXISTS``) and an existing ``yavih.toml`` (``E_EXISTS``) unless ``--force`` refreshes the rest. The user
+    file is never written: runs and results default to the folder's ``runs/`` (ignored by git) and ``results/``."""
+    from yavih.project import init_project
+
+    rec = init_project(ns.dir, site=ns.site, hosts=ns.hosts, launcher=ns.launcher, force=bool(ns.force))
+    lines = [f"project folder {rec['dir']}"]
+    lines += [f"  wrote {w}" for w in rec["written"]]
+    lines += [f"  kept  {k}" for k in rec["kept"]]
+    lines.append(f"  runs    {rec['runs_root']} (default; ignored by git. For a large suite set [runs] root in {rec['user_config']} "
+                 f"or under a [site.<id>] table to put the runs on scratch)")
+    lines.append(f"  results {rec['results_root']} (default; small text files, committed with the project)")
+    lines.append("next: " + "; then ".join(rec["next"]))
+    return Envelope(data=rec, paths={"dir": rec["dir"], "file": rec["file"]}, text="\n".join(lines) + "\n")
+
+
 def cmd_doctor(ns: argparse.Namespace) -> Envelope:
     """``yavih doctor [--bench B] [--selftest]``: extras, torch, decoders, decode sample, data
-    roots, GPUs, launcher, decode-worker default, ``$YAVIH_HOME`` and the runs root."""
+    roots, GPUs, launcher, decode-worker default, ``$YAVIH_HOME``, the runs root and the project folder
+    (``yavih.project.doctor_block``: ``W_PROJECT_VERSION``, ``W_PROJECT_NESTED``, ``W_PROJECT_STRAY``, ``W_RUNS_SIZE``).
+    A configuration that does not load even leniently is ``W_CONFIG`` plus ``config_error: {message, project_file}``
+    (the project file found without parsing it, if any); the text names that file instead of suggesting ``yavih init``."""
     from yavih import config as _cfg
     from yavih.extract import default_decode_workers
     from yavih.media import decoder_info
@@ -465,6 +486,7 @@ def cmd_doctor(ns: argparse.Namespace) -> Envelope:
     data: dict[str, Any] = {}
     # the configuration (files, site, every value with its source) is a finding, never an abort
     settings = None
+    data["config_error"] = None  # {message, project_file} when the configuration does not load even leniently
     try:
         settings = _cfg.load()
     except _cfg.ConfigError as e:
@@ -473,6 +495,8 @@ def cmd_doctor(ns: argparse.Namespace) -> Envelope:
             settings = _cfg.load(lenient=True)
         except _cfg.ConfigError as e2:
             warnings.append(_finding("W_CONFIG", f"even leniently the configuration does not load: {e2}"))
+            pf = _cfg.project_config_path()
+            data["config_error"] = {"message": str(e), "project_file": str(pf) if pf is not None else None}
     if settings is not None:
         for f in settings.files:
             if f.layer == "project" and not f.exists:
@@ -583,6 +607,18 @@ def cmd_doctor(ns: argparse.Namespace) -> Envelope:
     data["yavih_version"] = __version__
     data["python"] = sys.version.split()[0]
     data["host"] = socket.gethostname()
+    # the project folder (yavih-bench/): version requirement, nested project files, stray matrices
+    data["project"] = None
+    if settings is not None:
+        from yavih.project import doctor_block
+
+        try:
+            data["project"], pw, pn = doctor_block(settings)
+        except Exception as e:  # noqa: BLE001 - a layout scan must never take doctor down
+            warnings.append(_finding("W_INTERNAL", f"project layout check failed: {e.__class__.__name__}: {e}"))
+        else:
+            warnings += [_finding(code, msg, where=where) for code, msg, where in pw]
+            data["notes"] += [_finding("N_PROJECT", n) for n in pn]
     # where this yavih comes from, and whether an installed skill copy is older than the packaged skill
     from yavih.shipped import installed_from, installed_skills, skill_stamp
 
@@ -613,6 +649,9 @@ def _config_text(cfg: dict[str, Any], *, indent: str = "  ") -> list[str]:
         lines.append(f"{indent}config   (no file)")
     lines.append(f"{indent}site     {cfg.get('site') or '-'}" + (f"  ({cfg['site_source']})" if cfg.get("site_source") else "")
                  + ("  [lenient]" if cfg.get("lenient") else ""))
+    pj = cfg.get("project")
+    lines.append(f"{indent}project  " + (f"{pj['dir']}  (bridges {pj['bridges']}; matrices {pj['matrices']}; suites {pj['suites']}; "
+                                         f"benchmarks {pj['benchmarks']}; yavih {pj.get('yavih') or 'unpinned'})" if pj else "none (yavih init)"))
     vals = cfg.get("values") or {}
     width = max((len(k) for k in vals), default=10)
     for key, rec in vals.items():
@@ -657,7 +696,7 @@ def cmd_config_get(ns: argparse.Namespace) -> Envelope:
                  "home.root": lambda: settings.yavih_home(), "scratch.root": lambda: settings.scratch_root(),
                  "data.root": lambda: settings.data_root()}[key]()
         v = settings.get(*key.split("."))
-        source = v.source if v else "default"
+        source = {"runs.root": settings.runs_root_source, "results.root": settings.results_root_source}.get(key, lambda: v.source if v else "default")()
         if value is None:
             raise _cfg.ConfigError(f"{key} is not configured (set [data] root in {settings.edit_hint()} or YAVIH_DATA__ROOT)")
     elif head == "datasets":
@@ -711,6 +750,24 @@ def _doctor_text(d: dict[str, Any]) -> str:
     lines.append(f"  gpu         {[g['name'] for g in d['gpu']] or 'none'}")
     lines.append(f"  launcher    {d['launcher']}")
     lines.append(f"  decode_workers_default {d['decode_workers_default']}")
+    pj = d.get("project")
+    if pj and pj.get("dir"):
+        req = pj.get("requirement") or {}
+        state = "ok" if req.get("ok") else ("MISMATCH" if req.get("ok") is False else "unchecked")
+        lines.append(f"  project     {pj['dir']}  (yavih {req.get('spec') or 'unpinned'}: {state}{', dev build' if req.get('dev') else ''})")
+        for q in pj.get("nested") or []:
+            lines.append(f"    NESTED project file {q}")
+        for q in pj.get("stray") or []:
+            lines.append(f"    STRAY matrix {q}")
+    elif d.get("config_error"):  # no project block because the configuration did not load: name the file, never `yavih init`
+        ce = d["config_error"]
+        msg = " ".join(str(ce.get("message") or "").split())
+        if ce.get("project_file"):
+            lines.append(f"  project     {ce['project_file']}: configuration failed to load: {msg}")
+        else:
+            lines.append(f"  project     unknown (configuration failed to load: {msg})")
+    else:
+        lines.append("  project     none (yavih init)")
     if d.get("config"):
         lines.extend(_config_text({k: v for k, v in d["config"].items() if k != "bench"}))
     else:
@@ -902,6 +959,7 @@ def _bench_row(bench: Any) -> dict[str, Any]:
         "name": bench.name,
         "aliases": list(raw.get("aliases") or []),
         "readout": raw.get("readout"),
+        "capability": [str(c) for c in raw.get("capability") or []],
         "clips": dict(budget.get("clips") or {}),
         "media_gb": budget.get("media_gb"),
         "source_kind": (raw.get("source") or {}).get("kind"),
@@ -911,8 +969,8 @@ def _bench_row(bench: Any) -> dict[str, Any]:
 
 
 def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any]], list[str]]:
-    """``bench list --suite S``: ``(suite, packaged benchmark names in suite order, {name: {capability, readings}},
-    pending names)``."""
+    """``bench list --suite S``: ``(suite, packaged benchmark names in suite order, {name: {suite_capability,
+    readings}}, pending names)``; ``suite_capability`` is the suite group, ``capability`` stays the folder's tags."""
     from yavih.suites import load_suite
 
     suite = load_suite(suite_ref)
@@ -922,7 +980,7 @@ def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any
         if e.status != "packaged":
             pending.append(e.benchmark)
             continue
-        rec = facts.setdefault(e.benchmark, {"capability": cap, "readings": []})
+        rec = facts.setdefault(e.benchmark, {"suite_capability": cap, "readings": []})
         rec["readings"] += [r for r in e.readings if r not in rec["readings"]]
         if e.join:
             rec["readings"].append(str(e.join_reading))
@@ -930,8 +988,9 @@ def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any
 
 
 def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
-    """``yavih bench list [--fmt text|md] [--suite S]``: every discoverable benchmark, or with ``--suite`` the
-    suite's packaged benchmarks in suite order with their ``capability`` and ``readings``."""
+    """``yavih bench list [--fmt text|md] [--suite S]``: every discoverable benchmark with its ``capability`` tags
+    (``benchmark.yaml``), or with ``--suite`` the suite's packaged benchmarks in suite order with the suite group
+    (``suite_capability``) and ``readings``."""
     rows = []
     warnings = []
     suite, refs, facts, pending = (None, _bench_refs(), {}, [])
@@ -953,13 +1012,15 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
         if suite is not None:
             row.update(facts[ref])
         rows.append(row)
-    head = f"{'capability':<14}{'readings':<16}" if suite is not None else ""
-    lines = [f"{head}{'name':<16}{'readout':<8}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
+    head = f"{'group':<14}{'readings':<16}" if suite is not None else ""
+    lines = [f"{head}{'name':<16}{'readout':<8}{'capability':<23}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
     for r in rows:
         clips = ", ".join(f"{k}={v}" for k, v in r["clips"].items())
         tier = (r.get("obtain") or {}).get("tier") or "-"
-        pre = f"{r['capability']:<14}{','.join(r['readings']):<16}" if suite is not None else ""
-        lines.append(f"{pre}{r['name']:<16}{str(r['readout']):<8}{clips:<28}{str(r['media_gb']):>9}  {str(r['source_kind']):<15}{tier:<17}{r['status']}")
+        caps = ",".join(r.get("capability") or []) or "-"
+        pre = f"{r['suite_capability']:<14}{','.join(r['readings']):<16}" if suite is not None else ""
+        lines.append(f"{pre}{r['name']:<16}{str(r['readout']):<8}{caps:<23}{clips:<28}{str(r['media_gb']):>9}  "
+                     f"{str(r['source_kind']):<15}{tier:<17}{r['status']}")
     if suite is not None:
         lines.insert(0, f"suite {suite.name} ({suite.origin}): {suite.description}")
         if pending:
@@ -1003,6 +1064,7 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
     data = {
         "name": bench.name,
         "title": raw.get("title"),
+        "capability": [str(c) for c in raw.get("capability") or []],
         "readout": raw.get("readout"),
         "protocol_version": raw.get("protocol_version"),
         "protocol_hash": bench.protocol_hash,
@@ -1022,8 +1084,9 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
     summary = json.dumps(_jsonable({k: v for k, v in data.items() if k != "readme"}), indent=2, sort_keys=True)
     ob = data["obtain"] if isinstance(data["obtain"], dict) else {}
     obtain_line = f"obtain: {ob.get('tier')} — {ob.get('how')}\n" if ob else ""
+    cap_line = f"capability: {', '.join(data['capability'])}\n" if data["capability"] else ""
     return Envelope(data=data, paths={"folder": str(bench.folder)},
-                    text=readme + ("\n" if readme and not readme.endswith("\n") else "") + obtain_line + summary + "\n")
+                    text=readme + ("\n" if readme and not readme.endswith("\n") else "") + cap_line + obtain_line + summary + "\n")
 
 
 def cmd_bench_path(ns: argparse.Namespace) -> Envelope:
@@ -1183,6 +1246,98 @@ def cmd_bench_lint(ns: argparse.Namespace) -> Envelope:
     ok = not errors
     return Envelope(status="ok" if ok else "error", data=reports, errors=errors, warnings=warnings,
                     exit_code=EXIT_OK if ok else EXIT_CONTRACT, text="\n".join(lines) + "\n")
+
+
+def cmd_bench_conformance(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench conformance <name|path>... [--all] [--record [--same-version --reason TEXT] [--force]]``: check (or
+    record) each folder's ``conformance/expected.json`` (``yavih.conformance``). A drift, a stale or a missing fixture
+    exits 2; a folder whose pinned external package is absent here is a warning (nothing compared). ``--same-version``,
+    ``--reason`` and ``--force`` without ``--record``, and ``--reason`` without ``--same-version``, are ``E_USAGE``
+    (exit 1): a flag that would be silently ignored is refused."""
+    from yavih.benchmark import Benchmark, UnknownBenchmark
+    from yavih.conformance import REASON_DROPPED, ConformanceError, check, record
+
+    refs = list(ns.refs or [])
+    if ns.all:
+        refs += [r for r in _bench_refs() if r not in refs]
+    if not refs:
+        raise CliError("E_USAGE", "bench conformance needs a benchmark name or path (or --all)")
+    if not ns.record:
+        for flag, given in (("--same-version", ns.same_version), ("--reason", ns.reason is not None), ("--force", ns.force)):
+            if given:
+                raise CliError("E_USAGE", f"{flag} applies to --record")
+    if ns.reason is not None and not ns.same_version:
+        raise CliError("E_USAGE", "--reason applies to --same-version (it explains values that moved at the same protocol_version)")
+    data, errors, warnings, lines = [], [], [], []
+    for ref in refs:
+        try:
+            bench = Benchmark.load(ref)
+        except UnknownBenchmark as e:
+            raise CliError("E_USAGE", str(e), EXIT_USAGE) from e
+        if ns.record:
+            try:
+                res = record(bench, same_version=bool(ns.same_version), reason=ns.reason, force=bool(ns.force))
+            except ConformanceError as e:
+                if e.code.startswith("W_"):
+                    warnings.append(_finding(e.code, e.message, where=bench.name))
+                    lines.append(f"{bench.name}: not recorded ({e.code}: {e.message})")
+                    data.append({"name": bench.name, "recorded": False, "code": e.code})
+                    continue
+                errors.append(_finding(e.code, e.message, where=bench.name))
+                lines.append(f"{bench.name}: FAIL {e.code}: {e.message}")
+                data.append({"name": bench.name, "recorded": False, "code": e.code})
+                continue
+            rec = res.record
+            n = sum(len(v.get("metrics") or {}) + len(v.get("floors") or {}) + len(v.get("controls") or {}) for v in rec["values"].values())
+            stored = rec.get("same_version_reason")
+            note = f" (--reason not stored: {REASON_DROPPED[res.reason_dropped]})" if res.reason_dropped else ""
+            lines.append(f"{bench.name}: recorded {n} values at protocol_version {rec['protocol_version']} -> {bench.folder}/conformance/expected.json{note}")
+            data.append({"name": bench.name, "recorded": True, "protocol_version": rec["protocol_version"], "values": n,
+                         "readings": sorted(rec["values"]), "population": rec["population"], "same_version_reason": stored,
+                         "compared": res.compared, "moved": len(res.moved), "reason_dropped": res.reason_dropped})
+            continue
+        rep = check(bench)
+        data.append(rep.to_dict())
+        for f in rep.errors:
+            errors.append(_finding(f.code, f.message, where=bench.name))
+        for f in rep.warnings:
+            warnings.append(_finding(f.code, f.message, where=bench.name))
+        state = "skipped" if rep.skipped else ("ok" if rep.ok else "FAIL")
+        lines.append(f"{bench.name}: {state} ({rep.compared} values compared at protocol_version {rep.protocol_version})")
+        for f in rep.findings:
+            lines.append(f"  {f.severity:<7} {f.code:<22} {f.message}")
+    ok = not errors
+    return Envelope(status="ok" if ok else "error", data=data, errors=errors, warnings=warnings,
+                    exit_code=EXIT_OK if ok else EXIT_CONTRACT, text="\n".join(lines) + "\n")
+
+
+def cmd_bench_hash(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench hash <name|path> [--explain]``: the folder's ``protocol_hash``, ``input_hash`` and ``scoring_hash``;
+    with ``--explain`` the canonical text and digest of every hashed component (``ProtocolHashes.explain``), enough
+    to recompute the hashes with stdlib only, and the folder's ``folder_source`` provenance."""
+    from yavih.benchmark import Benchmark, UnknownBenchmark
+
+    try:
+        bench = Benchmark.load(ns.ref)
+    except UnknownBenchmark as e:
+        raise CliError("E_USAGE", str(e), EXIT_USAGE) from e
+    data: dict[str, Any] = {
+        "name": bench.name, "protocol_version": bench.spec.protocol_version, "protocol_hash": bench.protocol_hash,
+        "input_hash": bench.input_hash, "scoring_hash": bench.scoring_hash, "manifest_hash": bench.manifest_hash,
+        "folder_source": dict(bench.folder_source),
+    }
+    lines = [f"{bench.name} (protocol_version {bench.spec.protocol_version})",
+             f"  protocol_hash  {bench.protocol_hash}", f"  input_hash     {bench.input_hash}",
+             f"  scoring_hash   {bench.scoring_hash}", f"  manifest_hash  {bench.manifest_hash}",
+             f"  folder_source  probe={bench.folder_source.get('probe') or 'null'} reader={bench.folder_source.get('reader') or 'null'}"]
+    if ns.explain:
+        ex = bench.hashes.explain()
+        data["explain"] = ex
+        for side in ("input", "scoring"):
+            lines.append(f"  {side} components ({ex[side]['hash'][:12]}…):")
+            for name, c in ex[side]["components"].items():
+                lines.append(f"    {name:<16} {c['digest'][:12]}…  {c['canon']}")
+    return Envelope(status="ok", data=data, exit_code=EXIT_OK, text="\n".join(lines) + "\n")
 
 
 def cmd_bench_new(ns: argparse.Namespace) -> Envelope:
@@ -1508,7 +1663,8 @@ def cmd_report_build(ns: argparse.Namespace) -> Envelope:
         join = {kind: _kv_pairs(pairs)}
     rep = report(ns.globs, fmt=ns.fmt, seeds=ns.seeds, allow_coverage_diff=ns.allow_coverage_diff, join=join, detail=ns.detail,
                  results_root=getattr(ns, "results", None), merge_results=bool(getattr(ns, "merge_results", False)),
-                 **({"suite": ns.suite} if getattr(ns, "suite", None) else {}))
+                 **({"suite": ns.suite} if getattr(ns, "suite", None) else {}),
+                 **({"registry": ns.registry} if getattr(ns, "registry", None) else {}))
     paths: dict[str, Any] = {}
     if rep.merged:
         paths["merged"] = list(rep.merged)
@@ -1528,6 +1684,39 @@ def cmd_report_build(ns: argparse.Namespace) -> Envelope:
     warnings = [_finding(str(w.get("code")), str(w.get("message", "")), w.get("column") or w.get("where"))
                 for w in (getattr(rep, "warnings", None) or []) if isinstance(w, dict) and w.get("code")]
     return Envelope(data=rep.to_json(), warnings=warnings, paths=paths, text=rep.text if rep.text.endswith("\n") else rep.text + "\n")
+
+
+def cmd_registry_export(ns: argparse.Namespace) -> Envelope:
+    """``yavih registry export <results_root|file> --org ORG --out DIR [--model NAME]... [--include-nonstandard]``:
+    registry entries from a results store (``yavih.registry.export``); ``W_REGISTRY_UNVERIFIED`` per entry ``export``
+    lists under ``unverified`` (its ``conformance.passed`` is not true, judged on the entry as written)."""
+    from yavih.registry import RegistryError, export
+
+    try:
+        out = export(ns.source, org=ns.org, out=ns.out, include_nonstandard=bool(ns.include_nonstandard), models=ns.model)
+    except RegistryError as e:
+        raise CliError(e.code, e.message, EXIT_USAGE) from e
+    lines = [f"{len(out['entries'])} entries, {len(out['protocols'])} protocol payloads written under {ns.out}"]
+    lines += [f"  {p}" for p in out["entries"]]
+    warnings = [_finding("W_REGISTRY_SKIPPED", f"{s['key']}: {s['reason']}") for s in out["skipped"]]
+    lines += [f"  skipped {s['key']}: {s['reason']}" for s in out["skipped"]]
+    for p in out["unverified"]:
+        warnings.append(_finding("W_REGISTRY_UNVERIFIED", f"{p}: conformance not passed here; `yavih registry check` refuses it until it is", where=p))
+    return Envelope(data=out, warnings=warnings, paths={"out": str(ns.out)}, text="\n".join(lines) + "\n")
+
+
+def cmd_registry_check(ns: argparse.Namespace) -> Envelope:
+    """``yavih registry check DIR``: every entry parses, is filed under its id, carries consistent hashes, a protocol
+    payload that recomputes them, a passed conformance and a tolerance (``yavih.registry.check``); errors exit 2."""
+    from yavih.registry import check
+
+    rep = check(ns.root)
+    errors = [_finding(f.code, f.message, where=f.entry) for f in rep.errors]
+    warnings = [_finding(f.code, f.message, where=f.entry) for f in rep.warnings]
+    lines = [f"{ns.root}: {'ok' if rep.ok else 'FAIL'} ({rep.n_entries} entries, {rep.n_protocols} protocol payloads, {len(errors)} errors, {len(warnings)} warnings)"]
+    lines += [f"  {f.severity:<7} {f.code:<24} {f.message}" for f in rep.findings]
+    return Envelope(status="ok" if rep.ok else "error", data=rep.to_dict(), errors=errors, warnings=warnings,
+                    exit_code=EXIT_OK if rep.ok else EXIT_CONTRACT, text="\n".join(lines) + "\n")
 
 
 def cmd_plan_build(ns: argparse.Namespace) -> Envelope:
@@ -1560,14 +1749,22 @@ def cmd_plan_build(ns: argparse.Namespace) -> Envelope:
 
 
 def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
-    """``yavih plan init --suite S --model M --launcher L [--out matrix.yaml] [--bridges-dir DIR] [--force]``: one
+    """``yavih plan init --suite S --model M [--launcher L] [--out matrix.yaml] [--bridges-dir DIR] [--force]``: one
     bridge file per suite benchmark (``yavih.shipped.bridge_new``; an existing one is kept) and a ``matrix.yaml``
-    skeleton with one entry per suite ``(benchmark, reading)`` (``yavih.plan.skeleton``). The text lists the
-    ``bridge check`` command of every entry, then the ``plan build`` command."""
+    skeleton with one entry per suite ``(benchmark, reading)`` (``yavih.plan.skeleton``), in the project folder when
+    there is one. The text lists the ``bridge check`` command of every entry, then the ``plan build`` command;
+    ``W_LAUNCHER_UNSET`` when neither ``--launcher`` nor the configuration names one."""
     from yavih.plan.skeleton import plan_init
 
     rec = plan_init(ns.suite, model=ns.model, launcher=ns.launcher, out=ns.out, bridges_dir=ns.bridges_dir, force=bool(ns.force))
-    lines = [f"wrote {rec['path']}: suite {rec['suite']}, model {rec['model']}, {len(rec['entries'])} entries"]
+    warnings: list[dict] = []
+    if rec["launcher"] is None and not rec["launcher_configured"]:
+        warnings.append(_finding("W_LAUNCHER_UNSET", "no --launcher and no default `launcher` anywhere in the configuration (neither the top "
+                                 "level nor any [site.<id>] table defines `launcher`; a [launchers] name applies only to an entry that names "
+                                 "it): set one in the project yavih.toml, per site under [site.<id>], or pass --launcher; until then the "
+                                 "units run with the python running `yavih exec`"))
+    lines = [f"wrote {rec['path']}: suite {rec['suite']}, model {rec['model']}, {len(rec['entries'])} entries"
+             + (f" (project {rec['project']})" if rec["project"] else "")]
     for b in rec["bridges"]:
         lines.append(f"  bridge {b['path']} " + ("(exists, kept)" if b["action"] == "kept" else f"(created from {b['benchmark']}'s bridge_template.py)"))
     for p in rec["pending"]:
@@ -1578,7 +1775,7 @@ def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
         lines.append(f"after probing: `yavih suite missing {rec['suite']} --model {rec['model']}` prints the "
                      f"`yavih report build --join {j['benchmark']} ...` command that scores {j['benchmark']}:{j['reading']}")
     paths = {"matrix": rec["path"], "bridges": [b["path"] for b in rec["bridges"]]}
-    return Envelope(data=rec, paths=paths, text="\n".join(lines) + "\n")
+    return Envelope(data=rec, paths=paths, warnings=warnings, text="\n".join(lines) + "\n")
 
 
 def cmd_plan_status(ns: argparse.Namespace) -> Envelope:
@@ -1719,7 +1916,7 @@ def build_parser() -> argparse.ArgumentParser:
         # The configuration layer of every command (yavih.config): before or after the subcommand. SUPPRESS so a
         # subparser does not reset what the main parser saw; distinct dests so `probe run --results` keeps its own.
         parser.add_argument("--config", dest="cfg_config", default=argparse.SUPPRESS, metavar="FILE",
-                            help="project config file (beats ./yavih.toml discovery; exported as YAVIH_CONFIG)")
+                            help="project config file (beats $YAVIH_CONFIG and the yavih-bench/yavih.toml discovery; exported as YAVIH_CONFIG)")
         parser.add_argument("--runs-root", dest="cfg_runs_root", default=argparse.SUPPRESS, metavar="DIR",
                             help="runs root (beats YAVIH_RUNS and [runs] root)")
         if results:
@@ -1750,8 +1947,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", metavar="<command>")
     sub.required = True
 
+    # init
+    sp = sub.add_parser("init", parents=[common_r], help="write the project folder yavih-bench/ (yavih.toml, bridges/, matrices/, suites/, benchmarks/, tools/); runs and results default to runs/ and results/ inside it")
+    sp.add_argument("--dir", default=None, metavar="D", help="the repository root the folder goes under (default: the current directory)")
+    sp.add_argument("--site", default=None, metavar="ID", help="write a [site.ID] table for this cluster")
+    sp.add_argument("--hosts", action="append", default=[], metavar="GLOB", help="hostname glob(s) of --site (default: this host's name)")
+    sp.add_argument("--launcher", default=None, metavar="CMD", help="the site's default launcher (the model env's python or a prefix command)")
+    sp.add_argument("--force", action="store_true", help="refresh README.md, .gitignore and the directories of an existing folder (yavih.toml is never overwritten)")
+    sp.set_defaults(func=cmd_init)
+
     # doctor
-    sp = sub.add_parser("doctor", parents=[common_r], help="environment, decoders, data roots, GPU, configuration; --selftest runs the reference bridge")
+    sp = sub.add_parser("doctor", parents=[common_r], help="environment, decoders, data roots, GPU, configuration, the project folder; --selftest runs the reference bridge")
     sp.add_argument("--bench", default=None)
     sp.add_argument("--selftest", action="store_true")
     sp.set_defaults(func=cmd_doctor)
@@ -1811,7 +2017,7 @@ def build_parser() -> argparse.ArgumentParser:
     bsub.required = True
     s = bsub.add_parser("list", parents=[common_r])
     s.add_argument("--fmt", choices=["text", "md"], default="text", help="md: the markdown table the docs embed (no data scan)")
-    s.add_argument("--suite", default=None, metavar="S", help="only the suite's benchmarks, with their capability and readings")
+    s.add_argument("--suite", default=None, metavar="S", help="only the suite's benchmarks, with their suite group and readings")
     s.set_defaults(func=cmd_bench_list)
     s = bsub.add_parser("info", parents=[common_r])
     s.add_argument("name")
@@ -1854,11 +2060,23 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--all", action="store_true", help="every discoverable benchmark folder")
     s.add_argument("--skip", action="append", default=[], metavar="CHECK", help="skip a check by id (e.g. imports)")
     s.set_defaults(func=cmd_bench_lint)
+    s = bsub.add_parser("conformance", parents=[common_r], help="check (or --record) a folder's conformance fixture: the numbers its scoring path produces on a generated population, at its protocol_version")
+    s.add_argument("refs", nargs="*", metavar="name|path")
+    s.add_argument("--all", action="store_true", help="every discoverable benchmark folder")
+    s.add_argument("--record", action="store_true", help="write conformance/expected.json from the current scoring path")
+    s.add_argument("--same-version", action="store_true", help="with --record: overwrite differing values at the same protocol_version (needs --reason)")
+    s.add_argument("--reason", default=None, metavar="TEXT", help="with --same-version: why the numbers moved without a protocol change (stored as same_version_reason when values did move)")
+    s.add_argument("--force", action="store_true", help="with --record: overwrite without comparing")
+    s.set_defaults(func=cmd_bench_conformance)
+    s = bsub.add_parser("hash", parents=[common_r], help="a folder's protocol / input / scoring hashes; --explain prints every hashed component's canonical text")
+    s.add_argument("ref", metavar="name|path")
+    s.add_argument("--explain", action="store_true", help="the canonical JSON and digest of every component (recompute the hashes with stdlib only)")
+    s.set_defaults(func=cmd_bench_hash)
     s = bsub.add_parser("new", parents=[common_r], help="scaffold a benchmark folder that passes bench lint (TODO where facts are needed)")
     s.add_argument("name")
     s.add_argument("--readout", default=None, help="the readout (clf, seq, grid, box or a registered one); picks the default --like")
     s.add_argument("--like", default=None, metavar="BENCH", help="the folder whose manifest, reader and template are copied (default per readout)")
-    s.add_argument("--dir", default=None, metavar="D", help="parent directory (default: the first $YAVIH_BENCH_PATH entry, else .)")
+    s.add_argument("--dir", default=None, metavar="D", help="parent directory (default: the project's benchmarks/, else the first $YAVIH_BENCH_PATH entry, else .)")
     s.set_defaults(func=cmd_bench_new)
     s = bsub.add_parser("trial", parents=[common_r],
                         help="run the whole pipeline of one folder (stand-in, oracle bridge, check, extract, validate, probe, report) on a "
@@ -1885,11 +2103,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--allow-loopback", action="store_true",
                    help="let encode() connect to 127.0.0.0/8 / ::1 (a local inference server); recorded in the profile")
     s.set_defaults(func=cmd_bridge_check)
-    s = brsub.add_parser("new", parents=[common_r], help="copy a benchmark's bridge_template.py to bridges/<model>_<bench>.py with the model name filled in")
+    s = brsub.add_parser("new", parents=[common_r], help="copy a benchmark's bridge_template.py to <project bridges dir>/<model>_<bench>.py with the model name filled in")
     s.add_argument("bench", metavar="<bench>")
     s.add_argument("--model", required=True, help="the model's NAME (every bridge of this model uses it; results are filed under it)")
     s.add_argument("--reading", default=None, help="a | v | av (fills a literal reading, or the default of a reading arg)")
-    s.add_argument("--out", default=None, metavar="DIR|FILE", help="destination (default bridges/<model>_<bench>.py)")
+    s.add_argument("--out", default=None, metavar="DIR|FILE", help="destination (default: the project's bridges/<model>_<bench>.py, else ./bridges/)")
     s.add_argument("--force", action="store_true", help="overwrite an existing destination file")
     s.set_defaults(func=cmd_bridge_new)
 
@@ -1979,7 +2197,23 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--results", default=None, metavar="DIR", help="results-store root for --join / --merge-results")
     s.add_argument("--merge-results", action="store_true", help="merge every model's results_*.json into one results_<timestamp>.json")
     s.add_argument("--suite", default=None, metavar="S", help="append the suite's completeness per model (done / missing / join-missing)")
+    s.add_argument("--registry", default=None, metavar="DIR", help="a model registry (yavih registry export): its accepted entries join the table as rows, under the same comparability rule")
     s.set_defaults(func=cmd_report_build)
+
+    # registry
+    sp = sub.add_parser("registry", parents=[common_r], help="the model registry: export scores from a results store, check a registry")
+    rgsub = sp.add_subparsers(dest="subcommand", metavar="<subcommand>")
+    rgsub.required = True
+    s = rgsub.add_parser("export", parents=[common_r], help="write registry entries (and protocol payloads) from a results root or one results file")
+    s.add_argument("source", metavar="<results_root|results_file>")
+    s.add_argument("--org", required=True, help="the namespace the entries are filed under (<org>/<model>): your group or organisation")
+    s.add_argument("--out", required=True, metavar="DIR", help="the registry directory (entries/ and protocols/ are created under it)")
+    s.add_argument("--model", action="append", default=None, metavar="NAME", help="only these model names (repeatable)")
+    s.add_argument("--include-nonstandard", action="store_true", help="also register non-standard probe configurations (shown as such, never ranked)")
+    s.set_defaults(func=cmd_registry_export)
+    s = rgsub.add_parser("check", parents=[common_r], help="check every entry of a registry directory (what the registry repository's CI runs)")
+    s.add_argument("root", metavar="DIR")
+    s.set_defaults(func=cmd_registry_check)
 
     # plan
     sp = sub.add_parser("plan", parents=[common_r], help="build / status / calibrate / run (--local) unit plans")
@@ -1988,9 +2222,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = plsub.add_parser("init", parents=[common_r], help="write a matrix.yaml skeleton and the bridge stubs for one model on a suite")
     s.add_argument("--suite", required=True, metavar="S", help="the suite (yavih suite list)")
     s.add_argument("--model", required=True, help="the model NAME (every bridge of this model uses it; results are filed under it)")
-    s.add_argument("--launcher", required=True, metavar="PYTHON", help="the model environment's python (matrix defaults.launcher)")
-    s.add_argument("--out", default="matrix.yaml", metavar="matrix.yaml", help="the matrix file (default ./matrix.yaml)")
-    s.add_argument("--bridges-dir", default="bridges", metavar="DIR", help="bridge files and profiles, relative to the matrix (default bridges)")
+    s.add_argument("--launcher", default=None, metavar="PYTHON|NAME", help="the model environment's python, or a [launchers] name (matrix defaults.launcher); default: the configured launcher at execution")
+    s.add_argument("--out", default=None, metavar="matrix.yaml", help="the matrix file (default: the project's matrices/<model>.yaml, else ./matrix.yaml)")
+    s.add_argument("--bridges-dir", default=None, metavar="DIR", help="bridge files, relative to the matrix (default: the project's bridges/, else bridges); profiles go to <matrix stem>.profiles/ next to the matrix")
     s.add_argument("--force", action="store_true", help="overwrite an existing matrix file (bridge files are always kept)")
     s.set_defaults(func=cmd_plan_init)
     s = plsub.add_parser("build", parents=[common_r])

@@ -115,7 +115,7 @@ def test_extract_out_is_the_run_directory_everywhere() -> None:
     assert "--out runs/ " not in bridge_md and "Shards land in `runs/" not in bridge_md
     assert "--out $RUN" in bridge_md and "`--out` is the RUN directory" in bridge_md
     assert '"--out", "runs/"' not in _doc("execution.md")  # plan passes the run directory runs/<bench>/<model>/<reading>
-    assert "--out $RUN" in (REPO / "README.md").read_text()
+    assert "--out $RUN" in (REPO / "docs" / "quickstart.md").read_text()
 
 
 # ----------------------------------------------------------------------------- the live-probe fallback

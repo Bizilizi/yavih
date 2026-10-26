@@ -10,6 +10,12 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
 - ``yaml``: ``benchmark.yaml`` parses with pyyaml and loads strictly (``Benchmark.load``); ``name`` = folder name.
 - ``hashes``: the newest ``changelog`` entry records the ``protocol_hash`` and ``input_hash`` the folder computes
   (``E_CHANGELOG_HASH``, with the exact lines to write).
+- ``hashed``: no prose inside a hashed view (``E_HASHED_PROSE``): a sentence in ``protocol``, ``metrics``, the
+  contracts or ``targets`` would fork the hash on a wording edit; prose belongs in ``manifest.upstream``, the README
+  or setup.md.
+- ``conformance``: ``conformance/expected.json`` is recorded at the folder's ``protocol_version`` and the scoring
+  path reproduces it within tolerance (``E_CONFORMANCE_MISSING`` / ``E_CONFORMANCE_STALE`` / ``E_CONFORMANCE_DRIFT``;
+  ``W_CONFORMANCE_SKIPPED`` when a pinned external package is absent here).
 - ``layout``: the required files, a non-empty ``prepare/``, ``classes.csv`` iff ``manifest.classes``, no
   ``__init__.py`` in the folder or its ``tests/`` (a folder is data + scripts, never a package).
 - ``reader``: an optional folder ``reader.py`` accepts ``shard=`` (per-shard canaries); without one the generic
@@ -28,6 +34,9 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   the prepare steps run as ``yavih bench prepare <name> <step>``; ``source.revision`` in "## Obtain the data".
 - ``external``: every ``external[].pip`` is a runnable ``pip install …`` command.
 - ``obtain``: the ``obtain: {tier, how}`` block.
+- ``capability``: a non-empty ``capability:`` list of ``yavih.suites.CAPABILITIES`` ids (``E_CAPABILITY``; optional for
+  the loader); a shipped suite that lists the benchmark under a capability it does not carry is a warning
+  (``W_SUITE_CAPABILITY``).
 - ``template``: ``bridge_template.py`` declares a literal ``describe()["model"]`` and a ``reading`` in a/v/av.
 - ``citations``: the shipped docs cite nothing a pip-installed user cannot open (the repository's docs/ pages by
   relative path, the retired SPEC / DESIGN documents, repo notes,
@@ -306,6 +315,33 @@ def _c_hashes(c: _Ctx) -> Iterator[Finding]:
         yield _err("hashes", "E_CHANGELOG_HASH", msg, "benchmark.yaml")
 
 
+@_check("hashed")
+def _c_hashed_prose(c: _Ctx) -> Iterator[Finding]:
+    """No prose inside a hashed view (``E_HASHED_PROSE``): a sentence there forks the hash on a wording edit."""
+    if c.bench is None:
+        return
+    from yavih.hashing import find_prose
+
+    for side, values in (("input", c.bench.hashes.input_values), ("scoring", c.bench.hashes.scoring_values)):
+        for path, text in find_prose(values):
+            yield _err("hashed", "E_HASHED_PROSE", f"{side} side, {path}: prose in a hashed view ({text[:60]!r}…); move it to an "
+                       "unhashed key (manifest.upstream, README.md, setup.md) or encode it as typed values", "benchmark.yaml")
+
+
+@_check("conformance")
+def _c_conformance(c: _Ctx) -> Iterator[Finding]:
+    """``conformance/expected.json`` exists, is at the folder's ``protocol_version`` and the folder's scoring path still
+    reproduces it within tolerance (``yavih.conformance.check``: ``E_CONFORMANCE_MISSING`` / ``_STALE`` / ``_DRIFT``;
+    ``W_CONFORMANCE_SKIPPED`` when a pinned external package is absent here)."""
+    if c.bench is None:
+        return
+    from yavih.conformance import check
+
+    rep = check(c.bench)
+    for f in rep.findings:
+        yield (_err if f.severity == "error" else _warn)("conformance", f.code, f.message, "conformance/expected.json")
+
+
 @_check("layout")
 def _c_layout(c: _Ctx) -> Iterator[Finding]:
     for rel in REQUIRED_FILES:
@@ -513,6 +549,47 @@ def _c_obtain(c: _Ctx) -> Iterator[Finding]:
         yield _err("obtain", "E_OBTAIN", f"obtain.tier {ob['tier']!r} not in {sorted(OBTAIN_TIERS)}", "benchmark.yaml")
     if not str(ob.get("how") or "").strip():
         yield _err("obtain", "E_OBTAIN", "obtain.how is empty", "benchmark.yaml")
+
+
+def _shipped_suite_groups() -> list[tuple[str, str, list[str]]]:
+    """``(suite file name, group capability, benchmark names)`` of every shipped suite, read raw (pyyaml; a group
+    that does not parse is skipped: ``yavih suite show`` reports it)."""
+    from yavih.suites import shipped_dir
+
+    out: list[tuple[str, str, list[str]]] = []
+    for p in sorted(shipped_dir().glob("*.yaml")):
+        try:
+            d = yaml.safe_load(p.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        groups = d.get("groups") if isinstance(d, dict) else None
+        for g in groups if isinstance(groups, list) else []:
+            if isinstance(g, dict):
+                out.append((p.name, str(g.get("capability")),
+                            [str(e.get("benchmark")) for e in g.get("entries") or [] if isinstance(e, dict)]))
+    return out
+
+
+@_check("capability")
+def _c_capability(c: _Ctx) -> Iterator[Finding]:
+    if c.raw is None:
+        return
+    from yavih.suites import CAPABILITIES
+
+    caps = c.raw.get("capability")
+    if not isinstance(caps, list) or not caps:
+        yield _err("capability", "E_CAPABILITY", "benchmark.yaml needs `capability: [...]`, one or more of "
+                   f"{', '.join(CAPABILITIES)} (the README and the benchmarks index group benchmarks by it)", "benchmark.yaml")
+        return
+    bad = [x for x in caps if x not in CAPABILITIES]
+    if bad:
+        yield _err("capability", "E_CAPABILITY", f"capability {bad} not in the vocabulary {', '.join(CAPABILITIES)}", "benchmark.yaml")
+        return
+    names = {c.name, *map(str, c.raw.get("aliases") or [])}
+    for suite, cap, benches in _shipped_suite_groups():
+        if names & set(benches) and cap not in caps:
+            yield _warn("capability", "W_SUITE_CAPABILITY", f"the shipped suite {suite} lists {c.name} under capability "
+                        f"{cap!r}, which is not among its capability tags {caps}", "benchmark.yaml")
 
 
 def template_readings(src: str) -> set[str]:

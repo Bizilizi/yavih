@@ -96,7 +96,7 @@ def test_bench_trial_not_ready_when_no_stand_in_exists(capsys, monkeypatch):
     env_before = _yavih_env()
     rc, env = _json(capsys, ["bench", "trial", "esc50", "--synthetic"])
     assert rc == 3 and env["errors"][0]["code"] == "E_TRIAL_NOT_READY" and "soundfile" in env["errors"][0]["message"]
-    assert env["data"]["failed"]["stage"] == "stand_in" and [s["status"] for s in env["data"]["stages"]][1:] == ["skipped"] * 7
+    assert env["data"]["failed"]["stage"] == "stand_in" and [s["status"] for s in env["data"]["stages"]][2:] == ["skipped"] * 7
     assert _yavih_env() == env_before
     with pytest.raises(TrialError) as ei:
         run_trial("esc50", bridge="nope")
@@ -109,5 +109,5 @@ def test_bench_trial_failing_stage_is_exit_2(tmp_path):
     env_before = _yavih_env()
     rec = run_trial("esc50", readout_fast=True, bridge="random")
     assert rec["ok"] is False and rec["exit_code"] == 2 and rec["failed"]["stage"] == "headline"
-    assert [s["status"] for s in rec["stages"]] == ["ok"] * 7 + ["failed"] and rec["headline"]["clears_floor"] is False
+    assert [s["status"] for s in rec["stages"]] == ["ok"] * 8 + ["failed"] and rec["headline"]["clears_floor"] is False
     assert _yavih_env() == env_before

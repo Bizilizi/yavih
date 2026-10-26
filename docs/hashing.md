@@ -14,6 +14,17 @@ consistency, but they are never folded into a comparability key, a path or a res
 The model side enters keys only as two names the user chooses, `model` and `reading` (see
 [model and reading](#model-and-reading)).
 
+**Identity is the declaration, not the code** (`yavih-protocol-5`). `protocol_hash` is computed from what the
+benchmark folder declares: the frozen manifest and classes by content, typed views of the `benchmark.yaml` blocks,
+and declared versions (`protocol_version`, `READOUT_VERSION`). No source file enters it. The folder's `probe.py`
+and `reader.py`, and yavih's own readouts and metrics, may be refactored, re-implemented in another framework or
+ported by a third party without moving the hash; what pins their behaviour is `protocol_version` together with the
+folder's [conformance fixture](conformance.md), which fails until the version is bumped when the numbers move. A
+score recorded next to a hash is therefore comparable with every other score recorded next to that hash, whichever
+implementation produced it. The source digests are still computed and recorded as provenance
+(`Benchmark.folder_source`, [below](#folder-source-provenance)) so that two numbers under one hash can be traced to
+the code that produced them.
+
 Every digest by role:
 
 | digest | inputs | controlled by | role |
@@ -28,6 +39,7 @@ Every digest by role:
 | `features_fingerprint` | shard sha256s, `N`, `D`, dtype, pos, `n_present` | bridge output (+ site presence) | integrity and staleness (probe DONE gate); never a row key |
 | tar `sha256`, `pos_sha256`, `result_sha256` | file bytes | outputs | integrity |
 | `source_sha256` (bridge) | bridge file bytes | bridge | provenance (`W_SOURCE_SHA`) |
+| `folder_source` | `{probe, reader}`: normalized-source digests of the folder's `probe.py` / `reader.py` | benchmark folder | provenance in sidecars, `result.json` and results files; `W_FOLDER_SOURCE_DIFFERS` in the report; never identity |
 | `weights_sha256` | state dict | bridge | provenance (`W_WEIGHTS_UNFINGERPRINTED` when null; `W_JOIN_WEIGHTS`) |
 | `coverage.*.ids_sha256` | present clip ids | site | recorded; "population differs" in the report, `E_JOIN_POPULATION` |
 | `media_fingerprint`, `media_info_sha256` | staged media, census | site | provenance (`W_MEDIA_FP`) |
@@ -45,12 +57,12 @@ the readout registry.
 |---|---|---|---|
 | `FEATURE_FORMAT_VERSION` | `yavih.versions` / `yavih.io.format` | `4` | the tar layout, member names, sidecar, `_meta.json` or `NOT_APPLICABLE.json` schema changes ([features](features.md)) |
 | `BENCHMARK_SCHEMA_VERSION` | `yavih.versions` / `yavih.benchmark` | `2` | the `benchmark.yaml` schema changes incompatibly ([benchmark folder](benchmark-folder.md)); a purely additive optional key does not bump it |
-| `RESULT_SCHEMA_VERSION` | `yavih.versions` / `yavih.readouts.base` | `3` | the `result.json` schema changes ([results](results.md)); register an upgrade step in `report.migrate` |
+| `RESULT_SCHEMA_VERSION` | `yavih.versions` / `yavih.readouts.base` | `4` | the `result.json` schema changes ([results](results.md)); register an upgrade step in `report.migrate` |
 | `RESULTS_FILE_VERSION` | `yavih.versions` / `yavih.report.store` | `2` | the results-store file schema changes ([results](results.md)) |
 | `PLAN_SCHEMA_VERSION` | `yavih.versions` / `yavih.plan.units` | `3` | the unit record in `plan.jsonl` changes ([execution](execution.md)); an older record is refused with "rebuild the plan" (finished shards are kept) |
 | `READOUT_VERSION[readout]` | each readout's own module (`VERSION`), read through the readout registry | `clf: 1`, `seq: 2`, `grid: 2`, `box: 2` | any change to that readout's head, loss, floor, metric or protocol, including a change to a `yavih.metrics` function it lists ([readouts](readouts.md)) |
 | `PROBE_SCHEMA` | `yavih.versions` / `yavih.probes.config` | `"yavih-probe-1"` | the `probe_hash` payload shape changes |
-| `PROTOCOL_SCHEMA` | `yavih.versions` / `yavih.hashing` | `"yavih-protocol-4"` | the input / scoring / protocol payload shape changes, or the shared reader `yavih.sample.iter_samples` changes what is handed over (its semantics are part of every folder's input side, its bytes are not hashed) |
+| `PROTOCOL_SCHEMA` | `yavih.versions` / `yavih.hashing` | `"yavih-protocol-5"` | the input / scoring / protocol payload shape or a typed view changes, or the shared reader `yavih.sample.iter_samples` changes what is handed over (its semantics are part of every folder's input side, its bytes are not hashed) |
 | `DESCRIBE_SCHEMA` | `yavih.versions` / `yavih.hashing` | `"yavih-describe-2"` | the `describe()` subset that `describe_sha256` covers changes; `describe_subset` asserts it implements this schema, so both change together |
 | `protocol_version` | each folder's `benchmark.yaml` | per folder (`yavih bench info <name>`); the folder is authoritative | see [protocol_version bump or a moved hash](#protocol_version-bump-or-a-moved-hash) |
 | `yavih.__version__` | package | PEP 440 from the git tag `vX.Y.Z` (setuptools-scm writes `yavih/_version.py`; else the distribution metadata; else `0.0.0+unknown`) | set by the release tag ([releasing](releasing.md)); provenance only, never hashed |
@@ -87,28 +99,23 @@ Helpers: `sha256_canon(x) = sha256(canon(x))` as lower-case hex, `hash12(d) = d[
 `rng_seed(text)` = the big-endian integer of `sha256(text)`, used to seed `numpy.random.default_rng` for every
 deterministic draw.
 
-### Normalized source
-
-A folder's `reader.py` and `probe.py` enter the hashes as the digest of their normalized source, not their bytes:
-
+### Folder source provenance
+A folder's `reader.py` and `probe.py` never enter a hash. Each is digested as provenance:
 ```
 source_sha256(text) = sha256(normalized_source(text))
+Benchmark.folder_source = {"probe": source_sha256(probe.py) | null, "reader": source_sha256(reader.py) | null}
 ```
-
 `normalized_source` parses the file with `ast.parse`, removes every bare string statement (module, class and
 function docstrings, attribute docstrings, any other string used as a statement), and serializes the tree as
 canonical JSON node by node, `[NodeType, [field, value], ...]`, without source positions, without the `kind` and
 `type_comment` fields and without empty or absent fields. It does not use `ast.dump`, whose output differs between
-Python versions; the digest is the same on every supported interpreter (`tests/test_hashing.py` pins one).
+Python versions; the digest is the same on every supported interpreter (`tests/test_hashing.py` pins one). A
+comment, docstring or formatting edit leaves it unchanged; any edit to what the code does changes it.
 
-Consequences:
-
-- a comment, docstring, blank-line or formatting edit leaves the hash unchanged;
-- any edit to what the code does changes it;
-- **string literals used as values are kept**: `X = "a"` and `X = "b"` hash differently. Changing a message,
-  a key name or any other literal in `probe.py` moves `scoring_hash`; in `reader.py` it moves `input_hash`.
-
-A file that does not parse raises `SyntaxError` at load.
+`folder_source` is written into every sidecar's `benchmark` block, into `result.json` (`benchmark.folder_source`)
+and into the results file `configs`. The report raises `W_FOLDER_SOURCE_DIFFERS` when results in one column were
+scored by different folder code: they are comparable by declaration (the conformance fixture holds every version
+within tolerance) and the warning exists for diagnosis. A file that does not parse raises `SyntaxError` at load.
 
 ## manifest_hash
 
@@ -129,10 +136,14 @@ scoring_hash  = sha256(canon({"schema": PROTOCOL_SCHEMA, "part": "scoring", "com
 protocol_hash = sha256(canon({"schema": PROTOCOL_SCHEMA, "input_hash": input_hash, "scoring_hash": scoring_hash}))
 ```
 
-`Benchmark.load` computes all three from the raw parsed yaml blocks (`spec.raw`), the manifest, `reader.py`,
-`probe.py` and `yavih.versions` only, so they are identical in every env. `Benchmark.hashes`
-(`hashing.ProtocolHashes`) carries the three digests and both `{component: digest}` maps; the input map is written
-into every sidecar so `E_HASH_INPUT` names the component that differs.
+`Benchmark.load` computes all three from the raw parsed yaml blocks (`spec.raw`), the manifest digest and
+`yavih.versions` only, so they are identical in every env and reproducible outside yavih. `Benchmark.hashes`
+(`hashing.ProtocolHashes`) carries the three digests, both `{component: digest}` maps and both `{component: value}`
+maps (the exact hashed payloads; `yavih bench hash <name> --explain` prints their canonical text); the input digest
+map is written into every sidecar so `E_HASH_INPUT` names the component that differs.
+
+Every yaml block enters through a **typed view**: values only, no prose and no display setting, so a wording edit
+never forks a hash. `bench lint` check `hashed` (`E_HASHED_PROSE`) refuses a sentence inside any hashed view.
 
 ### Input side
 
@@ -146,11 +157,10 @@ benchmark (`hashing.input_components`):
 | `manifest` | `{"key": manifest.key, "columns": manifest.columns}`: which rows and media a Sample carries |
 | `splits` | `benchmark.yaml[splits]`: split values and roles |
 | `streams` | `benchmark.yaml[streams]`: handed-over streams, layouts, layout params (root names, never resolved paths) |
-| `input_contract` | `benchmark.yaml[input_contract]`: handed-over form, info, facts, materialize recipe |
+| `input_contract` | `hashing.input_contract_view`: `{info, facts, materialize}` (`handed_over`, one sentence per stream, is documentation) |
 | `output_contract` | `benchmark.yaml[output_contract]`: what the features must carry |
 | `readout` | the readout name |
 | `readout_inputs` | `hashing.input_readout_view`: `{"params": ..., "protocol": ...}` (below) |
-| `reader` | `source_sha256(<folder>/reader.py)`, or `null` (the generic `yavih.sample.iter_samples`) |
 
 `readout_inputs` holds the keys that are present among:
 
@@ -169,33 +179,39 @@ How features become numbers; none of it reaches the bridge (`hashing.scoring_com
 
 | component | value |
 |---|---|
-| `protocol_version` | `benchmark.yaml[protocol_version]` |
-| `protocol` | the whole `protocol` block |
+| `protocol_version` | `benchmark.yaml[protocol_version]`: the declared version of the folder's scoring behaviour (code, yavih's or the folder's, is pinned by it, never hashed) |
+| `protocol` | `hashing.protocol_view`: every `protocol` key as written, `train_draw` restricted to `{cap, seed, balance}` (the draw's description lives in `manifest.upstream.draw`) |
 | `readout_params` | the whole `readout_params` block |
-| `metrics` | `benchmark.yaml[metrics]` |
-| `external` | `benchmark.yaml[external]`, with its `version_pin`s |
+| `metrics` | `hashing.metrics_view`: `{headline, list, floors, controls, chance, ci, bootstrap, aggregation}`, absent ones as `null`; `table` (report columns) and `tolerance` (the conformance bound) stay out |
+| `external` | `hashing.external_view`: `[{name, version_pin}, …]` sorted by name (`pip` is an install instruction, `used_for` prose) |
 | `targets` | `[{split, kind, file, sha256, index_column}, ...]` sorted by split (`index_column` null when absent), or `null` |
 | `label` | `manifest.label` as written |
 | `readout` | `{"name": readout, "version": READOUT_VERSION[readout]}` (an unknown readout raises `ValueError`) |
-| `probe` | `source_sha256(<folder>/probe.py)`, or `null` |
 
 ### What moves which hash
 
-- Feature sets are checked against `input_hash` only. Editing `probe.py`, bumping a metric's `version_pin` or a
+- Feature sets are checked against `input_hash` only. Bumping `protocol_version`, a metric's `version_pin` or a
   `READOUT_VERSION`, changing a metric, a target file or a scoring-only protocol value moves `scoring_hash` and
   `protocol_hash`, hence `eval_hash`: it re-probes and never re-extracts.
+- Editing `probe.py` or `reader.py` moves no hash: it moves `folder_source` (provenance) and, if the numbers moved,
+  fails the conformance fixture until `protocol_version` is bumped.
 - A `protocol` / `readout_params` key that is also in `readout_inputs` moves both sides.
 - `protocol_version` is scoring-side: a version bump that keeps the inputs keeps the features.
 - `manifest_hash` is whole and input-side: labels share the file, and a manifest change is always a protocol event.
 - Over-inclusion is allowed (a stream's layout is hashed although a tar copy of the same bytes would score the
   same); omitting a number-changing benchmark input is not.
 
-Deliberately not hashed: `title`, `aliases` (one protocol, several names), `changelog` (it records the hashes),
+Deliberately not hashed: `title`, `aliases` (one protocol, several names), `capability` and `header` (how the
+benchmark is grouped and presented), `changelog` (it records the hashes),
 `source` (provenance; the staged copy is checked by `bench verify` and `W_MEDIA_FP`), `budget`, `data` (site roots,
 tar-index paths, derived-file listings), `obtain`, `manifest.file`, `manifest.sha256`, `classes`,
-`classes_sha256` (their content is `manifest_hash`), `manifest.upstream`, and the `source` / `root` of a target.
-Covered by convention instead of bytes: the shared reader `yavih.sample.iter_samples` (`PROTOCOL_SCHEMA` bump) and
-the `yavih.metrics` functions a readout lists (`READOUT_VERSION` bump).
+`classes_sha256` (their content is `manifest_hash`), `manifest.upstream` (including `draw`), the `source` / `root`
+of a target, `input_contract.handed_over`, `external[].pip` / `used_for`, `metrics.table`, `metrics.tolerance`,
+`protocol.train_draw` beyond `cap` / `seed` / `balance`, and every source file (`probe.py`, `reader.py`, yavih).
+Covered by declared versions instead of bytes: the folder's `probe.py` / `reader.py` (`protocol_version`, held by
+the [conformance fixture](conformance.md)), the shared reader `yavih.sample.iter_samples` (`PROTOCOL_SCHEMA` bump)
+and the readouts with the `yavih.metrics` functions they list (`READOUT_VERSION` bump, held by every folder's
+fixture on that readout).
 
 ## describe_sha256
 
@@ -231,7 +247,7 @@ A stored digest is compared as stored: a record written under another `DESCRIBE_
 `_meta.json`, `NOT_APPLICABLE.json`, `result.json`, DONE markers, unit records and results files, and are checked
 against their charsets: `model` `[A-Za-z0-9_.-]{1,64}`, `reading` `[A-Za-z0-9_-]{1,32}`, each starting with a
 letter or digit (never `.`, `..`, `_stale` or a hidden name). They are the only model-side part of any key: run
-directory `runs/<benchmark>/<model>/<reading>/`, results directory `<results_root>/<model>/`, report row
+directory `<runs root>/<benchmark>/<model>/<reading>/`, results directory `<results_root>/<model>/`, report row
 `(benchmark, eval_hash, model, reading)`. `plan` takes them from `profile.describe` and never computes them. A null
 `weights_sha256` changes no key; it is the warning `W_WEIGHTS_UNFINGERPRINTED`.
 
@@ -297,14 +313,16 @@ eval_hash = sha256(canon({"protocol_hash": protocol_hash, "probe_hash": probe_ha
 `hashing.eval_hash` has no schema tag of its own (each component carries one) and refuses an empty component. It
 is the comparability key: everything that decides what a number means, the benchmark and the probe, and nothing
 else. Reports show it (12 hex) next to `protocol_version`; it names the probe directory
-`runs/<benchmark>/<model>/<reading>/probe/<eval_hash12>/` and is recorded in `result.json`, DONE markers, probe
+`<runs root>/<benchmark>/<model>/<reading>/probe/<eval_hash12>/` and is recorded in `result.json`, DONE markers, probe
 unit records and results files ([results](results.md)).
 
 Two results are **comparable** iff they have the same `benchmark.name` after alias resolution, the same
 `eval_hash`, and both are `standard` (`report.compare.comparable`). Equal `eval_hash` implies equal
-`protocol_hash` and `probe_hash`, hence equal `input_hash` and `scoring_hash`, the same `external` versions,
-`reader.py`, `probe.py`, head and training. Bridge configuration, dtype, batch size, weights and site never make two
-results incomparable and never make them comparable.
+`protocol_hash` and `probe_hash`, hence equal `input_hash` and `scoring_hash`, the same `external` versions, the
+same declared `protocol_version`, head and training. The code that scored them may differ (`folder_source`, the
+yavih version): results under one hash agree within the folder's conformance tolerance by construction. Bridge
+configuration, dtype, batch size, weights and site never make two results incomparable and never make them
+comparable.
 
 Report columns are keyed `(benchmark, eval_hash)` and rows `(benchmark, eval_hash, model, reading)`:
 
@@ -312,7 +330,8 @@ Report columns are keyed `(benchmark, eval_hash)` and rows `(benchmark, eval_has
   configuration) raise `W_BRIDGE_CHANGED`; the newest configuration is shown, older ones under `--detail`;
 - within the shown configuration, results of different `features_fingerprint`s are never averaged: the newest
   feature set is shown, `W_FEATURES_DIFFER`;
-- a differing `coverage.eval.ids_sha256` within a column is marked "population differs".
+- a differing `coverage.eval.ids_sha256` within a column is marked "population differs";
+- differing `benchmark.folder_source` within a column raises `W_FOLDER_SOURCE_DIFFERS` (comparable; for diagnosis).
 
 ## Migration
 
@@ -351,8 +370,9 @@ changelog:
 folder). The message names the exact lines to write:
 
 - both keys missing: add `protocol_hash` and `input_hash` with the computed values;
-- `protocol_hash` differs: if results stay comparable, set the new value and append the old one to `supersedes`;
-  if numbers can change, bump `protocol_version` and add a new entry (`invalidates: true`) recording both hashes;
+- `protocol_hash` differs: the conformance fixture decides (it is keyed on `protocol_version`, not on the hash).
+  If it still passes, set the new value and append the old one to `supersedes`; if it fails, bump
+  `protocol_version`, add a new entry (`invalidates: true`) recording both hashes and re-record the fixture;
 - `input_hash` differs: set the new value; append the old one to `supersedes_input` only if the bridge is still
   handed exactly the same thing (otherwise features must be re-extracted);
 - an entry never lists its own digest under `supersedes` / `supersedes_input`.
@@ -381,8 +401,14 @@ a cycle stops where it closes.
 `report.migrate.migrate(result)` returns a current-schema copy of a `result.json` record, in memory only; the file
 on disk is never rewritten. A record of the current `RESULT_SCHEMA_VERSION` is copied unchanged; a newer one raises
 `MigrationError` ("newer than this yavih"), and so does an older one for which no upgrade step is registered
-("older than this yavih"). A future schema bump registers one step `_UPGRADES[old] = fn` that turns a record of
-schema `old` into one of `old + 1`; at 1.0 `_UPGRADES` is empty.
+("older than this yavih"). A schema bump registers one step `_UPGRADES[old] = fn` that turns a record of schema
+`old` into one of `old + 1`. Registered steps:
+
+| step | change |
+|---|---|
+| 3 → 4 | adds `benchmark.folder_source = null` (unknown: never reported as a differing source) |
+
+Schemas 1 and 2 are not read.
 
 Then, for every record, `benchmark.protocol_hash` is mapped to the newest hash of its benchmark through the
 changelog `supersedes` lists, and when it moved, `eval_hash` is recomputed. For example, a folder whose newest
@@ -394,19 +420,20 @@ not a table.
 
 ### protocol_version bump or a moved hash
 
-Bump `protocol_version` (and add a changelog entry with `invalidates: true`) for any change to what the hashes
-cover (`protocol`, `splits`, `streams`, `input_contract`, `output_contract`, `external`, `metrics`,
-`readout_params`, `targets`, `manifest.key` / `label` / `columns`, `reader.py`, `probe.py`, or the frozen manifest)
-that can change numbers.
+Bump `protocol_version` (and add a changelog entry with `invalidates: true`) for any change that can change
+numbers: to what the hashes cover (`protocol`, `splits`, `streams`, `input_contract`, `output_contract`, `external`,
+`metrics`, `readout_params`, `targets`, `manifest.key` / `label` / `columns`, or the frozen manifest) and to the
+code behind them (`probe.py`, `reader.py`, a readout or metric of yavih). The conformance fixture
+([conformance](conformance.md)) is the detector: a code change that moves the fixture's numbers beyond tolerance
+is `E_CONFORMANCE_DRIFT` until the version is bumped and the fixture re-recorded.
 
 Do not bump it when the hash moves but numbers cannot change; record the new hash on the newest entry and list the
 old one under `supersedes` (and `supersedes_input` when the input side moved but hands over the same thing):
 
 - a `PROTOCOL_SCHEMA` bump alone;
-- a `probe.py` edit confined to the folder's `join` hook (no per-reading number reads it; the folder's changelog
-  records it);
-- moving a metric verbatim between yavih's core and a folder's `probe.py` with identical values;
-- any other refactor that keeps rows, inputs and scoring semantics.
+- a typed-view change or a `READOUT_VERSION` bump that leaves this folder's fixture passing;
+- a value moved between hashed keys with identical meaning.
+A `probe.py` or `reader.py` edit of any kind moves no hash and needs no changelog entry unless the fixture fails.
 
 A `READOUT_VERSION` bump moves `scoring_hash` of every folder using that readout; whether it changes a folder's
 numbers decides between the two paths above.

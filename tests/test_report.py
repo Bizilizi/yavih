@@ -89,13 +89,13 @@ def make_result(
     ok = status == "ok"
     ci = [acc - 0.05, acc + 0.05] if ci is None else ci
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "status": status,
         "reason": None if ok else "eligibility: missing pos",
         "standard": standard,
         "eval_hash": hashing.eval_hash(protocol_hash, probe_hash),
         "benchmark": {"name": bench, "protocol_version": protocol_version, "readout": readout, "readout_version": 1 if readout == "clf" else 2,
-                      "manifest_hash": "9" * 64, "protocol_hash": protocol_hash},
+                      "manifest_hash": "9" * 64, "protocol_hash": protocol_hash, "folder_source": {"probe": None, "reader": None}},
         "model": model,
         "reading": reading,
         "bridge": {"name": bridge_name, "describe": describe, "describe_sha256": hashing.describe_sha256(describe), "source_sha256": "7" * 64},
@@ -167,7 +167,7 @@ def test_migrate_identity_for_current_schema():
     r = make_result()
     out = migrate(r)
     assert out == r and out is not r
-    assert out["schema_version"] == RESULT_SCHEMA_VERSION == 3
+    assert out["schema_version"] == RESULT_SCHEMA_VERSION == 4
 
 
 def test_migrate_refuses_newer_schema_and_bad_types():
@@ -188,7 +188,7 @@ def test_migrate_refuses_a_missing_or_older_schema():
     with pytest.raises(MigrationError):
         migrate(r)
     with pytest.raises(MigrationError, match="older"):
-        migrate({**make_result(), "schema_version": RESULT_SCHEMA_VERSION - 1})
+        migrate({**make_result(), "schema_version": 2})  # 3 has an upgrade step; 2 and earlier have none
 
 
 @pytest.fixture
@@ -344,6 +344,75 @@ def test_build_index_skips_unreadable_and_newer_schema(runs: Path, capsys):
     assert [r["path"] for r in recs] == [str(good.resolve())]
     err = capsys.readouterr().err
     assert "newer" in err and "skipping" in err
+
+
+def test_a_schema_3_result_loads_and_reports(runs: Path):
+    """Schema 4 added ``benchmark.folder_source``; a schema-3 ``result.json`` is upgraded in memory (``null``: unknown)
+    and reported next to a current one, with no W_FOLDER_SOURCE_DIFFERS (an unknown source is not a different one)."""
+    old = make_result(model="m1", acc=0.4)
+    old["schema_version"] = 3
+    del old["benchmark"]["folder_source"]
+    up = migrate(old)
+    assert up["schema_version"] == RESULT_SCHEMA_VERSION == 4 and up["benchmark"]["folder_source"] is None
+    assert "folder_source" not in old["benchmark"]  # in memory only
+    cur = make_result(model="m2", acc=0.6)
+    cur["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
+    write_result(runs, old)
+    write_result(runs, cur)
+    rep = report([str(runs / "*")], write=False)
+    assert rep.n_results == 2 and len(rep.columns) == 1
+    assert {r["model"]: r["metrics"]["acc"]["value"] for r in rep.rows} == {"m1": pytest.approx(0.4), "m2": pytest.approx(0.6)}
+    assert "W_FOLDER_SOURCE_DIFFERS" not in {w["code"] for w in rep.warnings}
+    with pytest.raises(MigrationError, match="older than this yavih"):
+        migrate({**old, "schema_version": 2})
+
+
+def test_folder_source_differs_compares_known_sources_only():
+    """Two known, different sources in one column warn; a missing one next to known ones that agree does not."""
+    a, b, c = (make_result(model=m) for m in ("m1", "m2", "m3"))
+    a["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
+    b["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
+    c["benchmark"]["folder_source"] = None
+    rep = build_report(_records(a, b, c))
+    assert "W_FOLDER_SOURCE_DIFFERS" not in {w["code"] for w in rep.warnings}
+    assert "folder_source_differs" not in rep.columns[0]["flags"]
+    b["benchmark"]["folder_source"] = {"probe": "2" * 64, "reader": None}
+    rep = build_report(_records(a, b, c))
+    assert [w["code"] for w in rep.warnings].count("W_FOLDER_SOURCE_DIFFERS") == 1
+    assert "folder_source_differs" in rep.columns[0]["flags"]
+
+
+def test_values_within_the_conformance_tolerance_are_ties_not_an_order():
+    """Within a column, values within the metric's tolerance (default ``yavih.versions.DEFAULT_TOLERANCE``) of the
+    best one are ties: ``tie`` in json, the ``tie`` column in csv, ``≈`` in md; a disclosure is never ranked; tied
+    rows are never ordered by value."""
+    import csv
+    import io
+
+    from yavih import conformance, versions
+    from yavih.report import compare
+
+    assert compare.DEFAULT_TOLERANCE is conformance.DEFAULT_TOLERANCE is versions.DEFAULT_TOLERANCE == 0.001  # one definition
+    recs = _records(make_result(model="m1", acc=0.5004), make_result(model="m2", acc=0.5), make_result(model="m3", acc=0.4))
+    rep = build_report(recs, fmt="json")
+    ties = {r["model"]: r["metrics"]["acc"].get("tie") for r in rep.rows}
+    assert ties == {"m1": True, "m2": True, "m3": False}
+    assert all("tie" not in r["metrics"]["n_eval"] for r in rep.rows)  # a disclosure has no direction
+    assert "ties" in rep.columns[0]["flags"]
+    md = build_report(recs, fmt="md").text
+    assert md.count("| ≈ 0.5") == 2 and "| 0.4 (" in md and "tied with the best value" in md
+    rows = list(csv.DictReader(io.StringIO(build_report(recs, fmt="csv").text)))
+    assert {(r["model"], r["tie"]) for r in rows if r["metric"] == "acc"} == {("m1", "true"), ("m2", "true"), ("m3", "false")}
+    # a single best value is not a tie; nor is a non-standard column ever ranked
+    rep = build_report(_records(make_result(model="m1", acc=0.6), make_result(model="m2", acc=0.5)))
+    assert [r["metrics"]["acc"]["tie"] for r in rep.rows] == [False, False] and "ties" not in rep.columns[0]["flags"]
+    rep = build_report(_records(make_result(model="m1", acc=0.5, standard=False), make_result(model="m2", acc=0.5, standard=False)))
+    assert all("tie" not in r["metrics"]["acc"] for r in rep.rows)
+    # per-seed rows of one model, tied: ordered by seed, not by value
+    rep = build_report(_records(make_result(model="m1", seed=0, acc=0.5), make_result(model="m1", seed=1, acc=0.5008)), seeds="list")
+    assert [r["seed"] for r in rep.rows] == [0, 1] and all(r["metrics"]["acc"]["tie"] for r in rep.rows)
+    rep = build_report(_records(make_result(model="m1", seed=0, acc=0.5), make_result(model="m1", seed=1, acc=0.6)), seeds="list")
+    assert [r["seed"] for r in rep.rows] == [1, 0]  # outside the tolerance the value still orders
 
 
 def test_runs_root_inference(runs: Path):
@@ -861,3 +930,50 @@ def test_lone_low_coverage_result_is_flagged():
     assert "low_coverage" in rep.rows[0]["flags"]
     full = make_result(model="full")
     assert "low_coverage" not in build_report([{"path": "/r/f", "result": full}]).rows[0]["flags"]
+
+
+def test_bench_meta_resolves_a_folder_on_the_bench_path(tmp_path, monkeypatch):
+    """``_bench_meta`` goes through the folder resolver: a benchmark on ``$YAVIH_BENCH_PATH`` (or project-local) brings
+    its declared ``metrics.tolerance``, ``table`` and ``headline``, not the ``{}`` that would tie it at the default."""
+    import yaml
+
+    from yavih import hash_history
+    from yavih import testing as T
+    from yavih.report import compare
+
+    folder = T.make_synthetic_benchmark(tmp_path / "packs", "clf", n_train=8, n_eval=4, media="none")
+    spec = yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))
+    spec["metrics"]["tolerance"] = {"acc": 0.05}
+    (folder / "benchmark.yaml").write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+    hash_history.reset()
+    assert compare._bench_meta(folder.name) == {}  # not resolvable yet
+    monkeypatch.setenv("YAVIH_BENCH_PATH", str(tmp_path / "packs"))
+    meta = compare._bench_meta(folder.name)
+    assert meta["tolerance"] == {"acc": 0.05} and meta["headline"] == spec["metrics"]["headline"] and meta["protocol_version"] == spec["protocol_version"]
+    rows = [{"status": "ok", "missing": False, "partial": False, "greyed": False, "flags": [], "metrics": {"acc": {"value": v}}} for v in (0.70, 0.66)]
+    compare._mark_ties(rows, [{"registry": {"tolerance": {"acc": 0.0001}}}, {}], ["acc"], meta)
+    assert [r["metrics"]["acc"]["tie"] for r in rows] == [True, True]  # the folder's 0.05 decides, not the recorded one
+    hash_history.reset()
+
+
+def test_packaged_tolerance_beats_a_recorded_one():
+    """A packaged folder's tolerance (its ``metrics.tolerance`` entry, else the default) always decides ties; a
+    registry-recorded tolerance only applies to a benchmark not packaged here (the largest recorded)."""
+    from yavih.report import compare
+
+    def rows_and_results(recorded: float):
+        rows = [{"status": "ok", "missing": False, "partial": False, "greyed": False, "flags": [],
+                 "metrics": {"acc": {"value": v}}} for v in (0.70, 0.61)]
+        results = [{"registry": {"tolerance": {"acc": recorded}}}, {}]
+        return rows, results
+
+    def ties(meta, recorded):
+        rows, results = rows_and_results(recorded)
+        compare._mark_ties(rows, results, ["acc"], meta)
+        return [r["metrics"]["acc"]["tie"] for r in rows]
+
+    packaged = {"protocol_version": 1}  # what _bench_meta returns for a packaged folder declaring no tolerance
+    assert ties(packaged, 0.1) == [False, False]  # the default 0.001 wins over the larger recorded 0.1
+    assert ties({**packaged, "tolerance": {"acc": 0.2}}, 0.0001) == [True, True]  # the folder's declared entry wins
+    assert ties({}, 0.1) == [True, True]  # not packaged here: the recorded tolerance
+    assert ties({}, 0.0001) == [False, False]

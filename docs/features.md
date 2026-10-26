@@ -24,7 +24,7 @@ again.
   _stale/<utc>/             shards, layouts and _meta.json of another configuration, moved aside (never deleted)
 ```
 
-By convention `<run_dir>` is `runs/<benchmark>/<model>/<reading>/` (see [execution](execution.md)). Nothing
+By convention `<run_dir>` is `<runs root>/<benchmark>/<model>/<reading>/` (see [execution](execution.md)). Nothing
 reads the benchmark, model or reading back from the path: they are recorded in every sidecar.
 
 Every file is written to a tmp file and then renamed, so a killed task leaves only a tmp file. The tmp files of
@@ -128,7 +128,8 @@ shard 3 of 32 of a 20 000-row split at batch size 32 (rows `[1856, 2496)`):
 
 | key | meaning |
 |---|---|
-| `benchmark.manifest_hash`, `benchmark.input_hash` | the shard's benchmark identity: the manifest and the input side of the protocol. A scoring edit (a metric, `probe.py`, a readout version) never stales a shard. See [hashing](hashing.md). |
+| `benchmark.manifest_hash`, `benchmark.input_hash` | the shard's benchmark identity: the manifest and the input side of the protocol. A scoring edit (a metric, a readout version, `protocol_version`) never stales a shard. See [hashing](hashing.md). |
+| `benchmark.folder_source` | `{probe, reader}`: the folder's `probe.py` / `reader.py` normalized-source digests at extraction (provenance, never compared). |
 | `benchmark.input_components` | `{component: sha256(canon(value))}` behind `input_hash`, so `E_HASH_INPUT` can name the component that differs |
 | `benchmark.protocol_hash`, `scoring_hash` | what the benchmark was when the shard was written (provenance only) |
 | `benchmark.media_fingerprint`, `media_info_sha256`, `data_roots` | copied from the site's `data_status.json`: provenance, never hashed; compared by `W_MEDIA_FP` |

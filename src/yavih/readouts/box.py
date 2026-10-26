@@ -28,6 +28,10 @@ _fit = lazy_module("yavih.readouts._fit")  # torch: imported on first use, never
 __all__ = ["READOUT", "VERSION", "run_box", "ShuffledRows"]
 
 #: The readout version: enters ``protocol_hash``; ``yavih.versions.READOUT_VERSION`` reads it here.
+#: The readout's conformance band on the synthetic end-to-end run (``tests/test_e2e_synthetic.py``): the oracle bridge's
+#: headline stays at or above ``oracle_min`` and the random bridge's at or below ``random_max``. Probe training is not
+#: bit-reproducible across torch builds, so this is a band, not a point; a change that leaves it bumps ``VERSION``.
+CONFORMANCE: dict[str, float] = {"oracle_min": 0.5, "random_max": 0.45}
 VERSION: int = 2
 
 

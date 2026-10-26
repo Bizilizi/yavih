@@ -19,7 +19,7 @@ Layers, lowest to highest precedence. A later layer overrides an earlier one key
 | 1 | built-in defaults and `benchmark.yaml` root defaults | `${data.root}`, `${datasets.<name>}` placeholders (below) |
 | 2 | user file | `$XDG_CONFIG_HOME/yavih/config.toml`, else `~/.config/yavih/config.toml` |
 | 3 | the active `[site.<id>]` table of the user file | see [Sites](#sites) |
-| 4 | project file | `--config FILE`, else `$YAVIH_CONFIG`, else the nearest `yavih.toml` found walking up from the current directory |
+| 4 | project file | `--config FILE`, else `$YAVIH_CONFIG`, else the nearest `yavih-bench/yavih.toml` (else `yavih.toml`) found walking up from the current directory, stopping at the git root ([project layout](project-layout.md)) |
 | 5 | the active `[site.<id>]` table of the project file | |
 | 6 | environment variables | `YAVIH_*` ([Environment variables](#environment-variables)) |
 | 7 | CLI flags | `--config`, `--runs-root`, `--results`, `--data`, `--lenient` |
@@ -47,11 +47,18 @@ A relative path given on the command line is made absolute against the current d
 ## Files
 
 Both files are TOML with the same schema, and every key is optional. The user file is the place for
-per-person, per-cluster values; a project `yavih.toml` (committed next to a `matrix.yaml`, say)
-layers over it. When the project file is the user file itself, it is read once.
+per-person overrides (a runs root on scratch, a scratch root); the project file `yavih-bench/yavih.toml`
+([project layout](project-layout.md); `yavih init` writes it, never the user file) carries the project's
+facts (data roots, model environments, the yavih version) and layers over it. When the project file is the user
+file itself, it is read once.
 
 ```toml
-# ~/.config/yavih/config.toml (user) or ./yavih.toml (project)
+# ~/.config/yavih/config.toml (user) or yavih-bench/yavih.toml (project)
+launcher = "/envs/mymodel/bin/python"   # the default launcher of extract units (top-level: before any table)
+[project]                               # project file only
+yavih = ">=1,<2"                        # the yavih the project expects (doctor warns on a mismatch)
+[launchers]
+vjepa = "/envs/vjepa/bin/python"        # a matrix entry's `launcher: vjepa`
 [data]
 root = "/data/datasets"                 # ${data.root}
 [data.in1k]                             # one table per benchmark (name or alias); keys = its declared roots
@@ -59,9 +66,9 @@ media_root = "$GROUP/imagenet2012"      # ~ and $VAR expand; a relative path is 
 [datasets]
 vggsound = "/data/vggsound"             # ${datasets.vggsound}: shared by several benchmarks
 [runs]
-root = "runs"                           # relative to this file
+root = "/scratch/me/yavih-runs"         # default yavih-bench/runs (ignored by git); a relative path is relative to THIS file
 [results]
-root = "/data/yavih-results"            # default: <runs root>/../results
+root = "/data/yavih-results"            # default yavih-bench/results (committed), else <runs root>/../results
 [scratch]
 root = "/tmp/yavih"                     # staged probe shards; default SLURM_TMPDIR; never TMPDIR
 [home]
@@ -72,6 +79,9 @@ cpus = 8
 decode_workers = 7
 [site.cluster_a]                        # active when YAVIH_SITE=cluster_a or a hosts glob matches
 hosts = ["gpu*", "*.cluster-a.example"]
+launcher = "/cluster-a/envs/mymodel/bin/python"
+[site.cluster_a.launchers]
+vjepa = "apptainer exec --nv /cluster-a/vjepa.sif python"
 [site.cluster_a.data]
 root = "/project/datasets"
 ```
@@ -81,8 +91,8 @@ root = "/project/datasets"
 | table | key | meaning | default |
 |---|---|---|---|
 | `[home]` | `root` | yavih home: fetched benchmark copies (`benchmarks/`), `data_status/`, `media_info/` | `~/.yavih` |
-| `[runs]` | `root` | runs root: run directories `<runs root>/<benchmark>/<model>/<reading>/` | `./runs` (relative to the current directory) |
-| `[results]` | `root` | results-store root ([results](results.md)) | `results/` next to the runs root (`<runs root>/../results`) |
+| `[runs]` | `root` | runs root: run directories `<runs root>/<benchmark>/<model>/<reading>/`, plan files `_plans/` | `yavih-bench/runs` in a project ([runs and results](project-layout.md#runs-and-results)), else `runs` under the current directory; always absolute |
+| `[results]` | `root` | results-store root ([results](results.md)) | `yavih-bench/results` in a project (committed with it), else `results/` next to the runs root (`<runs root>/../results`) |
 | `[scratch]` | `root` | where a probe stages shards that exceed the RAM budget | `$SLURM_TMPDIR`; else none (the probe reads features in place) |
 | `[data]` | `root` | the site data root, `${data.root}` | none |
 | `[data.<bench>]` | `<root>` | one declared data root of benchmark `<bench>` (name or alias) | the root's `default` in `benchmark.yaml` |
@@ -90,7 +100,12 @@ root = "/project/datasets"
 | `[resources]` | `ram_budget_gb` | RAM budget of a probe / validate, GiB (float, `>= 0`) | `min(16, 0.45 × memory limit)`, else 16 |
 | `[resources]` | `cpus` | CPUs this process may use (int, `> 0`) | scheduler / affinity / cgroup, else `os.cpu_count()` |
 | `[resources]` | `decode_workers` | default decode workers (int, `> 0`) | `cpus − 1` for an allocation, `cpus // 2` on a whole machine |
-| `[site.<id>]` | `hosts` + any table above | per-cluster values | see [Sites](#sites) |
+| (top level) | `launcher` | the default launcher: how a model environment's python is started (a path, or a prefix command; `~` expanded, never anchored) — used by `yavih exec` for a unit whose matrix entry names none ([execution](execution.md#matrixyaml)) | none (the unit runs with the interpreter running `exec`) |
+| `[launchers]` | `<name>` | a named launcher; a matrix entry's `launcher: <name>` resolves to it on the site that runs the unit | none |
+| `[project]` | `yavih` | the version requirement the project expects (`">=1,<2"`); `yavih doctor` warns `W_PROJECT_VERSION` outside it, never fails | none |
+| `[project]` | `bridges`, `matrices`, `suites`, `benchmarks` | relocate one of the project directories (relative to the project file) | `<project dir>/<kind>` |
+| `[project]` | `subprojects` | nested project folders inside the repository that `doctor` must not report as strays | `[]` |
+| `[site.<id>]` | `hosts`, `launcher`, `[launchers]` + any table above except `[project]` | per-cluster values | see [Sites](#sites) |
 
 Notes:
 
@@ -104,13 +119,17 @@ Notes:
   workers are capped at 16 per task and are at least 1. A malformed resource value is always an
   error, even in lenient mode. See [execution](execution.md#byte-read-ahead-and-decode-workers).
 - `[data]` takes only `root` and `[data.<bench>]` sub-tables. `[datasets]` names must match
-  `[a-z][a-z0-9_]*`.
+  `[a-z][a-z0-9_]*`; launcher names `[A-Za-z][A-Za-z0-9_.-]*`.
+- `[project]` is accepted in the project file only (in the user file it is a schema error) and never
+  inside a site table. Everything else, launchers included, layers per site.
 
 ### Values and paths
 
 - `~`, `$VAR` and `${VAR}` are expanded in every path value. An unset `$VAR` is a schema error.
 - A relative path in a file is relative to **that file's directory**. A relative path in an
-  environment variable stays relative to the current directory.
+  environment variable (or on the command line) is made absolute against the current directory when
+  the configuration loads, so every root is absolute wherever it is used later: `YAVIH_RUNS=runs` means
+  `<cwd>/runs` for `config get runs.root` and for a matrix `out: null` alike.
 - `${data.root}` and `${datasets.<name>}` are substituted in `benchmark.yaml` defaults and config
   values alike. `[data] root` itself cannot use a placeholder; a `[datasets]` entry may use
   `${data.root}` but not another `${datasets.*}`.
@@ -145,7 +164,7 @@ media_root = "/shared/mirrors/imagenet2012"
 [runs]
 root = "/scratch/me/yavih-runs"
 [results]
-root = "/scratch/me/yavih-results"   # optional; default <runs root>/../results = /scratch/me/results
+root = "/scratch/me/yavih-results"   # optional; default yavih-bench/results in a project, else <runs root>/../results
 [datasets]
 vggsound = "/data/me/datasets/vggsound"
 ```
@@ -168,7 +187,10 @@ verification stamps.
 ## Sites
 
 One shared file can hold the values of several clusters in `[site.<id>]` tables. A site table takes
-`hosts` (a hostname glob or a list of globs) and any of the tables above except `[site]`.
+`hosts` (a hostname glob or a list of globs), `launcher`, `[launchers]` and any of the tables above
+except `[site]` and `[project]`. Clusters are sites, never separate project folders: one matrix runs
+on every cluster because the site supplies the launcher command its entries name ([project
+layout](project-layout.md)).
 
 - The active site is `$YAVIH_SITE`, else the first `[site.<id>]` (user file first, then project file)
   whose `hosts` globs match `socket.gethostname()` (shell-style `fnmatch`).
@@ -188,14 +210,15 @@ fixed names: `YAVIH_DATA__<BENCH>__<ROOT>` (one data root) and `YAVIH_DATASETS__
 | variable | meaning |
 |---|---|
 | `YAVIH_HOME` | yavih home (fetched benchmarks, data_status/, media_info/); config [home] root; default ~/.yavih |
-| `YAVIH_RUNS` | runs root; config [runs] root; default ./runs |
-| `YAVIH_RESULTS` | results-store root; config [results] root; default <runs root>/../results |
+| `YAVIH_RUNS` | runs root; config [runs] root; default <project dir>/runs (yavih-bench/runs), else ./runs |
+| `YAVIH_RESULTS` | results-store root; config [results] root; default <project dir>/results (yavih-bench/results), else <runs root>/../results |
 | `YAVIH_SCRATCH` | scratch for staged shards; config [scratch] root; else SLURM_TMPDIR; never TMPDIR |
-| `YAVIH_CONFIG` | the project config file (beats ./yavih.toml discovery); same as --config |
+| `YAVIH_CONFIG` | the project config file (beats the yavih-bench/yavih.toml discovery); same as --config |
 | `YAVIH_SITE` | the active [site.<id>] table (else the first whose hosts glob matches the hostname) |
 | `YAVIH_LENIENT` | 1 = unknown config keys / YAVIH_* variables / stale benchmark copies warn instead of failing |
-| `YAVIH_BENCH_PATH` | colon-separated directories of out-of-tree benchmark folders (after $YAVIH_HOME/benchmarks and the packaged ones) |
-| `YAVIH_SUITES` | directory of project suites (<name>.yaml; beats suites/ next to the project yavih.toml, else ./suites) |
+| `YAVIH_BENCH_PATH` | colon-separated directories of out-of-tree benchmark folders (after $YAVIH_HOME/benchmarks, the packaged ones and the project's benchmarks/) |
+| `YAVIH_SUITES` | directory of project suites (<name>.yaml; beats the project's suites/, else ./suites) |
+| `YAVIH_LAUNCHER` | the default launcher (the model environment's python, or a prefix command); config `launcher` (top level or [site.<id>]) |
 | `YAVIH_DATA__ROOT` | the site data root (${data.root}); config [data] root |
 | `YAVIH_RAM_BUDGET_GB` | RAM budget of a probe / validate in GiB; config [resources] ram_budget_gb |
 | `YAVIH_CPUS` | CPUs this process may use (set per slot by `yavih exec --slots`); config [resources] cpus |
@@ -242,10 +265,11 @@ checked when that folder is loaded.
 ## Inspecting the configuration
 
 `yavih config show [--bench B]` prints the files read (layer, path, how each was found, whether it
-exists), the active site and why, and every value with its source. With `--bench B` it also resolves
+exists), the active site and why, the project folder with its directories and version requirement,
+and every value with its source (launchers included). With `--bench B` it also resolves
 that benchmark's roots and shows, per root, the value, the source, whether it exists, whether it is
 `prepare_only`, and the config key, environment variable and `--data` spelling that would set it.
-Under `--json`, `data` is `{files, site, site_source, lenient, values: {key: {value, source}}, warnings,
+Under `--json`, `data` is `{project: {file, dir, yavih, bridges, matrices, suites, benchmarks, subprojects} | null, files, site, site_source, lenient, values: {key: {value, source}}, warnings,
 bench?: {name, folder, roots: {root: {value, source, exists, prepare_only, default, env_var,
 config_key, error}}}}`.
 

@@ -28,6 +28,7 @@ def test_skeleton_written_and_bridges_created(tmp_path, runs_dir):
     rec = plan_init("minimal", model="toy", launcher="/envs/toy/bin/python", out=m)
     assert [e["key"] for e in rec["entries"]] == ["toy-esc50-a", "toy-ssv2-v", "toy-vggsounder-a", "toy-vggsounder-v",
                                                   "toy-vggsounder-av"]
+    assert rec["project"] is None and rec["launcher"] == "/envs/toy/bin/python"  # no project folder: ./matrix.yaml, ./bridges
     # ONE bridge file per benchmark, even for the three vggsounder readings
     assert [(b["benchmark"], b["action"]) for b in rec["bridges"]] == [("esc50", "created"), ("ssv2", "created"), ("vggsounder", "created")]
     for b in ("esc50", "ssv2", "vggsounder"):
@@ -36,14 +37,15 @@ def test_skeleton_written_and_bridges_created(tmp_path, runs_dir):
     raw = yaml.safe_load(m.read_text(encoding="utf-8"))
     assert raw["defaults"]["launcher"] == "/envs/toy/bin/python" and raw["out"] is None
     ent = raw["bridges"]
-    assert ent["toy-esc50-a"] == {"script": "bridges/toy_esc50.py", "benchmark": "esc50", "profile": "bridges/toy-esc50-a.profile.json"}
+    assert ent["toy-esc50-a"] == {"script": "bridges/toy_esc50.py", "benchmark": "esc50", "profile": "matrix.profiles/toy-esc50-a.profile.json"}
     assert ent["toy-vggsounder-av"] == {"script": "bridges/toy_vggsounder.py", "benchmark": "vggsounder", "args": {"reading": "av"},
-                                        "profile": "bridges/toy-vggsounder-av.profile.json"}
+                                        "profile": "matrix.profiles/toy-vggsounder-av.profile.json"}
     text = m.read_text(encoding="utf-8")
     assert "# waive:" in text and "E_PROFILE" in text and "--join vggsounder" in text
     # next steps: one bridge check per entry (--arg only for the multi-reading template), then plan build
     nxt = rec["next"]
-    assert len(nxt) == 6 and nxt[-1].startswith("yavih plan build ") and nxt[-1].endswith("plan.jsonl")
+    assert len(nxt) == 6 and nxt[-1].startswith("yavih plan build ") and nxt[-1].endswith(" --out " + rec["plan"])
+    assert rec["plan"] == str((runs_dir / "_plans" / "toy.jsonl").resolve())  # plan state under the runs root, never next to the matrix
     assert nxt[0].startswith("yavih bridge check ") and "--bench esc50 --out " in nxt[0] and "--arg" not in nxt[0]
     assert "--bench vggsounder --arg reading=v --out " in nxt[3] and nxt[3].endswith("toy-vggsounder-v.profile.json")
 
@@ -84,6 +86,19 @@ def test_existing_bridges_kept_and_matrix_refused(tmp_path, runs_dir, capsys):
     assert rc == 1 and env["errors"][0]["code"] == "E_ARG"
 
 
+def test_launcher_may_be_left_to_the_configuration(tmp_path, runs_dir, capsys):
+    """Without ``--launcher`` the skeleton writes ``launcher: null`` (the configured launcher applies at execution) and
+    ``plan init`` warns ``W_LAUNCHER_UNSET`` when the configuration names none either."""
+    m = tmp_path / "m.yaml"
+    rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--out", str(m)])
+    assert rc == 0 and [w["code"] for w in env["warnings"]] == ["W_LAUNCHER_UNSET"] and env["data"]["launcher"] is None
+    raw = yaml.safe_load(m.read_text(encoding="utf-8"))
+    assert raw["defaults"]["launcher"] is None and raw["bridges"]["toy-esc50-a"]["profile"] == "m.profiles/toy-esc50-a.profile.json"
+    assert all(e.launcher is None for e in load_matrix(str(m)).entries)
+    rc, env = _json(capsys, ["plan", "init", "--suite", "minimal", "--model", "toy", "--out", str(tmp_path / "n.yaml"), "--launcher", " "])
+    assert rc == 1 and env["errors"][0]["code"] == "E_ARG"
+
+
 def test_pending_entries_become_comments(tmp_path, runs_dir):
     suite = tmp_path / "mine.yaml"
     suite.write_text(yaml.safe_dump({
@@ -105,7 +120,7 @@ def test_cli_plan_init_text_lists_next_steps(tmp_path, runs_dir, capsys):
     out = capsys.readouterr().out
     checks = [ln.strip() for ln in out.splitlines() if ln.strip().startswith("yavih bridge check ")]
     assert len(checks) == 5 and sum("--arg reading=" in c for c in checks) == 3
-    assert f"yavih plan build {m} --out {tmp_path / 'plan.jsonl'}" in out
+    assert f"yavih plan build {m} --out {runs_dir / '_plans' / 'toy.jsonl'}" in out
     assert "yavih suite missing minimal --model toy" in out
     assert Path(m).is_file()
 
@@ -118,7 +133,7 @@ def test_skeleton_composes_with_plan_build_sample(tmp_path, runs_dir, capsys):
     from yavih.plan.units import benchmark_info
 
     m = tmp_path / "matrix.yaml"
-    plan_init("minimal", model="toy", launcher="python", out=m)
+    rec = plan_init("minimal", model="toy", launcher="python", out=m)
     matrix = load_matrix(str(m))
     infos = {}
     for ent in matrix.entries:
@@ -150,3 +165,9 @@ def test_skeleton_composes_with_plan_build_sample(tmp_path, runs_dir, capsys):
     assert report_u["out"] == os.path.join(root, "_report")
     rc, env = _json(capsys, ["plan", "build", str(m), "--sample", "0"])
     assert rc == 1 and env["errors"][0]["code"] == "E_PLAN"
+    # the printed --out (<runs root>/_plans/<model>.jsonl): a plan outside the matrix directory still runs from it
+    from yavih.plan.units import read_plan
+
+    rc, env = _json(capsys, ["plan", "build", str(m), "--out", rec["plan"], "--format", "count"])
+    assert rc == 0, env["errors"]
+    assert {u.cwd for u in read_plan(rec["plan"])} == {str(m.parent.resolve())}

@@ -67,7 +67,7 @@ def test_folder_lint_clean():
 
 def test_schema2_top_level_and_no_removed_keys(spec: dict):
     assert spec["schema_version"] == 2 and spec["name"] == "fsd50k" == HERE.name
-    assert list(spec) == ["schema_version", "name", "aliases", "title", "header", "readout", "protocol_version", "changelog", "source", "obtain",
+    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "readout", "protocol_version", "changelog", "source", "obtain",
                           "budget", "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract",
                           "external", "protocol", "metrics", "readout_params"]
     assert "requires" not in spec  # moved into output_contract.requires
@@ -117,7 +117,8 @@ def test_protocol_holds_label_facts_only(spec: dict):
     p = spec["protocol"]
     assert set(p) == {"clip_seconds", "train_draw", "views"}
     assert p["clip_seconds"] == 10.0 and p["views"] == "none"
-    assert p["train_draw"] == {"cap": 20000, "seed": 0, "balance": "first_label", "drawn_from": p["train_draw"]["drawn_from"]}
+    assert p["train_draw"] == {"cap": 20000, "seed": 0, "balance": "first_label"}  # the prose source: manifest.upstream.draw
+    assert spec["manifest"]["upstream"]["draw"]
 
 
 # ----------------------------------------------------------------------------- manifest + classes
@@ -186,7 +187,7 @@ def test_curation_sums(spec: dict, rows: list[dict[str, str]]):
     assert cur["excluded"] == {"draw_remainder": 20966}
     assert cur["short_clips"] == sum(1 for r in rows if float(r["duration_s"]) < spec["protocol"]["clip_seconds"]) == 20315
     mm = _load(HERE / "make_manifest.py", "fsd50k_make_manifest")
-    assert up["sha256"] == mm.GROUND_TRUTH_SHA256["dev.csv"] and up["sha256"] in spec["protocol"]["train_draw"]["drawn_from"]
+    assert up["sha256"] == mm.GROUND_TRUTH_SHA256["dev.csv"] and up["sha256"] in up["draw"]
     assert up["upstream_files"] == {f"FSD50K.ground_truth/{k}": v for k, v in mm.GROUND_TRUTH_SHA256.items()}
 
 

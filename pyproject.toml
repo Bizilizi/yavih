@@ -63,6 +63,7 @@ yavih = [
   "benchmarks/*/*",
   "benchmarks/*/prepare/*",
   "benchmarks/*/tests/*",
+  "benchmarks/*/conformance/*",    # expected.json: the folder's conformance fixture
   "skill/yavih/*",
   "skill/yavih/references/*",
   "suites/*.yaml",                 # the shipped suites (yavih suite list)

@@ -196,7 +196,7 @@ def test_curation_sums(spec, manifest_rows):
         "vggsound/metadata/vggsound.csv": mm.VGGSOUND_CSV_SHA,
     }
     assert spec["source"]["sha256"]["vggsound/metadata/vggsound.csv"] == mm.VGGSOUND_CSV_SHA
-    assert mm.VGGSOUND_CSV_SHA[:8] in spec["protocol"]["train_draw"]["drawn_from"]
+    assert mm.VGGSOUND_CSV_SHA[:8] in spec["manifest"]["upstream"]["draw"]
 
 
 def test_metric_names_resolve(spec, probe_mod):

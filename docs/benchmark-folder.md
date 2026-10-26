@@ -23,8 +23,10 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
   bridge_template.py    a Bridge skeleton to copy
   make_manifest.py      upstream metadata -> manifest.csv.gz + classes.csv, byte-identical re-freeze
   prepare/              numbered steps: 01_download.sh, 02_verify.sh, 03_materialize.py, ...
-  probe.py              optional: folder metrics, targets, the authors' scorer
-  reader.py             optional: replaces the generic reader
+  probe.py              optional: folder metrics, targets, the authors' scorer (provenance, never hashed)
+  reader.py             optional: replaces the generic reader (provenance, never hashed)
+  conformance/
+    expected.json       the conformance fixture: the scoring path's numbers at this protocol_version (bench conformance --record)
   tests/test_folder.py  the folder's own facts
   assets/header.png     the README header image (python -m yavih.headers) + header.src.sha256; never shipped
   notes/                optional maintainer notes; never shipped
@@ -68,8 +70,10 @@ current directory, with `FOLDER=<folder>` and `YAVIH_BENCH=<name>` set. Helper s
 
 All hooks are optional. Module scope imports only the standard library, numpy and yavih core (`yavih bench lint`
 imports it with torch and the folder's `external` packages blocked). It reuses the shared heads, trainer and
-`ProbeConfig`; it never defines a head, loss or training loop. Its normalized source (comments and docstrings
-excluded) enters `scoring_hash`, so editing it never invalidates extracted features.
+`ProbeConfig`; it never defines a head, loss or training loop. Its source never enters a hash: the digest of its
+normalized source is recorded as provenance (`folder_source.probe`), and its behaviour is pinned by
+`protocol_version` and the folder's conformance fixture (`conformance/expected.json`, [conformance](conformance.md)).
+An edit that moves the fixture's numbers is `E_CONFORMANCE_DRIFT` until `protocol_version` is bumped.
 
 ```python
 METRICS: dict[str, MetricSpec]      # folder metrics; may replace a registry metric only with the same readouts/shape/kind
@@ -101,20 +105,24 @@ def iter_samples(bench, split, rows, batch_size, canaries, canary_seed, *, shard
 ```
 
 It replaces the generic reader, imports only yavih core, must accept `shard=(i, n)` (per-shard canaries; `bench
-lint` check `reader`), and its normalized source enters `input_hash`. No packaged folder ships one.
+lint` check `reader`); its normalized-source digest is provenance (`folder_source.reader`), never identity. No
+packaged folder ships one.
 
 ## benchmark.yaml
 
 `yavih.benchmark.load_yaml(path)` parses the file into a frozen `BenchmarkSpec`. Unknown keys at any level are an
 error (`SchemaError`). Keys are required unless the comment says optional. Which blocks are hashed, and on which side,
-is in [hashing](hashing.md); in short, `aliases`, `title`, `header`, `changelog`, `source`, `obtain`, `budget`,
-`data` and `manifest.upstream` are never hashed.
+is in [hashing](hashing.md); in short, `aliases`, `title`, `capability`, `header`, `changelog`, `source`, `obtain`, `budget`,
+`data` and `manifest.upstream` are never hashed, and the hashed blocks enter through typed views that leave prose
+(`input_contract.handed_over`, `external[].used_for`) and display settings (`metrics.table`) out. No source file is
+hashed: `probe.py` / `reader.py` are provenance, their behaviour is `protocol_version` + the conformance fixture.
 
 ```yaml
 schema_version: 2                  # int, == yavih.versions.BENCHMARK_SCHEMA_VERSION
 name: k400                         # [a-z0-9_]+, == the folder's directory name
 aliases: []                        # list of [a-z0-9_]+; Benchmark.load(alias) resolves here; not hashed
 title: Kinetics-400 action recognition   # one line; bench list / bench info and the benchmarks index
+capability: [visual]               # optional for the loader, required by bench lint; not hashed; see "Capability"
 header:                            # optional for the loader, required by bench lint; not hashed (README header image)
   name: Kinetics-400                # the display name
   title: The Kinetics Human Action Video Dataset   # the paper title
@@ -170,6 +178,7 @@ manifest:
     rel_media: {type: str, role: media, stream: video}   # type str|int|float; role media|extra|label_aux
     offset_bin: {type: int, role: extra}                 # `stream` (a name or a list) only with role media
   upstream:                        # optional for the loader; bench lint requires `curation`; not hashed
+    draw: "..."                    # optional str: how protocol.train_draw was drawn, in words (hashed parameters: cap/seed/balance)
     source: "..."                  # the file the rows were frozen from
     sha256: "..."
     rows: 254110
@@ -254,8 +263,7 @@ protocol:                          # label facts only, JSON values (finite numbe
   train_draw:                      # null when uncapped
     cap: 20000
     seed: 0
-    balance: class                 # class | first_label | session | null
-    drawn_from: "..."
+    balance: class                 # class | first_label | session | null; the draw's description is manifest.upstream.draw
   views: none                      # none | rows: whether several rows derive from one source clip
   # Every other key is a per-benchmark label fact and must be consumed: named by a resolved metric, by the
   # readout, by probe.py PROTOCOL_KEYS, or by input_contract.facts. target_region, when present, is
@@ -288,6 +296,8 @@ From the yaml (`SchemaError`, exit 1):
 - `name` and `aliases` match `[a-z0-9_]+`, no alias equals the name; `readout` is registered;
 - `changelog`: strictly increasing versions, newest last, newest `version == protocol_version`;
 - `source.revision` non-empty when present; `obtain` (when present) has a known tier and a non-empty `how`;
+- `capability` (when present) is a non-empty list of distinct ids of `yavih.suites.CAPABILITIES`; an unknown id is
+  refused with the vocabulary in the message;
 - `budget.clips` keys are declared split values, `budget.probe_minutes_ref` has the benchmark's readout;
 - `manifest`: `classes` / `classes_sha256` both set or both null and present exactly for the label kinds with
   classes; the label rules of the schema above; media columns name declared streams; the key, `split` and label
@@ -501,32 +511,49 @@ maintainer commands.
 
 ## The benchmarks index
 
-`src/yavih/benchmarks/README.md` lists the packaged folders. Its table sits between
-`<!-- yavih:bench-table index begin ... -->` and `<!-- yavih:bench-table index end -->` markers and is generated from
-each folder's `benchmark.yaml` by `python -m yavih.doctables --write`. The same command regenerates every other list
-of the packaged benchmarks, each between `<!-- yavih:bench-table <kind> begin ... -->` / `end` markers: the repo
+`src/yavih/benchmarks/README.md` lists the packaged folders, grouped by capability. Its tables sit between
+`<!-- yavih:bench-table index begin ... -->` and `<!-- yavih:bench-table index end -->` markers and are generated
+from each folder's `benchmark.yaml` by `python -m yavih.doctables --write`. The same command regenerates every other
+list of the packaged benchmarks, each between `<!-- yavih:bench-table <kind> begin ... -->` / `end` markers: the repo
 README's table (`readme`) and controls bullet (`controls`), the index's `setup.md` links (`setup_links`), the
 [packaged benchmarks](#packaged-benchmarks) table below (`folder`), and in the skill `references/data.md`'s
 obtainability table (`data`) and `prepare_only` roots (`prepare_roots`) and `references/readouts.md`'s benchmarks per
-readout (`readout_groups`). `--check` exits 1 when a block is stale:
+readout (`readout_groups`). `--check` exits 1 when a block is stale; `--print <kind>` prints one block:
 
 ```
+### audio (2)
+
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [esc50](esc50/README.md) | ESC-50 environmental sound classification (...) | clf | audio | public (obtain: auto) |
 ```
 
-One row per packaged folder, sorted by name; the first cell links `<name>/README.md`; the description names every
-alias in backticks; `Readout` is the folder's `readout`; `Media` names what is handed over; `Source` is
-`source.kind` in words (public, torrent, manual portal, private mirror, derived). Below the table: the folder layout
-in one paragraph and a link to each folder's `setup.md`.
+One `### <capability> (<n>)` table per capability that has a benchmark, in `yavih.suites.CAPABILITIES` order; a
+benchmark with several capabilities is listed under each (a folder without `capability`, which `bench lint`
+refuses, would land under `untagged`). Within a table one row per folder, sorted by name; the first cell links
+`<name>/README.md`; the description names every alias in backticks; `Readout` is the folder's `readout`; `Media`
+names what is handed over; `Source` is `source.kind` in words (public, torrent, manual portal, private mirror,
+derived). Below the tables: the folder layout in one paragraph and a link to each folder's `setup.md`.
+
+The `capabilities` kind is the short overview for the repo README: one row per capability with the number of
+benchmarks and the first four names (sorted, each linked to its folder README by GitHub URL, `+ N more` after
+them), then a link "All N benchmarks → the index" to `src/yavih/benchmarks/README.md`.
+
+### Capability
+
+`capability` tags what a benchmark measures, from the one vocabulary suites group by (`yavih.suites.CAPABILITIES`:
+`audio`, `visual`, `audio-visual`, `temporal`, `spatial`, `retrieval`). A benchmark may carry several, e.g.
+`[audio-visual, temporal]` for a synchronisation task; tag every capability a suite might list it under.
+`yavih bench list` and `yavih bench info` show the tags, the index and the `capabilities` table group by them.
+They are not hashed: retagging a folder changes no hash and needs no changelog entry.
 
 ## Tests that pin the documentation
 
 - `tests/test_packaged_folders.py` runs every `bench lint` check on every packaged folder (one test per folder and
   check, so a new folder is covered without editing the test), and checks that aliases are unique and resolve with
-  the same `protocol_hash`, that the index has one correct row per packaged folder and its links resolve, that the
-  generated tables are current, and that the lint catches what it claims on a mutated copy of `esc50`.
+  the same `protocol_hash`, that the index lists every packaged folder under each of its capabilities with correct
+  rows and links that resolve, that the generated tables are current, that every folder's capability tags agree with
+  the shipped suites, and that the lint catches what it claims on a mutated copy of `esc50`.
 - Each folder's `tests/test_folder.py` pins that folder's facts: the yaml parses and loads, the sha256s match and the
   gzip header is reproducible, splits are assigned once, classes are contiguous, the curation sums hold, a reader
   smoke on synthetic media, and the README / setup.md sections (helpers in `yavih.testing.folder`, including
@@ -545,6 +572,8 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 |---|---|---|
 | `yaml` | `E_YAML`, `E_SCHEMA`, `E_NAME`, `E_LAYOUT` | `benchmark.yaml` exists and parses; `Benchmark.load` succeeds; `name` equals the folder name. |
 | `hashes` | `E_CHANGELOG_HASH` | The newest changelog entry records the computed `protocol_hash` and `input_hash` and does not supersede its own digests. |
+| `conformance` | `E_CONFORMANCE_MISSING`, `E_CONFORMANCE_STALE`, `E_CONFORMANCE_DRIFT`, `E_CONFORMANCE_SCHEMA`, `W_CONFORMANCE_SKIPPED` (warning) | `conformance/expected.json` exists, was recorded at the folder's `protocol_version`, and the scoring path reproduces it within tolerance ([conformance](conformance.md)); skipped with a warning when a pinned external package is absent here. |
+| `hashed` | `E_HASHED_PROSE` | No prose (a string of 8+ words or 80+ characters) inside a hashed view: it would fork the hash on a wording edit; prose belongs in `manifest.upstream`, README.md or setup.md. |
 | `layout` | `E_LAYOUT` | `README.md`, `setup.md`, `benchmark.yaml`, `manifest.csv.gz`, `bridge_template.py`, `make_manifest.py`, `tests/test_folder.py` exist; `prepare/` is non-empty; `classes.csv` exists iff `manifest.classes`; no `__init__.py` in the folder or `tests/`. |
 | `reader` | `E_READER` | An optional `reader.py` loads and its `iter_samples` accepts `shard=`. |
 | `budget` | `E_MANIFEST`, `E_BUDGET`, `E_CURATION` | The manifest reads; `budget.clips` equals the frozen rows per read split; `manifest.upstream.curation` exists, its `per_split.*.listed` equal the frozen rows, and listed plus excluded equals `total_upstream`. |
@@ -553,6 +582,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `setup` | `E_SETUP` | The [setup.md contract](#setupmd-contract). |
 | `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |
 | `obtain` | `E_OBTAIN` | `obtain` is exactly `{tier, how}`, a known tier and a non-empty `how`. |
+| `capability` | `E_CAPABILITY`, `W_SUITE_CAPABILITY` (warning) | `capability` is a non-empty list of `yavih.suites.CAPABILITIES` ids. A shipped suite that lists the benchmark (by name or alias) in a group whose capability is not among its tags is a warning (`W_SUITE_CAPABILITY`). |
 | `template` | `E_TEMPLATE` | `bridge_template.py` has a literal `describe()["model"]` and a `reading` within `a`/`v`/`av`. |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |
 | `imports` | `E_IMPORT` | `reader.py` / `probe.py` import in a fresh interpreter with torch and the `external` packages blocked. |

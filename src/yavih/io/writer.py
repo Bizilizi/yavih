@@ -438,6 +438,7 @@ class FeatureWriter:
             # mismatch (E_HASH_INPUT). protocol_hash / scoring_hash: what the benchmark was when written (provenance).
             "input_hash": getattr(b, "input_hash", None),
             "input_components": dict(getattr(hashes, "input_components", None) or {}) or None,
+            "folder_source": dict(getattr(b, "folder_source", None) or {}) or None,  # provenance, never identity
             "protocol_hash": getattr(b, "protocol_hash", None),
             "scoring_hash": getattr(b, "scoring_hash", None),
             "media_fingerprint": media_fp,

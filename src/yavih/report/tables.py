@@ -31,8 +31,10 @@ MISSING = "MISSING"
 _CSV_FIELDS = [
     "benchmark", "eval_hash", "protocol_hash", "probe_hash", "model", "reading", "describe_sha256", "features_fingerprint",
     "bridge_name", "status", "seed", "n_seeds", "coverage_train", "coverage_eval", "metric", "kind", "value", "std", "floor",
-    "ci_lo", "ci_hi", "chance", "partial", "flag", "waived",
+    "ci_lo", "ci_hi", "chance", "tie", "partial", "flag", "waived",
 ]
+#: The mark on a value tied with its column's best (within the metric's conformance tolerance; ``report.compare``).
+TIE_MARK = "≈"
 #: The suffix on every value of a capped run's row (``plan build --sample N``).
 PARTIAL_MARK = "(partial)"
 #: The mark of a row whose features passed validation with a waived check: shown next to the value with a
@@ -112,7 +114,8 @@ def format_value(
 def _cell_text(cell: dict[str, Any] | None) -> str:
     if not cell:
         return ""
-    return format_value(cell.get("value"), cell.get("floor"), cell.get("ci"), std=cell.get("std"))
+    text = format_value(cell.get("value"), cell.get("floor"), cell.get("ci"), std=cell.get("std"))
+    return f"{TIE_MARK} {text}" if text and cell.get("tie") else text
 
 
 def _md_escape(text: str) -> str:
@@ -204,6 +207,8 @@ def render_md(report) -> str:
             notes.append("superseded protocol_version")
         if not col.get("standard"):
             notes.append("non-standard ProbeConfig: not comparable")
+        if "ties" in (col.get("flags") or []):
+            notes.append(f"{TIE_MARK} = tied with the best value (within the metric's conformance tolerance): not an order")
         if notes:
             out.append("; ".join(notes))
         out.append("")
@@ -408,7 +413,7 @@ def _csv_row(row: dict[str, Any], **extra: Any) -> dict[str, Any]:
         "n_seeds": row.get("n_seeds", 0),
         "coverage_train": format_coverage(cov.get("train")),
         "coverage_eval": format_coverage(cov.get("eval")),
-        "metric": "", "kind": "", "value": "", "std": "", "floor": "", "ci_lo": "", "ci_hi": "", "chance": "",
+        "metric": "", "kind": "", "value": "", "std": "", "floor": "", "ci_lo": "", "ci_hi": "", "chance": "", "tie": "",
         "flag": ";".join(row.get("flags") or []),
         "waived": ";".join(str(w.get("code")) for w in row.get("waived") or [] if isinstance(w, dict)),
         "partial": "true" if row.get("partial") else "false",
@@ -440,6 +445,7 @@ def render_csv(report) -> str:
                 value=format_number(cell.get("value")), std=format_number(cell.get("std")),
                 floor=format_number(cell.get("floor")), ci_lo=format_number(ci[0]), ci_hi=format_number(ci[1]),
                 chance=format_number(cell.get("chance")),
+                tie="" if cell.get("tie") is None else ("true" if cell["tie"] else "false"),
             ))
         for c in col.get("controls") or []:
             w.writerow(_csv_row(row, metric=c, kind="control", value=format_number((row.get("controls") or {}).get(c))))

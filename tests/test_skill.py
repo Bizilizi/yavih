@@ -6,6 +6,7 @@ serve the package data."""
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
 import json
@@ -22,7 +23,7 @@ SKILL_MD = SKILL_ROOT / "SKILL.md"
 REFERENCES = ("bridge", "data", "readouts", "slurm", "cli")
 # the skill's step table: "<i> <step>" in the first column
 STEPS = ("install", "setup.md", "prepare", "bridge", "smoke", "extract", "validate", "probe", "report")
-GROUPS = ("doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec", "suite")
+GROUPS = ("init", "doctor", "config", "skill", "bench", "bridge", "extract", "features", "probe", "report", "registry", "plan", "exec", "suite")
 # the operational rules that follow the guardrail checklist, carried verbatim (whitespace-normalized)
 OPERATIONAL_RULES = (
     "Install with `--no-deps`; never let pip touch the model env's torch; install original-author packages "
@@ -83,8 +84,24 @@ def test_frontmatter_name_and_description():
     head = text.split("---", 2)[1]
     assert re.search(r"^name:\s*yavih\s*$", head, re.M)
     assert "description:" in head
-    for trigger in ("yavih", "bridge", "frozen", "setup.md", "K400", "SSv2", "ESC-50", "AVE", "NYUv2"):
+    for trigger in ("yavih", "bridge", "frozen", "setup.md", "probing", "probe", "benchmark suite", "benchmark my model",
+                    "video", "audio-visual", "`yavih bench list`"):
         assert trigger in head, f"description must trigger on {trigger!r}"
+
+
+def test_frontmatter_enumerates_no_benchmark():
+    """The benchmark set grows by adding folders: the description triggers on `yavih bench list`, never on a list of
+    names that would go stale (no packaged name, alias or header display name)."""
+    import yaml
+
+    from yavih.benchmarks import packaged_folder, packaged_names
+
+    head = SKILL_MD.read_text(encoding="utf-8").split("---", 2)[1]
+    for name in packaged_names():
+        y = yaml.safe_load((packaged_folder(name) / "benchmark.yaml").read_text(encoding="utf-8"))
+        for word in (name, *(y.get("aliases") or []), (y.get("header") or {}).get("name") or name):
+            assert not re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", head, flags=re.I), \
+                f"the SKILL.md description names benchmark {word!r}"
 
 
 def test_nine_steps_present_in_order():
@@ -108,12 +125,12 @@ def test_step_rows_carry_commands_and_stop_conditions():
         "bridge": ("bridge_template.py", "preprocessing source", "`model`", "`reading`", "custom", "one-line description",
                    "views: 1", "precision", "(feats, pos, used)", "media coordinates"),
         "smoke": ("yavih bridge check", "bit-identical", "1e-5", "1e-3", "E_RULE_MISMATCH", "E_TIMES_OUT_OF_MEDIA", "E_NETWORK"),
-        "extract": ("yavih plan build", "yavih plan status", "pending == 0", "preempted == 0", "failed == 0"),
-        "validate": ("yavih features validate runs/<b>/<model>/<reading>/features", "coverage", "N_RULE_CUSTOM",
+        "extract": ("R=$(yavih config get runs.root)", "yavih plan build", "$R/_plans/", "yavih plan status", "pending == 0", "preempted == 0", "failed == 0"),
+        "validate": ("yavih features validate $R/<b>/<model>/<reading>/features", "coverage", "N_RULE_CUSTOM",
                      "W_RULE_UNCHECKED", "not_applicable"),
-        "probe": ("yavih probe run runs/<b>/<model>/<reading>", "--log-samples", "floor", "floor_violated", "audio_blind",
+        "probe": ("yavih probe run $R/<b>/<model>/<reading>", "--log-samples", "floor", "floor_violated", "audio_blind",
                   "external"),
-        "report": ("yavih report build", "results/<model>/results_<timestamp>.json", "`reading`", "`eval_hash`", "ci95",
+        "report": ("yavih report build \"$R/*\"", "$(yavih config get results.root)/<model>/results_<timestamp>.json", "`reading`", "`eval_hash`", "ci95",
                    "floor", "W_BRIDGE_CHANGED"),
     }
     for step, needles in need.items():
@@ -257,7 +274,7 @@ def test_bridge_md_documents_model_and_reading():
     names), ``reading`` names the run subdirectory and the results key; ``describe()`` is recorded, never identity."""
     text = (SKILL_ROOT / "references" / "bridge.md").read_text(encoding="utf-8")
     row = next(ln for ln in text.splitlines() if ln.startswith("| `model` |"))
-    for n in ("[A-Za-z0-9_.-]{1,64}", "runs/<b>/<model>/<reading>/", "results/<model>/", "two names", "W_BRIDGE_CHANGED"):
+    for n in ("[A-Za-z0-9_.-]{1,64}", "<runs root>/<b>/<model>/<reading>/", "<results root>/<model>/", "two names", "W_BRIDGE_CHANGED"):
         assert n in row, f"bridge.md `model` row: {n!r} missing"
     assert "| key | in `describe_sha256` | content |" in text and "| key | identity |" not in text
     for n in ("describe_sha256", "E_CONFIG_DRIFT", "--expect-profile", "W_WEIGHTS_UNFINGERPRINTED", "`notes`"):
@@ -298,7 +315,7 @@ def test_readouts_md_covers_readouts_and_results():
     text = (SKILL_ROOT / "references" / "readouts.md").read_text(encoding="utf-8")
     for n in ("media coordinates", "T = 10", "t_bins", "min_cell_coverage", "target region", "0.25", "full-frame",
               "external", "E_EXTERNAL_MISSING", "E_EXTERNAL_VERSION", "vggsounder==1.0", "result.json",
-              "\"schema_version\": 3", "\"eval_hash\"", "\"model\"", "\"reading\"", "results_<timestamp>.json",
+              "\"schema_version\": 4", "\"eval_hash\"", "\"model\"", "\"reading\"", "results_<timestamp>.json",
               "samples_<benchmark>_<reading>_<timestamp>.jsonl", "<benchmark>:<reading>", "\"results_version\": 2",
               "(benchmark, reading, eval_hash)", "W_BRIDGE_CHANGED", "W_FEATURES_DIFFER", "higher_is_better",
               "--merge-results", "floor_of", "not_applicable"):
@@ -349,6 +366,16 @@ def _parse_help(argv: list[str]) -> int:
         with pytest.raises(SystemExit) as exc:
             parser.parse_args([*argv, "--help"])
     return int(exc.value.code or 0)
+
+
+def test_the_cli_reference_synopsis_lists_every_top_level_command():
+    """The synopsis block at the top of references/cli.md names exactly the parser's top-level commands."""
+    text = (SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8")
+    block = text.split("```", 2)[1]
+    listed = {line.split()[0] for line in block.splitlines()[1:] if line.startswith("  ") and not line.startswith("    ")}
+    sub = next(a for a in cli.build_parser()._actions if isinstance(a, argparse._SubParsersAction))
+    assert listed == set(sub.choices), f"synopsis {sorted(listed)} != parser {sorted(sub.choices)}"
+    assert set(GROUPS) == set(sub.choices)
 
 
 def test_every_mentioned_command_parses_with_argparse():
@@ -470,10 +497,10 @@ def _yaml_blocks(text: str) -> list[str]:
     return re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
 
 
-@pytest.mark.parametrize("doc", ["references/slurm.md", "README.md"])
+@pytest.mark.parametrize("doc", ["references/slurm.md", "docs/quickstart.md"])
 def test_matrix_examples_parse_with_plan_build(tmp_path, doc):
     """The ``matrix.yaml`` examples of the skill (``references/slurm.md`` "matrix.yaml", which SKILL.md points to) and
-    README.md are accepted by ``plan build``'s parser."""
+    docs/quickstart.md are accepted by ``plan build``'s parser."""
     from yavih.plan.matrix import load_matrix
 
     path = SKILL_ROOT / doc if doc.startswith("references/") else REPO / doc
@@ -516,12 +543,92 @@ def test_in1k_image_as_video_gotcha_says_top_level():
 
 
 def test_readme_example_reading_uses_the_benchmarks_vocabulary():
-    """The README's vggsounder bridge declares ``reading`` in vggsounder's {a, v, av}."""
+    """The quickstart's vggsounder bridge takes ``reading`` as an argument over vggsounder's {a, v, av} (the readings
+    ``plan init`` plans), records it in ``describe()``, and its step-4 ``bridge check`` is the one printed for ``v``."""
     from yavih.benchmarks import packaged_folder
 
-    readme = REPO / "README.md"
+    readme = REPO / "docs" / "quickstart.md"
     if not readme.is_file():
-        pytest.skip("README.md not available")
-    m = re.search(r'"reading": "([a-z]+)"', readme.read_text(encoding="utf-8"))
-    assert m and m.group(1) == "v"
+        pytest.skip("docs/quickstart.md not available")
+    text = readme.read_text(encoding="utf-8")
+    m = re.search(r'"reading": ArgSpec\([^)]*choices=\(([^)]*)\)', text)
+    assert m and {c.strip().strip('"') for c in m.group(1).split(",")} == {"a", "v", "av"}
+    assert '"reading": self.reading' in text
+    assert ("yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --arg reading=v "
+            "--out yavih-bench/matrices/mymodel.profiles/mymodel-vggsounder-v.profile.json") in text
     assert "`describe()[\"reading\"]` ∈ {`a`, `v`, `av`}" in (packaged_folder("vggsounder") / "setup.md").read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------------------------------- the complete code list
+
+
+def _code_constants() -> dict[str, list[str]]:
+    """Every ``E_*`` / ``W_*`` / ``N_*`` string literal in the yavih sources (folder tests excluded): ``{code: files}``."""
+    pkg = SKILL_ROOT.parents[1]
+    out: dict[str, list[str]] = {}
+    for path in sorted(pkg.rglob("*.py")):
+        if "tests" in path.parts or "__pycache__" in path.parts:
+            continue
+        for m in re.finditer(r"""["']([EWN]_[A-Z][A-Z0-9_]*[A-Z0-9])["']""", path.read_text(encoding="utf-8")):
+            out.setdefault(m.group(1), []).append(str(path.relative_to(pkg)))
+    return out
+
+
+def test_every_code_the_sources_define_is_in_the_cli_reference_codes():
+    """``yavih skill show --ref cli`` is the one complete list (docs/cli.md says so): every code literal in the sources
+    appears in its "Codes" section."""
+    codes = _section((SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8"), "Codes")
+    constants = _code_constants()
+    assert len(constants) > 150
+    missing = sorted(c for c in constants if not re.search(rf"(?<![A-Z0-9_]){c}(?![A-Z0-9_])", codes))
+    assert not missing, "codes missing from references/cli.md ## Codes: " + ", ".join(f"{c} ({constants[c][0]})" for c in missing)
+
+
+def test_the_cli_reference_environment_lists_every_variable():
+    """references/cli.md "Environment" names every variable of ``yavih.config.ENV_VARS`` (the strict configuration
+    refuses any other ``YAVIH_*`` name)."""
+    from yavih.config import ENV_VARS
+
+    env = _section((SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8"), "Environment")
+    missing = [name for name in ENV_VARS if f"`{name}" not in env]
+    assert not missing, f"references/cli.md ## Environment lacks {missing}"
+    assert "`YAVIH_DATA__<BENCH>__<ROOT>" in env and "`YAVIH_DATASETS__<NAME>`" in env
+
+
+def _top_level_keys(shape: str) -> set[str]:
+    """The keys at depth 1 of a ``{a: {...}, b?, c: [..] | null}`` shape string (``?`` stripped)."""
+    keys: set[str] = set()
+    depth, cur = 0, ""
+    for ch in shape.strip()[1:-1] + ",":
+        if ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+        if depth == 0 and ch == ",":
+            keys.add(re.split(r"[:\s]", cur.strip(), maxsplit=1)[0].rstrip("?"))
+            cur = ""
+        elif depth == 0 or ch not in ",":
+            cur += ch
+    return {k for k in keys if k}
+
+
+def test_the_config_show_row_matches_the_envelope_keys(tmp_path, monkeypatch):
+    """references/cli.md documents ``config show``'s data with exactly the keys ``Settings.show`` returns (``bench``
+    with ``--bench``), and the ``project`` block with exactly its keys."""
+    from yavih import config
+    from yavih.benchmark import Benchmark
+
+    text = (SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8")
+    row = next(line for line in text.splitlines() if line.startswith("| `yavih config show` |"))
+    m = re.search(r"\| `(\{project: .*?\}\}\}\})`;", row)
+    assert m, "the config show row's data shape"
+    shape = m.group(1).replace("\\|", "|")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "yavih-bench").mkdir()
+    (tmp_path / "yavih-bench" / "yavih.toml").write_text("[project]\n", encoding="utf-8")
+    monkeypatch.delenv("YAVIH_CONFIG", raising=False)
+    shown = config.load(refresh=True, cwd=tmp_path).show(Benchmark.load("esc50"))
+    config.load(refresh=True)
+    assert _top_level_keys(shape) == set(shown)
+    project_shape = re.search(r"project: (\{[^}]*\})", shape).group(1)
+    assert _top_level_keys(project_shape) == set(shown["project"])

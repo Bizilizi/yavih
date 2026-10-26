@@ -21,7 +21,7 @@ These are accepted by every command, before or after the subcommand.
 |---|---|
 | `--json` | emit exactly one JSON envelope on stdout ([below](#the---json-envelope)); also `YAVIH_JSON=1` |
 | `--version` | print the version and exit 0 |
-| `--config FILE` | the project config file (beats `$YAVIH_CONFIG` and `./yavih.toml` discovery) |
+| `--config FILE` | the project config file (beats `$YAVIH_CONFIG` and the discovery of the nearest `yavih-bench/yavih.toml`, else `yavih.toml`, up to the repository root) |
 | `--runs-root DIR` | runs root (beats `YAVIH_RUNS` and `[runs] root`) |
 | `--results DIR` | results-store root (beats `YAVIH_RESULTS` and `[results] root`) |
 | `--data BENCH.ROOT=PATH` | one data root override, repeatable; also `root=PATH` and `datasets.NAME=PATH` |
@@ -34,8 +34,9 @@ them to the environment of every child process it starts.
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih doctor` | report the environment: installed extras, torch, decoders, GPUs, the configuration with sources, the home / runs / results roots, the default decode-worker count, installed skill copies | `--bench B` also resolves B's data roots, reads one stored row per stream (`W_MEDIA_READ`), checks the header backends (`W_HEADER_BACKEND`), the benchmark's external packages and its pinned tools (`data.tools:` per tool, `W_TOOL_PIN` when one is missing or off its pin); `--selftest` runs the reference bridge on 32 ESC-50 clips |
-| `yavih config show` | every configuration value with its source, the files read and the active site | `--bench B` adds B's data roots, whether each exists, and the key / env var that sets it |
+| `yavih init` | write the project folder `yavih-bench/` (`yavih.toml`, `README.md`, `.gitignore` with `runs/`, `logs/`, `__pycache__/`, `bridges/`, `matrices/`, `suites/`, `benchmarks/`, `tools/`); runs and results default to `runs/` and `results/` inside it, the user config is never written ([project layout](project-layout.md)) | `--dir D` (default `.`); `--site ID [--hosts GLOB]... [--launcher CMD]` writes a real site table; `--force` refreshes README.md, .gitignore and the directories (`yavih.toml` is never overwritten); refuses a folder another project file already governs (`E_PROJECT_EXISTS`) unless that project lists it in `[project] subprojects` |
+| `yavih doctor` | report the environment: installed extras, torch, decoders, GPUs, the configuration with sources, the home / runs / results roots, the default decode-worker count, installed skill copies, the project folder (version requirement, nested project files, stray matrices, a project-default runs root over 50 GB: `W_PROJECT_VERSION`, `W_PROJECT_NESTED`, `W_PROJECT_STRAY`, `W_RUNS_SIZE`); a configuration that does not load even leniently is `W_CONFIG` with `config_error: {message, project_file}` and the text names that file (no `yavih init` hint for a project whose file is malformed) | `--bench B` also resolves B's data roots, reads one stored row per stream (`W_MEDIA_READ`), checks the header backends (`W_HEADER_BACKEND`), the benchmark's external packages and its pinned tools (`data.tools:` per tool, `W_TOOL_PIN` when one is missing or off its pin); `--selftest` runs the reference bridge on 32 ESC-50 clips |
+| `yavih config show` | every configuration value with its source, the files read, the active site and the project folder | `--bench B` adds B's data roots, whether each exists, and the key / env var that sets it |
 | `yavih config get` | print one resolved value for shell scripts | `KEY` = `runs.root`, `results.root`, `scratch.root`, `home.root`, `data.root`, `datasets.<name>`, `resources.<key>` or `<benchmark>.<root>`; exit 1 when it does not resolve |
 | `yavih skill install` | install the packaged agent skill into a project | `--target claude\|codex\|cursor\|agents-md` (default `claude`); `--path P` (default per target: `.claude/skills/yavih`, `.codex/skills/yavih`, `.cursor/rules/yavih.mdc`, `AGENTS.md`) |
 | `yavih skill show` | print the skill's `SKILL.md` | `--all` appends every reference; `--ref NAME` prints one reference (`bridge`, `cli`, `data`, `readouts`, `slurm`) |
@@ -48,17 +49,19 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih bench list` | every discoverable benchmark: aliases, readout, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their `capability` and `readings` |
-| `yavih bench info` | a benchmark's README plus its hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
+| `yavih bench list` | every discoverable benchmark: aliases, readout, `capability` tags, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their suite group (`suite_capability`) and `readings` |
+| `yavih bench info` | a benchmark's README plus its `capability` tags, hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
 | `yavih bench path` | print the benchmark folder, or the absolute path of one shipped file | `<name> [<what>]` (`what` as for `bench show`) |
-| `yavih bench files` | every shipped file of a folder with absolute path, kind and size | `<name>` |
-| `yavih bench show` | print one shipped file | `<name> <what>`: `readme`, `setup`, `yaml`, `template`, `probe`, `classes`, `prepare/<file>` or a path inside the folder |
+| `yavih bench files` | every shipped file of a folder with absolute path, kind (`readme`, `setup`, `yaml`, `template`, `probe`, `manifest`, `classes`, `conformance`, `prepare`, `test`, `other`) and size | `<name>` |
+| `yavih bench show` | print one shipped file | `<name> <what>`: `readme`, `setup`, `yaml`, `template`, `probe`, `classes`, `conformance` (`conformance/expected.json`), `prepare/<file>` or a path inside the folder |
 | `yavih bench prepare` | list the numbered `prepare/NN_*.{sh,py}` steps, or run one | `<name> [<step> [-- args…]]`; the step runs with `FOLDER` and `YAVIH_BENCH` set and the command exits with the step's own code |
 | `yavih bench fetch` | build or download the manifest into `$YAVIH_HOME` and verify its sha256 | `--refresh` overwrites locally edited files of the home copy with the packaged ones |
 | `yavih bench verify` | presence scan, byte reads of a seeded sample, an optional decode health check, derived / target sha256s, curation sums; writes `data_status.json` | `--census` probes every present file and writes the media-info table; `--decode-sample N` (32); `--fingerprint-sample N` (256) |
 | `yavih bench lint` | check folders against the folder contract | `<name\|path>...`; `--all` every discoverable folder; `--skip CHECK` (repeatable); errors exit 2, `TODO` markers are warnings |
-| `yavih bench new` | scaffold a folder that passes `bench lint`, with `TODO` where facts are needed | `<name>`; `--readout R`; `--like B` (the folder copied); `--dir D` (default: the first `$YAVIH_BENCH_PATH` entry, else `.`) |
-| `yavih bench trial` | run a folder's whole pipeline in process on a tiny synthetic stand-in: stand-in, oracle bridge, `bridge check`, extract, validate, probe, report, headline against its floor; per-stage status | `<name\|folder> --synthetic` (required); `--readout-fast` (the test-only fast `ProbeConfig`; the headline must then clear its floor); `--keep DIR` (work in a new or empty `DIR` and keep it; `paths` names the stand-in, bridge, profile, run directory and report) |
+| `yavih bench conformance` | check (or record) a folder's conformance fixture: the numbers its scoring path produces on a generated population, at its `protocol_version` ([conformance](conformance.md)) | `<name\|path>...`; `--all`; `--record` writes `conformance/expected.json`; `--same-version --reason TEXT` overwrites differing values at the same version (the reason is stored only when values did move); `--force` overwrites without comparing; `--same-version`, `--reason` and `--force` need `--record`, `--reason` needs `--same-version` (`E_USAGE`); a drift, stale or missing fixture exits 2, an absent external package is a warning |
+| `yavih bench hash` | a folder's `protocol_hash`, `input_hash`, `scoring_hash`, `manifest_hash` and `folder_source` | `<name\|path>`; `--explain` prints the canonical JSON and digest of every hashed component (recompute the hashes with stdlib only) |
+| `yavih bench new` | scaffold a folder that passes `bench lint`, with `TODO` where facts are needed | `<name>`; `--readout R`; `--like B` (the folder copied); `--dir D` (default: the project's `benchmarks/`, else the first `$YAVIH_BENCH_PATH` entry, else `.`) |
+| `yavih bench trial` | run a folder's whole pipeline in process on a tiny synthetic stand-in: conformance fixture, stand-in, oracle bridge, `bridge check`, extract, validate, probe, report, headline against its floor; per-stage status | `<name\|folder> --synthetic` (required); `--readout-fast` (the test-only fast `ProbeConfig`; the headline must then clear its floor); `--keep DIR` (work in a new or empty `DIR` and keep it; `paths` names the stand-in, bridge, profile, run directory and report) |
 
 The folder contract, `benchmark.yaml` and the lint checks are described in
 [benchmark-folder](benchmark-folder.md); writing a new folder and opening its pull request in
@@ -80,8 +83,10 @@ runs, every `YAVIH_*` variable is replaced (home, runs and results under the wor
 `YAVIH_TESTING=1`), the `--config` / `--runs-root` / `--results` / `--data` layer is cleared, and both are restored
 afterwards, also on error. The work directory is temporary unless `--keep DIR`.
 
-What it does not cover: the stand-in is single-label, so a `multi` or `multi_sets` folder trials as single-label
-`acc`; the folder's own `probe.py` hooks and `external` packages are not exercised; speed and numbers on the
+What it does not cover: the `conformance` stage runs the folder's real scoring path (its readout, metrics,
+`probe.py` hooks and pinned `external` package) on the fixture's generated population, but every later stage
+runs on the stand-in, which never reads the real data; it is single-label, so the `probe` stage of a `multi` or
+`multi_sets` folder trials as single-label `acc`; its bridge is the oracle, not yours; speed and numbers on the
 stand-in carry over to nothing. The trial on real data is the fresh-agent [trial run](trial-run.md); without
 `--synthetic` the command is a usage error (exit 1) that points there.
 
@@ -109,12 +114,12 @@ An unknown suite or a file that does not validate is `E_SUITE` (exit 1).
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih bridge new` | copy a benchmark's `bridge_template.py` to `bridges/<model>_<bench>.py` with the model name (and reading) filled in | `<bench> --model M`; `--reading a\|v\|av`; `--out DIR\|FILE`; `--force` overwrites |
+| `yavih bridge new` | copy a benchmark's `bridge_template.py` to the project's `bridges/<model>_<bench>.py` (else `./bridges/`) with the model name (and reading) filled in | `<bench> --model M`; `--reading a\|v\|av`; `--out DIR\|FILE`; `--force` overwrites |
 | `yavih bridge check` | smoke-test a bridge: describe schema, declared rules, rerun / batch / order invariance, throughput; writes `profile.json` | `<bridge.py> --bench B`; `--n 32`; `--arg k=v` (repeatable); `--decode-workers N`; `--out profile.json`; `--synthetic` (a tiny generated stand-in, no data, no profile); `--allow-loopback` |
 
 A failed hard check, an unfilled template (`E_TEMPLATE_UNFILLED`) or features equal for every smoke
 clip (`E_CONSTANT_FEATURES`) exit 2. The text output names the run directory the plan will use,
-`runs/<bench>/<model>/<reading>/`. See [bridge](bridge.md).
+`<runs root>/<bench>/<model>/<reading>/`. See [bridge](bridge.md).
 
 ## Extraction and features
 
@@ -135,7 +140,9 @@ feature format is in [features](features.md), the validation codes and waivers i
 | command | purpose | important flags |
 |---|---|---|
 | `yavih probe run` | train and score the benchmark's standardized readout on a run directory; writes `result.json`, `DONE` and the results-store file | `<run_dir>`; `--seeds 0,1,2` (default `0`); `--deadline …`; `--scratch DIR`; `--allow-low-coverage`; `--loader-workers N` (default 1: a background thread gathers the next two training batches; `0` = inline; same numbers); `--bench REF` (when `_meta.json`'s name does not resolve); `--no-validate`; `--waive CODE=reason`; `--log-samples`; `--out DIR` (probe a read-only feature set); `--device cpu\|cuda\|cuda:N`; `--results DIR` or `--no-results` |
-| `yavih report build` | comparability-checked tables with floors | `<glob>...`; `--fmt md\|csv\|json`; `--out PATH`; `--seeds aggregate\|list`; `--allow-coverage-diff`; `--detail`; `--join BENCH READING=RUN ...`; `--results DIR`; `--merge-results`; `--suite S` (a completeness appendix per model, md and json) |
+| `yavih report build` | comparability-checked tables with floors | `<glob>...`; `--fmt md\|csv\|json`; `--out PATH`; `--seeds aggregate\|list`; `--allow-coverage-diff`; `--detail`; `--join BENCH READING=RUN ...`; `--results DIR`; `--merge-results`; `--suite S` (a completeness appendix per model, md and json); `--registry DIR` (a model registry's accepted entries join the table as rows, flag `registry`, model `<org>/<model>`) |
+| `yavih registry export` | registry entries from a results store ([registry](registry.md)) | `<results_root\|results_file> --org ORG --out DIR`; `--model NAME` (repeatable); `--include-nonstandard`; writes `entries/<benchmark>/<eval_hash12>/<org>/<model>/<reading>.json` and `protocols/<benchmark>/<protocol_hash12>.json`; an entry whose conformance did not pass here is written, listed under `unverified` and warned about (`W_REGISTRY_UNVERIFIED`); `check` refuses it |
+| `yavih registry check` | the registry repository's CI check | `DIR`; every entry parses, is filed under its id, carries consistent hashes, a protocol payload that recomputes them, a passed conformance and a tolerance; non-standard or low-coverage entries are warnings; errors exit 2 |
 
 `probe run` first validates every split (skip with `--no-validate`). Its `<run_dir>` is
 `<runs root>/<bench>/<model>/<reading>`; any other layout needs `--results` or a configured results
@@ -145,7 +152,7 @@ root, else `E_RESULTS_ROOT` (exit 1). See [readouts](readouts.md) and [results](
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih plan init` | write a `matrix.yaml` skeleton (one entry per suite `(benchmark, reading)`) and one bridge stub per benchmark for one model; prints the `bridge check` command of every entry, then `plan build` | `--suite S --model M --launcher PYTHON`; `--out matrix.yaml`; `--bridges-dir bridges` (relative to the matrix); `--force` overwrites the matrix (bridge files are always kept) |
+| `yavih plan init` | write a matrix skeleton (one entry per suite `(benchmark, reading)`) and one bridge stub per benchmark for one model, into the project's `matrices/<M>.yaml` and `bridges/` (else `./matrix.yaml`, `./bridges/`); profiles go to `<matrix stem>.profiles/`; prints the `bridge check` command of every entry, then `plan build <matrix> --out <runs root>/_plans/<M>.jsonl` | `--suite S --model M`; `--launcher PYTHON\|NAME` (default: the configured launcher at execution; `W_LAUNCHER_UNSET` when none); `--out FILE`; `--bridges-dir DIR` (relative to the matrix); `--force` overwrites the matrix (bridge files are always kept) |
 | `yavih plan build` | turn a `matrix.yaml` into unit records (`plan.jsonl`) | `<matrix.yaml>`; `--out plan.jsonl` (else JSONL on stdout); `--pending` (only units whose DONE is missing or stale); `--kind extract\|probe\|report`; `--shard-minutes M`; `--format jsonl\|count`; `--sample N` (a capped trial run, below) |
 | `yavih plan status` | count units by status and list those that need attention | `<plan.jsonl>`; `--root DIR` |
 | `yavih plan run` | run every pending unit of a plan on this machine, dependencies first | `<plan.jsonl> --local` (required); `--slots K` (default 1); `--deadline …`; `--deadline-margin 900`; `--root DIR`; `--cpus N`; `--deps plan.jsonl` |
@@ -264,7 +271,8 @@ Codes of plans and execution:
 | code | exit | meaning |
 |---|---|---|
 | `E_SUITE` | 1 | an unknown suite, or a suite file that does not parse or validate ([suites](suites.md)) |
-| `E_EXISTS` | 1 | `plan init` / `suite new` / `bridge new`: the destination exists (pass `--force`) |
+| `E_EXISTS` | 1 | `init` / `plan init` / `suite new` / `bridge new`: the destination exists (pass `--force`) |
+| `E_PROJECT_EXISTS` | 1 | `init`: another project file already governs this directory (one project per repository; `[project] subprojects` for a nested one) |
 | `E_MATRIX` | 1 | malformed `matrix.yaml` (unknown key, wrong type, missing entry key) |
 | `E_PROFILE` | 1 | a profile missing, malformed, disagreeing with its entry or without passed hard checks |
 | `E_PLAN` | 1 | a plan cannot be built or read (two entries on one run directory, a frozen layout contradicting a `shards` pin, an older or newer plan schema, duplicate ids) |

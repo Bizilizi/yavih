@@ -72,7 +72,7 @@ def test_raw_stream_fields_are_read_only(tmp_path):
 def test_cli_help_lists_the_full_command_tree(capsys):
     parser = cli.build_parser()
     sub = next(a for a in parser._actions if a.dest == "command")
-    assert set(sub.choices) == {"doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec", "config", "suite"}
+    assert set(sub.choices) == {"init", "doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec", "config", "suite", "registry"}
 
     def subs(name):
         p = sub.choices[name]
@@ -81,7 +81,7 @@ def test_cli_help_lists_the_full_command_tree(capsys):
 
     assert subs("skill") == {"install", "show"}
     # files / show / prepare and bridge new: one command surface for shipped files
-    assert subs("bench") == {"list", "info", "path", "fetch", "verify", "lint", "new", "files", "show", "prepare", "trial"}
+    assert subs("bench") == {"list", "info", "path", "fetch", "verify", "lint", "new", "files", "show", "prepare", "trial", "conformance", "hash"}
     assert subs("bridge") == {"check", "new"}
     assert subs("features") == {"validate", "inspect", "diff", "stage"}
     assert subs("probe") == {"run"}

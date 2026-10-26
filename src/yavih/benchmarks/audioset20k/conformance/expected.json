@@ -1,0 +1,43 @@
+{
+ "benchmark": "audioset20k",
+ "generator": 1,
+ "population": {
+  "eval": 256,
+  "floor": 0,
+  "folds": 0,
+  "train": 256
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "externals": {},
+  "folder_source": {
+   "probe": null,
+   "reader": null
+  },
+  "protocol_hash": "5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7",
+  "scoring_hash": "ca02cd1022d1e2109d51a9535903d1b7e805faacbdd6e82a4fa092c42ee7a19c",
+  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "effective_pos_classes": 0.001,
+  "map": 0.001,
+  "map_floor": 0.001,
+  "n_eval": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {},
+   "controls": {},
+   "floors": {
+    "map_floor": 0.004877253320683112
+   },
+   "metrics": {
+    "effective_pos_classes": 313,
+    "map": 0.01388800347791556,
+    "n_eval": 256
+   }
+  }
+ }
+}

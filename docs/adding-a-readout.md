@@ -88,6 +88,7 @@ readout is refused for yours; `n_eval` serves every readout. Register new ones w
 - **From a package**: declare an entry point; no yavih change is needed.
 
   ```toml
+  # pyproject.toml of the plugin package (not a yavih configuration file)
   [project.entry-points."yavih.readouts"]
   toy = "mypkg.toy_readout"
   ```

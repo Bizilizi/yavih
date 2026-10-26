@@ -11,20 +11,20 @@ cover: [hashing](hashing.md). Validation waivers: [validation](validation.md).
 ## result.json
 
 Path: `<run_dir>/probe/<eval_hash12>/seed<k>/result.json`, where a standard run directory is
-`runs/<benchmark>/<model>/<reading>/`. `result.json` is written atomically and schema-checked
+`<runs root>/<benchmark>/<model>/<reading>/`. `result.json` is written atomically and schema-checked
 (`readouts.base.check_result`); for `status` `ok` or `not_applicable` a `DONE` marker follows, carrying
 `result_sha256`, `protocol_hash`, `probe_hash`, `eval_hash`, `model`, `reading`, `describe_sha256`,
 `features_fingerprint`, `yavih_version` and `created`. A `failed` result never gets a DONE.
 
 ```jsonc
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "status": "ok",                          // "ok" | "not_applicable" | "failed"
   "reason": null,                          // a string for not_applicable / failed
   "standard": true,                        // false for a non-pinned ProbeConfig
   "eval_hash": "…",                        // sha256(canon({protocol_hash, probe_hash})): the comparability key
   "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2,
-                "manifest_hash": "…", "protocol_hash": "…"},
+                "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"probe": "…", "reader": null}},
   "model": "vjepa2-l",                     // describe()["model"]
   "reading": "av",                         // describe()["reading"]
   "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
@@ -57,11 +57,11 @@ Values are illustrative.
 
 | key | content |
 |---|---|
-| `schema_version` | `RESULT_SCHEMA_VERSION` (3) |
+| `schema_version` | `RESULT_SCHEMA_VERSION` (4) |
 | `status`, `reason` | `reason` is null for `ok`, a string otherwise |
 | `standard` | true iff the probe config's `probe_hash` equals the pinned one |
 | `eval_hash` | full hex; must equal the hash of `benchmark.protocol_hash` and `probe.hash` |
-| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash` |
+| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash`, `folder_source` (`{probe, reader}` normalized-source digests of the folder's `probe.py` / `reader.py` at scoring: provenance, never a key; `null` in a schema-3 record read through [`report.migrate`](hashing.md#reportmigrate)) |
 | `model`, `reading` | from the bridge's `describe()`; `model` matches `[A-Za-z0-9][A-Za-z0-9_.-]{0,63}`, `reading` `[A-Za-z0-9][A-Za-z0-9_-]{0,31}` |
 | `bridge` | exactly `name`, `describe`, `describe_sha256` (current describe schema), `source_sha256`; recorded, never a key |
 | `features` | exactly `fingerprint` (the split's, or a sha256 over the per-split ones), `dtype`, `N`, `D`, `pos_mode`, `bytes` (summed), `backend` (`ram` / `memmap`), `canary_max_rel_l2`, `batch_tolerance`, `rules_checked` (per stream: the temporal rule or `"custom"`, the spatial check). Null for a plan-time `not_applicable`; every key present with null geometry for a bridge-declared one |
@@ -127,7 +127,7 @@ CLI: `yavih report build <glob>... [--fmt md|csv|json] [--out PATH] [--seeds agg
 - Every `result.json` at any depth under the globs that has a valid sibling `DONE`: a JSON object whose
   `result_sha256` matches the file and whose recorded hashes, model and reading equal the result's. Anything
   else, including a `failed` result, is skipped.
-- The index `runs/_index.jsonl`: one line per result, cached on `(path, mtime_ns, size)`, so a rerun costs one
+- The index `<runs root>/_index.jsonl`: one line per result, cached on `(path, mtime_ns, size)`, so a rerun costs one
   `stat` per result.
 - Every record passes through `yavih.report.migrate` in memory: a schema newer (or older) than this yavih's is
   refused, and every record's `protocol_hash` is mapped to its benchmark's newest hash through the folders'
@@ -135,7 +135,7 @@ CLI: `yavih report build <glob>... [--fmt md|csv|json] [--out PATH] [--seeds agg
   never rewritten.
 - A result found under a `probe/_stale/` directory is indexed `moved_aside` and is never a row (below).
 
-Outputs: the rendered table is printed and written to `runs/_report/report.<fmt>` with a `DONE` marker;
+Outputs: the rendered table is printed and written to `<runs root>/_report/report.<fmt>` with a `DONE` marker;
 `--out PATH` also writes it to `PATH` (a directory gets `report.<fmt>`). With `--json`, the report's warnings
 are also the envelope's findings ([cli](cli.md)).
 
@@ -197,6 +197,20 @@ No row is greyed, flagged or footnoted because its bridge declared a `custom` ru
 unfingerprinted (`W_WEIGHTS_UNFINGERPRINTED` is listed once among the report's warnings), or because of any
 other bridge decision.
 
+### Ties
+
+Two values under one `eval_hash` that differ by no more than the metric's conformance tolerance
+([conformance](conformance.md#tolerance)) are a tie, not an order. In a standard column, per metric with a
+direction (`higher_is_better`; a disclosure such as `n_eval` has none), over the rows that are `ok`, full, at
+coverage and not greyed: the values within the tolerance of the best one are tied when there are at least two of
+them. md prefixes each tied value with `≈` and notes it under the column title (the column flag `ties`); json
+cells carry `"tie": true` (every other ranked cell `"tie": false`); csv has a `tie` column (`true` / `false`, empty
+where nothing is ranked). Tied rows are never ordered by value. When the benchmark's folder is resolvable here
+(packaged with this yavih, project-local, on `$YAVIH_BENCH_PATH` or in a pack), its tolerance always applies: the
+metric's `metrics.tolerance` entry if declared, else yavih's default `0.001`; a tolerance recorded by a registry
+entry (`conformance.tolerance`, [registry](registry.md)) never overrides it. Only for a benchmark no folder here
+resolves is the largest tolerance recorded by the column's registry entries used (else the default).
+
 ### The † waived mark
 
 A row whose results record validation waivers (`result.json` `waived`) is marked, not greyed: md puts `†` after
@@ -225,7 +239,8 @@ is `missing` with the note `partial only`.
 - `csv`: view 2 in long format, one line per (row, metric) plus one per control, with `benchmark`, `eval_hash`,
   `protocol_hash`, `probe_hash`, `model`, `reading`, `describe_sha256`, `features_fingerprint`, `bridge_name`,
   `status`, `seed`, `n_seeds`, coverage, `metric`, `kind`, `value`, `std`, `floor`, `ci_lo`, `ci_hi`,
-  `chance`, `partial` (`true` / `false`), `flag` (`;`-joined flags, e.g. `below_floor`) and `waived`.
+  `chance`, `tie` ([ties](#ties)), `partial` (`true` / `false`), `flag` (`;`-joined flags, e.g. `below_floor`)
+  and `waived`.
 - `json`: `lm_eval` (view 1), `columns`, `rows`, `warnings`, `superseded`, `detail`, `joins`, `merged`, `suite`, `paths`.
 - csv carries view 2 only: the superseded, join, warning and suite completeness sections are in md and json.
 - `--detail`: per row, the shown configuration's `describe()` and `describe_sha256`, `rules_checked`, the
@@ -239,6 +254,7 @@ is `missing` with the note `partial only`.
 |---|---|
 | `W_BRIDGE_CHANGED` | a row key holds several bridge configurations; newest shown |
 | `W_FEATURES_DIFFER` | the shown configuration holds several feature sets; newest shown, never averaged |
+| `W_FOLDER_SOURCE_DIFFERS` | results in a column were scored by different versions of the folder's `probe.py` / `reader.py` (`benchmark.folder_source`); comparable by declaration, listed for diagnosis. A result without a recorded source (`null`: schema 3, a registry entry without one) is unknown and not compared |
 | `W_POPULATION_DIFFERS` | eval populations differ within a column |
 | `W_MISSING_READING` | a model lacks an expected reading in a column |
 | `W_NONSTANDARD` | a column of non-pinned probe configs: comparable with nothing |
@@ -288,12 +304,13 @@ prints the same statuses for one model without building a report.
 
 Decided before any training (`yavih.readouts.base.resolve_results_root`): `probe run --results DIR` (a matrix
 `results` key), else `YAVIH_RESULTS`, else config `[results] root` ([configuration](configuration.md)), else
-the directory `results` next to the runs root of a standard run directory: the absolute run directory's last
-three components must be `<benchmark or alias>/<model>/<reading>` of the feature set being probed, and the runs
-root is the directory above them. Any other run directory is refused with `E_RESULTS_ROOT` (exit 1, nothing
-trained). `--no-results` needs no root, and neither does a capped run's probe (`_meta.json` `sample`), which never
-writes the store. `report build` uses `--results`, else the same configured root, else
-`results` next to the runs root of the indexed results.
+`yavih-bench/results` when a project is discovered ([project layout](project-layout.md)), else the directory
+`results` next to the runs root of a standard run directory: the absolute run directory's last three components
+must be `<benchmark or alias>/<model>/<reading>` of the feature set being probed, and the runs root is the
+directory above them. Any other run directory is refused with `E_RESULTS_ROOT` (exit 1, nothing trained).
+`--no-results` needs no root, and neither does a capped run's probe (`_meta.json` `sample`), which never writes
+the store. `report build` uses `--results`, else the same configured or project root, else `results` next to the
+runs root of the indexed results.
 
 ### Layout
 
@@ -332,7 +349,7 @@ One directory per model name, every reading and benchmark of it inside. `<timest
                          "probe": {"config": {…}, "seeds": [0], "standard": true},
                          "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
                          "describe_sha256": "…", "features_fingerprint": "…",
-                         "unit_results": ["runs/ave/vjepa2-l/av/probe/<eval_hash12>/seed0/result.json"]}},
+                         "unit_results": ["<runs root>/ave/vjepa2-l/av/probe/<eval_hash12>/seed0/result.json"]}},
   "versions": {"ave:av": 2},
   "higher_is_better": {"ave:av": {"seg_acc": true, "clip_acc": true, "seg_acc_boundary": true}},
   "n_samples": {"ave:av": {"train": 2624, "eval": 316}},
@@ -372,6 +389,16 @@ With `--log-samples`, one JSON line per scored row, seed and fold: `{"clip_id", 
 | seq | `[T]` class indices each |
 | grid | `prediction` that image's `{d1, absrel, rmse}`; `target` null |
 | box | `[cx, cy, w, h]` each, plus `"iou"` |
+
+### --registry
+
+`report build --registry DIR` adds the accepted entries of a model registry ([registry](registry.md)) to the
+comparison as rows: model `<org>/<model>`, flag `registry`, one record per recorded seed, under the same
+comparability rule as every local result (same benchmark, same `eval_hash`, both standard). An entry whose
+conformance did not pass is not a row. Differences within the metric's tolerance are ties ([ties](#ties): the
+tolerance of the folder resolvable here, a recorded one only for a benchmark no folder resolves). An entry whose eval
+coverage (`present / nominal`, else its recorded `fraction`) is below `min_eval_coverage` is flagged
+`low_coverage` and takes no part in ties.
 
 ### --merge-results
 

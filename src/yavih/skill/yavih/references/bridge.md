@@ -129,7 +129,7 @@ tells configurations of one model name apart in the report (`W_BRIDGE_CHANGED`).
 
 | key | in `describe_sha256` | content |
 |---|---|---|
-| `model` | yes | the model's NAME, chosen by you, `[A-Za-z0-9_.-]{1,64}` starting with a letter or digit (`_stale`, `.x`, `-x` are refused): the SAME string in every bridge of that model, on every benchmark and in every reading. Results are filed under it: run dir `runs/<b>/<model>/<reading>/`, results `results/<model>/`, report rows `(model, reading)`. Two configurations you want side by side (another layer, another checkpoint) are two names; one name re-run with another configuration is one row, newest shown (`W_BRIDGE_CHANGED`). |
+| `model` | yes | the model's NAME, chosen by you, `[A-Za-z0-9_.-]{1,64}` starting with a letter or digit (`_stale`, `.x`, `-x` are refused): the SAME string in every bridge of that model, on every benchmark and in every reading. Results are filed under it: run dir `<runs root>/<b>/<model>/<reading>/`, results `<results root>/<model>/`, report rows `(model, reading)`. Two configurations you want side by side (another layer, another checkpoint) are two names; one name re-run with another configuration is one row, newest shown (`W_BRIDGE_CHANGED`). |
 | `weights_sha256` | yes | `fingerprint_state_dict(model_or_state_dict)`; null is accepted and recorded as the warning `W_WEIGHTS_UNFINGERPRINTED` |
 | `weights_ref` | **no** | path or hub id; provenance only |
 | `dtype`, `pos_mode`, `streams` | yes | equal to the class attributes |
@@ -341,7 +341,7 @@ def describe(self):
 ```
 
 For features already extracted, the operator does the same without touching the bridge (no hash changes;
-recorded with `source: cli`): `yavih features validate runs/vggsounder/<model>/a/features --waive
+recorded with `source: cli`): `yavih features validate <runs root>/vggsounder/<model>/a/features --waive
 E_DUPLICATE_CLIPS="digitally silent audio"` (repeatable; `all=<reason>`), `yavih probe run … --waive …`, or the matrix
 entry key `waive: {E_DUPLICATE_CLIPS: "digitally silent audio"}` for the plan's probe units.
 
@@ -382,7 +382,7 @@ imported base does not count. Run `bridge check` once per matrix entry: each loa
 ## 8. Template walkthrough (`bridge_template.py` of the benchmark folder)
 
 Start from a copy: `yavih bridge new <b> --model <name> [--reading a|v|av] [--out DIR|FILE] [--force]` writes
-`bridges/<name>_<b>.py` with `describe()["model"]` (and the reading, when given) filled in and a header naming the
+the project's `bridges/<name>_<b>.py` with `describe()["model"]` (and the reading, when given) filled in and a header naming the
 contract command; `yavih bench show <b> template` prints the pristine template. The template carries the benchmark's stream names,
 a `describe()` with the `input` block to fill, `used` reporting, `grid_pos` with `region` and
 `t_centres`, TODO markers and a "Preprocessing source" docstring slot. Fill in this order:
@@ -416,7 +416,7 @@ order_rel_l2, tolerance, tolerance_reason}, rules_checked, clips_per_s, decode_w
 peak_gpu_gb, warnings, notes}`.
 
 - `model`, `reading`: copied from `describe()`; `plan` names the run directory
-  `runs/<b>/<model>/<reading>/` from them and refuses two matrix entries resolving to one
+  `<runs root>/<b>/<model>/<reading>/` from them and refuses two matrix entries resolving to one
   `(benchmark, model, reading)`.
 - `describe_sha256`, `N`, `D`: what the writer will fix (a pooled bridge → `N = 1`; ViT-B/16 on
   16 × 224² with tubelet 2 → 1 568 tokens). Every extract unit carries `--expect-profile`, so a
@@ -442,13 +442,14 @@ python -m yavih.extract --bench <b> --bridge bridges/x.py --split <split> --shar
     [--expect-profile P] [--json]
 ```
 
-`--out` is the RUN directory (by convention `runs/<b>/<model>/<reading>`, what `plan` passes): shards land in
+`--out` is the RUN directory (by convention `<runs root>/<b>/<model>/<reading>`, what `plan` passes): shards land in
 `$RUN/features/<split>/shard-NNNNNN.{tar,json}`; each member's
 `.json` holds `{row, clip_id, media_key, media, used}`. A matching sidecar → skipped (exit 0); one
 written under another configuration (`describe_sha256`, `model`, `reading`) or for another benchmark
 input side (`benchmark.input_hash`: manifest, splits, streams, contracts) is moved to `_stale/<utc>/`
-and re-extracted. A benchmark edit on the scoring side only (`probe.py`, a metric or its pinned
-package, a readout version) never touches finished shards: it re-probes. The first unit of a reconfigured split moves EVERY shard of the old configuration or
+and re-extracted. A benchmark change on the scoring side only (a `protocol_version` bump — how a `probe.py` or
+metric fix lands once its conformance fixture is re-recorded — a pinned package, a readout version) never touches
+finished shards: it re-probes. The first unit of a reconfigured split moves EVERY shard of the old configuration or
 shard count (also the ones the new plan no longer writes) and the old `_meta.json` there in one step;
 with `--expect-profile` nothing moves before the drift check passed (`E_CONFIG_DRIFT`). SIGTERM/SIGUSR1 or the deadline finishes the current
 batch, discards the shard's `.tmp` and exits 4. `--read-ahead` batches of bytes are read (and, with

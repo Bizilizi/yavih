@@ -56,7 +56,7 @@ def test_runs_root_precedence(monkeypatch, tmp_path):
     assert config.runs_root() == Path("/from/env")
     monkeypatch.delenv("YAVIH_RUNS")
     monkeypatch.setenv("YAVIH_CONFIG", str(tmp_path / "absent.toml"))
-    assert config.runs_root() == Path("runs")
+    assert config.runs_root() == Path.cwd() / "runs"  # no project: runs under the current directory, absolute
 
 
 def test_scratch_root_never_uses_tmpdir(monkeypatch, tmp_path):

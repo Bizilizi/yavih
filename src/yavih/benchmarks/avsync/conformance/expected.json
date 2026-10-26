@@ -1,0 +1,59 @@
+{
+ "benchmark": "avsync",
+ "generator": 1,
+ "population": {
+  "eval": 256,
+  "floor": 64,
+  "folds": 0,
+  "train": 256
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "externals": {},
+  "folder_source": {
+   "probe": "0de9921546857c976dbbda2b7ef7de9a6a8d389fe8e8ee23e720fa4b7decdc33",
+   "reader": null
+  },
+  "protocol_hash": "90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1",
+  "scoring_hash": "64ce376bb210333291d83099d28b27297cca5cb1972b77176d49f82d6332e9a8",
+  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "acc": 0.001,
+  "acc_coarse5": 0.001,
+  "acc_floor": 0.001,
+  "acc_floor_arm": 0.001,
+  "acc_tol1": 0.001,
+  "floor_violated": 0.001,
+  "mae_seconds": 0.001,
+  "n_coarse5": 0.001,
+  "n_eval": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "acc": [
+     0.06702402222215342,
+     0.14018486224554
+    ]
+   },
+   "controls": {
+    "acc_floor_arm": 0.09375,
+    "floor_violated": false
+   },
+   "floors": {
+    "acc_floor": 0.09765625
+   },
+   "metrics": {
+    "acc": 0.09765625,
+    "acc_coarse5": 0.1554054054054054,
+    "acc_tol1": 0.27734375,
+    "mae_seconds": 1.380859375,
+    "n_coarse5": 148,
+    "n_eval": 256
+   }
+  }
+ }
+}

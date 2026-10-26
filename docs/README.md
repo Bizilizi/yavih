@@ -1,12 +1,13 @@
 # yavih documentation
 
 Repository documentation for yavih, a frozen-feature benchmark harness for video, audio and audio-visual
-encoders. Start with the project [README](../README.md) for installation and a quickstart. The agent-facing
+encoders. Start with the project [README](../README.md); [Quickstart by hand](quickstart.md) walks through every step without an agent. The agent-facing
 documentation ships with the package as a skill (`yavih skill show`, source in
 [`src/yavih/skill/yavih/`](../src/yavih/skill/yavih/SKILL.md)).
 
 ## Concepts
 
+- [Quickstart by hand](quickstart.md): install, prepare a benchmark, write a bridge, extract, validate, probe and report, step by step, with what yavih enforces along the way.
 - [Design](design.md): what yavih is and is not, and the reasons behind its rules.
 
 ## Reference
@@ -22,7 +23,10 @@ Normative descriptions of current behaviour.
 | [Readouts](readouts.md) | the metric registry, common probe rules, `ProbeConfig`, the `clf` / `seq` / `grid` / `box` readouts, floors, controls, intervals |
 | [Results](results.md) | `result.json`, `yavih report`, comparability in reports, the results store |
 | [Hashing](hashing.md) | version constants, canonicalization, input / scoring / protocol / describe / probe / eval hashes, unit ids, migration through folder changelogs |
-| [Configuration](configuration.md) | config layers and tables, data roots, sites, environment variables |
+| [Registry](registry.md) | the model registry: scores recorded next to their hash, the entry contract, `yavih registry export` / `check`, `report build --registry`, ties under tolerance |
+| [Conformance](conformance.md) | the per-folder fixture that holds a declared `protocol_version` to its numbers: the generated population, `expected.json`, tolerance, `bench conformance`, the readout bands, claiming a hash from outside yavih |
+| [Configuration](configuration.md) | config layers and tables, data roots, sites, launchers, the `[project]` table, environment variables |
+| [Project layout](project-layout.md) | the `yavih-bench/` folder: what lives where, one project per repository, sites instead of per-cluster copies, what may live elsewhere, `yavih init`, the `doctor` findings |
 | [CLI](cli.md) | every command and flag, the `--json` envelope, exit codes |
 | [Suites](suites.md) | named benchmark sets (`minimal`, `default`), the suite file schema, project suites, completeness (`suite missing`, `report build --suite`) |
 | [Execution](execution.md) | sharding, read-ahead, `plan init`, `matrix.yaml`, plan units, `yavih exec`, deadlines, slots, DONE markers, local runs, wrapping in SLURM |

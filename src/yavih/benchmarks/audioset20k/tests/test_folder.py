@@ -59,7 +59,7 @@ def test_folder_lint_clean():
 def test_yaml_shape(spec):
     assert spec["schema_version"] == 2 and spec["name"] == HERE.name == "audioset20k"
     assert spec["aliases"] == [] and spec["readout"] == "clf"
-    assert list(spec) == ["schema_version", "name", "aliases", "title", "header", "readout", "protocol_version", "changelog", "source",
+    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "readout", "protocol_version", "changelog", "source",
                           "obtain", "budget", "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract",
                           "external", "protocol", "metrics", "readout_params"]
     assert spec["header"]["name"] == "AudioSet-20K" and "Gemmeke" in spec["header"]["venue"]

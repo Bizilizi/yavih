@@ -49,7 +49,9 @@ def _last(unit: Unit) -> dict:
 def test_build_command_launcher_rules(workspace):
     root, script = workspace
     u = fake_unit(root, script)
-    assert X.build_command(u) == u.cmd
+    # no launcher: the planned literal "python" becomes the interpreter running exec, never whatever is on PATH
+    assert u.cmd[0] == "python" and X.build_command(u) == [sys.executable, *u.cmd[1:]]
+    assert X.build_command(u, launcher=None) == [sys.executable, *u.cmd[1:]]
     u.launcher = "/envs/vjepa/bin/python"
     assert X.build_command(u) == ["/envs/vjepa/bin/python", *u.cmd[1:]]
     u.launcher = "conda run -n vjepa python3.11"
@@ -57,7 +59,7 @@ def test_build_command_launcher_rules(workspace):
     u.launcher = "apptainer exec --nv --bind /e img.sif"
     assert X.build_command(u) == ["apptainer", "exec", "--nv", "--bind", "/e", "img.sif", *u.cmd]
     u.launcher = "   "
-    assert X.build_command(u) == u.cmd
+    assert X.build_command(u) == [sys.executable, *u.cmd[1:]]
 
 
 def test_resolve_deadline_sources():

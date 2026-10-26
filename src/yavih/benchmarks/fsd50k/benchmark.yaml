@@ -4,6 +4,7 @@ schema_version: 2
 name: fsd50k
 aliases: []
 title: FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP)
+capability: [audio]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
 header:
   name: FSD50K
   title: "FSD50K: An Open Dataset of Human-Labeled Sound Events"
@@ -19,8 +20,8 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: c23f5bed2978e76b9749d205325b2c0fef00bcca84502c3a93f13758a34ad200
-    input_hash: e30c20ff410c2157d1a9b569c50c42319b2c5c172f1813590a436a07b6aaf954
+    protocol_hash: 2e59e335f433b107e9f5f37436a21c89d177a0ee2e6bb5425c9740ef8bf2e6b7
+    input_hash: 19663af8805a0c53d4310dbf5f898a3b2c2d91104c5abdc90d56702ad23da517
     supersedes: []
 
 source:
@@ -88,6 +89,7 @@ manifest:
     source: "FSD50K.ground_truth/dev.csv + eval.csv (Zenodo 4060432)"
     sha256: ce4ab5f01baa5a52b0ec892edaf137a7560743fce3a70155f8bf975c197ded1b   # dev.csv, the train-draw population
     rows: 51197
+    draw: "FSD50K.ground_truth/dev.csv rows (official train+val, 40 966, file order), sha256 ce4ab5f01baa5a52b0ec892edaf137a7560743fce3a70155f8bf975c197ded1b; class-balanced draw (yavih.freeze.class_balanced_subsample) keyed by each row's first label, cap 20 000, seed 0"
     note: "train rows = a first-label-balanced round robin (cap 20 000, seed 0) over the 40 966 dev.csv rows in file order; the 20 966 undrawn dev rows are excluded.draw_remainder; eval = all 10 231 eval.csv rows"
     upstream_files:
       FSD50K.ground_truth/vocabulary.csv: 992b6e11422101ee575ab3022d37b79b98e19407b211331c72f5d9fdd16e7174
@@ -156,7 +158,6 @@ protocol:
     cap: 20000
     seed: 0
     balance: first_label
-    drawn_from: "FSD50K.ground_truth/dev.csv rows (official train+val, 40 966, file order), sha256 ce4ab5f01baa5a52b0ec892edaf137a7560743fce3a70155f8bf975c197ded1b; class-balanced draw (yavih.freeze.class_balanced_subsample) keyed by each row's first label, cap 20 000, seed 0"
   views: none
 
 metrics:

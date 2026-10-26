@@ -147,36 +147,48 @@ extraction speed must use equal worker counts.
 
 ## `yavih plan init`
 
-`yavih plan init --suite S --model M --launcher PYTHON [--out matrix.yaml] [--bridges-dir bridges] [--force]`
-writes the starting point for running one model on a [suite](suites.md):
+`yavih plan init --suite S --model M [--launcher PYTHON|NAME] [--out matrix.yaml] [--bridges-dir DIR] [--force]`
+writes the starting point for running one model on a [suite](suites.md). In a project
+([project layout](project-layout.md)) the matrix goes to `yavih-bench/matrices/<M>.yaml` and the bridges to
+`yavih-bench/bridges/`; without one, to `./matrix.yaml` and `./bridges/`:
 
-- one bridge file per packaged suite benchmark, `<bridges-dir>/<M>_<benchmark>.py` next to the matrix: a copy of
-  the folder's `bridge_template.py` with the model name filled in (`yavih bridge new`). A template that takes the
-  reading as an argument (`vggsounder`, `audioset20k`, `avsync`) serves every reading from that one file. An
-  existing bridge file is kept, never overwritten;
-- `matrix.yaml` in the layout [below](#matrixyaml): `defaults.launcher` = `PYTHON`, `out: null` (the configured
-  runs root), and one entry `<M>-<benchmark>-<reading>` per suite `(benchmark, reading)` with `script`,
-  `benchmark`, `args: {reading: <r>}` for a multi-reading template, `profile:
-  <bridges-dir>/<M>-<benchmark>-<reading>.profile.json` and a commented `waive:` line. A join entry adds a comment
-  with its `report build --join` command; pending suite entries are listed as comments. An existing matrix is
-  refused (`E_EXISTS`, exit 1) unless `--force`.
+- one bridge file per packaged suite benchmark, `<bridges-dir>/<M>_<benchmark>.py`: a copy of the folder's
+  `bridge_template.py` with the model name filled in (`yavih bridge new`). A template that takes the reading as an
+  argument (`vggsounder`, `audioset20k`, `avsync`) serves every reading from that one file. An existing bridge
+  file is kept, never overwritten;
+- the matrix in the layout [below](#matrixyaml): `defaults.launcher` = `--launcher` (a python path or a
+  `[launchers]` name), or `null` when omitted so the configured launcher applies on whichever site runs the units
+  (`W_LAUNCHER_UNSET` when no default `launcher` is configured either, at the top level or in any `[site.<id>]`
+  table; a `[launchers]` name alone does not count, since `null` never resolves to one); `out: null` (the
+  configured runs root); and one
+  entry `<M>-<benchmark>-<reading>` per suite `(benchmark, reading)` with `script`, `benchmark`, `args: {reading:
+  <r>}` for a multi-reading template, `profile: <matrix stem>.profiles/<M>-<benchmark>-<reading>.profile.json`
+  (profiles belong to matrix entries and sit next to their matrix) and a commented `waive:` line. A join entry adds
+  a comment with its `report build --join` command; pending suite entries are listed as comments. An existing
+  matrix is refused (`E_EXISTS`, exit 1) unless `--force`.
 
 The output lists what to run next: one `yavih bridge check <script> --bench <benchmark> [--arg reading=<r>] --out
-<profile>` per entry (after the bridge's TODOs are filled, on the staged data), then `yavih plan build
-matrix.yaml --out plan.jsonl`. Until every profile exists `plan build` refuses the matrix (`E_PROFILE`).
+<profile>` per entry (after the bridge's TODOs are filled, on the staged data), then `yavih plan build <matrix>
+--out <runs root>/_plans/<M>.jsonl` (`plan` in `--json`). A plan file is run state, so it sits under the runs
+root (by default `yavih-bench/runs`, which the project's `.gitignore` covers), never among the committed files; the
+plan stores each unit's `cwd` relative to itself, so it runs from there. Until every profile exists `plan build` refuses the matrix
+(`E_PROFILE`).
+
+In the commands below, `matrix.yaml` stands for the matrix (`yavih-bench/matrices/<M>.yaml` in a project) and
+`plan.jsonl` / `pending.<kind>.jsonl` for plan files under `<runs root>/_plans/` (`yavih config get runs.root`).
 
 ## `matrix.yaml`
 
 ```yaml
 schema_version: 1
-out: runs/                          # runs root; default: the configured runs root
+out: null                           # runs root (a path is relative to this file); null = the configured runs root
 results: null                       # results-store root for the probe units; null = the usual resolution
 seeds: [0]                          # one probe unit per seed
 shard_minutes: 30                   # target wall per extract unit (--shard-minutes overrides)
 max_rows_per_shard: 10000           # rows cap of the shard-count estimate
 canaries: 8                         # canary rows re-encoded per shard
 defaults:                           # merged into every entry
-  launcher: "/envs/vjepa/bin/python"
+  launcher: "/envs/vjepa/bin/python"  # or a [launchers] name, or null = the configured launcher of the site
   env: {HF_HUB_OFFLINE: "1", OMP_NUM_THREADS: "8"}
   cpus: 8                           # decode workers = cpus − 1
   args: {}
@@ -186,7 +198,7 @@ bridges:                            # one entry per (bridge, benchmark)
     script: bridges/vjepa_video_k400.py
     benchmark: k400                 # one name or alias
     args: {layer: 12}
-    profile: bridges/vjepa-video-k400.profile.json   # from `yavih bridge check`; required
+    profile: matrix.profiles/vjepa-video-k400.profile.json   # from `yavih bridge check`; required
     # shards: {train: 64}           # pin n for a split with no frozen layout (an int = every split)
     # max_rows_per_shard: 5000      # this entry's rows cap (default: the matrix's)
     # allow_loopback: true          # extract with --allow-loopback (a local inference server)
@@ -209,10 +221,18 @@ Unknown keys are an error (`E_MATRIX`, exit 1). Entry values override `defaults`
 are merged key by key). `env` values are coerced to strings. Relative `script`, `profile`, `out` and
 `results` paths are relative to the matrix file's directory.
 
-`launcher` is how the model environment's Python is started. If the basename of its last token
-matches `python*`, it replaces `cmd[0]` (`/envs/vjepa/bin/python`, `conda run -n vjepa python`,
+`launcher` is how the model environment's Python is started. `yavih exec` resolves it when the unit
+runs (`yavih.plan.exec.resolve_launcher`): a value with a path separator or whitespace is the command
+itself; a bare name is the `[launchers] <name>` entry of the active configuration (per site; [configuration](configuration.md#sites)),
+else the name when it is a command on PATH; a name that is neither records the unit `misconfigured` (exit 1) before
+anything starts, with a `launcher: …` message naming the known entries, shown by `plan status` and kept in the
+unit's `<out>/logs/last.<id>.json`. `null` (or no `launcher` at all) is the configured default `launcher`, else
+the interpreter running `exec` (`sys.executable`, never whatever `python` is on `PATH`). If the basename of the command's
+last token matches `python*`, it replaces `cmd[0]` (`/envs/vjepa/bin/python`, `conda run -n vjepa python`,
 `apptainer exec --nv --bind /e model.sif python`); otherwise it is a prefix to the whole command.
-Probe and report units have no launcher: they run inside the process running `yavih exec`.
+`script` may also be `module:Class` for a bridge installed in the model environment
+([bridge](bridge.md)). Probe and report units have no launcher: they run inside the process running
+`yavih exec`.
 
 `waive: {CODE: reason}` gives every probe unit of the entry `--waive CODE=reason` for its validate
 prologue ([validation](validation.md)); a non-waivable code or a missing reason is `E_MATRIX`. The
@@ -238,13 +258,13 @@ One JSON object per line, sorted keys:
  "depends_on": [],
  "needs": {"gpu": 1, "cpus": 8, "mem_gb": 48, "scratch_gb": 0, "minutes": 15},
  "cmd": ["python", "-m", "yavih.extract", "--bench", "k400", "--bridge", "bridges/vjepa_video_k400.py",
-         "--split", "train", "--shard", "3/32", "--out", "runs/k400/vjepa2-l/v", "--arg", "layer=12",
-         "--canaries", "8", "--decode-workers", "7", "--expect-profile", "bridges/vjepa-video-k400.profile.json"],
+         "--split", "train", "--shard", "3/32", "--out", "<runs root>/k400/vjepa2-l/v", "--arg", "layer=12",
+         "--canaries", "8", "--decode-workers", "7", "--expect-profile", "matrix.profiles/vjepa-video-k400.profile.json"],
  "launcher": "/envs/vjepa/bin/python", "env": {"HF_HUB_OFFLINE": "1"}, "cwd": ".",
- "out": "runs/k400/vjepa2-l/v/features/train",
- "done": "runs/k400/vjepa2-l/v/features/train/shard-000003.json",
+ "out": "<runs root>/k400/vjepa2-l/v/features/train",
+ "done": "<runs root>/k400/vjepa2-l/v/features/train/shard-000003.json",
  "inputs_hash": "…", "expected_status": "ok",
- "profile": "bridges/vjepa-video-k400.profile.json", "not_applicable": null}
+ "profile": "matrix.profiles/vjepa-video-k400.profile.json", "not_applicable": null}
 ```
 
 | kind | one per | `cmd` | `out` | `depends_on` |
@@ -271,7 +291,8 @@ One JSON object per line, sorted keys:
   `needs.gpu` (GPU units first) and a minutes bucket (15, 30, 60, 120, 240, 480, 720, 1440), keeping
   matrix, split and shard order inside a group, so a plan is deterministic.
 - `write_plan` stores `cwd` relative to the plan file and `read_plan` anchors it there again (or at
-  `--root DIR`), so a plan kept inside the project survives being mounted elsewhere.
+  `--root DIR`), so a plan survives the project being mounted elsewhere; `out` and `done` (under the
+  runs root) are stored absolute and are not re-anchored.
 - A record of an older plan schema is refused (`E_PLAN`: rebuild the plan with `plan build`;
   finished shards are kept because they are checked by input hash); a newer one asks for a newer
   yavih.
@@ -355,8 +376,8 @@ yavih exec plan.jsonl (--index N | --id X | --range a:b) [--deps plan.jsonl]
 
 For one unit, `exec`:
 
-1. reads the plan (checks the schema; `--root DIR` replaces every unit's `cwd`, the directory the
-   plan's relative paths mean on this machine) and, with `--plan-sha HEX`, refuses (exit 1) a plan
+1. reads the plan (checks the schema; `--root DIR` replaces every unit's `cwd`, the only relative
+   path a plan stores, with the directory the project is mounted at on this machine) and, with `--plan-sha HEX`, refuses (exit 1) a plan
    file whose sha256 does not start with `HEX` (8 to 64 hex digits);
 2. checks dependencies: every `depends_on` unit must have a matching DONE marker, else exit 3
    (`not_ready`, nothing written). `--deps plan.jsonl` names the full plan used only to look up
@@ -390,7 +411,7 @@ For one unit, `exec`:
 | `done` | 0 | the unit wrote a matching DONE marker |
 | `skipped` | 0 | the DONE marker already matched |
 | `not_applicable` | 0 | `NOT_APPLICABLE.json` or a `not_applicable` result |
-| `misconfigured` | 1 | the child (or in-process unit) exited 1: a usage or configuration error no resubmission heals (`E_LAYOUT`, a bad `--deadline`) |
+| `misconfigured` | 1 | the child (or in-process unit) exited 1: a usage or configuration error no resubmission heals (`E_LAYOUT`, a bad `--deadline`); also a bare launcher name that is neither a `[launchers]` entry nor a command on `PATH`, recorded before the unit starts |
 | `not_ready` | 3 | a dependency is not done, data or scratch is missing, the shard is claimed |
 | `deadline` | 4 | the unit's deadline stopped it, or it was refused at start; an in-process probe stopped by a forwarded signal is recorded here too |
 | `preempted` | 4 | a signal stopped it: a child killed by a signal (negative return code or 128 + n), a child that exited 4 after a forwarded signal, an in-process unit that failed or returned without DONE after a signal |
@@ -507,10 +528,12 @@ yavih plan status plan.jsonl
   not started.
 
 Lower-level pieces for your own runner: `yavih exec plan.jsonl --range 0:40` (in order, one process),
-`yavih exec plan.jsonl --index 7`, or GNU parallel with one GPU per job slot. In a container, keep
-`plan.jsonl` inside the mounted project (its paths are relative to the plan file) or pass
-`--root /workspace`; CPU quotas are read from the cgroup. A Kubernetes Indexed Job runs
-`yavih exec plan.jsonl --index $JOB_COMPLETION_INDEX --deadline +<seconds>`.
+`yavih exec plan.jsonl --index 7`, or GNU parallel with one GPU per job slot. In a container, mount the
+runs root at the same absolute path (`-v "$R:$R"`): the plan stores only each unit's `cwd` relative to itself, while
+`out`, `done` and the children's `--out` are absolute paths under the runs root. Mount the project at its path as
+well, or pass `--root /workspace` to re-anchor `cwd` (and only `cwd`) to where the project is mounted; otherwise
+rebuild the plan inside the container. CPU quotas are read from the cgroup. A Kubernetes Indexed Job runs
+`yavih exec $R/_plans/<model>.jsonl --index $JOB_COMPLETION_INDEX --deadline +<seconds>`.
 
 ## Running under SLURM
 
@@ -527,27 +550,32 @@ of scheduling is one line of a plan file, run by one array task:
 #SBATCH --time=00:50:00                # ≥ max needs.minutes + 20 min
 #SBATCH --signal=B:TERM@600            # TERM 600 s before the wall (exec stops on its own 900 s before)
 #SBATCH --requeue                      # preemption and node failure
-#SBATCH --output=logs/%x_%A_%a.log
+#SBATCH --output=yavih-bench/logs/%x_%A_%a.log   # ignored by git; mkdir -p yavih-bench/logs before sbatch
 set -euo pipefail
-cd /path/to/project                    # where matrix.yaml and plan.jsonl live
-PLAN="${1:-pending.extract.jsonl}"
+cd /path/to/project                    # the repository root (yavih-bench/ below it; unit paths come from the plan)
+PLAN="${1:?pending file}"              # <runs root>/_plans/pending.extract.jsonl
+DEPS="${2:?full plan}"                 # <runs root>/_plans/<M>.jsonl
 # `exec` replaces the shell, so SLURM's TERM reaches yavih (bash would not forward it)
-exec yavih exec "$PLAN" --deps plan.jsonl --index "$SLURM_ARRAY_TASK_ID" --deadline slurm
+exec yavih exec "$PLAN" --deps "$DEPS" --index "$SLURM_ARRAY_TASK_ID" --deadline slurm
 ```
 
 and a driver loop that resubmits until nothing is pending:
 
 ```bash
-yavih plan build matrix.yaml --out plan.jsonl
+M=yavih-bench/matrices/mymodel.yaml
+R=$(yavih config get runs.root); P=$R/_plans    # plan files are run state: under the runs root
+mkdir -p yavih-bench/logs                       # sbatch --output lands there
+yavih plan build "$M" --out "$P/mymodel.jsonl"
 for KIND in extract probe report; do
   while :; do
-    N=$(yavih plan build matrix.yaml --pending --kind "$KIND" --out "pending.$KIND.jsonl" --format count)
+    N=$(yavih plan build "$M" --pending --kind "$KIND" --out "$P/pending.$KIND.jsonl" --format count)
     [ "$N" -eq 0 ] && break
-    sbatch --wait --array="0-$((N-1))%8" "$KIND.sbatch" "pending.$KIND.jsonl" || true
-    yavih plan status plan.jsonl        # stop here on failed / misconfigured / repeated units
-    yavih plan calibrate runs/          # optional: raise minutes of units their deadline stopped
+    sbatch --wait --array="0-$((N-1))%8" "$KIND.sbatch" "$P/pending.$KIND.jsonl" "$P/mymodel.jsonl" || true
+    yavih plan status "$P/mymodel.jsonl"   # stop here on failed / misconfigured / repeated units
+    yavih plan calibrate "$R"              # optional: raise minutes of units their deadline stopped
   done
 done
+yavih report build "$R/*"
 ```
 
 Rules the script must follow:

@@ -14,12 +14,12 @@ def test_pinned_values():
     """The pinned version constants."""
     assert versions.FEATURE_FORMAT_VERSION == 4
     assert versions.BENCHMARK_SCHEMA_VERSION == 2
-    assert versions.RESULT_SCHEMA_VERSION == 3
+    assert versions.RESULT_SCHEMA_VERSION == 4
     assert versions.RESULTS_FILE_VERSION == 2
     assert versions.PLAN_SCHEMA_VERSION == 3
     assert dict(versions.READOUT_VERSION) == {"clf": 1, "seq": 2, "grid": 2, "box": 2}
     assert versions.PROBE_SCHEMA == "yavih-probe-1"
-    assert versions.PROTOCOL_SCHEMA == "yavih-protocol-4"
+    assert versions.PROTOCOL_SCHEMA == "yavih-protocol-5"
     assert versions.DESCRIBE_SCHEMA == "yavih-describe-2"
     assert isinstance(versions.__version__, str) and versions.__version__
     assert set(versions.READOUTS) == {"clf", "seq", "grid", "box"}

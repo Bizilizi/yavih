@@ -6,9 +6,9 @@ suite. yavih ships two, `minimal` and `default`; a project can add its own or re
 ```
 yavih suite list                                   # every suite and where it comes from
 yavih suite show default                           # its capabilities, benchmarks, readings and joins
-yavih plan init --suite default --model M --launcher /envs/m/bin/python   # matrix.yaml + bridge stubs
+yavih plan init --suite default --model M --launcher /envs/m/bin/python   # yavih-bench/matrices/M.yaml + bridge stubs
 yavih suite missing default --model M              # what M still lacks
-yavih report build runs/ --suite default           # the report with a completeness appendix
+yavih report build "$(yavih config get runs.root)/*" --suite default   # the report with a completeness appendix
 ```
 
 A suite is not a profile: a profile is the `profile.json` that `yavih bridge check --out` writes for one bridge
@@ -34,7 +34,7 @@ groups:
 | `name` | `[a-z0-9][a-z0-9_-]*`, at most 64 characters; equals the file name (`<name>.yaml`) when loaded by name |
 | `description` | one non-empty line |
 | `groups` | non-empty list of `{capability, entries}`; each capability at most once |
-| `groups[].capability` | `audio`, `visual`, `audio-visual`, `temporal`, `spatial` or `retrieval` |
+| `groups[].capability` | `audio`, `visual`, `audio-visual`, `temporal`, `spatial` or `retrieval` (`yavih.suites.CAPABILITIES`, the vocabulary of `benchmark.yaml` `capability` too) |
 | `groups[].entries[].benchmark` | a benchmark name or alias (`yavih bench list`); an alias is stored as the folder's name |
 | `groups[].entries[].readings` | non-empty list of distinct reading tags; each one a reading the folder's `bridge_template.py` declares (a literal `"reading"`, or the `choices` of its `reading` argument) |
 | `groups[].entries[].join` | `false` (default) or `true`: the folder's `probe.py` defines `join()`, and the readings are scored together by `yavih report build --join <benchmark> <reading>=RUN ...` ([results](results.md#joins)); needs at least two readings |
@@ -44,14 +44,20 @@ groups:
 Unknown keys at any level, a `(benchmark, reading)` listed twice, and every rule above are refused with
 `E_SUITE` (exit 1). A join's results-store key is `<benchmark>:<readings joined by +>` (`vggsounder:a+v+av`).
 
+The capability vocabulary is shared: every benchmark folder tags itself in its `benchmark.yaml` with
+`capability: [...]` from the same `yavih.suites.CAPABILITIES` ([benchmark folder](benchmark-folder.md#capability)),
+and the benchmarks index and `yavih bench list` group by those tags. A suite still chooses the group an entry sits
+in; `yavih bench lint` warns (`W_SUITE_CAPABILITY`) when a shipped suite lists a benchmark under a capability the
+folder does not carry.
+
 ## Where suites come from
 
 `yavih suite show <name>` and every `--suite <name>` resolve in this order:
 
 1. an existing `.yaml` / `.yml` path (any argument with a `/` or a yaml suffix is a path);
-2. `<project suites dir>/<name>.yaml`, where the project suites directory is `$YAVIH_SUITES` when set, else
-   `suites/` next to the project config file (`--config`, `$YAVIH_CONFIG` or the `yavih.toml` found walking up
-   from the current directory; [configuration](configuration.md)), else `./suites`;
+2. `<project suites dir>/<name>.yaml`, where the project suites directory is `$YAVIH_SUITES` when set, else the
+   project's `suites/` (`yavih-bench/suites/`, or `[project] suites`; [project layout](project-layout.md)), else
+   `./suites`;
 3. the shipped `yavih/suites/<name>.yaml`.
 
 A project suite of a shipped name shadows it (`yavih suite list` marks it `project*`). `yavih suite new <name>
@@ -122,7 +128,8 @@ globs before the options) prints, for model `M`, one status per suite `(benchmar
 It exits 0 either way. `yavih report build <glob>... --suite <name>` appends the same statuses for every model
 in the report as a trailing `## Suite completeness: <name>` section (md) and the `suite` key (json); a join
 computed by the same invocation (`--join`) counts as done ([results](results.md#suite-completeness)).
-`yavih bench list --suite <name>` lists the suite's packaged benchmarks with their capability and readings.
+`yavih bench list --suite <name>` lists the suite's packaged benchmarks with their suite group (`suite_capability`
+in json), readings and the folder's own `capability` tags.
 
 `yavih plan init --suite <name> --model M --launcher PYTHON` writes the matrix of a suite for one model
 ([execution](execution.md#yavih-plan-init)).

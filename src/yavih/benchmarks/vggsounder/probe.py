@@ -80,6 +80,8 @@ PACKAGE_SETS: tuple[str, ...] = ("a", "v", "av", "a only", "v only")
 #: reading → (its own set, its exclusive set or ``None``): the pkl key is the reading, and the package reads
 #: ``a only`` / ``v only`` from ``logits["a"]`` / ``logits["v"]``.
 READING_SETS: dict[str, tuple[str, str | None]] = {"a": ("a", "a only"), "v": ("v", "v only"), "av": ("av", None)}
+#: The readings ``score`` routes (``yavih.conformance`` records the fixture under each).
+READINGS: tuple[str, ...] = ("a", "v", "av")
 #: suffix of the metric ids scored on the reading's exclusive set (``a only`` / ``v only``).
 ONLY_SUFFIX = "_only"
 #: pkl keys of ``report --join`` (the three readings of one model), the paper's routings.

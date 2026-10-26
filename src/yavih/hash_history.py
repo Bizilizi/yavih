@@ -151,8 +151,10 @@ def reset() -> None:
         _MERGED = None
 
 
-def _scan_key() -> tuple[str | None, str | None]:
-    return (os.environ.get("YAVIH_BENCH_PATH"), os.environ.get("YAVIH_HOME"))
+def _scan_key() -> tuple[str | None, str | None, str | None]:
+    from yavih import config
+
+    return (os.environ.get("YAVIH_BENCH_PATH"), os.environ.get("YAVIH_HOME"), str(config.project_benchmarks_dir() or "") or None)
 
 
 def _read_folder(folder: Path) -> tuple[str, list[HashRecord]] | None:
@@ -261,13 +263,14 @@ def check_recorded(bench: Any) -> list[str]:
         return out
     if rec_ph != ph:
         out.append(f"changelog entry version {v} records protocol_hash {rec_ph} but the folder computes {ph} (a protocol edit). "
-                   f"If results stay comparable (same rows, inputs and scoring semantics, e.g. a payload-schema bump or a "
-                   f"refactor), set `protocol_hash: {ph}` and append `{rec_ph}` to that entry's `supersedes`; if the numbers "
-                   f"can change, bump protocol_version and add a new changelog entry (invalidates: true) recording "
-                   f"`protocol_hash: {ph}` and `input_hash: {ih}`.")
+                   f"If the numbers cannot change (the conformance fixture still passes: a payload-schema bump, a readout "
+                   f"version bump that leaves this folder's numbers, a value moved between hashed keys), set `protocol_hash: {ph}` "
+                   f"and append `{rec_ph}` to that entry's `supersedes`; if the fixture fails, bump protocol_version and add a "
+                   f"new changelog entry (invalidates: true) recording `protocol_hash: {ph}` and `input_hash: {ih}`, then "
+                   f"re-record the fixture.")
     if rec_ih != ih:
         out.append(f"changelog entry version {v} records input_hash {rec_ih} but the folder computes {ih} (an input-side edit: "
-                   f"manifest, splits, streams, contracts, input-side protocol/readout_params keys or reader.py). Set "
+                   f"manifest, splits, streams, contracts or input-side protocol/readout_params keys). Set "
                    f"`input_hash: {ih}`; append `{rec_ih}` to `supersedes_input` only if the bridge is still handed exactly "
                    f"the same thing and must produce the same output (else extracted features must be re-extracted).")
     if ph in getattr(e, "supersedes", ()):

@@ -3,6 +3,8 @@ process, with no data staged.
 
 The chain is the one a real run takes, stage by stage:
 
+0. ``conformance`` — ``yavih.conformance.check`` on the REAL folder: its scoring path (readout, metrics, ``probe.py``
+   hooks, pinned ``external`` package) reproduces ``conformance/expected.json`` on the fixture's generated population;
 1. ``stand_in`` — ``yavih.testing.make_synthetic_like``: the folder's name, readout, stream names and kinds, guaranteed
    media facts and label facts over tiny generated media (10 s 16 x 16 mp4, 10 s 8 kHz wav, 48 x 32 png) in the work
    directory, plus its media-info census; every stage is handed the stand-in's folder path, never its name (which
@@ -18,8 +20,10 @@ The chain is the one a real run takes, stage by stage:
 8. ``headline`` — the headline metric against its floor: the oracle must clear it under ``readout_fast`` (the pinned
    schedule may underfit a few dozen synthetic rows, so without it a miss is a ``warning``).
 
-Limits: ``make_synthetic_like`` is single-label, so a ``multi`` / ``multi_sets`` folder trials as single-label ``acc``;
-the folder's real ``probe.py`` hooks and ``external`` packages are not exercised (the stand-in has neither); speed and
+Limits: the ``conformance`` stage (first) runs the real folder's scoring path, ``probe.py`` hooks and pinned ``external``
+package included, on the fixture's generated population; every later stage runs on the stand-in, which never reads
+the real data and is single-label, so a ``multi`` / ``multi_sets`` folder's ``probe`` stage trials as single-label
+``acc`` (the stand-in has no ``probe.py`` and no ``external``), with the oracle bridge, never the user's; speed and
 numbers measured on the stand-in carry over to nothing. The fresh-agent trial on real data covers the rest
 (https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md).
 
@@ -48,7 +52,7 @@ __all__ = ["run_trial", "TrialError", "TRIAL_DOC", "STAGES", "E_TRIAL", "E_TRIAL
 #: The trial-run protocol (the fresh-agent trial on real data).
 TRIAL_DOC = "https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md"
 #: The stages, in order.
-STAGES: tuple[str, ...] = ("stand_in", "bridge", "bridge_check", "extract", "validate", "probe", "report", "headline")
+STAGES: tuple[str, ...] = ("conformance", "stand_in", "bridge", "bridge_check", "extract", "validate", "probe", "report", "headline")
 #: A stage failed (exit 2; exit 3 when that stage itself was not ready, e.g. a decoder missing).
 E_TRIAL = "E_TRIAL"
 #: The stand-in cannot be built: a readout or stream kind the synthetic fixtures do not cover, or no media writer
@@ -322,6 +326,17 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
         return {"rows": len(rep.rows), "columns": len(rep.columns), "warnings": sorted({str(w.get("code")) for w in rep.warnings}),
                 "report": rep.paths.get("report")}
 
+    def conformance() -> dict:
+        from yavih.conformance import check as check_conformance
+        rep = check_conformance(real)
+        out = {"ok": rep.ok, "skipped": rep.skipped, "compared": rep.compared, "protocol_version": rep.protocol_version,
+               "warnings": [f.code for f in rep.warnings]}
+        if not rep.ok:
+            err = rep.errors[0]
+            return {"_status": "failed", "_code": err.code, "_message": err.message, **out}
+        return out
+
+    st.run("conformance", conformance)
     st.run("stand_in", stand_in)
     st.run("bridge", write_bridge)
     st.run("bridge_check", check)
@@ -376,9 +391,9 @@ def _limits(real: Any) -> list[str]:
         out.append(f"label kind {kind!r}: the stand-in is single-label, so the readout trials as single-label acc")
     folder = Path(real.folder)
     if (folder / "probe.py").is_file():
-        out.append("the folder's probe.py hooks are not exercised (the stand-in has none)")
+        out.append("the folder's probe.py hooks run in the conformance stage only (the stand-in has none)")
     if (getattr(real.spec, "raw", None) or {}).get("external"):
-        out.append("the folder's external packages are not exercised")
+        out.append("the folder's external packages run in the conformance stage only (the stand-in lists none)")
     return out
 
 

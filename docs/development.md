@@ -39,7 +39,8 @@ pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and
 | `__main__.py` | `python -m yavih` = the `yavih` command |
 | `versions.py` | every version constant (formats, schemas, readout versions, `GIT_HASH`, `writer_stamp()`); stdlib only |
 | `buildinfo.py` | which source commit is running (checkout `git rev-parse` or the wheel's recorded commit) |
-| `config.py` | layered site configuration (`Settings`, data roots, runs/results/scratch roots, `ENV_VARS`) |
+| `config.py` | layered site configuration (`Settings`, data roots, runs/results/scratch roots, launchers, the `[project]` table, `ENV_VARS`; discovery of `yavih-bench/yavih.toml` up to the git root) |
+| `project.py` | the project folder `yavih-bench/`: `yavih init`, the layout scan and version check behind `doctor` (`W_PROJECT_*`) |
 | `_toml.py` | a minimal TOML reader for Python 3.10 without `tomli` |
 | `resources.py` | CPU, memory, RAM budget and decode-worker defaults from env, SLURM, PBS, cgroups |
 | `deadline.py` | the one `--deadline` parser shared by `exec`, `extract` and `probe run` |
@@ -81,7 +82,7 @@ torch. Module-scope imports are restricted:
 
 | allowed at module scope | where |
 |---|---|
-| stdlib only | `versions.py`, `buildinfo.py`, `config.py`, `resources.py`, `deadline.py`, `hashing.py`, `hash_history.py`, `external.py`, `readouts/registry.py`, `plan/`, `report/` |
+| stdlib only | `versions.py`, `buildinfo.py`, `config.py`, `project.py`, `resources.py`, `deadline.py`, `hashing.py`, `hash_history.py`, `external.py`, `readouts/registry.py`, `plan/`, `report/` |
 | numpy + pyyaml + stdlib | the rest of the core: `benchmark.py`, `sample.py`, `bridge.py`, `extract.py`, `io/`, `media/` (decoders inside functions), `metrics/` (scikit-learn inside functions), `cli.py` |
 | torch | `probes/` (not `probes/config.py`), `readouts/` drivers (their `READOUT` descriptors must import without torch), `bridges/examples/`, `testing/__init__.py` |
 
@@ -105,9 +106,10 @@ Any change that can change a number must move a hash, and nothing else may. In p
 - Editing a hashed part of a folder (see [hashing](hashing.md)) moves its `input_hash` or `scoring_hash`,
   and the folder's `changelog` must record it: [hashing: migration](hashing.md#migration) says when to bump
   `protocol_version` and when to list the old hash under `supersedes`.
-- `probe.py` and `reader.py` are hashed as normalized syntax trees: comments and docstrings are free to
-  edit, but **string literals and code are hashed** (an error message in a folder's `probe.py` is part of the
-  scoring hash).
+- `probe.py`, `reader.py`, the readouts and `yavih.metrics` are never hashed: their behaviour is held by every
+  folder's conformance fixture (`yavih bench conformance --all`, [conformance](conformance.md)). A change that
+  moves a fixture's numbers beyond tolerance fails until `protocol_version` (a folder's code) or the readout's
+  `VERSION` (yavih's code) is bumped and the fixtures re-recorded.
 - Changing a payload shape bumps the matching schema constant in `versions.py`; changing a readout's head,
   loss, floor or metric bumps its `VERSION`.
 - `tests/test_hashing.py` pins the hash payloads and formulas and checks that every packaged folder's

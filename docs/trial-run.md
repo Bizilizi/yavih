@@ -79,8 +79,9 @@ edit anything yavih ships; when something does not work, work around it if you c
    bridge stub(s) it wrote with the toy model: the preprocessing source pasted into the docstring, every TODO,
    decoding in prepare() and the forward pass in encode(). Then `yavih bridge check ... --synthetic` and the
    `yavih bridge check ... --out <profile>` lines plan init printed, one per entry.
-7. A capped run: `yavih plan build matrix.yaml --sample <N> --out plan.jsonl`, `yavih plan run plan.jsonl --local`,
-   `yavih plan status plan.jsonl`.
+7. A capped run, with `P=$(yavih config get runs.root)/_plans` (plan files never go into `yavih-bench/`):
+   `yavih plan build yavih-bench/matrices/toy.yaml --sample <N> --out $P/toy-trial.jsonl`,
+   `yavih plan run $P/toy-trial.jsonl --local`, `yavih plan status $P/toy-trial.jsonl`.
 8. Read the outputs by hand, under the capped runs root (`<runs root>-sample<N>`): `yavih features validate` on each
    run's features directory, `yavih probe run <run dir> --no-results` (a probe the plan already finished is
    skipped, which is fine), and `yavih report build '<runs root>-sample<N>/*' --suite trial`.

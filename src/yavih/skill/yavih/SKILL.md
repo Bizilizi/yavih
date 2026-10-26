@@ -5,10 +5,10 @@ description: >
   yavih (frozen-feature benchmark harness): reading a benchmark's setup.md, writing a yavih bridge
   that turns the benchmark's raw files into tokens, extracting features, running the standardized
   probe readouts (clf / seq / grid / box) and reporting with floors. Use whenever the request
-  mentions yavih, a bridge, frozen-feature or linear/attentive probing, or one of the benchmarks
-  K400, SSv2, ESC-50, AudioSet-20K, FSD50K, VGGSounder, IN1K, AVSync, AVE, NYUv2 depth or VGG-SS
-  boxes, or a benchmark suite ("benchmark my model" = the default suite). Nine steps, each with the
-  exact command and the output that must be seen before moving on; contracts live in references/.
+  mentions yavih, a bridge, frozen-feature or linear/attentive probing, a benchmark suite
+  ("benchmark my model" = the default suite), evaluating an encoder's audio, visual, audio-visual,
+  temporal or spatial capabilities, or any benchmark in `yavih bench list` (by name or alias). Nine
+  steps, each with the exact command and the output to see before moving on; contracts in references/.
 ---
 
 # yavih — nine steps, one stop condition each
@@ -39,18 +39,28 @@ fine-tuning: yavih reads models, it never updates them.
 # the model's own python; --no-deps keeps its torch untouched, and assumes numpy>=1.24 and pyyaml>=6 are there
 pip install --no-deps yavih     # PyPI; else "git+https://github.com/Bizilizi/yavih"; offline node: a prebuilt wheel
 python -c "import numpy, yaml"                                  # --no-deps installs neither
+yavih init                     # once per repository: yavih-bench/ (yavih.toml, bridges/, matrices/, suites/, benchmarks/, tools/)
 yavih doctor --bench <b>
 ```
 
+**Project folder.** Everything yavih-related lives in `yavih-bench/` at the repository root (`yavih init`; one per
+repository, found from any directory below the root; `yavih doctor` warns `W_PROJECT_NESTED` / `W_PROJECT_STRAY`
+/ `W_PROJECT_VERSION`): `yavih.toml` with one `[site.<id>]` per cluster (data roots, `launcher`, `[launchers]`),
+`bridges/`, `matrices/<model>.yaml` + `<model>.profiles/`, `suites/`, `benchmarks/`, `tools/` (your drivers and
+scripts; yavih never reads them). Clusters are site tables, never separate folders or copies. Runs default to
+`yavih-bench/runs` (ignored by git; a `[runs] root` in `~/.config/yavih/config.toml` or a `[site.<id>]` table puts
+them on scratch) and results to `yavih-bench/results` (small text, committed). Fine outside the folder: a bridge in a
+model package (`script: pkg.mod:Class`), a deliverable benchmark folder (`[project] benchmarks`), job scripts.
+
 **Hard rule — shipped files.** Everything yavih ships (setup.md, README.md, benchmark.yaml, `bridge_template.py`,
 `prepare/` scripts, this skill's references) is reached ONLY through `yavih bench files <b>` (list, absolute paths),
-`yavih bench show <b> setup|readme|yaml|template|prepare/<file>`, `yavih bench prepare <b> [<step>]`,
+`yavih bench show <b> setup|readme|yaml|template|probe|classes|conformance|prepare/<file>`, `yavih bench prepare <b> [<step>]`,
 `yavih bridge new <b> --model <name>` and `yavih skill show --ref <name>`. Never search site-packages or a repository
 checkout for them: a wheel install has no checkout, and these commands answer the same everywhere. Exploring a benchmark:
 
 ```bash
 yavih suite list                          # benchmark sets: default, minimal (`suite show <s>`, `suite new <s>`)
-yavih bench list                          # all benchmarks: readout, clips, obtain tier, data status
+yavih bench list                          # all benchmarks: readout, capability, clips, obtain tier, data status
 yavih bench files <b>                     # every shipped file, absolute path + kind (--json)
 yavih bench show <b> setup                # contracts, data, gotchas: read first
 yavih bench show <b> readme|yaml|probe    # paper/protocol, machine spec, extra metrics (probe.py: only some benchmarks)
@@ -70,22 +80,22 @@ reference bridge.
 
 | step | command | continue only when you have seen |
 |---|---|---|
-| 1 install | `pip install --no-deps yavih` (model env); `yavih doctor --bench <b>` | `torch.untouched == true`; every data root `exists`; `media_read … ok`; the `external` packages listed (probe env, step 2) |
+| 1 install | `pip install --no-deps yavih` (model env); `yavih init` (once per repository); `yavih doctor --bench <b>` | `torch.untouched == true`; `project` line present, no `W_PROJECT_*`; every data root `exists`; `media_read … ok`; the `external` packages listed (probe env, step 2) |
 | 2 setup.md | `yavih suite show default` names the benchmarks (the default set; `minimal` = a smoke pass); per benchmark `yavih bench info <b> --setup` (= `yavih bench show <b> setup`) FIRST, then `yavih bench list` (the `obtain` column), `yavih bench info <b>`, `yavih bench files <b>` | source obtainable here (else "When blocked"); budget fits; every "## Dependencies" package installed and `ok` in `yavih doctor --bench <b>` (probe env); "## Input contract" and "## Output contract" read |
 | 3 prepare | setup.md "## Obtain the data" and "## Prepare & verify": `yavih bench prepare <b>` lists the steps, `yavih bench prepare <b> <step> [-- args]` runs one; `yavih bench verify <b> --census` | eval coverage ≥ 95 %; `labels_ok`; `read` sample ok; media-info table written; `derived_sha_ok` (nyuv2_depth) true where not null |
-| 4 bridge | `yavih bridge new <b> --model <name>` copies that benchmark's `bridge_template.py` to `bridges/<name>_<b>.py` (a bridge file serves one benchmark); paste the model's preprocessing source into its docstring; fill `describe()`: `model`, `reading`, the `input` rules (a `custom` rule with a one-line description where none fits), `views: 1`, explicit `precision`; decode in `prepare()` (it overlaps the forward pass; `encode()` reads `sample.prepared`); `encode()` returns `(feats, pos, used)`, pos in media coordinates | `describe()` matches the pasted source line by line; `model` is the same string in every bridge of the model |
-| 5 smoke | `yavih bridge check bridges/<model>_<b>.py --bench <b> --arg k=v --out bridges/<model>-<b>.profile.json` per matrix entry (`--synthetic` before data is staged) | rerun bit-identical; batch/order invariance within `1e-5` (or a declared ≤ `1e-3` with a reason); no `E_RULE_MISMATCH`, `E_TIMES_OUT_OF_MEDIA`, `E_NETWORK`, `E_TEMPLATE_UNFILLED`; profile written |
-| 6 extract | `yavih plan init --suite default --model <name> --launcher <python>` writes matrix.yaml + bridge stubs (keeps existing bridges), then `yavih plan build matrix.yaml --out plan.jsonl` (`--sample N` first: a capped trial run); run the units (SLURM: references/slurm.md; no SLURM: `yavih plan run plan.jsonl --local [--slots K]`); `yavih plan status plan.jsonl` | `pending == 0`, `preempted == 0`, `failed == 0` (`not_ready` → fix data/dependency) |
-| 7 validate | `yavih features validate runs/<b>/<model>/<reading>/features` | `ok` per split; coverage 100 % or accepted; `rules checked:` names your rules (`N_RULE_CUSTOM` fine; `W_RULE_UNCHECKED` understood); `eligible for` read (ineligible = recorded `not_applicable`) |
-| 8 probe | `yavih exec plan.jsonl --id <probe unit>` or `yavih probe run runs/<b>/<model>/<reading> --seeds 0,1,2 --log-samples` | `status: ok`; headline above its floor; no `floor_violated` / `audio_blind`; `external` versions recorded |
-| 9 report | `yavih report build 'runs/*' --out <dir>/report.md` (`--merge-results`: one file per model) | table (`benchmark`, `reading`, `version`, `eval_hash`, `readout`, `metric`, `value`, `ci95`, `floor`) written; `results/<model>/results_<timestamp>.json` present; every reading of an AV model present; compare only at equal `eval_hash`; `W_BRIDGE_CHANGED` understood; no greyed row presented as a result |
+| 4 bridge | from the repository root (every path in this table is relative to it): `yavih plan init --suite default --model <name>` writes `yavih-bench/matrices/<name>.yaml` and one bridge stub per benchmark, `yavih-bench/bridges/<name>_<b>.py` (a copy of that benchmark's `bridge_template.py`; existing bridges are kept; `--launcher <python>` unless `yavih.toml` names one per site), and prints the step-5 and step-6 commands; one benchmark only: `yavih bridge new <b> --model <name>`. Per bridge: paste the model's preprocessing source into its docstring; fill `describe()`: `model`, `reading`, the `input` rules (a `custom` rule with a one-line description where none fits), `views: 1`, explicit `precision`; decode in `prepare()` (it overlaps the forward pass; `encode()` reads `sample.prepared`); `encode()` returns `(feats, pos, used)`, pos in media coordinates | `describe()` matches the pasted source line by line; `model` is the same string in every bridge of the model |
+| 5 smoke | per matrix entry `<name>-<b>-<r>`: `yavih bridge check yavih-bench/bridges/<name>_<b>.py --bench <b> [--arg reading=<r>] --out yavih-bench/matrices/<name>.profiles/<name>-<b>-<r>.profile.json` (the profile path the matrix names; `plan init` printed each command; `--synthetic` before data is staged, no profile) | rerun bit-identical; batch/order invariance within `1e-5` (or a declared ≤ `1e-3` with a reason); no `E_RULE_MISMATCH`, `E_TIMES_OUT_OF_MEDIA`, `E_NETWORK`, `E_TEMPLATE_UNFILLED`; profile written |
+| 6 extract | `R=$(yavih config get runs.root)` once (the configured runs root; steps 7–9 use `$R`), then `yavih plan build yavih-bench/matrices/<name>.yaml --out $R/_plans/<name>.jsonl` (the command `plan init` printed: plan files live under the runs root, never in `yavih-bench/`; `--sample N` first: a capped trial run); run the units (SLURM: references/slurm.md; no SLURM: `yavih plan run <plan> --local [--slots K]`); `yavih plan status <plan>` | `pending == 0`, `preempted == 0`, `failed == 0` (`not_ready` → fix data/dependency) |
+| 7 validate | `yavih features validate $R/<b>/<model>/<reading>/features` | `ok` per split; coverage 100 % or accepted; `rules checked:` names your rules (`N_RULE_CUSTOM` fine; `W_RULE_UNCHECKED` understood); `eligible for` read (ineligible = recorded `not_applicable`) |
+| 8 probe | `yavih exec <plan> --id <probe unit>` or `yavih probe run $R/<b>/<model>/<reading> --seeds 0,1,2 --log-samples` | `status: ok`; headline above its floor; no `floor_violated` / `audio_blind`; `external` versions recorded |
+| 9 report | `yavih report build "$R/*" --out <dir>/report.md` (`--merge-results`: one file per model) | table (`benchmark`, `reading`, `version`, `eval_hash`, `readout`, `metric`, `value`, `ci95`, `floor`) written; `$(yavih config get results.root)/<model>/results_<timestamp>.json` present; every reading of an AV model present; compare only at equal `eval_hash`; `W_BRIDGE_CHANGED` understood; no greyed row presented as a result |
 
 Step 4, the template copy (the model name filled in; every other TODO stays, so `bridge check` refuses the copy with
 `E_TEMPLATE_UNFILLED` until `weights_ref`, the input rules and the norm constants come from the model's own code):
 
 ```bash
 yavih bench show <b> setup                       # the contract the bridge must meet
-yavih bridge new <b> --model <name> [--reading a|v|av]   # → bridges/<name>_<b>.py (--out, --force)
+yavih bridge new <b> --model <name> [--reading a|v|av]   # → yavih-bench/bridges/<name>_<b>.py (--out, --force)
 yavih bench show <b> template                    # the pristine template, if you need to compare
 ```
 
@@ -150,7 +160,8 @@ structural and identity checks and `E_TEMPLATE_UNFILLED` never (`E_WAIVE_INVALID
 Corrupt media your decoder cannot read: raise `yavih.MediaUndecodable(clip_ids, reason)` (those rows
 become missing); any other exception aborts the shard. `probe` refuses missing authors' packages (exit 3
 with the pip line), stale hashes, train ∩ eval ≠ ∅ and low eval coverage; `report` greys rows below the
-floor (never for a bridge decision).
+floor (never for a bridge decision). Hashes cover a benchmark's declaration, never code: `yavih bench conformance`
+holds a folder's `protocol_version` to its numbers (references/cli.md).
 
 ## Operational rules
 
@@ -194,26 +205,26 @@ A benchmark you cannot finish here is a recorded outcome, not a reason to stop o
 ## What the outputs look like (values illustrative)
 
 ```
-$ yavih --json bridge check bridges/x_k400.py --bench k400 --out bridges/x-k400.profile.json   # envelope, abridged
+$ yavih --json bridge check yavih-bench/bridges/x_k400.py --bench k400 --out yavih-bench/matrices/x.profiles/x-k400-v.profile.json
   data.model "x"  data.reading "v"  data.N 1568  data.D 1024  data.pos_mode "per_sample"
   data.invariance {"rerun_bit_identical": true, "batch_rel_l2": 3e-07, "order_rel_l2": 3e-07, "tolerance": 1e-05}
-$ yavih features validate runs/k400/x/v/features
+$ yavih features validate $R/k400/x/v/features
   shards 31/32 done, 0 in progress, 1 missing: --shard 7/32           # ← rerun that shard, exit 2
   rules checked: video uniform + spatial
   eligible for clf: yes
-$ yavih report build 'runs/*'
+$ yavih report build "$R/*"
   | benchmark | reading | version | eval_hash | readout | metric | value | ci95 | floor |
   | ave | av | 2 | 10914c9d2195 | seq | seg_acc | 0.412 | [0.36, 0.47] | 0.164 |
 ```
 
-The run directory is `runs/<b>/<model>/<reading>/` with `features/<split>/shard-NNNNNN.{tar,json}`,
+The run directory is `$R/<b>/<model>/<reading>/` with `features/<split>/shard-NNNNNN.{tar,json}`,
 `_meta.json` (written by validate) and `probe/<eval_hash12>/seed<k>/{result.json,DONE}`; the results
-store is `results/<model>/results_<timestamp>.json` (entries keyed `<b>:<reading>`; +
-`samples_<b>_<reading>_<timestamp>.jsonl` with `--log-samples`), next to the runs root unless
-`YAVIH_RESULTS` or `--results DIR` says otherwise.
+store is `<results root>/<model>/results_<timestamp>.json` (entries keyed `<b>:<reading>`; +
+`samples_<b>_<reading>_<timestamp>.jsonl` with `--log-samples`); `yavih config get results.root` prints that root
+(`[results] root`, `YAVIH_RESULTS` or `--results DIR`, else `yavih-bench/results` in a project, else `<runs root>/../results`).
 
-`matrix.yaml` (`yavih plan init` writes one per suite): its keys, an example and when `plan build` refuses a
-profile are in references/slurm.md "matrix.yaml".
+The matrix (`yavih plan init` writes `yavih-bench/matrices/<model>.yaml`, one per model): its keys, an example and when `plan
+build` refuses a profile are in references/slurm.md "matrix.yaml".
 
 ## Contributing a benchmark
 
@@ -231,8 +242,8 @@ Print one with `yavih skill show --ref <name>` (bridge, data, readouts, slurm, c
 - `references/data.md` — obtainability and budget per benchmark, data roots, inode rules, prepare-time transforms.
 - `references/readouts.md` — what each readout measures, floors, controls, CIs, eligibility, results files.
 - `references/slurm.md` — `matrix.yaml`, array templates, driver loop, preemption.
-- `references/cli.md` — command table and flags (suites, `plan init`, `--sample`, `bench trial`), `--json` envelope,
-  exit codes, every code.
+- `references/cli.md` — command table and flags (`init`, suites, `plan init`, `--sample`, `bench trial`), `--json`
+  envelope, exit codes, every code, the configuration layers (`[project]`, sites, launchers).
 
 Install this skill where your agent reads skills: `yavih skill install --target claude|codex|cursor|agents-md
 [--path P]` (stamped: `yavih doctor` warns `W_SKILL_STALE` after a yavih upgrade); print it with `yavih skill show`,
