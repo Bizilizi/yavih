@@ -48,11 +48,15 @@ What the scaffold holds, and what has to be replaced:
 | `README.md`, `setup.md` | written from the folder contract, `TODO` in every section | your docs (step 5) |
 | `make_manifest.py`, `prepare/01_obtain.sh` | stubs that exit 2 | your freeze and prepare steps (steps 3 and 4) |
 | `tests/test_folder.py` | generated: the shared checks of `yavih.testing.folder`, `--like`'s values pinned, two tests that skip with a `TODO:` reason | your folder tests (step 9) |
+| `conformance/expected.json` | recorded for the copied protocol (`conformance: recorded`); when the package that protocol needs is not installed here (Probe3D's `evals` for `--like nyuv2_depth`), `--like`'s fixture copied with the new folder's identity and `recorded_with.copied_from` (`conformance: copied from <like>`) | your fixture (step 8) |
 
 Never copied: `--like`'s `curation.json`, `notes/`, `tests/`, `prepare/` and `assets/`. Until step 3, every number
-in the folder is `--like`'s.
+in the folder is `--like`'s. The command's last lines say how the fixture was made; a copied one is correct for the
+copied scoring path (its manifest, classes, `probe.py` and metrics are `--like`'s unchanged) and is re-recorded here
+once the package is installed (step 8).
 
-**Done when:** `yavih bench lint <name>` exits 0 with only `W_TODO` warnings, and
+**Done when:** `yavih bench lint <name>` exits 0 with only `W_TODO` warnings (plus `W_CONFORMANCE_SKIPPED` while the
+copied protocol's package is absent), and
 `python -m pytest $F -q -p no:cacheprovider -o addopts="--import-mode=importlib"` passes (two tests skip).
 
 ## 2. Write the protocol in `benchmark.yaml`
@@ -221,7 +225,8 @@ yavih bench conformance <name> --record
 writes `conformance/expected.json` (the scoring path's numbers on a generated population; a few KB, no inputs
 stored). Re-record after every later edit that moves them, as long as the folder is unmerged: while the changelog
 has its one entry, `--record` overwrites the record without comparing, including the fixture the scaffold recorded
-for the copied protocol. Once the folder has a second changelog entry, a moved number means a `protocol_version`
+for the copied protocol or copied from `--like` (`recorded_with.copied_from`, when the package the copied protocol
+needs was absent at scaffold time). Once the folder has a second changelog entry, a moved number means a `protocol_version`
 bump (or `--same-version --reason TEXT`), and `--record` refuses to overwrite differing values otherwise.
 
 **Done when:** `yavih bench lint <name>` reports no `E_CHANGELOG_HASH` and no `E_CONFORMANCE_*`, and

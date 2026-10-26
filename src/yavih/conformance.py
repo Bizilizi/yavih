@@ -52,6 +52,7 @@ __all__ = [
     "compute",
     "check",
     "record",
+    "record_copied",
     "expected_path",
     "read_expected",
 ]
@@ -734,8 +735,38 @@ def record(bench: Any, *, same_version: bool = False, reason: str | None = None,
             if drifted and same_version:
                 rec["same_version_reason"] = str(reason)
                 why = None
+    _write_expected(bench, rec)
+    return RecordResult(record=rec, compared=compared, moved=list(drifted), reason_dropped=why if reason is not None else None)
+
+
+def record_copied(bench: Any, source: Path | str, *, copied_from: str) -> dict[str, Any]:
+    """Write ``bench``'s ``conformance/expected.json`` from the fixture of folder ``source`` instead of computing it:
+    for a folder whose scoring path IS ``source``'s (``yavih bench new --like``: the same manifest, classes, ``probe.py``
+    and metrics) when the external package that path needs is absent here (:func:`record` raises
+    ``W_CONFORMANCE_SKIPPED``). The values, population, generator and external versions are ``source``'s; every
+    identity field is the new folder's exactly as :func:`record` would write it (``benchmark``, ``protocol_version``,
+    ``tolerance``, ``recorded_with`` with this folder's hashes and ``folder_source``), and
+    ``recorded_with.copied_from`` names ``copied_from``. :func:`check` with the package installed must then pass
+    unchanged. ``ConformanceError(E_CONFORMANCE_SCHEMA)`` when ``source`` has no readable record. Returns the record."""
+    p = Path(source) / EXPECTED_FILE
+    if not p.is_file():
+        raise ConformanceError(E_SCHEMA, f"{copied_from}: no {EXPECTED_FILE} to copy")
+    try:
+        src = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise ConformanceError(E_SCHEMA, f"{copied_from}/{EXPECTED_FILE}: {e}") from e
+    need = {"schema", "generator", "values", "recorded_with"}
+    if not isinstance(src, dict) or not need <= set(src) or src["schema"] != CONFORMANCE_SCHEMA:
+        raise ConformanceError(E_SCHEMA, f"{copied_from}/{EXPECTED_FILE}: not a {CONFORMANCE_SCHEMA} record")
+    computed = {"generator": src["generator"], "population": dict(src.get("population") or {}),
+                "externals": dict((src.get("recorded_with") or {}).get("externals") or {}), "values": src["values"]}
+    rec = _record_dict(bench, computed)
+    rec["recorded_with"]["copied_from"] = str(copied_from)
+    _write_expected(bench, rec)
+    return rec
+
+
+def _write_expected(bench: Any, rec: Mapping[str, Any]) -> None:
     p = expected_path(bench)
     p.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(rec, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
-    p.write_text(text, encoding="utf-8")
-    return RecordResult(record=rec, compared=compared, moved=list(drifted), reason_dropped=why if reason is not None else None)
+    p.write_text(json.dumps(rec, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")

@@ -11,9 +11,11 @@ import numpy as np
 import pytest
 import yaml
 
+from yavih import cli
 from yavih import conformance as C
 from yavih import testing as T
 from yavih.benchmark import Benchmark, packaged_benchmarks
+from yavih.benchmarks import packaged_folder
 
 
 def _bench(tmp_path: Path, readout: str = "clf", **kw) -> Benchmark:
@@ -308,8 +310,6 @@ def test_lint_runs_the_conformance_check(tmp_path):
 
 
 def test_cli_conformance_and_hash(tmp_path, capsys, monkeypatch):
-    from yavih import cli
-
     b = _bench(tmp_path)
 
     def run(argv):
@@ -365,3 +365,49 @@ def test_scaffold_records_a_fixture(tmp_path, monkeypatch):
     folder = new_benchmark("scaffolded", readout="clf", dir=tmp_path)
     b = Benchmark.from_dir(folder)
     assert C.read_expected(b) is not None and C.check(b).ok
+    from yavih.scaffold import scaffold_conformance
+
+    assert scaffold_conformance(folder) == {"state": "recorded", "copied_from": None, "packages": []}
+
+
+def test_scaffold_copies_the_like_fixture_when_the_package_is_absent(tmp_path, monkeypatch, capsys):
+    """``bench new --like nyuv2_depth`` where Probe3D's ``evals`` is absent: recording is impossible (W_CONFORMANCE_SKIPPED),
+    so the scaffold copies nyuv2_depth's fixture with the new folder's identity fields (``recorded_with.copied_from``);
+    with the package installed, ``check`` on the copy passes: the copied values are what recording produces here."""
+    from yavih import external
+    from yavih.scaffold import scaffold_conformance
+
+    real = external.require
+
+    def absent(name, pip, pin):
+        if name == "evals":
+            raise external.ExternalMissing(name, "E_EXTERNAL_MISSING: evals is not installed (test)")
+        return real(name, pip, pin)
+
+    with monkeypatch.context() as m:
+        m.setattr(external, "require", absent)
+        assert cli.main(["--json", "bench", "new", "new_depth", "--like", "nyuv2_depth", "--dir", str(tmp_path)]) == 0
+        env = json.loads(capsys.readouterr().out)
+        # the text form says what happened and how to record it here
+        assert cli.main(["bench", "new", "new_depth2", "--like", "nyuv2_depth", "--dir", str(tmp_path)]) == 0
+        assert "  conformance: copied from nyuv2_depth (record it here once evals is installed: `yavih bench conformance" in capsys.readouterr().out
+    folder = tmp_path / "new_depth"
+    assert env["data"]["conformance"] == {"state": "copied", "copied_from": "nyuv2_depth", "packages": ["evals"]}
+    assert scaffold_conformance(folder) == env["data"]["conformance"]
+    rec = json.loads((folder / "conformance" / "expected.json").read_text(encoding="utf-8"))
+    like = json.loads((packaged_folder("nyuv2_depth") / "conformance" / "expected.json").read_text(encoding="utf-8"))
+    b = Benchmark.from_dir(folder)
+    assert rec["benchmark"] == "new_depth" and rec["protocol_version"] == 1 and rec["schema"] == C.CONFORMANCE_SCHEMA
+    assert rec["generator"] == like["generator"] and rec["values"] == like["values"] and rec["population"] == like["population"]
+    assert rec["tolerance"] == C.tolerances(b)
+    rw = rec["recorded_with"]
+    assert rw["copied_from"] == "nyuv2_depth" and rw["externals"] == like["recorded_with"]["externals"]
+    assert rw["protocol_hash"] == b.protocol_hash and rw["scoring_hash"] == b.scoring_hash and rw["folder_source"] == b.folder_source
+    assert C.read_expected(b) == rec  # the identity fields read as this folder's record
+    rep = C.check(b)
+    if rep.skipped:
+        pytest.skip("Probe3D's evals is not installed here: the copy is written, the proof needs the package")
+    assert rep.ok and not rep.skipped and rep.compared > 0 and not rep.drifted, [f.message for f in rep.findings]
+    fresh = C.record(b, force=True).record
+    assert {k: v for k, v in fresh["recorded_with"].items() if k != "commit"} == {k: v for k, v in rw.items() if k not in ("copied_from", "commit")}
+    assert {k: v for k, v in fresh.items() if k != "recorded_with"} == {k: v for k, v in rec.items() if k != "recorded_with"}

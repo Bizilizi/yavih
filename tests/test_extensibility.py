@@ -157,6 +157,14 @@ def test_bench_path_is_a_known_env_var():
 # ----------------------------------------------------------------------------- bench new
 
 
+def _conformance_warnings(folder: Path) -> set[str]:
+    """``{"W_CONFORMANCE_SKIPPED"}`` when the scaffold's conformance check cannot run here (its external package, Probe3D's
+    ``evals`` for a ``grid`` scaffold, is absent: the lint reports that warning), else the empty set."""
+    from yavih.conformance import check
+
+    return {"W_CONFORMANCE_SKIPPED"} if check(Benchmark.from_dir(folder)).skipped else set()
+
+
 @pytest.mark.parametrize("readout", ["clf", "seq", "grid", "box"])
 def test_bench_new_scaffold_passes_lint_and_loads(tmp_path, readout, capsys):
     from yavih.lint import lint_folder
@@ -165,8 +173,9 @@ def test_bench_new_scaffold_passes_lint_and_loads(tmp_path, readout, capsys):
     env = json.loads(capsys.readouterr().out)
     folder = Path(env["data"]["folder"])
     assert folder == tmp_path / f"new_{readout}" and env["data"]["todo"] > 0
+    assert env["data"]["conformance"]["state"] in ("recorded", "copied")
     rep = lint_folder(folder)
-    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"}
+    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"} | _conformance_warnings(folder)
     b = Benchmark.load(str(folder))
     assert b.name == f"new_{readout}" and b.spec.readout == readout and b.spec.protocol_version == 1
     assert not (folder / "notes").exists() and (folder / "tests" / "test_folder.py").is_file()
@@ -192,8 +201,12 @@ def test_bench_new_marks_copied_scripts_and_skips_curation(tmp_path):
     first = (folder / "probe.py").read_text(encoding="utf-8").splitlines()[0]
     assert first.startswith("# TODO: copied verbatim from nyuv2_depth by `yavih bench new`")
     rep = lint_folder(folder)
-    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"}
+    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"} | _conformance_warnings(folder)
     assert {"probe.py", "tests/test_folder.py", "prepare/01_obtain.sh"} <= {f.file for f in rep.warnings}
+    # the fixture: recorded here, or nyuv2_depth's copied with this folder's identity when Probe3D's evals is absent
+    rec = json.loads((folder / "conformance" / "expected.json").read_text(encoding="utf-8"))
+    assert rec["benchmark"] == "new_depth" and rec["protocol_version"] == 1
+    assert (rec["recorded_with"].get("copied_from") == "nyuv2_depth") is bool(_conformance_warnings(folder))
     # capability: --like's tags, under a TODO comment the lint counts
     assert Benchmark.load(str(folder)).spec.capability == ("visual", "spatial")
     cap_line = next(ln for ln in (folder / "benchmark.yaml").read_text(encoding="utf-8").splitlines() if ln.startswith("capability:"))

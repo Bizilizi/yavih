@@ -356,7 +356,9 @@ payload, so a folder recording its own digests is not circular.
 
 `yavih bench lint` (check `hashes`, code `E_CHANGELOG_HASH`) requires the newest entry to record the computed
 `protocol_hash` and `input_hash`, and its message names the exact lines to write; `yavih bench new` writes both
-hashes for the scaffold. When to bump `protocol_version` and when to list an old hash under `supersedes`, and how
+hashes for the scaffold, and records its conformance fixture for the copied protocol (or copies `--like`'s fixture
+with the scaffold's identity fields and `recorded_with.copied_from` when the package that protocol needs is absent;
+the command says which). When to bump `protocol_version` and when to list an old hash under `supersedes`, and how
 `yavih.hash_history` follows these lists across folders: [hashing: migration](hashing.md#migration).
 
 ## Manifest and classes
@@ -559,7 +561,8 @@ They are not hashed: retagging a folder changes no hash and needs no changelog e
   smoke on synthetic media, and the README / setup.md sections (helpers in `yavih.testing.folder`, including
   `assert_lint_clean`).
 - `tests/test_extensibility.py` checks that a `yavih bench new` scaffold of every readout loads and passes the lint
-  with only `W_TODO` warnings, that its generated `tests/test_folder.py` passes (the tests that need the benchmark's
+  with only `W_TODO` warnings (plus `W_CONFORMANCE_SKIPPED` where the copied protocol's external package is absent),
+  that its generated `tests/test_folder.py` passes (the tests that need the benchmark's
   own data skip with a `TODO:` reason), and covers out-of-tree folders (`$YAVIH_BENCH_PATH`, entry-point packs).
 
 ## yavih bench lint

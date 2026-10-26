@@ -13,6 +13,12 @@ written from the folder contract, plus a ``header:`` block for the README header
 not a protocol: replace the manifest (``make_manifest.py``), the protocol, the contracts, the copied scripts, the
 tests and the docs, then lint again.
 
+The conformance fixture (``conformance/expected.json``) is recorded for the copied protocol. When recording needs an
+external package that is absent here (Probe3D's ``evals`` for a ``grid`` scaffold), the ``--like`` folder's fixture
+is copied instead, with the new folder's identity fields and ``recorded_with.copied_from``: its values are the copied
+scoring path's. ``bench new`` says which happened (``conformance: recorded`` / ``copied from <like>``); the author
+re-records once the protocol is theirs (``yavih bench conformance <name> --record``).
+
 Where it goes: ``--dir D`` (the folder is ``D/<name>``), else the project's benchmarks directory
 (``yavih-bench/benchmarks/``), else the first ``$YAVIH_BENCH_PATH`` directory, else the current directory. A folder
 in the project directory or on ``$YAVIH_BENCH_PATH`` resolves by name; elsewhere use its path.
@@ -28,7 +34,7 @@ from typing import Any
 
 import yaml
 
-__all__ = ["DEFAULT_LIKE", "ScaffoldError", "new_benchmark"]
+__all__ = ["DEFAULT_LIKE", "ScaffoldError", "new_benchmark", "scaffold_conformance"]
 
 #: The folder a readout's scaffold copies when ``--like`` is not given.
 DEFAULT_LIKE: dict[str, str] = {"clf": "esc50", "seq": "ave", "grid": "nyuv2_depth", "box": "vggss_box"}
@@ -379,12 +385,41 @@ def new_benchmark(name: str, *, readout: str | None = None, like: str | None = N
     readings = sorted(template_readings(tpl.read_text(encoding="utf-8"))) if tpl.is_file() else []
     (dest / "tests" / "test_folder.py").write_text(
         _test_folder(y, like_name, readings=readings, has_probe=(dest / "probe.py").is_file()), encoding="utf-8")
-    # the conformance fixture of the scaffold's (copied) protocol: re-recorded by the author once the protocol is theirs
+    # the conformance fixture of the scaffold's (copied) protocol: re-recorded by the author once the protocol is theirs.
+    # Recording needs the protocol's external package (Probe3D's `evals`, ...); absent here, the --like folder's fixture
+    # is copied with this folder's identity: the scoring path (manifest, classes, probe.py, metrics) is --like's unchanged
     try:
         from yavih.benchmark import Benchmark
-        from yavih.conformance import record
+        from yavih.conformance import W_SKIPPED, ConformanceError, record, record_copied
 
-        record(Benchmark.from_dir(dest), force=True)
+        b = Benchmark.from_dir(dest)
+        try:
+            record(b, force=True)
+        except ConformanceError as e:
+            if e.code != W_SKIPPED:
+                raise
+            record_copied(b, src, copied_from=like_name)
     except Exception:  # noqa: BLE001 - `bench lint` reports E_CONFORMANCE_MISSING with the command to run
         pass
     return dest
+
+
+def scaffold_conformance(folder: str | os.PathLike) -> dict[str, Any]:
+    """How the scaffold in ``folder`` got its ``conformance/expected.json``: ``{"state": "recorded" | "copied" | "missing",
+    "copied_from": the --like folder or None, "packages": the external packages the copied record was made with}``
+    (``bench new`` reports it; a copied record is re-recorded here once those packages are installed)."""
+    import json
+
+    from yavih.conformance import EXPECTED_FILE
+
+    p = Path(folder) / EXPECTED_FILE
+    out: dict[str, Any] = {"state": "missing", "copied_from": None, "packages": []}
+    if not p.is_file():
+        return out
+    try:
+        rw = dict(json.loads(p.read_text(encoding="utf-8")).get("recorded_with") or {})
+    except (OSError, ValueError, AttributeError):
+        return out
+    like = rw.get("copied_from")
+    out.update(state="copied" if like else "recorded", copied_from=like, packages=sorted(rw.get("externals") or {}))
+    return out

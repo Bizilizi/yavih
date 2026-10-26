@@ -1344,7 +1344,7 @@ def cmd_bench_new(ns: argparse.Namespace) -> Envelope:
     """``yavih bench new <name> [--readout R] [--like B] [--dir D]``: a scaffold folder that passes ``bench lint``
     (``yavih.scaffold``), with ``TODO`` wherever the new benchmark must supply a fact."""
     from yavih.lint import lint_folder
-    from yavih.scaffold import ScaffoldError, new_benchmark
+    from yavih.scaffold import ScaffoldError, new_benchmark, scaffold_conformance
 
     try:
         folder = new_benchmark(ns.name, readout=ns.readout, like=ns.like, dir=ns.dir)
@@ -1352,12 +1352,20 @@ def cmd_bench_new(ns: argparse.Namespace) -> Envelope:
         raise CliError("E_USAGE", str(e), EXIT_USAGE) from e
     rep = lint_folder(folder)
     todo = sum(int(f.message.split()[0]) for f in rep.warnings if f.code == "W_TODO")
+    conf = scaffold_conformance(folder)
+    if conf["state"] == "copied":
+        pkgs = ", ".join(conf["packages"]) or "its external package"
+        conf_line = f"copied from {conf['copied_from']} (record it here once {pkgs} is installed: `yavih bench conformance {folder} --record`)"
+    else:
+        conf_line = "recorded" if conf["state"] == "recorded" else "not recorded (bench lint names the cause)"
     lines = [f"{ns.name}: scaffold written to {folder}",
              f"  bench lint: {'ok' if rep.ok else 'FAIL'} ({len(rep.errors)} errors, {todo} TODO markers to fill)",
+             f"  conformance: {conf_line}",
              "  next: replace the manifest (make_manifest.py), protocol and contracts in benchmark.yaml, fill every TODO,",
              f"        then `yavih bench lint {folder}` and `python -m pytest {folder}/tests -q`"]
-    return Envelope(data={"name": ns.name, "folder": str(folder), "lint": rep.to_dict(), "todo": todo}, paths={"folder": str(folder)},
-                    status="ok" if rep.ok else "error", exit_code=EXIT_OK if rep.ok else EXIT_CONTRACT, text="\n".join(lines) + "\n")
+    return Envelope(data={"name": ns.name, "folder": str(folder), "lint": rep.to_dict(), "todo": todo, "conformance": conf},
+                    paths={"folder": str(folder)}, status="ok" if rep.ok else "error", exit_code=EXIT_OK if rep.ok else EXIT_CONTRACT,
+                    text="\n".join(lines) + "\n")
 
 
 def cmd_bench_trial(ns: argparse.Namespace) -> Envelope:
