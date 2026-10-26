@@ -234,7 +234,7 @@ def test_normalized_source_ignores_comments_docstrings_and_layout():
     assert hashing.source_sha256(b) != hashing.source_sha256(b.replace("return y", "return x"))
     # a string that is a value (not a bare statement) still counts
     assert hashing.source_sha256('X = "a"\n') != hashing.source_sha256('X = "b"\n')
-    # version stability: the serialization drops empty/absent fields, so this digest is the same on Python 3.10 and 3.12 (checked)
+    # version stability: the serialization drops empty/absent fields, so this digest is the same on Python 3.10 through 3.15 (checked)
     assert hashing.source_sha256(b) == "84be28145e0add60b16b477bc3aee08e7b45e0b528892bd71176ec3d2dd8f0ba"
     assert hashing.source_sha256(b.encode()) == hashing.source_sha256(b)
     with pytest.raises(SyntaxError):

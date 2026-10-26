@@ -171,6 +171,10 @@ def manifest_hash(manifest_bytes: bytes, classes_bytes: bytes | None) -> str:
 #: AST fields never serialized by :func:`normalized_source`: source positions and per-version bookkeeping that do not
 #: change what the code does (``kind`` is the ``u`` prefix of a string literal; ``type_comment`` a ``# type:`` comment).
 _AST_SKIP_FIELDS: frozenset[str] = frozenset({"type_comment", "kind"})
+#: AST flag fields serialized only when set: their ``0`` default was added by a later interpreter (``is_lazy`` on
+#: ``Import`` / ``ImportFrom`` since Python 3.15, PEP 810) and would otherwise change every digest there; a set flag
+#: (``lazy import x``) does change what the code does and stays in.
+_AST_SKIP_WHEN_FALSE: frozenset[str] = frozenset({"is_lazy"})
 
 
 def _strip_docstrings(tree: ast.AST) -> None:
@@ -190,6 +194,8 @@ def _ast_json(node: Any) -> Any:
             value = getattr(node, name, None)
             if value is None or (isinstance(value, list) and not value):
                 continue  # Python-version stable: 3.12 added empty ``type_params``, 3.13 dumps omit empties
+            if name in _AST_SKIP_WHEN_FALSE and not value:
+                continue  # 3.15 added ``is_lazy=0`` to every import
             out.append([name, _ast_json(value)])
         return out
     if isinstance(node, list):
@@ -204,8 +210,9 @@ def normalized_source(text: str | bytes) -> str:
     in an AST) and every docstring / bare string statement removed, serialized field by field without source
     positions and without empty or absent fields, as canonical JSON. A comment, docstring, blank-line or formatting
     edit leaves it unchanged; any change to what the code does changes it. The serialization does not use
-    ``ast.dump`` (whose output differs between Python 3.10 and 3.13), so the digest is the same in every supported
-    interpreter (``tests/test_hashing.py`` pins one)."""
+    ``ast.dump`` (whose output differs between Python 3.10 and 3.13) and drops fields a later interpreter added with a
+    default (``is_lazy`` since 3.15), so the digest is the same in every supported interpreter (``tests/test_hashing.py``
+    pins one)."""
     tree = ast.parse(text)
     _strip_docstrings(tree)
     return canon(_ast_json(tree))

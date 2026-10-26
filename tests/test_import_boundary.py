@@ -184,6 +184,10 @@ def test_wheel_imports_without_torch_and_hashes_match(tmp_path):
 
     if importlib.util.find_spec("wheel") is None and importlib.util.find_spec("setuptools") is None:
         pytest.skip("no wheel/setuptools to build with")
+    if importlib.util.find_spec("setuptools_scm") is None:
+        # --no-build-isolation below uses this env's build backend: without setuptools-scm the wheel has no
+        # version file and the assertions below would report a packaging bug that is an env gap (CI installs it)
+        pytest.skip("setuptools-scm is not installed: pip install 'setuptools-scm>=10'")
     # build from a copy: an in-tree build would leave build/ and *.egg-info in the source tree
     tree = tmp_path / "tree"
     repo = PYPROJECT.parent

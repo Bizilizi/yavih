@@ -430,10 +430,13 @@ def _site_scores() -> Path | None:
     return work if (work / "video").is_dir() else None
 
 
-@pytest.mark.skipif(_site_scores() is None or _media_root() is None, reason="no score directory (make_manifest.py score) or VGGSound tree at this site")
 def test_rebuild_from_site_scores(spec, mm):
     """The freeze from this site's scores and the official listing: the committed files and yaml values."""
-    result = mm.freeze(_media_root(), _site_scores(), 0)
+    # decided at run time, not in a skipif: the session's config isolation (tests/conftest.py) is in force only then
+    media_root, scores = _media_root(), _site_scores()
+    if scores is None or media_root is None:
+        pytest.skip("no score directory (make_manifest.py score) or VGGSound tree at this site")
+    result = mm.freeze(media_root, scores, 0)
     assert result["report"]["source"] == "scores"
     assert mm.gzip_bytes(result["manifest_bytes"]) == (HERE / "manifest.csv.gz").read_bytes()
     assert mm.yaml_drift(HERE, result["report"]) == []
@@ -773,11 +776,12 @@ def _derived_root() -> Path | None:
     return root if root is not None and any((root / "_materialize").glob("log*.jsonl")) else None
 
 
-@pytest.mark.skipif(_derived_root() is None, reason="no materialized avsync media (derived_root/_materialize/log*.jsonl) at this site")
 def test_materialized_media_present_match_log(spec, mat_mod, manifest_rows):
     """Up to 12 verified rows of the site's materialization log: the file exists, its sha256 equals the log's, the
     log's recipe is the yaml's, and (when this site wrote one with --write-record) the site's per-row record."""
-    root = _derived_root()
+    root = _derived_root()  # run time, not a skipif: the session's config isolation is in force only then
+    if root is None:
+        pytest.skip("no materialized avsync media (derived_root/_materialize/log*.jsonl) at this site")
     done = mat_mod.read_log(root / "_materialize")  # every writer's log, merged
     rsha = mat_mod.recipe_sha256(spec["input_contract"]["materialize"])
     current = [d for d in done.values() if d.get("recipe_sha256") == rsha]
