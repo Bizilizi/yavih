@@ -53,6 +53,15 @@ def _checkout(tmp_path, *, head: str | None = SHA, version: str | None = "1.0", 
     return root
 
 
+def test_same_version_is_pep440_equality():
+    """``require`` / ``status`` compare the installed version with ``version_pin`` as PEP 440 versions."""
+    assert external.same_version("1.0.0", "1.0") and external.same_version("1.0", "1.0.0") and external.same_version("1.0", "1.0")
+    assert not external.same_version("1.0.1", "1.0") and not external.same_version("1.1", "1.0") and not external.same_version("0.9", "1.0")
+    assert not external.same_version(None, "1.0")
+    assert external.same_version("1.0+a1f14640 (git checkout)", "1.0+a1f14640 (git checkout)")  # not a version: text equality
+    assert not external.same_version("1.0+a1f14640 (git checkout)", "1.0")
+
+
 def test_pinned_commit():
     assert external.pinned_commit(PIP) == SHA
     assert external.pinned_commit("pip install git+ssh://git@github.com/x/y.git@ABCDEF1#egg=y") == "abcdef1"

@@ -372,9 +372,15 @@ def test_require_is_the_core_assert_import_with_the_version_pin(monkeypatch, pro
     assert not hasattr(probe_mod, "_fallback_require")
     external.reset()
     monkeypatch.setitem(sys.modules, "vggsounder", types.ModuleType("vggsounder"))
+    for installed in ("1.1", "1.0.1", "0.9"):  # another version than the pin 1.0: refused, nothing recorded
+        monkeypatch.setattr(importlib.metadata, "version", lambda name, v=installed: v)
+        with pytest.raises(external.ExternalVersion, match="E_EXTERNAL_VERSION") as exc:
+            probe_mod.require_vggsounder()
+        assert exc.value.exit_code == 3 and external.versions_used() == {}
+    # the pin compares as a PEP 440 version: 1.0.0 is 1.0; what is recorded is the installed string
     monkeypatch.setattr(importlib.metadata, "version", lambda name: "1.0.0")
-    with pytest.raises(external.ExternalVersion, match="E_EXTERNAL_VERSION"):
-        probe_mod.require_vggsounder()
+    assert probe_mod.require_vggsounder() == "1.0.0" and external.versions_used() == {"vggsounder": "1.0.0"}
+    external.reset()
     monkeypatch.setattr(importlib.metadata, "version", lambda name: "1.0")
     assert probe_mod.require_vggsounder() == "1.0" and external.versions_used() == {"vggsounder": "1.0"}
     external.reset()
