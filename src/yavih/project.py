@@ -79,7 +79,7 @@ class ProjectError(ValueError):
 def _listed_dirs(file: Path) -> tuple[list[Path], list[Path]]:
     """``([project] subprojects, relocated [project] directories)`` of project file ``file``, resolved against the
     file's directory as those keys are documented (``~`` expanded); ``([], [])`` when the file does not parse."""
-    import tomllib
+    from yavih.config import tomllib  # stdlib tomllib, or the 3.10 fallback
 
     try:
         table = tomllib.loads(file.read_text(encoding="utf-8")).get("project") or {}

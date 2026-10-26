@@ -129,9 +129,8 @@ _TOML_BLOCKS = _toml_blocks()
 def test_toml_examples_load_under_the_strict_schema(body: str, tmp_path: Path) -> None:
     """A copyable configuration example parses as TOML and passes the strict schema (a key written after a table
     header belongs to that table, so a top-level ``launcher`` below ``[project]`` is refused)."""
-    import tomllib
-
     from yavih import config
+    from yavih.config import tomllib  # stdlib tomllib, or the 3.10 fallback
 
     data = tomllib.loads(body)
     config.load(config=data, env={"GROUP": "/group", "HOME": str(tmp_path)}, cwd=tmp_path, lenient=False)
