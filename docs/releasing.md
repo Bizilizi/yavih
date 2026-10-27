@@ -26,8 +26,7 @@ number. Releases follow semantic versioning for the Python API, the CLI and the 
 `.github/workflows/ci.yml` runs on every push to `main`, every pull request and on demand:
 
 - **ruff** on `src` and `tests`;
-- **pytest** on Python 3.10 through 3.15 with CPU torch (the nightly CPU build on 3.15 until torch
-  publishes release wheels for it) and ffmpeg, without benchmark data
+- **pytest** on Python 3.10 through 3.14 with CPU torch and ffmpeg, without benchmark data
   (tests that need staged media skip): `pytest tests src/yavih/benchmarks -p no:cacheprovider -o
   addopts="--import-mode=importlib"`;
 - **package**: builds the sdist and wheel, runs `twine check --strict`, asserts that the wheel carries no

@@ -27,7 +27,7 @@ src/yavih/            the package (everything below ships in the wheel)
 tests/                repo tests: contract, integration, golden, docs and import-boundary tests
 docs/                 this documentation (not shipped in the wheel)
 assets/               header.html → header.png (the README header), benchmark-header/ (the folder header template)
-.github/workflows/    ci.yml (ruff, pytest on 3.10–3.15, wheel smoke test), release.yml (PyPI + GitHub Release)
+.github/workflows/    ci.yml (ruff, pytest on 3.10–3.14, wheel smoke test), release.yml (PyPI + GitHub Release)
 pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and ruff settings
 ```
 
@@ -144,7 +144,7 @@ that wrote it (`versions.writer_stamp()`).
 .venv/bin/python -m pytest tests src/yavih/benchmarks -q -p no:cacheprovider -o addopts="--import-mode=importlib"
 ```
 
-The second line is what CI runs (Python 3.10–3.15, CPU torch, ffmpeg installed, no benchmark data). It
+The second line is what CI runs (Python 3.10–3.14, CPU torch, ffmpeg installed, no benchmark data). It
 covers the repo tests and every folder's `tests/test_folder.py`; all benchmark folders share the test file
 basename, hence importlib import mode.
 
