@@ -29,7 +29,7 @@ is a re-download made by a third party.
 
 ### Protocol
 
-`readout: clf` (single label, cross-entropy), `label.kind: single`, 400 classes, `protocol_version` 1. The media
+`scorer: clf` (single label, cross-entropy), `label.kind: single`, 400 classes, `protocol_version` 1. The media
 come from the Academic-Torrents Kinetics-400 `_256` release (height 256, 157 GB). This is a frozen-feature probe on
 the video only.
 

@@ -1,0 +1,101 @@
+{
+ "benchmark": "vggsounder_v2a",
+ "generator": 1,
+ "population": {
+  "eval": 32,
+  "floor": 0,
+  "folds": 0,
+  "train": 0
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "fa7ac592b642eaf876d62e30f2eda8f1ad98fa5d+dirty",
+  "externals": {
+   "av_bench": "1.0.0"
+  },
+  "folder_source": {
+   "probe": "4637af9c71ad40b72df31f0262cd311dc9e676232ff29cd5ff9897abf3b0d6cb",
+   "reader": null
+  },
+  "protocol_hash": "cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0",
+  "scorer": {
+   "kind": "direct",
+   "name": "vggsounder_v2a",
+   "version": 1
+  },
+  "scoring_hash": "5b3aaa5bce340c31f542dd40d0d083d7194aafb2340248b662ab8e714d8a25cb",
+  "yavih_version": "1.0.1.dev2+gfa7ac592b.d20261030"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "desync": 0.001,
+  "desync_floor": 0.001,
+  "desync_ref": 0.001,
+  "fd_panns": 0.001,
+  "fd_passt": 0.001,
+  "fd_vgg": 0.001,
+  "ib_score": 0.001,
+  "ib_score_floor": 0.001,
+  "ib_score_ref": 0.001,
+  "is_panns": 0.001,
+  "is_passt": 0.001,
+  "kad_panns": 0.001,
+  "kad_passt": 0.001,
+  "kl_panns": 0.001,
+  "kl_passt": 0.001,
+  "kl_passt_floor": 0.001,
+  "n_eval": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "desync": [
+     1.0999999956460669,
+     1.4624999823165126
+    ],
+    "ib_score": [
+     0.0288418184696789,
+     0.05987284017240036
+    ],
+    "kad_panns": [
+     45.73931771180944,
+     50.320929494929956
+    ],
+    "kad_passt": [
+     32.97117453874242,
+     36.141629347562855
+    ],
+    "kl_panns": [
+     5.7274070905209244,
+     7.025467288784648
+    ],
+    "kl_passt": [
+     6.372083113574342,
+     7.492907864260952
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "desync_floor": 1.2468749976251274,
+    "ib_score_floor": 0.035661619156599045,
+    "kl_passt_floor": 6.367440223693848
+   },
+   "metrics": {
+    "desync": 1.284374991664663,
+    "desync_ref": 0.46250000572763383,
+    "fd_panns": 202.4495764698418,
+    "fd_passt": 1228.7712081500947,
+    "fd_vgg": 45.31969811018472,
+    "ib_score": 0.044874563813209534,
+    "ib_score_ref": 0.3273097276687622,
+    "is_panns": 1.0019058147860578,
+    "is_passt": 1.0022088116947485,
+    "kad_panns": 46.513455945556736,
+    "kad_passt": 33.21169835699169,
+    "kl_panns": 6.3765339851379395,
+    "kl_passt": 6.915477752685547,
+    "n_eval": 32
+   }
+  }
+ }
+}

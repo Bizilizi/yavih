@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from yavih.fields import spec_streams
 from yavih.versions import __version__
 
 __all__ = [
@@ -373,7 +374,7 @@ def _to_numpy(x: Any) -> Any:
 
 def _external_block(bench: Any) -> dict[str, dict[str, Any]]:
     """``{name: {ok, version, version_pin, pip}}`` for ``benchmark.yaml[external]`` (``doctor``): the
-    authors' packages a folder's ``probe.py`` assert-imports; never yavih dependencies."""
+    authors' packages a folder's ``eval.py`` assert-imports; never yavih dependencies."""
     from yavih.external import status
 
     return {str(_get(e, "name")): status(str(_get(e, "name")), str(_get(e, "pip")), str(_get(e, "version_pin")))
@@ -531,7 +532,7 @@ def cmd_doctor(ns: argparse.Namespace) -> Envelope:
                 warnings.append(_finding("W_EXTERNAL", f"{name}: installed {ext['version'] or 'nothing'}, the protocol pins {ext['version_pin']}; "
                                          f"install it independently (needed in the probe env only): {ext['pip']}", where=name))
         data["benchmark"] = {"name": bench.name, "protocol_hash": bench.protocol_hash, "input_hash": bench.input_hash,
-                             "readout": _get(bench.spec, "readout")}
+                             "scorer": _get(bench.spec, "readout")}
         try:
             data["data_roots"] = _data_roots(bench)
         except _cfg.ConfigError as e:  # an unknown configured root of this benchmark (strict schema)
@@ -569,7 +570,7 @@ def cmd_doctor(ns: argparse.Namespace) -> Envelope:
         # ffprobe); a stream kind with none of them fails every row with DecoderMissing (extract refuses at start).
         from yavih.media.info import header_backends
 
-        kinds = sorted({str(_get(s, "kind", s)) for s in (_get(bench.spec, "streams") or {}).values()})
+        kinds = sorted({str(_get(s, "kind", s)) for s in spec_streams(bench.spec).values()})
         data["media_info"]["header_backends"] = {k: header_backends(k) for k in kinds}
         lacking = [k for k, b in data["media_info"]["header_backends"].items() if not b]
         if table is None and lacking:
@@ -958,7 +959,7 @@ def _bench_row(bench: Any) -> dict[str, Any]:
     return {
         "name": bench.name,
         "aliases": list(raw.get("aliases") or []),
-        "readout": raw.get("readout"),
+        "scorer": raw.get("scorer"),
         "capability": [str(c) for c in raw.get("capability") or []],
         "clips": dict(budget.get("clips") or {}),
         "media_gb": budget.get("media_gb"),
@@ -1013,13 +1014,13 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
             row.update(facts[ref])
         rows.append(row)
     head = f"{'group':<14}{'readings':<16}" if suite is not None else ""
-    lines = [f"{head}{'name':<16}{'readout':<8}{'capability':<23}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
+    lines = [f"{head}{'name':<16}{'scorer':<8}{'capability':<23}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
     for r in rows:
         clips = ", ".join(f"{k}={v}" for k, v in r["clips"].items())
         tier = (r.get("obtain") or {}).get("tier") or "-"
         caps = ",".join(r.get("capability") or []) or "-"
         pre = f"{r['suite_capability']:<14}{','.join(r['readings']):<16}" if suite is not None else ""
-        lines.append(f"{pre}{r['name']:<16}{str(r['readout']):<8}{caps:<23}{clips:<28}{str(r['media_gb']):>9}  "
+        lines.append(f"{pre}{r['name']:<16}{str(r['scorer']):<8}{caps:<23}{clips:<28}{str(r['media_gb']):>9}  "
                      f"{str(r['source_kind']):<15}{tier:<17}{r['status']}")
     if suite is not None:
         lines.insert(0, f"suite {suite.name} ({suite.origin}): {suite.description}")
@@ -1065,7 +1066,7 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
         "name": bench.name,
         "title": raw.get("title"),
         "capability": [str(c) for c in raw.get("capability") or []],
-        "readout": raw.get("readout"),
+        "scorer": raw.get("scorer"),
         "protocol_version": raw.get("protocol_version"),
         "protocol_hash": bench.protocol_hash,
         "input_hash": bench.input_hash,
@@ -1215,6 +1216,43 @@ def cmd_bench_verify(ns: argparse.Namespace) -> Envelope:
     return Envelope(data=data, warnings=warnings, paths=paths, text="\n".join(lines) + "\n")
 
 
+def cmd_bench_migrate(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench migrate <folder|name> [--write]``: rewrite a schema-2 ``benchmark.yaml`` as schema 3 (``streams:``
+    becomes ``fields:`` with ``storage: file``, ``readout:`` becomes ``scorer:``), keeping its comments. Without
+    ``--write`` it prints the diff. With ``--write`` the folder must load afterwards with the hashes its changelog
+    records (the migration moves no hash); otherwise the file is restored and the command fails (exit 2)."""
+    import difflib
+
+    from yavih.benchmark import Benchmark, migrate_text, resolve_folder
+
+    folder = Path(ns.ref) if Path(ns.ref).is_dir() else resolve_folder(ns.ref)
+    if folder is None or not (Path(folder) / "benchmark.yaml").is_file():
+        return Envelope(status="error", errors=[{"code": "E_USAGE", "message": f"{ns.ref}: not a benchmark folder", "where": None}], exit_code=EXIT_USAGE)
+    path = Path(folder) / "benchmark.yaml"
+    old = path.read_text(encoding="utf-8")
+    try:
+        new = migrate_text(old)
+    except ValueError as e:
+        return Envelope(status="error", errors=[{"code": "E_MIGRATE", "message": str(e), "where": str(path)}], exit_code=EXIT_CONTRACT)
+    diff = "".join(difflib.unified_diff(old.splitlines(keepends=True), new.splitlines(keepends=True), str(path), str(path)))
+    data: dict[str, Any] = {"folder": str(folder), "changed": new != old, "written": False}
+    if ns.write and new != old:
+        path.write_text(new, encoding="utf-8")
+        try:
+            b = Benchmark.from_dir(folder)
+            recorded = b.spec.changelog[-1]
+            moved = [k for k in ("protocol_hash", "input_hash") if getattr(recorded, k, None) not in (None, getattr(b, k))]
+            if moved:
+                raise ValueError(f"the migrated folder computes other {moved} than its changelog records")
+        except Exception as e:  # noqa: BLE001 - restore the original before reporting
+            path.write_text(old, encoding="utf-8")
+            return Envelope(status="error", errors=[{"code": "E_MIGRATE", "message": f"{type(e).__name__}: {e}; {path} restored", "where": str(path)}],
+                            exit_code=EXIT_CONTRACT)
+        data.update(written=True, protocol_hash=b.protocol_hash, input_hash=b.input_hash)
+    text = (diff or f"{path}: already schema 3\n") + (f"written; hashes unchanged ({data.get('protocol_hash', '')[:12]})\n" if data["written"] else "")
+    return Envelope(data=data, paths={"benchmark_yaml": str(path)}, text=text)
+
+
 def cmd_bench_lint(ns: argparse.Namespace) -> Envelope:
     """``yavih bench lint <name|path>... [--all]``: the folder contract (``yavih.lint``) on packaged or out-of-tree
     folders. Errors exit 2 (a contract violation the folder author fixes); ``TODO`` markers are warnings."""
@@ -1341,13 +1379,13 @@ def cmd_bench_hash(ns: argparse.Namespace) -> Envelope:
 
 
 def cmd_bench_new(ns: argparse.Namespace) -> Envelope:
-    """``yavih bench new <name> [--readout R] [--like B] [--dir D]``: a scaffold folder that passes ``bench lint``
+    """``yavih bench new <name> [--scorer S] [--like B] [--dir D]``: a scaffold folder that passes ``bench lint``
     (``yavih.scaffold``), with ``TODO`` wherever the new benchmark must supply a fact."""
     from yavih.lint import lint_folder
     from yavih.scaffold import ScaffoldError, new_benchmark, scaffold_conformance
 
     try:
-        folder = new_benchmark(ns.name, readout=ns.readout, like=ns.like, dir=ns.dir)
+        folder = new_benchmark(ns.name, scorer=ns.scorer, like=ns.like, dir=ns.dir)
     except ScaffoldError as e:
         raise CliError("E_USAGE", str(e), EXIT_USAGE) from e
     rep = lint_folder(folder)
@@ -1427,9 +1465,11 @@ def cmd_bridge_check(ns: argparse.Namespace) -> Envelope:
     model, reading = profile.get("model"), profile.get("reading")
     bench_name = profile.get("bench") or ns.bench  # bridge_check records the canonical name (it names the run dir)
     dsha = profile.get("describe_sha256")
+    okeys = dict((profile.get("outputs") or {}).get("keys") or {})
+    shape = (" ".join(f"{k}={v.get('codec')}" for k, v in okeys.items()) if okeys and profile.get("N") is None else
+             f"N={profile.get('N')} D={profile.get('D')} dtype={profile.get('dtype')} pos_mode={profile.get('pos_mode')}")
     text = (
-        f"{model} reading={reading}: N={profile.get('N')} D={profile.get('D')} dtype={profile.get('dtype')} "
-        f"pos_mode={profile.get('pos_mode')} streams={profile.get('streams')}\n"
+        f"{model} reading={reading}: {shape} streams={profile.get('streams')}\n"
         f"  invariance: rerun_bit_identical={inv.get('rerun_bit_identical')} batch_rel_l2={num(inv.get('batch_rel_l2'))} "
         f"order_rel_l2={num(inv.get('order_rel_l2'))} tolerance={num(inv.get('tolerance'))}"
         + (f" ({inv.get('tolerance_reason')})" if inv.get("tolerance_reason") else "") + "\n"
@@ -1527,7 +1567,10 @@ def cmd_features_validate(ns: argparse.Namespace) -> Envelope:
         elig = report.eligibility or {}
         lines.append(
             f"{report.split}: {'ok' if report.ok else 'FAILED'}  coverage {cov.get('present')}/{cov.get('nominal')}  "
-            f"N={report.N} D={report.D} {report.dtype} pos={report.pos_mode}  missing shards: {n_missing}"
+            + (f"outputs {', '.join(map(str, getattr(report, 'describe')['outputs']))}"
+               if (getattr(report, "describe", None) or {}).get("outputs") and not report.N
+               else f"N={report.N} D={report.D} {report.dtype} pos={report.pos_mode}")
+            + f"  missing shards: {n_missing}"
             + (f" ({' '.join(report.missing_shards)})" if n_missing else "")
         )
         if getattr(report, "rules_checked", None):
@@ -1562,7 +1605,7 @@ def cmd_features_diff(ns: argparse.Namespace) -> Envelope:
 def cmd_features_stage(ns: argparse.Namespace) -> Envelope:
     """``yavih features stage <features/> <scratch>``: copy shards + sidecars + ``_meta.json`` (and
     ``NOT_APPLICABLE.json``) to ``<scratch>/<unit_id|run>.<host>.<pid>/features/<split>/`` and print the
-    staged directory. The printed path is the one ``probe run --scratch`` takes: the probe
+    staged directory. The printed path is the one ``eval run --scratch`` takes: the probe
     looks for ``<scratch>/features/`` (one copy routine for the package lives in
     ``yavih.io.stage``)."""
     from yavih.io.stage import stage_features
@@ -1587,7 +1630,7 @@ def cmd_features_stage(ns: argparse.Namespace) -> Envelope:
     return Envelope(data=data, paths={"staged": str(dest), "features": str(features_dest)}, text=f"{dest}\n")
 
 
-def cmd_probe_run(ns: argparse.Namespace) -> Envelope:
+def cmd_eval_run(ns: argparse.Namespace) -> Envelope:
     from yavih.readouts import probe
     from yavih.waivers import parse_cli_waivers
 
@@ -1624,7 +1667,7 @@ def cmd_probe_run(ns: argparse.Namespace) -> Envelope:
         res = dict(r.result or {})
         bname = (res.get("benchmark") or {}).get("name")
         hl_name = _headline_name(bname, getattr(ns, "bench", None), headlines)
-        # `probe run` data: the comparability key and the row key (eval_hash, model, reading)
+        # `eval run` data: the comparability key and the row key (eval_hash, model, reading)
         rec = {"status": r.status, "seed": r.seed, "path": str(r.path) if r.path else None,
                "benchmark": bname, "eval_hash": res.get("eval_hash"), "model": res.get("model"), "reading": res.get("reading"),
                "headline": {"name": hl_name, "value": r.metrics.get(hl_name)} if hl_name else None,
@@ -1647,7 +1690,7 @@ def cmd_probe_run(ns: argparse.Namespace) -> Envelope:
 
 
 def _headline_name(bench_name: str | None, bench_ref: str | None, cache: dict[str, Any]) -> str | None:
-    """The benchmark's ``metrics.headline`` for the ``probe run`` summary; ``None`` when the
+    """The benchmark's ``metrics.headline`` for the ``eval run`` summary; ``None`` when the
     benchmark cannot be loaded here (the number is still in ``metrics``)."""
     ref = bench_ref or bench_name
     if not ref:
@@ -1922,7 +1965,7 @@ def build_parser() -> argparse.ArgumentParser:
     """The command table."""
     def config_flags(parser: argparse.ArgumentParser, *, results: bool = True) -> None:
         # The configuration layer of every command (yavih.config): before or after the subcommand. SUPPRESS so a
-        # subparser does not reset what the main parser saw; distinct dests so `probe run --results` keeps its own.
+        # subparser does not reset what the main parser saw; distinct dests so `eval run --results` keeps its own.
         parser.add_argument("--config", dest="cfg_config", default=argparse.SUPPRESS, metavar="FILE",
                             help="project config file (beats $YAVIH_CONFIG and the yavih-bench/yavih.toml discovery; exported as YAVIH_CONFIG)")
         parser.add_argument("--runs-root", dest="cfg_runs_root", default=argparse.SUPPRESS, metavar="DIR",
@@ -1944,7 +1987,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=argparse.SUPPRESS,
         help="emit exactly one JSON envelope on stdout (also YAVIH_JSON=1)",
     )
-    # `probe run` and `report build` define their own --results (same meaning, read by the handler)
+    # `eval run` and `report build` define their own --results (same meaning, read by the handler)
     common_nr = argparse.ArgumentParser(add_help=False, parents=[common])
     config_flags(common_nr, results=False)
     common_r = argparse.ArgumentParser(add_help=False, parents=[common])
@@ -2063,6 +2106,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--decode-sample", type=int, default=32)
     s.add_argument("--fingerprint-sample", type=int, default=256)
     s.set_defaults(func=cmd_bench_verify)
+    s = bsub.add_parser("migrate", parents=[common_r], help="rewrite a schema-2 benchmark.yaml as schema 3 (fields:), keeping comments; --write to apply")
+    s.add_argument("ref", metavar="folder|name")
+    s.add_argument("--write", action="store_true", help="rewrite the file (the hashes must not move, else it is restored)")
+    s.set_defaults(func=cmd_bench_migrate)
     s = bsub.add_parser("lint", parents=[common_r], help="check a benchmark folder against the folder contract (layout, yaml, docs, imports)")
     s.add_argument("refs", nargs="*", metavar="name|path")
     s.add_argument("--all", action="store_true", help="every discoverable benchmark folder")
@@ -2082,8 +2129,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_bench_hash)
     s = bsub.add_parser("new", parents=[common_r], help="scaffold a benchmark folder that passes bench lint (TODO where facts are needed)")
     s.add_argument("name")
-    s.add_argument("--readout", default=None, help="the readout (clf, seq, grid, box or a registered one); picks the default --like")
-    s.add_argument("--like", default=None, metavar="BENCH", help="the folder whose manifest, reader and template are copied (default per readout)")
+    s.add_argument("--scorer", default=None, help="the scorer (clf, seq, grid, box or a registered one); picks the default --like")
+    s.add_argument("--like", default=None, metavar="BENCH", help="the folder whose manifest, reader and template are copied (default per scorer)")
     s.add_argument("--dir", default=None, metavar="D", help="parent directory (default: the project's benchmarks/, else the first $YAVIH_BENCH_PATH entry, else .)")
     s.set_defaults(func=cmd_bench_new)
     s = bsub.add_parser("trial", parents=[common_r],
@@ -2163,8 +2210,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("scratch")
     s.set_defaults(func=cmd_features_stage)
 
-    # probe
-    sp = sub.add_parser("probe", parents=[common_r], help="train and score the standardized readout")
+    # eval
+    sp = sub.add_parser("eval", parents=[common_r], help="score a validated feature set with the benchmark's scorer (a pinned probe, or the folder's own)")
     psub = sp.add_subparsers(dest="subcommand", metavar="<subcommand>")
     psub.required = True
     s = psub.add_parser("run", parents=[common_nr])
@@ -2187,7 +2234,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="results-store root (default: YAVIH_RESULTS / config [results] root / results/ next to the runs root of a "
                          "standard <runs root>/<benchmark>/<model>/<reading> run dir; any other layout needs --results)")
     rg.add_argument("--no-results", action="store_true", help="do not write the results-store file")
-    s.set_defaults(func=cmd_probe_run)
+    s.set_defaults(func=cmd_eval_run)
 
     # report
     sp = sub.add_parser("report", parents=[common_r], help="comparability-checked tables with floors")
@@ -2201,7 +2248,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--allow-coverage-diff", action="store_true")
     s.add_argument("--detail", action="store_true")
     s.add_argument("--join", nargs="+", default=None, metavar="BENCH READING=RUN",
-                   help="call the benchmark folder's probe.py join() over the named readings")
+                   help="call the benchmark folder's eval.py join() over the named readings")
     s.add_argument("--results", default=None, metavar="DIR", help="results-store root for --join / --merge-results")
     s.add_argument("--merge-results", action="store_true", help="merge every model's results_*.json into one results_<timestamp>.json")
     s.add_argument("--suite", default=None, metavar="S", help="append the suite's completeness per model (done / missing / join-missing)")
@@ -2342,12 +2389,12 @@ def _stdout_to_stderr() -> Iterator[None]:
 def _config_layer(ns: argparse.Namespace) -> Iterator[None]:
     """Install the CLI configuration layer (``--config/--runs-root/--results/--data/--lenient``) for this
     command and export it to the environment, so the children a command starts (``exec`` → ``extract`` /
-    ``probe run``) resolve the same roots. Both are undone afterwards (``main`` may run in-process)."""
+    ``eval run``) resolve the same roots. Both are undone afterwards (``main`` may run in-process)."""
     from yavih import config
 
     results = getattr(ns, "cfg_results", None)
     if results is None and isinstance(getattr(ns, "results", None), str):
-        results = ns.results  # `probe run --results` / `report build --results`: the same root
+        results = ns.results  # `eval run --results` / `report build --results`: the same root
     saved = {k: os.environ.get(k) for k in os.environ if k.startswith("YAVIH_")}
     try:
         config.set_cli(config_file=getattr(ns, "cfg_config", None), runs_root=getattr(ns, "cfg_runs_root", None), results=results,

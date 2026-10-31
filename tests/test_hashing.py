@@ -175,7 +175,7 @@ def test_protocol_hash_payload_matches_the_hand_written_payload():
     assert hs.input_components == hashing.component_digests(inp) and set(hs.scoring_components) == set(sco)
     assert hs.input_values == inp and hs.scoring_values == sco
     # no source digest is an input at all
-    for extra in ("reader_sha256", "probe_sha256"):
+    for extra in ("reader_sha256", "eval_sha256"):
         with pytest.raises(TypeError):
             hashing.protocol_hashes(**kw, **{extra: "a" * 64})
     # explain(): the canonical text of every component reproduces every digest with stdlib only
@@ -401,13 +401,14 @@ def test_packaged_protocol_hashes_are_recorded_in_the_folder(name):
     # recomputed from the raw yaml blocks with the documented payload, independently of Benchmark.load's call
     raw = b.spec.raw
     again = hashing.protocol_hashes(
-        name=b.spec.name, protocol_version=b.spec.protocol_version, protocol=raw["protocol"], splits=raw["splits"], streams=raw["streams"],
+        name=b.spec.name, protocol_version=b.spec.protocol_version, protocol=raw["protocol"], splits=raw["splits"], streams=hashing.fields_view(raw["fields"]),
         input_contract=raw["input_contract"], output_contract=raw["output_contract"], external=raw["external"], metrics=raw["metrics"],
         readout_params=raw["readout_params"], targets=raw["targets"], manifest=raw["manifest"], manifest_hash=b.manifest_hash,
         readout=b.spec.readout,
+        codec_versions={str(e["type"]): int(b.codecs[str(e["type"])].version) for e in (raw["output_contract"].get("schema") or {}).values()},
     )
     assert (again.protocol_hash, again.input_hash) == (rec.protocol_hash, rec.input_hash) == (b.protocol_hash, b.input_hash)
-    assert b.folder_source == {"probe": b.probe_sha256, "reader": None}  # the packaged folders ship no reader.py
+    assert b.folder_source == {"probe": b.eval_sha256, "reader": None}  # the packaged folders ship no reader.py
     assert not hashing.find_prose(b.hashes.input_values) and not hashing.find_prose(b.hashes.scoring_values)
 
 
@@ -648,3 +649,26 @@ def test_inputs_hash_changes_with_cmd_not_with_where_it_runs():
     for extra in ({"launcher": "/envs/x/bin/python"}, {"env": {"A": "1"}}, {"cwd": "."}, {"needs": {"minutes": 15}}):
         with pytest.raises(TypeError):
             hashing.inputs_hash(**kw, **extra)
+
+
+def test_fields_view_of_every_migrated_packaged_folder_is_its_schema2_streams_block():
+    """Schema 3 moved no hash: the hashed `fields` view of every packaged folder equals the `streams` block it had
+    under schema 2 (the migration only adds `storage: file`, which the view drops)."""
+    import subprocess
+    from pathlib import Path
+
+    import yaml
+
+    from yavih.benchmark import migrate_schema, packaged_benchmarks
+
+    root = Path(__file__).resolve().parents[1]
+    for name in packaged_benchmarks():
+        rel = f"src/yavih/benchmarks/{name}/benchmark.yaml"
+        old = subprocess.run(["git", "show", f"fa7ac59:{rel}"], cwd=root, capture_output=True, text=True)
+        if old.returncode != 0:
+            pytest.skip("the 1.0 tree is not available in this checkout")
+        raw2 = yaml.safe_load(old.stdout)
+        raw3 = yaml.safe_load((root / rel).read_text(encoding="utf-8"))
+        assert hashing.fields_view(raw3["fields"]) == raw2["streams"], name
+        assert migrate_schema(raw2)["fields"] == raw3["fields"], name
+    assert hashing.fields_view({"c": {"storage": "cell", "kind": "text", "column": "c"}}) == {"c": {"storage": "cell", "kind": "text", "column": "c"}}

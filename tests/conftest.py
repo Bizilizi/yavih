@@ -148,11 +148,11 @@ def write_synthetic_benchmark(
             p.touch()
 
     spec: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "name": name,
         "aliases": [f"{name}_alias"],
         "title": "Synthetic single-label classification fixture",
-        "readout": readout,
+        "scorer": readout,
         "protocol_version": 2,
         "changelog": [
             {"version": 1, "date": "2026-10-07", "reason": "synthetic test fixture (tests/conftest.py)", "invalidates": False},
@@ -201,8 +201,9 @@ def write_synthetic_benchmark(
             },
         },
         "splits": {"train": ["train"], "eval": ["val"], "floor": [], "folds": None, "unused": [], "min_eval_coverage": 0.95},
-        "streams": {
+        "fields": {
             "video": {
+                "storage": "file",
                 "kind": "video",
                 "media_column": "rel_media",
                 "root": "media_root",

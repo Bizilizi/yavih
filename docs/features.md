@@ -6,10 +6,12 @@ sidecar per shard. The format is written by `yavih extract` (through `FeatureWri
 It depends on nothing but numpy and the standard library's `tarfile`, so any tool that reads tars and `.npy`
 files can read the features without yavih.
 
-The current feature format is **4** (`yavih.versions.FEATURE_FORMAT_VERSION`). Writers always write format 4,
-and validation, `FeatureReader`, `read_sidecar` and `read_meta` read format 4 only: any other `format_version` is
-`E_FORMAT` ("unsupported format_version N (this yavih reads 4); re-extract"), and that split must be extracted
-again.
+The current feature format is **5** (`yavih.versions.FEATURE_FORMAT_VERSION`). Validation, `FeatureReader`,
+`read_sidecar` and `read_meta` read formats 4 and 5 (`READABLE_FEATURE_FORMATS`); any other `format_version` is
+`E_FORMAT` ("unsupported format_version N (this yavih reads [4, 5]); re-extract"). Format 5 adds the `outputs`
+block and the per-key members of a declared output schema ([codecs](codecs.md)); a feature set of the default
+schema is written exactly as in format 4, so a format-4 set stays usable without re-extraction. A `_meta.json` of
+an older format is never reused: validation re-derives it.
 
 ## Directory layout
 
@@ -53,6 +55,29 @@ member has `mtime = 0`, `uid = gid = 0`, empty user and group names, and mode `0
 
 `N >= 1` and `D >= 1` are fixed for a feature set: every row of every split of one run directory has the
 same shape. `dtype` is `float16` or `float32`. `pos_mode` is `none`, `constant` or `per_sample`.
+
+### A declared output schema (format 5)
+
+When the benchmark declares `output_contract.schema`, a row's members are its `{row:09d}.json` record followed by
+one `{row:09d}.{key}.{ext}` member per carried key, in schema order, with the extension of the key's codec
+(`000000012.audio.wav`, `000000012.answer.json`); a canary repeats every key under `c{row:09d}`. The sidecar's
+`features` block holds nulls (`dtype`, `N`, `D`) and `pos_mode: none`, and the `outputs` block says what the set
+carries:
+
+```json
+"outputs": {
+  "schema": {"audio": {"type": "wav", "channels": 1, "duration_s": [9.5, 10.5]}},
+  "schema_sha256": "…",
+  "bound": {"K": 3},
+  "keys": {"audio": {"codec": "wav", "version": 1, "ext": "wav", "dtype": null}}
+}
+```
+
+Each member entry carries `parts: {key: {offset_data, nbytes, header_len?}}` instead of the flat offsets. A
+default-schema sidecar has `outputs: {schema: null, schema_sha256, bound: {N, D}, keys: null}`. `_meta.json` copies
+the `outputs` block of a generic set, and its fingerprint adds the schema's sha256 (a default set's fingerprint is
+unchanged). `FeatureReader.values(key, rows, codecs=...)` decodes the values of one key; `rows()` / `matrix()`
+refuse a generic set, which has no feature matrix.
 
 ### The per-row `.json` member
 
@@ -129,7 +154,7 @@ shard 3 of 32 of a 20 000-row split at batch size 32 (rows `[1856, 2496)`):
 | key | meaning |
 |---|---|
 | `benchmark.manifest_hash`, `benchmark.input_hash` | the shard's benchmark identity: the manifest and the input side of the protocol. A scoring edit (a metric, a readout version, `protocol_version`) never stales a shard. See [hashing](hashing.md). |
-| `benchmark.folder_source` | `{probe, reader}`: the folder's `probe.py` / `reader.py` normalized-source digests at extraction (provenance, never compared). |
+| `benchmark.folder_source` | `{probe, reader}`: the folder's `eval.py` / `reader.py` normalized-source digests at extraction (provenance, never compared). |
 | `benchmark.input_components` | `{component: sha256(canon(value))}` behind `input_hash`, so `E_HASH_INPUT` can name the component that differs |
 | `benchmark.protocol_hash`, `scoring_hash` | what the benchmark was when the shard was written (provenance only) |
 | `benchmark.media_fingerprint`, `media_info_sha256`, `data_roots` | copied from the site's `data_status.json`: provenance, never hashed; compared by `W_MEDIA_FP` |
@@ -467,4 +492,4 @@ class FeatureReader:
 | `yavih features validate <dir>` | checks a split (or every split under `features/`) and writes `_meta.json`; see [validation](validation.md) |
 | `yavih features inspect <dir>` | diagnostics over the validation sample: per-dimension std histogram, near-constant dimensions, mean absolute value, position summary, dead token positions. It decides nothing. |
 | `yavih features diff <a> <b>` | compares the rows present in two split directories: `rows_compared`, `max_abs`, `max_rel_l2` and a verdict (`identical`, `within_tol`, `differs`, `incompatible`, `empty`) |
-| `yavih features stage <features/> <scratch>` | copies tars, sidecars, `_meta.json` and `NOT_APPLICABLE.json` (never tmp files) to local scratch for `probe run --scratch`, after checking free space (exit 3 when short) |
+| `yavih features stage <features/> <scratch>` | copies tars, sidecars, `_meta.json` and `NOT_APPLICABLE.json` (never tmp files) to local scratch for `eval run --scratch`, after checking free space (exit 3 when short) |

@@ -1,6 +1,6 @@
-# yavih benchmark folder — VGG-SS single-box regression (schema 2). Values under `manifest` and `budget` are
+# yavih benchmark folder — VGG-SS single-box regression (schema 3). Values under `manifest` and `budget` are
 # written by make_manifest.py; `make_manifest.py --check` re-derives them.
-schema_version: 2
+schema_version: 3
 name: vggss_box
 aliases: []
 title: VGG-SS audio-conditioned single-box regression
@@ -13,7 +13,7 @@ header:
     VGG-SS annotates 5 158 clips of the VGGSound test split (221 classes) with 1–7 bounding boxes around the
     visible sound source in the frame at 5 s. The task is to localize the sounding object in the video given its
     audio; this benchmark regresses one box on the single-box clips and scores mean IoU.
-readout: box
+scorer: box
 protocol_version: 1
 changelog:
   - version: 1
@@ -113,8 +113,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:
+fields:
   video:
+    storage: file
     kind: video
     media_column: rel_video
     root: media_root
@@ -122,6 +123,7 @@ streams:
     layout_params: {}
     required: true
   audio:
+    storage: file
     kind: audio
     media_column: rel_audio
     root: media_root

@@ -52,15 +52,16 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 | `yavih bench list` | every discoverable benchmark: aliases, readout, `capability` tags, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their suite group (`suite_capability`) and `readings` |
 | `yavih bench info` | a benchmark's README plus its `capability` tags, hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
 | `yavih bench path` | print the benchmark folder, or the absolute path of one shipped file | `<name> [<what>]` (`what` as for `bench show`) |
-| `yavih bench files` | every shipped file of a folder with absolute path, kind (`readme`, `setup`, `yaml`, `template`, `probe`, `manifest`, `classes`, `conformance`, `prepare`, `test`, `other`) and size | `<name>` |
-| `yavih bench show` | print one shipped file | `<name> <what>`: `readme`, `setup`, `yaml`, `template`, `probe`, `classes`, `conformance` (`conformance/expected.json`), `prepare/<file>` or a path inside the folder |
+| `yavih bench files` | every shipped file of a folder with absolute path, kind (`readme`, `setup`, `yaml`, `template`, `eval`, `manifest`, `classes`, `conformance`, `prepare`, `test`, `other`) and size | `<name>` |
+| `yavih bench show` | print one shipped file | `<name> <what>`: `readme`, `setup`, `yaml`, `template`, `eval`, `classes`, `conformance` (`conformance/expected.json`), `prepare/<file>` or a path inside the folder |
 | `yavih bench prepare` | list the numbered `prepare/NN_*.{sh,py}` steps, or run one | `<name> [<step> [-- args…]]`; the step runs with `FOLDER` and `YAVIH_BENCH` set and the command exits with the step's own code |
 | `yavih bench fetch` | build or download the manifest into `$YAVIH_HOME` and verify its sha256 | `--refresh` overwrites locally edited files of the home copy with the packaged ones |
 | `yavih bench verify` | presence scan, byte reads of a seeded sample, an optional decode health check, derived / target sha256s, curation sums; writes `data_status.json` | `--census` probes every present file and writes the media-info table; `--decode-sample N` (32); `--fingerprint-sample N` (256) |
 | `yavih bench lint` | check folders against the folder contract | `<name\|path>...`; `--all` every discoverable folder; `--skip CHECK` (repeatable); errors exit 2, `TODO` markers are warnings |
 | `yavih bench conformance` | check (or record) a folder's conformance fixture: the numbers its scoring path produces on a generated population, at its `protocol_version` ([conformance](conformance.md)) | `<name\|path>...`; `--all`; `--record` writes `conformance/expected.json`; `--same-version --reason TEXT` overwrites differing values at the same version (the reason is stored only when values did move); `--force` overwrites without comparing; `--same-version`, `--reason` and `--force` need `--record`, `--reason` needs `--same-version` (`E_USAGE`); a drift, stale or missing fixture exits 2, an absent external package is a warning |
 | `yavih bench hash` | a folder's `protocol_hash`, `input_hash`, `scoring_hash`, `manifest_hash` and `folder_source` | `<name\|path>`; `--explain` prints the canonical JSON and digest of every hashed component (recompute the hashes with stdlib only) |
-| `yavih bench new` | scaffold a folder that passes `bench lint`, with `TODO` where facts are needed; reports how its conformance fixture was made (`recorded`, or `copied from <like>` when the copied protocol's package is absent here) | `<name>`; `--readout R`; `--like B` (the folder copied); `--dir D` (default: the project's `benchmarks/`, else the first `$YAVIH_BENCH_PATH` entry, else `.`) |
+| `yavih bench new` | scaffold a folder that passes `bench lint`, with `TODO` where facts are needed; reports how its conformance fixture was made (`recorded`, or `copied from <like>` when the copied protocol's package is absent here) | `<name>`; `--scorer S`; `--like B` (the folder copied); `--dir D` (default: the project's `benchmarks/`, else the first `$YAVIH_BENCH_PATH` entry, else `.`) |
+| `yavih bench migrate` | rewrite a schema-2 `benchmark.yaml` (`streams:`, `readout:`) as schema 3 (`fields:`, `scorer:`), keeping its comments; prints the diff, `--write` applies it and checks that the folder still computes the hashes its changelog records (else the file is restored, `E_MIGRATE`, exit 2) | `<folder|name>`; `--write` |
 | `yavih bench trial` | run a folder's whole pipeline in process on a tiny synthetic stand-in: conformance fixture, stand-in, oracle bridge, `bridge check`, extract, validate, probe, report, headline against its floor; per-stage status | `<name\|folder> --synthetic` (required); `--readout-fast` (the test-only fast `ProbeConfig`; the headline must then clear its floor); `--keep DIR` (work in a new or empty `DIR` and keep it; `paths` names the stand-in, bridge, profile, run directory and report) |
 
 The folder contract, `benchmark.yaml` and the lint checks are described in
@@ -84,7 +85,7 @@ runs, every `YAVIH_*` variable is replaced (home, runs and results under the wor
 afterwards, also on error. The work directory is temporary unless `--keep DIR`.
 
 What it does not cover: the `conformance` stage runs the folder's real scoring path (its readout, metrics,
-`probe.py` hooks and pinned `external` package) on the fixture's generated population, but every later stage
+`eval.py` hooks and pinned `external` package) on the fixture's generated population, but every later stage
 runs on the stand-in, which never reads the real data; it is single-label, so the `probe` stage of a `multi` or
 `multi_sets` folder trials as single-label `acc`; its bridge is the oracle, not yours; speed and numbers on the
 stand-in carry over to nothing. The trial on real data is the fresh-agent [trial run](trial-run.md); without
@@ -129,7 +130,7 @@ clip (`E_CONSTANT_FEATURES`) exit 2. The text output names the run directory the
 | `yavih features validate` | validate feature sets and write `_meta.json` | `<features_dir or features/>`; `--verify-sha`; `--no-write-meta`; `--waive CODE=reason` (repeatable, `all=reason`) |
 | `yavih features inspect` | per-dimension statistics, near-constant dims, dead rows, position and `used` summaries | `<features_dir>` |
 | `yavih features diff` | compare two feature sets row by row | `<a> <b>`; reports `rows_compared`, `max_abs`, `max_rel_l2`, `verdict` |
-| `yavih features stage` | copy shards, sidecars and `_meta.json` to scratch and print the staged path for `probe run --scratch` | `<features/> <scratch>` |
+| `yavih features stage` | copy shards, sidecars and `_meta.json` to scratch and print the staged path for `eval run --scratch` | `<features/> <scratch>` |
 
 `yavih extract` is normally started by `yavih exec` from a plan ([execution](execution.md)). The
 feature format is in [features](features.md), the validation codes and waivers in
@@ -139,12 +140,12 @@ feature format is in [features](features.md), the validation codes and waivers i
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih probe run` | train and score the benchmark's standardized readout on a run directory; writes `result.json`, `DONE` and the results-store file | `<run_dir>`; `--seeds 0,1,2` (default `0`); `--deadline …`; `--scratch DIR`; `--allow-low-coverage`; `--loader-workers N` (default 1: a background thread gathers the next two training batches; `0` = inline; same numbers); `--bench REF` (when `_meta.json`'s name does not resolve); `--no-validate`; `--waive CODE=reason`; `--log-samples`; `--out DIR` (probe a read-only feature set); `--device cpu\|cuda\|cuda:N`; `--results DIR` or `--no-results` |
+| `yavih eval run` | train and score the benchmark's standardized readout on a run directory; writes `result.json`, `DONE` and the results-store file | `<run_dir>`; `--seeds 0,1,2` (default `0`); `--deadline …`; `--scratch DIR`; `--allow-low-coverage`; `--loader-workers N` (default 1: a background thread gathers the next two training batches; `0` = inline; same numbers); `--bench REF` (when `_meta.json`'s name does not resolve); `--no-validate`; `--waive CODE=reason`; `--log-samples`; `--out DIR` (probe a read-only feature set); `--device cpu\|cuda\|cuda:N`; `--results DIR` or `--no-results` |
 | `yavih report build` | comparability-checked tables with floors | `<glob>...`; `--fmt md\|csv\|json`; `--out PATH`; `--seeds aggregate\|list`; `--allow-coverage-diff`; `--detail`; `--join BENCH READING=RUN ...`; `--results DIR`; `--merge-results`; `--suite S` (a completeness appendix per model, md and json); `--registry DIR` (a model registry's accepted entries join the table as rows, flag `registry`, model `<org>/<model>`) |
 | `yavih registry export` | registry entries from a results store ([registry](registry.md)) | `<results_root\|results_file> --org ORG --out DIR`; `--model NAME` (repeatable); `--include-nonstandard`; writes `entries/<benchmark>/<eval_hash12>/<org>/<model>/<reading>.json` and `protocols/<benchmark>/<protocol_hash12>.json`; an entry whose conformance did not pass here is written, listed under `unverified` and warned about (`W_REGISTRY_UNVERIFIED`); `check` refuses it |
 | `yavih registry check` | the registry repository's CI check | `DIR`; every entry parses, is filed under its id, carries consistent hashes, a protocol payload that recomputes them, a passed conformance and a tolerance; non-standard or low-coverage entries are warnings; errors exit 2 |
 
-`probe run` first validates every split (skip with `--no-validate`). Its `<run_dir>` is
+`eval run` first validates every split (skip with `--no-validate`). Its `<run_dir>` is
 `<runs root>/<bench>/<model>/<reading>`; any other layout needs `--results` or a configured results
 root, else `E_RESULTS_ROOT` (exit 1). See [readouts](readouts.md) and [results](results.md).
 
@@ -170,7 +171,7 @@ SLURM wrapping is in [execution](execution.md).
 
 ### `--deadline`
 
-`extract`, `probe run`, `exec` and `plan run` share one parser (`yavih.deadline`):
+`extract`, `eval run`, `exec` and `plan run` share one parser (`yavih.deadline`):
 
 | form | meaning |
 |---|---|
@@ -180,7 +181,7 @@ SLURM wrapping is in [execution](execution.md).
 | `2026-10-10T18:00:00Z` | an ISO-8601 time (no offset = UTC) |
 | `slurm` | `SLURM_JOB_END_TIME − margin` (`--deadline-margin`, default 900 s); outside SLURM no deadline; inside a job without a usable `SLURM_JOB_END_TIME` the error `E_DEADLINE_SPEC` (exit 1) |
 
-Without `--deadline`, `extract` and `probe run` inherit `$YAVIH_DEADLINE` (what `exec` sets for its
+Without `--deadline`, `extract` and `eval run` inherit `$YAVIH_DEADLINE` (what `exec` sets for its
 children); `exec` and `plan run` have no deadline.
 
 ## The `--json` envelope
@@ -205,7 +206,7 @@ A Finding is `{"code": "E_…|W_…|N_…", "message": str, "where": str | null}
 
 `status` is `skipped` for a unit or shard that was already done (`exec`, `extract`),
 `not_applicable` when the bridge or the planner declared the benchmark not applicable (`exec`,
-`extract`, `probe run`), `error` whenever the exit code is non-zero.
+`extract`, `eval run`), `error` whenever the exit code is non-zero.
 
 Stdout stays one object even when a bridge or a library prints: while a `--json` command runs,
 Python's `sys.stdout` is redirected to stderr and, when stdout and stderr are real descriptors 1 and

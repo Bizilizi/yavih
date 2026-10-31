@@ -365,8 +365,8 @@ def test_bench_list(capsys, fake_benchmark_module, yavih_home):
     rc, env = run_json(capsys, ["bench", "list"])
     assert rc == 0 and len(env["data"]) == 1
     row = env["data"][0]
-    assert set(row) == {"name", "aliases", "readout", "capability", "clips", "media_gb", "source_kind", "obtain", "status"}
-    assert row["name"] == "synth_clf" and row["readout"] == "clf" and row["clips"] == {"train": 8, "val": 4} and row["status"] == "verified"
+    assert set(row) == {"name", "aliases", "scorer", "capability", "clips", "media_gb", "source_kind", "obtain", "status"}
+    assert row["name"] == "synth_clf" and row["scorer"] == "clf" and row["clips"] == {"train": 8, "val": 4} and row["status"] == "verified"
     assert row["source_kind"] == "derived" and row["aliases"] == ["synth_clf_alias"]
     rc = cli.main(["bench", "list"])
     assert rc == 0 and "synth_clf" in capsys.readouterr().out
@@ -714,7 +714,7 @@ def test_features_stage(capsys, tmp_path, monkeypatch):
     staged = Path(env["data"]["staged"])
     assert staged.parent == scratch and staged.name.startswith("abc123.") and staged.name.endswith(f".{os.getpid()}")
     assert env["paths"]["staged"] == str(staged)
-    # the staged copy keeps the features/<split> level: `probe run --scratch <staged>` looks for <staged>/features
+    # the staged copy keeps the features/<split> level: `eval run --scratch <staged>` looks for <staged>/features
     assert sorted(p.name for p in (staged / "features" / "train").iterdir()) == ["_meta.json", "shard-000000.json", "shard-000000.tar"]
     assert env["data"]["splits"]["val"]["bytes"] == 30 + 2 + 2
     rc = cli.main(["features", "stage", str(feats / "val"), str(scratch)])
@@ -768,7 +768,7 @@ def test_probe_run_envelope(capsys, monkeypatch):
 
     monkeypatch.setattr(BM.Benchmark, "load", staticmethod(fake_load))
     monkeypatch.setattr(RO, "probe", fake_probe)
-    rc, env = run_json(capsys, ["probe", "run", "/r", "--seeds", "0,1", "--allow-low-coverage", "--scratch", "/s"])
+    rc, env = run_json(capsys, ["eval", "run", "/r", "--seeds", "0,1", "--allow-low-coverage", "--scratch", "/s"])
     # the CLI runs the validate prologue by default, like a planned probe unit; the results store is on by default
     assert rc == 0 and seen == {"run_dir": "/r", "seeds": (0, 1), "allow": True, "scratch": "/s", "validate_first": True,
                                 "log_samples": False, "results_root": None, "write_results": True}
@@ -778,23 +778,23 @@ def test_probe_run_envelope(capsys, monkeypatch):
                               "metrics": {"acc": 0.9}, "floors": {"acc_floor": 0.2}, "reason": None}
     assert loads == ["synth_clf"], "the headline is looked up once per benchmark"
     assert env["paths"] == {"results_file": "/res/m/results_T.json"}
-    rc = cli.main(["probe", "run", "/r"])
+    rc = cli.main(["eval", "run", "/r"])
     assert rc == 0 and f"synth_clf/m/v eval_hash={'e' * 12}" in capsys.readouterr().out
-    rc, env = run_json(capsys, ["probe", "run", "/r", "--no-validate"])
+    rc, env = run_json(capsys, ["eval", "run", "/r", "--no-validate"])
     assert rc == 0 and seen["validate_first"] is False
-    rc, env = run_json(capsys, ["probe", "run", "/r", "--log-samples", "--results", "/res"])
+    rc, env = run_json(capsys, ["eval", "run", "/r", "--log-samples", "--results", "/res"])
     assert rc == 0 and seen["log_samples"] is True and seen["results_root"] == "/res"
     assert env["paths"] == {"results_file": "/res/m/results_T.json", "samples_files": ["/res/m/samples_b_v_T.jsonl"]}
-    rc, env = run_json(capsys, ["probe", "run", "/r", "--no-results"])
+    rc, env = run_json(capsys, ["eval", "run", "/r", "--no-results"])
     assert rc == 0 and seen["write_results"] is False
-    assert cli.main(["probe", "run", "/r", "--no-results", "--results", "/x"]) != 0  # mutually exclusive: a usage error
+    assert cli.main(["eval", "run", "/r", "--no-results", "--results", "/x"]) != 0  # mutually exclusive: a usage error
     capsys.readouterr()
 
     def na_probe(run_dir, **kw):
         return [SimpleNamespace(status="not_applicable", seed=0, path=None, result={}, metrics={}, reason="pos missing")]
 
     monkeypatch.setattr(RO, "probe", na_probe)
-    rc, env = run_json(capsys, ["probe", "run", "/r"])
+    rc, env = run_json(capsys, ["eval", "run", "/r"])
     assert rc == 0 and env["status"] == "not_applicable"
 
     def refused(run_dir, **kw):
@@ -803,7 +803,7 @@ def test_probe_run_envelope(capsys, monkeypatch):
         raise ProbeRefused("E_COVERAGE", "eval coverage 0.5 < 0.95")
 
     monkeypatch.setattr(RO, "probe", refused)
-    rc, env = run_json(capsys, ["probe", "run", "/r"])
+    rc, env = run_json(capsys, ["eval", "run", "/r"])
     assert rc == 2 and env["errors"][0]["code"] == "E_COVERAGE"
 
 
@@ -912,9 +912,9 @@ def test_extract_envelope_passes_arguments(capsys, monkeypatch):
 
 # ============================================================================= yavih.testing: synthetic benchmarks
 
-REQUIRED_TOP_LEVEL_KEYS = {  # benchmark.yaml schema 2
-    "schema_version", "name", "aliases", "title", "readout", "protocol_version", "changelog", "source", "budget",
-    "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract", "external", "protocol",
+REQUIRED_TOP_LEVEL_KEYS = {  # benchmark.yaml schema 3
+    "schema_version", "name", "aliases", "title", "scorer", "protocol_version", "changelog", "source", "budget",
+    "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract", "external", "protocol",
     "metrics", "readout_params", "header",
 }
 README_H2 = ["Description", "Citation", "In yavih"]  # README.md contract
@@ -950,11 +950,11 @@ def test_make_synthetic_benchmark_folder_is_valid(tmp_path, readout):
               "prepare/01_generate.sh", "tests/test_folder.py"):
         assert (folder / f).is_file(), f
     spec = yaml.safe_load((folder / "benchmark.yaml").read_text())
-    assert set(spec) == REQUIRED_TOP_LEVEL_KEYS and spec["schema_version"] == 2 and spec["name"] == folder.name and spec["readout"] == readout
+    assert set(spec) == REQUIRED_TOP_LEVEL_KEYS and spec["schema_version"] == 3 and spec["name"] == folder.name and spec["scorer"] == readout
     assert spec["protocol_version"] == 1 and [c["version"] for c in spec["changelog"]] == [1] and spec["external"] == []
     # contracts: handed_over/info name exactly the streams; the output contract is pinned
     ic, oc = spec["input_contract"], spec["output_contract"]
-    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["streams"]) and ic["materialize"] is None
+    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["fields"]) and ic["materialize"] is None
     assert all(f in spec["protocol"] for f in ic["facts"])
     assert oc["shape"] == "fixed" and oc["coordinates"] == "media" and (oc["target_frame"] == "full_frame") == (readout in ("grid", "box"))
     from yavih.benchmark import Benchmark
@@ -968,8 +968,8 @@ def test_make_synthetic_benchmark_folder_is_valid(tmp_path, readout):
     cols = spec["manifest"]["columns"]
     assert set(cols) <= set(rows[0]) and "clip_id" not in cols and "split" not in cols
     media_cols = {c: v["stream"] for c, v in cols.items() if v["role"] == "media"}
-    assert set(media_cols.values()) == set(spec["streams"])
-    for sname, st in spec["streams"].items():
+    assert set(media_cols.values()) == set(spec["fields"])
+    for sname, st in spec["fields"].items():
         assert st["media_column"] in cols and cols[st["media_column"]]["stream"] == sname
         assert st["root"] in spec["data"]["roots"]
     # classes
@@ -999,10 +999,10 @@ def test_make_synthetic_benchmark_folder_is_valid(tmp_path, readout):
     from yavih.benchmark import READOUT_PARAM_KEYS
 
     assert set(spec["readout_params"]) <= READOUT_PARAM_KEYS[readout]
-    assert set(spec["output_contract"]["requires"]["streams"]) <= set(spec["streams"])
+    assert set(spec["output_contract"]["requires"]["streams"]) <= set(spec["fields"])
     for k in ("visual_stream", "conditioning_stream"):
         if k in spec["readout_params"]:
-            assert spec["readout_params"][k] in spec["streams"]
+            assert spec["readout_params"][k] in spec["fields"]
     assert (spec["targets"] is not None) == (readout == "grid")
     cur = spec["manifest"]["upstream"]["curation"]
     assert sum(v["listed"] for v in cur["per_split"].values()) + sum(cur["excluded"].values()) == cur["total_upstream"] == 18

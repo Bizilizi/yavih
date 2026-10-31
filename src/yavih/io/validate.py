@@ -18,7 +18,7 @@ by ``run_extract`` from ``RawStream.info``) and the bridge's report of what it c
 validate re-evaluates the rule the bridge declared in ``describe()["input"]`` on those
 facts.
 
-``E_FORMAT`` refuses any format other than this yavih's (re-extract); ``E_DESCRIBE_MISMATCH`` covers ``model``,
+``E_FORMAT`` refuses any format this yavih cannot read (re-extract); ``E_DESCRIBE_MISMATCH`` covers ``model``,
 ``reading`` and ``describe_sha256`` (consistency of one feature set, never identity); a ``custom`` rule is a
 legitimate opt-out recorded as the note ``N_RULE_CUSTOM``; ``W_RULE_UNCHECKED`` is only for a checkable rule a
 null media fact kept from being evaluated; ``W_WEIGHTS_UNFINGERPRINTED`` records a null ``weights_sha256``.
@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from yavih import hashing
+from yavih.fields import spec_streams
 from yavih.hash_history import describe_input_mismatch
 from yavih.io.format import (
     CONSTANT_POS_MEMBER,
@@ -54,6 +55,7 @@ from yavih.io.format import (
     META_FILE,
     NOT_APPLICABLE_FILE,
     POS_MODES,
+    READABLE_FEATURE_FORMATS,
     FormatError,
     parse_member_name,
     shard_sidecar_name,
@@ -165,14 +167,24 @@ MAX_BATCH_TOLERANCE: float = 1e-3
 #: ``W_FP16_RANGE`` thresholds.
 FP16_WARN_ABS: float = 1e3
 FP16_WARN_ZERO_FRACTION: float = 0.5
-#: Dense readouts: pooled features (``N == 1``) can never serve them.
+def _scorer(readout: str) -> Any | None:
+    """The registered scorer, or ``None`` for an unknown name (the verdict then follows ``requires`` alone)."""
+    from yavih.readouts import registry
+
+    try:
+        return registry.get(readout)
+    except registry.UnknownScorer:
+        return None
+
+
+#: Dense scorers: pooled features (``N == 1``) can never serve them.
 def _dense(readout: str) -> bool:
-    """Whether the readout needs per-token media positions (``Readout.dense``, ``yavih.readouts.registry``)."""
+    """Whether the scorer needs per-token media positions (``Scorer.dense``, ``yavih.readouts.registry``)."""
     from yavih.readouts import registry
 
     try:
         return bool(registry.get(readout).dense)
-    except registry.UnknownReadout:
+    except registry.UnknownScorer:
         return False
 
 _SIDECAR_RE = re.compile(r"^shard-(\d{6})\.json$")
@@ -490,11 +502,12 @@ class _BenchView:
         self.name: str | None = getattr(bench, "name", None)
         self.readout: str | None = _get(spec, "readout")
         oc = _get(spec, "output_contract")
+        self.output_contract: dict = _as_dict(oc)
         self.requires: dict = _as_dict(_get(oc, "requires"))
         self.readout_params: dict = dict(_get(spec, "readout_params") or {})
         self.protocol: dict = dict(_get(spec, "protocol") or {})
         self.splits: dict = _as_dict(_get(spec, "splits"))
-        self.streams: dict[str, Any] = dict(_get(spec, "streams") or {})
+        self.streams: dict[str, Any] = spec_streams(spec) if spec is not None else {}
         self.stream_kinds: dict[str, str] = {}
         for sname, s in self.streams.items():
             kind = _get(s, "kind")
@@ -583,9 +596,11 @@ def rules_checked(describe: Mapping[str, Any], kinds: Mapping[str, str]) -> dict
     """``_meta.json`` ``rules_checked``: per stream read, the temporal rule validate re-evaluates (``"custom"`` = the bridge
     opted out, ``N_RULE_CUSTOM``; ``None`` for images) and whether the spatial rule is checked (``False`` = custom,
     ``None`` where a kind has no spatial rule)."""
+    from yavih.bridge import is_cell_entry
+
     out: dict[str, dict[str, Any]] = {}
     for sname, entry in dict((describe or {}).get("input") or {}).items():
-        if not isinstance(entry, Mapping):
+        if not isinstance(entry, Mapping) or is_cell_entry(entry):  # a cell field has no rule
             continue
         kind = kinds.get(sname) or _infer_kind(entry, None, None) or "video"
         t = entry.get("temporal")
@@ -625,8 +640,10 @@ def check_member(
         fx.add("E_MEMBERS", ".json lacks 'used' (what the bridge consumed per stream)", where)
         return
     tags = list((describe or {}).get("streams") or [])
+    from yavih.bridge import is_cell_entry
+
     for sname, entry in inp.items():
-        if not isinstance(entry, Mapping):
+        if not isinstance(entry, Mapping) or is_cell_entry(entry):
             continue
         if sname not in used:
             fx.add("E_MEMBERS", f".json used lacks stream {sname!r} declared in describe()['input']", where)
@@ -903,8 +920,8 @@ def _read_sidecar(path: Path, fx: _Findings) -> dict | None:
         fx.add("E_FORMAT", "sidecar is not a JSON object", path.name)
         return None
     fv = sc.get("format_version")
-    if isinstance(fv, bool) or fv != FEATURE_FORMAT_VERSION:
-        fx.add("E_FORMAT", f"unsupported format_version {fv!r} (this yavih reads {FEATURE_FORMAT_VERSION}); re-extract", path.name)
+    if isinstance(fv, bool) or fv not in READABLE_FEATURE_FORMATS:
+        fx.add("E_FORMAT", f"unsupported format_version {fv!r} (this yavih reads {list(READABLE_FEATURE_FORMATS)}); re-extract", path.name)
         return None
     missing = [k for k in _SIDECAR_REQUIRED if k not in sc]
     if missing:
@@ -915,7 +932,15 @@ def _read_sidecar(path: Path, fx: _Findings) -> dict | None:
         fx.add("E_FORMAT", "sidecar shard block malformed (needs index, n, rows [lo, hi], batch_size)", path.name)
         return None
     feats = sc["features"]
-    if not isinstance(feats, dict) or feats.get("dtype") not in FEATURE_DTYPES or feats.get("pos_mode") not in POS_MODES:
+    outputs = sc.get("outputs")
+    generic = isinstance(outputs, dict) and outputs.get("schema") is not None
+    if generic and (not isinstance(outputs.get("schema"), dict) or not isinstance(outputs.get("bound", {}), dict)
+                    or not isinstance(outputs.get("keys") or {}, dict) or not isinstance(outputs.get("schema_sha256"), str)):
+        fx.add("E_FORMAT", "sidecar outputs block malformed (needs schema, schema_sha256, bound, keys)", path.name)
+        return None
+    if generic:
+        pass  # no feature matrix: the members carry `parts`
+    elif not isinstance(feats, dict) or feats.get("dtype") not in FEATURE_DTYPES or feats.get("pos_mode") not in POS_MODES:
         fx.add("E_FORMAT", f"sidecar features block malformed: dtype ∈ {sorted(FEATURE_DTYPES)}, pos_mode ∈ {sorted(POS_MODES)}", path.name)
         return None
     if not isinstance(sc.get("members"), list) or not isinstance(sc.get("missing"), list):
@@ -979,6 +1004,7 @@ class _Stats:
         self.t_bins: list[int] = []  # per sampled row, scored seconds with a timed token
         self.annot_dt: list[float] = []  # per sampled row, min |t·duration − annotated second| over the stream's timed tokens
         self._elig_rows: set[int] = set()
+        self.codec_stats: dict[str, Any] = {}  # generic sets: key -> the codec's Stats (yavih.codecs)
 
     def feat(self, row: int, clip_id: str, media_key: str | None, arr: np.ndarray) -> None:
         self.present_rows.append(row)
@@ -1023,6 +1049,10 @@ class _Stats:
         self.dup_hash.update(part.dup_hash)
         self.canary_pairs.extend(part.canary_pairs)
         self.canary_mismatch.extend(part.canary_mismatch)
+        for key, st in part.codec_stats.items():
+            if key not in self.codec_stats:
+                self.codec_stats[key] = st.empty()
+            self.codec_stats[key].merge(st)
         self.pos_streams |= part.pos_streams
         self.pos_axes |= part.pos_axes
         for row, meta, p in part._elig_queue:
@@ -1112,6 +1142,8 @@ class _ScanCtx:
     verify_sha: bool
     pos_blobs: dict[int, tuple[str, str]]
     unchecked: dict[str, int] = field(default_factory=dict)  # stream -> members whose checkable rule needed a null fact
+    resolved: dict | None = None  # generic sets: {key: (entry, codec)}
+    tolerance: float = DEFAULT_BATCH_TOLERANCE
 
 
 class _Recorder:
@@ -1138,6 +1170,7 @@ class _ScanStatic:
     verify_sha: bool
     sampled: frozenset[int]
     elig: _EligSpec
+    resolved: dict | None = None  # generic sets: {key: (entry, codec)} of the declared output schema
 
 
 @dataclass
@@ -1161,7 +1194,8 @@ def _scan_shard_isolated(sh: _Shard, static: _ScanStatic) -> _ShardScan:
     blobs: dict[int, tuple[str, str]] = {}
     unchecked: dict[str, int] = {}
     ctx = _ScanCtx(fx=rec, N=static.N, D=static.D, dtype=static.dtype, pos_mode=static.pos_mode, describe=static.describe,
-                   kinds=static.kinds, stats=part, verify_sha=static.verify_sha, pos_blobs=blobs, unchecked=unchecked)
+                   kinds=static.kinds, stats=part, verify_sha=static.verify_sha, pos_blobs=blobs, unchecked=unchecked,
+                   resolved=static.resolved)
     _scan_shard(sh, ctx)
     return _ShardScan(index=sh.index, findings=rec.findings, stats=part, pos_blob=blobs.get(sh.index), unchecked=unchecked)
 
@@ -1231,6 +1265,9 @@ def _scan_shard(sh: _Shard, ctx: _ScanCtx) -> None:
     """One streaming pass over a shard's tar: ``E_TAR_SHA``, ``E_MEMBERS``, ``E_ROWS``, the per-member
     ``E_TIMES_OUT_OF_MEDIA`` / ``E_RULE_MISMATCH``, ``E_FINITE``, ``E_POS_SHAPE/RANGE``, canary pairs and the
     sampled stats."""
+    if ctx.resolved is not None:
+        _scan_shard_generic(sh, ctx)
+        return
     fx, N, D, stats = ctx.fx, ctx.N, ctx.D, ctx.stats
     n_streams = len(ctx.describe.get("streams") or [])
     sc = sh.sidecar
@@ -1454,6 +1491,198 @@ def _scan_shard(sh: _Shard, ctx: _ScanCtx) -> None:
             fx.add("E_MEMBERS", f"canary c{crow:09d}.json has no c{crow:09d}.feat.npy", where)
 
 
+def _scan_shard_generic(sh: _Shard, ctx: _ScanCtx) -> None:
+    """The scan of a generic set (a declared output schema): per row the ``.json`` record and one ``{key}.{ext}``
+    member per carried key, each decoded and checked by its codec (``E_MEMBERS``, ``E_FINITE``, ``E_FEATURES``,
+    ``W_FP16_RANGE``) with the symbols the shard's sidecar bound; the codec statistics of keys with ``stats: true``;
+    canary pairs through the codec's distance (an exact key must be equal: ``E_BATCH_INVARIANCE``); the member set
+    against the sidecar; every row of the range written xor missing. The temporal checks of ``used`` against the
+    media facts run as for the feature matrix (there are no media positions)."""
+    fx, stats, resolved = ctx.fx, ctx.stats, ctx.resolved
+    assert resolved is not None
+    sc = sh.sidecar
+    where = sh.where
+    tar_path = sh.tar_path
+    assert tar_path is not None
+    tar_block = sc.get("tar") or {}
+    try:
+        size = tar_path.stat().st_size
+    except OSError as e:
+        fx.add("E_SHARD_SET", f"tar unreadable: {e}", where)
+        return
+    if isinstance(tar_block.get("bytes"), int) and tar_block["bytes"] != size:
+        fx.add("E_MEMBERS", f"tar is {size} B, sidecar says {tar_block['bytes']} B (truncated or rewritten tar)", where)
+    if ctx.verify_sha:
+        got = _sha256_file(tar_path)
+        if got != tar_block.get("sha256"):
+            fx.add("E_TAR_SHA", f"tar sha256 {got[:12]}… ≠ sidecar {str(tar_block.get('sha256'))[:12]}…", where)
+    outputs = sc.get("outputs") or {}
+    carried = list((outputs.get("keys") or {}).keys())
+    unknown = [k for k in carried if k not in resolved]
+    if unknown:
+        fx.add("E_MEMBERS", f"sidecar outputs.keys names keys outside the schema: {unknown}", where)
+    missing_keys = [k for k, (spec, _) in resolved.items() if k not in carried and not spec.get("optional", False)]
+    if missing_keys and sc.get("members"):
+        fx.add("E_MEMBERS", f"the feature set lacks the schema key(s) {missing_keys}", where)
+    bound = {str(k): int(v) for k, v in (outputs.get("bound") or {}).items()}
+    lo, hi = sh.lo, sh.hi
+    sidecar_members = {int(m["row"]): m for m in sc["members"] if isinstance(m, dict) and "row" in m}
+    missing_rows = {int(m["row"]): m for m in sc["missing"] if isinstance(m, dict) and "row" in m}
+    for k in carried:
+        if k in resolved and resolved[k][0].get("stats") and k not in stats.codec_stats and resolved[k][1].stats is not None:
+            st = resolved[k][1].stats(resolved[k][0], bound)
+            stats.codec_stats[k] = st.partial() if stats.deferred else st
+    try:
+        tf = tarfile.open(tar_path, "r:")
+    except (tarfile.TarError, OSError) as e:
+        fx.add("E_MEMBERS", f"tar unreadable: {e}", where)
+        return
+    with tf:
+        try:
+            infos = tf.getmembers()
+        except (tarfile.TarError, OSError, EOFError) as e:
+            fx.add("E_MEMBERS", f"tar truncated or malformed: {e}", where)
+            return
+        seen_json: dict[int, dict] = {}
+        seen_parts: dict[int, dict[str, Any]] = {}
+        canary_json: dict[int, dict] = {}
+        canary_parts: dict[int, dict[str, Any]] = {}
+        written_twice: set[int] = set()
+        order: list[int] = []
+        for ti in infos:
+            name = ti.name
+            try:
+                row, ext, is_canary = parse_member_name(name)
+            except FormatError:
+                fx.add("E_MEMBERS", f"unexpected member {name!r}", where)
+                continue
+            if not ti.isfile():
+                fx.add("E_MEMBERS", f"member {name!r} is not a regular file", where)
+                continue
+            data = tf.extractfile(ti).read()  # type: ignore[union-attr]
+            mwhere = f"{where}:{name}"
+            if ext == "json":
+                try:
+                    j = json.loads(data.decode("utf-8"))
+                except ValueError as e:
+                    fx.add("E_MEMBERS", f"json member unparsable: {e}", mwhere)
+                    j = {}
+                if not isinstance(j, dict):
+                    fx.add("E_MEMBERS", "json member is not an object", mwhere)
+                    j = {}
+                if j.get("row") != row:
+                    fx.add("E_MEMBERS", f".json.row {j.get('row')!r} ≠ member name row {row}", mwhere)
+                if is_canary:
+                    canary_json[row] = j
+                    continue
+                if row in seen_json:
+                    written_twice.add(row)
+                seen_json[row] = j
+                order.append(row)
+                if not (lo <= row < hi):
+                    fx.add("E_ROWS", f"row {row} outside shard range [{lo}, {hi})", mwhere)
+                sm = sidecar_members.get(row)
+                if sm is not None and sm.get("clip_id") != j.get("clip_id"):
+                    fx.add("E_MEMBERS", f"clip_id {j.get('clip_id')!r} ≠ sidecar members {sm.get('clip_id')!r}", mwhere)
+                check_member(j, None, describe=ctx.describe, kinds=ctx.kinds, where=mwhere, fx=fx, unchecked=ctx.unchecked)
+                continue
+            key, _, mext = ext.partition(".")
+            if key not in resolved or key not in carried:
+                fx.add("E_MEMBERS", f"member {name!r}: key {key!r} is not a carried schema key ({carried})", mwhere)
+                continue
+            spec, codec = resolved[key]
+            if mext != codec.ext_for(spec):
+                fx.add("E_MEMBERS", f"member {name!r}: extension {mext!r} ≠ the codec's {codec.ext_for(spec)!r}", mwhere)
+                continue
+            try:
+                value = codec.decode(data, spec)
+            except Exception as e:  # noqa: BLE001 - a member that does not decode is a finding
+                fx.add("E_MEMBERS", f"{key}: does not decode as {codec.name}: {type(e).__name__}: {e}", mwhere)
+                continue
+            for f in codec.check(value, spec, dict(bound)):
+                fx.add(f.code, f"{key}: {f.message}", mwhere)
+            if is_canary:
+                canary_parts.setdefault(row, {})[key] = value
+                continue
+            seen_parts.setdefault(row, {})[key] = value
+            sm = sidecar_members.get(row)
+            part = ((sm or {}).get("parts") or {}).get(key)
+            if sm is not None and (part is None or int(part.get("offset_data", -1)) != int(ti.offset_data)):
+                fx.add("E_MEMBERS", f"sidecar parts.{key}.offset_data {None if part is None else part.get('offset_data')} ≠ tar {ti.offset_data}", mwhere)
+            stats.bytes += len(data)
+            st = stats.codec_stats.get(key)
+            if st is not None:
+                j = seen_json.get(row, {})
+                st.add(row, str(j.get("clip_id", "")), j.get("media_key"), value, sampled=row in stats.sampled)
+
+        if order != sorted(order):
+            fx.add("E_MEMBERS", "members are not in ascending row order", where)
+        for row in seen_json:
+            have = set(seen_parts.get(row, {}))
+            if have != set(carried):
+                fx.add("E_MEMBERS", f"row {row}: members {sorted(have)} ≠ the carried keys {sorted(carried)}", where)
+        written = set(seen_json)
+        for row in written:
+            j = seen_json[row]
+            stats.present_rows.append(row)
+            stats.clip_ids.append(str(j.get("clip_id", "")))
+        if set(sidecar_members) != written:
+            fx.add("E_MEMBERS", f"member set ≠ sidecar members (only in tar: {sorted(written - set(sidecar_members))[:10]}, "
+                   f"only in sidecar: {sorted(set(sidecar_members) - written)[:10]})", where)
+        rows_block = sc.get("rows") or {}
+        if isinstance(rows_block.get("n_written"), int) and rows_block["n_written"] != len(written):
+            fx.add("E_MEMBERS", f"sidecar rows.n_written {rows_block['n_written']} ≠ {len(written)} members", where)
+        if written_twice:
+            fx.add("E_ROWS", f"rows written twice: {sorted(written_twice)[:10]}", where)
+        both = written & set(missing_rows)
+        if both:
+            fx.add("E_ROWS", f"rows both written and listed missing: {sorted(both)[:10]}", where)
+        unaccounted = [r for r in range(lo, hi) if r not in written and r not in missing_rows]
+        if unaccounted:
+            fx.add("E_ROWS", f"{len(unaccounted)} rows neither written nor in missing: {unaccounted[:10]}", where)
+
+        # canaries through the codec's distance: exact keys must be equal, the rest within the tolerance
+        for crow, cvals in sorted(canary_parts.items()):
+            orig = seen_parts.get(crow)
+            if orig is None:
+                fx.add("E_MEMBERS", f"canary c{crow:09d} has no original row", where)
+                continue
+            worst = 0.0
+            for key, cv in cvals.items():
+                spec, codec = resolved[key]
+                d = float(codec.distance(cv, orig.get(key), spec))
+                if codec.is_exact(spec):
+                    if d != 0.0:
+                        stats.canary_mismatch.append((crow, key))
+                else:
+                    worst = max(worst, d)
+            stats.canary_pairs.append((crow, worst))
+            cj = canary_json.get(crow)
+            if cj is None:
+                fx.add("E_MEMBERS", f"canary c{crow:09d} has no c{crow:09d}.json", where)
+            elif "used" in cj and hashing.canon(cj.get("used")) != hashing.canon((seen_json.get(crow) or {}).get("used")):
+                stats.canary_mismatch.append((crow, "used"))
+
+
+def _resolve_generic(shards: list[_Shard], view: _BenchView | None, fx: _Findings | _Recorder) -> dict | None:
+    """``{key: (entry, codec)}`` of a generic set's schema: the loaded benchmark's (whose sha must match the
+    sidecars', ``E_FORMAT``), else the sidecars' own schema resolved against the built-in and entry-point codecs."""
+    from yavih import codecs as _codecs
+
+    sc_schema = next(((sh.sidecar.get("outputs") or {}).get("schema") for sh in shards if (sh.sidecar.get("outputs") or {}).get("schema")), None)
+    bench = getattr(view, "bench", None) if view is not None else None
+    reg = getattr(bench, "codecs", None) or _codecs.registry()
+    oc = getattr(getattr(bench, "spec", None), "output_contract", None)
+    bench_schema = oc.get("schema") if isinstance(oc, Mapping) else getattr(oc, "schema", None)
+    if bench_schema is not None and _codecs.schema_sha256(bench_schema) != _codecs.schema_sha256(sc_schema):
+        fx.add("E_FORMAT", "the sidecars' output schema is not the benchmark's output_contract.schema (re-extract)")
+    try:
+        return _codecs.resolve_schema(bench_schema or sc_schema, reg)
+    except ValueError as e:
+        fx.add("E_FORMAT", f"the output schema does not resolve here: {e}")
+        return None
+
+
 def _check_pos(arr: np.ndarray, N: int, n_streams: int, where: str, fx: _Findings) -> bool:
     """``E_POS_SHAPE`` / ``E_POS_RANGE`` on one pos array; True when usable for the spatial checks."""
     ok = True
@@ -1539,6 +1768,7 @@ def _eligibility(
     tag_names: list[str],
     stats: _Stats,
     espec: _EligSpec,
+    present_keys: list[str] | None = None,
 ) -> dict:
     """``N_ELIGIBILITY``: ``output_contract.requires`` evaluated on the features (medians over the
     sample, mins recorded). The ``_meta.json`` eligibility block; decided here and nowhere else."""
@@ -1561,53 +1791,34 @@ def _eligibility(
     if view is None:
         block["reason"] = f"undecided: {why_no_bench}"
         return block
-    missing: list[str] = []
-    reasons: list[str] = []
     readout = view.readout or "?"
-    req, rp = view.requires, view.readout_params
-    if _dense(readout) and N == 1:
-        missing.append("tokens>1")
-        reasons.append(f"N == 1 (pooled features) cannot serve the dense readout {readout!r}")
-    for axis in tuple(req.get("pos") or ()):
-        if pos_mode == "none" or axis not in stats.pos_axes:
-            missing.append(f"pos.{axis}")
-    required_streams = list(req.get("streams") or ())
-    for key in ("visual_stream", "conditioning_stream"):
-        if rp.get(key) and rp[key] not in required_streams:
-            required_streams.append(rp[key])
-    for sname in required_streams:
-        if sname not in tagged:
-            missing.append(f"stream:{sname}")
-    g = req.get("grid")
-    if isinstance(g, Mapping) and g.get("min_cell_coverage") is not None:
-        cov = block["grid_cell_coverage"]
-        need = float(g["min_cell_coverage"])
-        if cov is None or cov["median"] < need:
-            missing.append("grid_cell_coverage")
-            frame = "the target region" if block["target_region"] is not None else "the full frame"
-            got = "no positioned tokens" if cov is None else f"median {cov['median']:.2f}"
-            reasons.append(f"grid coverage {got} < {need:g} over {frame}")
-    tb = req.get("t_bins")
-    if tb is not None:
-        got_tb = block["t_bins"]
-        if got_tb is None or got_tb["median"] < int(tb):
-            missing.append("t_bins")
-            reasons.append(f"scored seconds with a timed token: median {None if got_tb is None else got_tb['median']} < {int(tb)}")
-    af = req.get("annotated_frame")
-    if isinstance(af, Mapping) and espec.annot_second is not None:
-        dt = block.get("annotated_frame_dt")
-        tol = float(espec.annot_tol or 0.0)
-        if dt is None or dt.get("median") is None or float(dt["median"]) > tol:
-            missing.append("annotated_frame")
-            got = "no timed token" if dt is None or dt.get("median") is None else f"median {float(dt['median']):.2f} s"
-            reasons.append(f"no {espec.annot_stream!r} token within {tol:g} s of the annotated second {espec.annot_second:g} s ({got} away): "
-                           "the target is drawn on that frame")
+    from yavih.readouts.eligibility import (
+        EXPLAINED,
+        EligibilityView,
+        normalize_verdict,
+        requires_missing,
+    )
+
+    scorer = _scorer(readout)
+    present_keys = set(present_keys) if present_keys is not None else {"feat"} | ({"pos"} if pos_mode != "none" else set())
+    ev = EligibilityView(
+        scorer=readout, dense=_dense(readout), N=int(N), pos_mode=str(pos_mode), readout_params=dict(view.readout_params),
+        requires=dict(view.requires), protocol=dict(view.protocol), pos_axes=frozenset(stats.pos_axes), stream_tags=tuple(tagged),
+        grid_cell_coverage=block["grid_cell_coverage"], t_bins=block["t_bins"], annotated_frame_dt=block.get("annotated_frame_dt"),
+        annot_second=espec.annot_second, annot_tol=float(espec.annot_tol or 0.0), annot_stream=espec.annot_stream,
+        target_region=block["target_region"], output_schema=(view.output_contract or {}).get("schema"), output_keys=frozenset(present_keys),
+    )
+    hook = getattr(scorer, "eligibility", None) if scorer is not None else None
+    missing, reasons = normalize_verdict(hook(ev)) if hook is not None else requires_missing(ev)
+    for key in sorted(getattr(scorer, "output_keys", ()) or ()):  # the scorer's declared output keys must be present
+        if key not in present_keys:
+            missing.append(f"schema:{key}")
     seen: set[str] = set()
     missing = [m for m in missing if not (m in seen or seen.add(m))]
     block["missing"] = missing
     block["eligible"] = not missing
     if missing:
-        rest = [m for m in missing if m not in ("tokens>1", "grid_cell_coverage", "t_bins", "annotated_frame")]
+        rest = [m for m in missing if m not in EXPLAINED]
         if rest:
             reasons.append("missing: " + ", ".join(rest))
         block["reason"] = "; ".join(reasons)
@@ -1649,7 +1860,7 @@ def _cheap_recheck(split_dir: Path, meta: dict, shards: list[_Shard], view: _Ben
 
     if not isinstance(meta.get("validation"), dict) or not meta["validation"].get("ok"):
         return None
-    if meta.get("format_version") != FEATURE_FORMAT_VERSION:
+    if meta.get("format_version") != FEATURE_FORMAT_VERSION:  # an older _meta.json's verdict is never reused: re-validate
         return None
     if view is not None and view.readout is not None and (meta.get("eligibility") or {}).get("readout") != view.readout:
         return None  # eligibility was decided for another readout; re-derive it
@@ -1686,8 +1897,9 @@ def _cheap_recheck(split_dir: Path, meta: dict, shards: list[_Shard], view: _Ben
         coverage["sample"] = list(meta["sample"])
     return ValidationReport(
         ok=fx.ok, errors=fx.errors, warnings=fx.warnings, notes=fx.notes, split=str(meta.get("split")),
-        coverage=coverage, N=int(feats.get("N", 0)), D=int(feats.get("D", 0)), dtype=str(feats.get("dtype", "")),
-        pos_mode=str(feats.get("pos_mode", "none")), bytes=int(feats.get("bytes", 0)),
+        # a generic set (a declared output schema) records N, D, dtype and pos_mode as null
+        coverage=coverage, N=int(feats.get("N") or 0), D=int(feats.get("D") or 0), dtype=str(feats.get("dtype") or ""),
+        pos_mode=str(feats.get("pos_mode") or "none"), bytes=int(feats.get("bytes") or 0),
         backend_hint="memmap" if any(w.code == "W_SIZE" for w in fx.warnings) else "ram",
         eligibility=dict(meta.get("eligibility") or {}), missing_shards=[],
         shards={"n": n_shards, "done": n_shards, "in_progress": 0, "missing": 0, "reused_meta": True},
@@ -1812,7 +2024,7 @@ def validate_features(
     complete = n_total is not None and not missing_shards and all(s.tar_path is not None for s in shards) and len(shards) == n_total
 
     # ---- hash checks (cheap, before tiling so a wrong-benchmark set is named first). The benchmark side of a feature
-    # set is its INPUT hash: a scoring edit (metric pin, probe.py, readout version) never fails features. A recorded
+    # set is its INPUT hash: a scoring edit (metric pin, eval.py, readout version) never fails features. A recorded
     # input hash the folder changelog lists under `supersedes_input` stands for the current one (identity_value).
     nominal: int | None = view.n_rows(split_name) if view else None
     # A capped run (`extract --rows lo:hi`, `plan build --sample N`): the split's _layout.json says `sample: [lo, hi]`;
@@ -1913,6 +2125,20 @@ def validate_features(
     pos_sha_declared = _consensus(lambda s: s["features"].get("pos_sha256"), "E_DESCRIBE_MISMATCH", "features.pos_sha256")
     # Same describe(), different bridge FILE: an edit that leaves describe() alone can still change the numbers.
     _consensus(lambda s: s["bridge"].get("source_sha256"), "W_SOURCE_SHA", "bridge.source_sha256 (shards extracted by different bridge files)")
+    # ---- a declared output schema (generic set): one schema per set, its symbols bound alike by every shard
+    schema_sha = _consensus(lambda s: (s.get("outputs") or {}).get("schema_sha256") if (s.get("outputs") or {}).get("schema") is not None else None,
+                            "E_DESCRIBE_MISMATCH", "outputs.schema_sha256")
+    resolved: dict | None = None
+    if schema_sha is not None:
+        resolved = _resolve_generic(shards, view, fx)
+        bound_all: dict[str, int] = {}
+        for sh in shards:
+            for sym, v in ((sh.sidecar.get("outputs") or {}).get("bound") or {}).items():
+                if sym in bound_all and bound_all[sym] != v:
+                    fx.add("E_DESCRIBE_MISMATCH", f"outputs.bound.{sym} is {v} in this shard, {bound_all[sym]} in another (every symbol is fixed per feature set)", sh.where)
+                bound_all.setdefault(sym, v)
+        _consensus(lambda s: sorted((s.get("outputs") or {}).get("keys") or {}) if s.get("members") else None,
+                   "E_DESCRIBE_MISMATCH", "outputs.keys (the carried schema keys)")
     if not isinstance(describe, dict):
         describe = {}
     if shards and describe:
@@ -1963,7 +2189,7 @@ def validate_features(
         if unconsumed:
             fx.add("E_ARGS_UNCONSUMED", f"--arg keys not echoed in describe()['args']: {unconsumed}", sh.where)
 
-    if shards and (not isinstance(N, int) or not isinstance(D, int) or N < 1 or D < 1):
+    if shards and resolved is None and schema_sha is None and (not isinstance(N, int) or not isinstance(D, int) or N < 1 or D < 1):
         fx.add("E_FORMAT", f"features.N/D must be ints ≥ 1, got {N!r}/{D!r}")
     if not isinstance(N, int) or not isinstance(D, int):
         N, D = int(N or 0), int(D or 0)
@@ -2015,9 +2241,10 @@ def validate_features(
     stats = _Stats(max(N, 0), max(D, 0), sampled, espec)
     pos_blobs: dict[int, tuple[str, str]] = {}
     unchecked_rows: dict[str, int] = {}
-    if N >= 1 and D >= 1:
-        static = _ScanStatic(N=N, D=D, dtype=np.dtype(dtype_name), pos_mode=pos_mode, describe=describe, kinds=kinds,
-                             verify_sha=verify_sha, sampled=frozenset(sampled), elig=espec)
+    if resolved is not None or (N >= 1 and D >= 1):
+        static = _ScanStatic(N=N, D=D, dtype=np.dtype(dtype_name if dtype_name not in (None, "None") else "float32"), pos_mode=pos_mode,
+                             describe=describe, kinds=kinds, verify_sha=verify_sha, sampled=frozenset(sampled), elig=espec,
+                             resolved=resolved)
         _scan_shards(shards, static, validate_workers(shards), fx, stats, pos_blobs, unchecked_rows)
     # a declared checkable rule that could not be evaluated on some rows (a fact it needs is null there)
     for sname, k_rows in sorted(unchecked_rows.items()):
@@ -2097,8 +2324,17 @@ def validate_features(
                    msg + " (features do not depend on the input; if the model's input is genuinely identical for those media, e.g. "
                    "digitally silent audio: describe()['waive'] = {'E_DUPLICATE_CLIPS': '<reason>'})")
 
+    # ---- a generic set's codec statistics (keys with `stats: true`)
+    for key, st in sorted(stats.codec_stats.items()):
+        for f in st.findings(key=key):
+            fx.add(f.code, f.message)
+
     # ---- eligibility
-    elig = _eligibility(view=view, why_no_bench=why_no_bench, N=N, pos_mode=pos_mode, tag_names=tag_names, stats=stats, espec=espec)
+    carried = None
+    if resolved is not None:
+        carried = sorted({k for sh in shards for k in ((sh.sidecar.get("outputs") or {}).get("keys") or {})})
+    elig = _eligibility(view=view, why_no_bench=why_no_bench, N=N, pos_mode=pos_mode, tag_names=tag_names, stats=stats, espec=espec,
+                        present_keys=carried)
     fx.add("N_ELIGIBILITY", eligibility_line(elig))
 
     # ---- coverage

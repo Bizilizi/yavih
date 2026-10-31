@@ -12,7 +12,7 @@ A suite is a yaml file naming, per capability, the benchmarks and readings a mod
           - {benchmark: audioset20k, readings: [a, v, av], required: true, status: packaged}
 
 ``status: pending`` marks a benchmark without a packaged folder yet (listed, never planned or checked).
-``join: true`` names the folder's ``probe.py`` ``join()`` hook (``yavih report build --join <benchmark>
+``join: true`` names the folder's ``eval.py`` ``join()`` hook (``yavih report build --join <benchmark>
 <reading>=RUN ...``), whose result is stored under ``<benchmark>:<readings joined by +>``.
 
 Resolution (``load_suite``): an existing ``.yaml`` path; else ``<project suites dir>/<name>.yaml`` (the
@@ -59,7 +59,7 @@ __all__ = [
 ]
 
 #: The capability groups a suite may use, in display order.
-CAPABILITIES: tuple[str, ...] = ("audio", "visual", "audio-visual", "temporal", "spatial", "retrieval")
+CAPABILITIES: tuple[str, ...] = ("audio", "visual", "audio-visual", "temporal", "spatial", "retrieval", "generation")
 #: ``status`` of a suite entry: ``packaged`` (a resolvable benchmark folder) or ``pending`` (none yet).
 ENTRY_STATUSES: tuple[str, ...] = ("packaged", "pending")
 #: Completeness of one ``(benchmark, reading, model)``: a DONE-marked result exists (``done``), it does not
@@ -271,7 +271,7 @@ def _bool(raw: Any, default: bool, where: str) -> bool:
 
 
 def _packaged_facts(bench: str, where: str) -> tuple[str, set[str], bool, bool]:
-    """``(canonical name, template readings, multi-reading template, probe.py defines join)`` of a resolvable folder."""
+    """``(canonical name, template readings, multi-reading template, eval.py defines join)`` of a resolvable folder."""
     from yavih.benchmark import resolve_folder
     from yavih.lint import template_readings
     from yavih.shipped import _bench_name
@@ -284,7 +284,7 @@ def _packaged_facts(bench: str, where: str) -> tuple[str, set[str], bool, bool]:
     if not template.is_file():
         raise SuiteError(f"{where}: benchmark {bench!r} ships no bridge_template.py ({folder})")
     src = template.read_text(encoding="utf-8")
-    probe = Path(folder) / "probe.py"
+    probe = Path(folder) / "eval.py"
     has_join = probe.is_file() and bool(_JOIN_HOOK_RE.search(probe.read_text(encoding="utf-8")))
     multi = bool(re.search(r'"reading":\s*ArgSpec\(', src))
     return _bench_name(Path(folder)), template_readings(src), multi, has_join
@@ -295,7 +295,7 @@ def validate_suite(raw: Any, *, where: str = "suite") -> Suite:
     (:class:`SuiteError`): unknown keys at any level, ``schema_version`` other than 1, a capability outside
     :data:`CAPABILITIES`, a packaged benchmark that does not resolve, readings outside its
     ``bridge_template.py``'s (a literal ``"reading"`` or the ``choices`` of its ``reading`` argument), ``join`` on
-    a folder whose ``probe.py`` defines no ``join()``, and a ``(benchmark, reading)`` listed twice. Packaged
+    a folder whose ``eval.py`` defines no ``join()``, and a ``(benchmark, reading)`` listed twice. Packaged
     benchmark names are canonicalized (an alias becomes the folder's name)."""
     top = _check_keys(raw, _TOP_KEYS, where)
     if isinstance(top.get("schema_version"), bool) or top.get("schema_version") != SUITE_SCHEMA_VERSION:
@@ -355,7 +355,7 @@ def validate_suite(raw: Any, *, where: str = "suite") -> Suite:
                     raise SuiteError(f"{ewhere}: readings {extra} are not readings of {bench}'s bridge_template.py "
                                      f"(it declares {sorted(have)})")
                 if join and not has_join:
-                    raise SuiteError(f"{ewhere}: join: true, but {bench}'s probe.py defines no join() "
+                    raise SuiteError(f"{ewhere}: join: true, but {bench}'s eval.py defines no join() "
                                      "(`yavih report build --join` needs that hook)")
             if join and len(readings) < 2:
                 raise SuiteError(f"{ewhere}: join needs at least two readings")

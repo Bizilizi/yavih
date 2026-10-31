@@ -11,10 +11,11 @@ Grouped by each folder's `benchmark.yaml` `capability` tags (the vocabulary suit
 capabilities is listed under each.
 
 <!-- yavih:bench-table index begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-### audio (2)
+### audio (3)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
+| [audiocaps_t2a](audiocaps_t2a/README.md) | AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark) | audiocaps_t2a | text (cell) | public (obtain: auto) |
 | [esc50](esc50/README.md) | ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy) | clf | audio | public (obtain: auto) |
 | [fsd50k](fsd50k/README.md) | FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP) | clf | audio | public (obtain: auto) |
 
@@ -27,7 +28,7 @@ capabilities is listed under each.
 | [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
 | [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
 
-### audio-visual (5)
+### audio-visual (6)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -35,6 +36,7 @@ capabilities is listed under each.
 | [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
 | [vggsounder](vggsounder/README.md) | VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes) | clf | video + audio | public (obtain: needs-data-owner) |
+| [vggsounder_v2a](vggsounder_v2a/README.md) | VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark) | vggsounder_v2a | video (materialized at prepare time) | public (obtain: needs-data-owner) |
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 
 ### temporal (2)
@@ -50,6 +52,13 @@ capabilities is listed under each.
 |---|---|---|---|---|
 | [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
+
+### generation (2)
+
+| Benchmark | Description | Readout | Media | Source |
+|---|---|---|---|---|
+| [audiocaps_t2a](audiocaps_t2a/README.md) | AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark) | audiocaps_t2a | text (cell) | public (obtain: auto) |
+| [vggsounder_v2a](vggsounder_v2a/README.md) | VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark) | vggsounder_v2a | video (materialized at prepare time) | public (obtain: needs-data-owner) |
 <!-- yavih:bench-table index end -->
 
 `Media` names what the reader hands over; `Source` is `benchmark.yaml` `source.kind` in words.
@@ -63,12 +72,12 @@ protocol in yavih), `setup.md` (for the agent: obtain the data, dependencies to 
 contract, the output contract, prepare & verify, gotchas), `benchmark.yaml` (the machine-readable protocol), the frozen
 `manifest.csv.gz` and `classes.csv` (the generic reader `yavih.sample.iter_samples` hands over the stored files
 and their facts as `benchmark.yaml` declares them; an out-of-tree folder may add its own `reader.py`),
-an optional `probe.py` (targets, folder-specific metrics with their intervals, and the authors' scorer through an
+an optional `eval.py` (targets, folder-specific metrics with their intervals, and the authors' scorer through an
 assert-import), a `bridge_template.py` to copy, `make_manifest.py` (byte-identical re-freeze, through the shared
 `yavih.freeze` helpers), `prepare/` and `tests/test_folder.py`. A folder is data + scripts, not a Python package: no `__init__.py` in it or
-in its `tests/`; `probe.py` (and an optional `reader.py`) are loaded by path and never hashed:
+in its `tests/`; `eval.py` (and an optional `reader.py`) are loaded by path and never hashed:
 `protocol_hash = H(input_hash, scoring_hash)` covers the declaration in `benchmark.yaml` only, and their behaviour
-is held by `protocol_version` plus the conformance fixture (`conformance/expected.json`), so a `probe.py` fix is a
+is held by `protocol_version` plus the conformance fixture (`conformance/expected.json`), so a `eval.py` fix is a
 re-record and a `protocol_version` bump, and never invalidates extracted features. The newest
 `changelog` entry of `benchmark.yaml` records the `protocol_hash` and `input_hash` the folder computes. `Benchmark.load(<name>)` resolves folders through
 `importlib.resources` (`packaged_names()`, `packaged_folder()`).
@@ -79,6 +88,7 @@ Read the folder's `setup.md` first, before downloading anything or writing a bri
 (`yavih bench info <name> --setup` prints it; `FOLDER=$(yavih bench path <name>)` is the folder its
 `"$FOLDER/prepare/…"` commands run from):
 <!-- yavih:bench-table setup_links begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
+[audiocaps_t2a](audiocaps_t2a/setup.md) ·
 [audioset20k](audioset20k/setup.md) ·
 [ave](ave/setup.md) ·
 [avsync](avsync/setup.md) ·
@@ -89,12 +99,13 @@ Read the folder's `setup.md` first, before downloading anything or writing a bri
 [nyuv2_depth](nyuv2_depth/setup.md) ·
 [ssv2](ssv2/setup.md) ·
 [vggsounder](vggsounder/setup.md) ·
+[vggsounder_v2a](vggsounder_v2a/setup.md) ·
 [vggss_box](vggss_box/setup.md).
 <!-- yavih:bench-table setup_links end -->
 
 ## Adding a benchmark, and the checks that pin these documents
 
-A new benchmark is a new folder and nothing else: `yavih bench new <name> --readout clf --like esc50 [--dir D]`
+A new benchmark is a new folder and nothing else: `yavih bench new <name> --scorer clf --like esc50 [--dir D]`
 writes a scaffold (with `TODO` where facts are needed), `yavih bench lint <name|path>` checks it against the folder
 contract (`yavih.lint`), and `python -m yavih.doctables --write` regenerates the tables above, the repo README's and
 the skill's from the folders' `benchmark.yaml`. A folder outside the package loads from a directory on
@@ -111,7 +122,7 @@ Prepare & verify, Gotchas; neither file has a Changelog, History, Checklist or M
 `benchmark.yaml` `changelog` is the version record). "## Dependencies" carries every `external[].pip` line verbatim (or "None" when
 `external` is empty); the last fenced `yaml` block of "## Input contract" / "## Output contract" parses to
 `input_contract` / `output_contract`; "## Prepare & verify" contains `yavih bench verify <name>`; the shipped docs
-cite nothing a pip-installed user cannot open; `probe.py` (and any `reader.py`) import without torch; the newest
+cite nothing a pip-installed user cannot open; `eval.py` (and any `reader.py`) import without torch; the newest
 `changelog` entry records the hashes the folder computes. The repo tests run it
 over every packaged folder and check that the generated tables are current. Run one folder's own tests with
 `python -m pytest "$(yavih bench path <name>)/tests" -q -p no:cacheprovider`.

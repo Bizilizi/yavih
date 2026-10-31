@@ -33,14 +33,17 @@ def _isolated(monkeypatch, tmp_path):
 
 
 def test_builtin_readouts_describe_themselves():
-    assert registry.names() == ("clf", "seq", "grid", "box") and list(READOUTS) == ["clf", "seq", "grid", "box"]
-    assert dict(READOUT_VERSION) == {"clf": 1, "seq": 2, "grid": 2, "box": 2}  # hashed: unchanged by the refactor
-    for name in registry.names():
+    # the built-ins come first; a folder's SCORER registers when its folder loads (test order decides what follows)
+    builtin = ("clf", "seq", "grid", "box")
+    assert registry.names()[:4] == builtin and list(READOUTS)[:4] == list(builtin)
+    assert {k: READOUT_VERSION[k] for k in builtin} == {"clf": 1, "seq": 2, "grid": 2, "box": 2}  # hashed: unchanged by the refactor
+    assert all(registry.get(n).kind != "probe" for n in registry.names()[4:])
+    for name in builtin:
         r = registry.get(name)
         assert r.module == f"yavih.readouts.{name}" and callable(r.driver()) and r.floor_outputs is not None
         assert set(r.train) == {"lr", "lr_grid", "weight_decay", "max_epochs", "batch_size", "patience", "warmup_fraction"}
-    assert [n for n in registry.names() if registry.get(n).dense] == ["seq", "grid", "box"]
-    with pytest.raises(registry.UnknownReadout):
+    assert [n for n in builtin if registry.get(n).dense] == ["seq", "grid", "box"]
+    with pytest.raises(registry.UnknownScorer):
         registry.get("nope")
 
 
@@ -54,9 +57,9 @@ def test_readout_descriptors_import_without_torch():
     assert out.returncode == 0 and "('clf', 'seq', 'grid', 'box')" in out.stdout, out.stderr
 
 
-def _toy_readout(module: str = "toy_readout_mod") -> registry.Readout:
-    return registry.Readout(
-        name="toy", version=7, module=module, label_kinds=frozenset({"single"}), requires_t_bins=False, requires_grid=False,
+def _toy_readout(module: str = "toy_readout_mod") -> registry.Scorer:
+    return registry.Scorer(
+        name="toy", version=7, module=module, kind="probe", label_kinds=frozenset({"single"}), requires_t_bins=False, requires_grid=False,
         train=dict(lr=1e-3, lr_grid=(), weight_decay=0.0, max_epochs=1, batch_size=8, patience=1, warmup_fraction=0.0),
         head=lambda **kw: {"family": "toy_head_v1", "out": kw.get("num_classes")}, loss=lambda label_kind: "toy_loss",
         head_families=frozenset({"toy_head_v1"}), losses=frozenset({"toy_loss"}), geometry=lambda cfg: {"num_classes": cfg.head.get("out")},
@@ -68,7 +71,7 @@ def _toy_folder(tmp_path: Path) -> Path:
     dst = tmp_path / "toy_bench"
     shutil.copytree(packaged_folder("in1k"), dst, ignore=shutil.ignore_patterns("__pycache__", "notes", "tests"))
     y = yaml.safe_load((dst / "benchmark.yaml").read_text(encoding="utf-8"))
-    y.update(name="toy_bench", aliases=[], readout="toy")
+    y.update(name="toy_bench", aliases=[], scorer="toy")
     y["budget"]["probe_minutes_ref"] = {"toy": 1}
     y["metrics"].update(headline="n_eval", list=["n_eval"], floors=[], controls=[], chance={}, ci={})
     (dst / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False), encoding="utf-8")
@@ -81,10 +84,10 @@ def test_a_registered_readout_is_a_first_class_task_type(tmp_path, monkeypatch):
     from yavih.probes.floors import floor_outputs
 
     folder = _toy_folder(tmp_path)
-    with pytest.raises(SchemaError, match="readout"):
+    with pytest.raises(SchemaError, match="scorer"):
         Benchmark.load(str(folder))  # not registered yet
     mod = types.ModuleType("toy_readout_mod")
-    mod.READOUT = _toy_readout()
+    mod.SCORER = _toy_readout()
     monkeypatch.setitem(sys.modules, "toy_readout_mod", mod)
     monkeypatch.setattr(registry, "_entry_point_modules", lambda: [("toy", "toy_readout_mod")])
     registry.reset()
@@ -102,7 +105,7 @@ def test_metrics_of_another_readout_are_refused_for_a_registered_one(tmp_path):
     y = yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))
     y["metrics"].update(headline="acc", list=["acc", "n_eval"])
     (folder / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False), encoding="utf-8")
-    with pytest.raises(SchemaError, match="not allowed for readout 'toy'"):
+    with pytest.raises(SchemaError, match="not allowed for scorer 'toy'"):
         Benchmark.load(str(folder))
     # n_eval serves every readout (MetricSpec.readouts = {"*"})
     from yavih.metrics.registry import REGISTRY, allows
@@ -169,7 +172,7 @@ def _conformance_warnings(folder: Path) -> set[str]:
 def test_bench_new_scaffold_passes_lint_and_loads(tmp_path, readout, capsys):
     from yavih.lint import lint_folder
 
-    assert cli.main(["--json", "bench", "new", f"new_{readout}", "--readout", readout, "--dir", str(tmp_path)]) == 0
+    assert cli.main(["--json", "bench", "new", f"new_{readout}", "--scorer", readout, "--dir", str(tmp_path)]) == 0
     env = json.loads(capsys.readouterr().out)
     folder = Path(env["data"]["folder"])
     assert folder == tmp_path / f"new_{readout}" and env["data"]["todo"] > 0
@@ -182,27 +185,27 @@ def test_bench_new_scaffold_passes_lint_and_loads(tmp_path, readout, capsys):
 
 
 def test_bench_new_refuses_bad_requests(tmp_path, capsys):
-    assert cli.main(["bench", "new", "Bad-Name", "--readout", "clf", "--dir", str(tmp_path)]) == 1
-    assert cli.main(["bench", "new", "x1", "--readout", "seq", "--like", "esc50", "--dir", str(tmp_path)]) == 1
-    assert cli.main(["bench", "new", "esc50", "--readout", "clf", "--dir", str(tmp_path)]) == 1  # resolves already
+    assert cli.main(["bench", "new", "Bad-Name", "--scorer", "clf", "--dir", str(tmp_path)]) == 1
+    assert cli.main(["bench", "new", "x1", "--scorer", "seq", "--like", "esc50", "--dir", str(tmp_path)]) == 1
+    assert cli.main(["bench", "new", "esc50", "--scorer", "clf", "--dir", str(tmp_path)]) == 1  # resolves already
     assert cli.main(["bench", "new", "x2", "--dir", str(tmp_path)]) == 1  # neither --readout nor --like
     assert cli.main(["bench", "new", "x3", "--like", "avsync", "--dir", str(tmp_path)]) == 0
     assert cli.main(["bench", "new", "x3", "--like", "avsync", "--dir", str(tmp_path)]) == 1  # exists
 
 
 def test_bench_new_marks_copied_scripts_and_skips_curation(tmp_path):
-    """``--like nyuv2_depth`` copies its probe.py with a ``TODO`` banner as the first line (a ``todo`` finding), never
+    """``--like nyuv2_depth`` copies its eval.py with a ``TODO`` banner as the first line (a ``todo`` finding), never
     its ``curation.json``; the generated tests and the prepare stub carry ``TODO:`` markers the lint reports."""
     from yavih.lint import lint_folder
     from yavih.scaffold import new_benchmark
 
     folder = new_benchmark("new_depth", like="nyuv2_depth", dir=tmp_path)
     assert (packaged_folder("nyuv2_depth") / "curation.json").is_file() and not (folder / "curation.json").exists()
-    first = (folder / "probe.py").read_text(encoding="utf-8").splitlines()[0]
+    first = (folder / "eval.py").read_text(encoding="utf-8").splitlines()[0]
     assert first.startswith("# TODO: copied verbatim from nyuv2_depth by `yavih bench new`")
     rep = lint_folder(folder)
     assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"} | _conformance_warnings(folder)
-    assert {"probe.py", "tests/test_folder.py", "prepare/01_obtain.sh"} <= {f.file for f in rep.warnings}
+    assert {"eval.py", "tests/test_folder.py", "prepare/01_obtain.sh"} <= {f.file for f in rep.warnings}
     # the fixture: recorded here, or nyuv2_depth's copied with this folder's identity when Probe3D's evals is absent
     rec = json.loads((folder / "conformance" / "expected.json").read_text(encoding="utf-8"))
     assert rec["benchmark"] == "new_depth" and rec["protocol_version"] == 1
@@ -232,3 +235,70 @@ def test_bench_new_generated_tests_pass_or_skip(tmp_path, like):
     summary = proc.stdout.strip().splitlines()[-1]
     assert "failed" not in summary and "error" not in summary and " passed" in summary and "2 skipped" in summary, summary
     assert proc.stdout.count("SKIPPED") == 2 and "TODO: " in proc.stdout
+
+
+# ----------------------------------------------------------------------------- scorer kinds
+
+
+def _direct_scorer(name: str = "toy_direct", version: int = 3) -> registry.Scorer:
+    return registry.Scorer(
+        name=name, version=version, module="toy_direct_mod", kind="direct", label_kinds=frozenset({"none"}),
+        requires_t_bins=False, requires_grid=False, score=lambda ctx: {"metrics": {}}, needs_gpu=False,
+    )
+
+
+def test_scorer_kinds_and_configuration_hashes():
+    """A probe scorer hashes its ProbeConfig; a non-probe scorer's configuration is the constant
+    ``scorer_config_hash(name, version)`` (``ScorerConfig``), so the second slot of ``eval_hash`` keeps its shape."""
+    from yavih import hashing
+    from yavih.probes.config import ProbeConfig
+    from yavih.readouts.registry import ScorerConfig
+
+    clf = registry.get("clf")
+    cfg = ProbeConfig.pinned("clf", num_classes=3, label_kind="single")
+    assert clf.is_probe and clf.gpu and clf.hash_config(cfg) == hashing.probe_hash(cfg)
+    assert clf.pinned_config(None).head["family"] == cfg.head["family"] == "attentive_probe_v1"
+
+    d = _direct_scorer()
+    assert not d.is_probe and not d.gpu and d.families() == {"toy_direct"} and d.driver()(None) == {"metrics": {}}
+    pinned = d.pinned_config(None)
+    assert pinned == ScorerConfig(scorer="toy_direct", version=3, kind="direct") and pinned.readout == "toy_direct"
+    assert pinned.to_json() == {"scorer": "toy_direct", "version": 3, "kind": "direct"}
+    assert d.hash_config(pinned) == hashing.scorer_config_hash("toy_direct", 3) == d.hash_config(None)
+    assert hashing.scorer_config_hash("toy_direct", 3) != hashing.scorer_config_hash("toy_direct", 4)
+    assert len(hashing.scorer_config_hash("toy_direct", 3)) == 64
+    with pytest.raises(TypeError):
+        hashing.scorer_config_hash("toy_direct", 0)
+    assert registry.Scorer(name="fam", version=1, module="m", kind="stateless", label_kinds=frozenset(), family="clf").families() == {"fam", "clf"}
+
+
+def test_scorer_descriptor_refusals():
+    with pytest.raises(ValueError, match="kind"):
+        registry.Scorer(name="x", version=1, module="m", kind="nope", label_kinds=frozenset())
+    with pytest.raises(ValueError, match="trains no probe"):
+        registry.Scorer(name="x", version=1, module="m", kind="direct", label_kinds=frozenset(), head=lambda **kw: {})
+    with pytest.raises(ValueError, match="needs train, head, loss"):
+        registry.Scorer(name="x", version=1, module="m", kind="probe", label_kinds=frozenset())
+    with pytest.raises(ValueError, match="family"):
+        registry.Scorer(name="x", version=1, module="m", kind="direct", label_kinds=frozenset(), family="Bad-Name")
+
+
+def test_a_non_probe_scorer_has_no_probe_config():
+    from yavih.probes.config import ProbeConfig
+
+    registry.register(_direct_scorer())
+    with pytest.raises(ValueError, match="trains no probe"):
+        ProbeConfig.pinned("toy_direct")
+
+
+def test_folder_scorers_register_under_their_own_name_and_never_shadow():
+    d = _direct_scorer()
+    registry.register_folder(d)
+    assert registry.get("toy_direct") is d
+    registry.register_folder(_direct_scorer(version=4))  # the folder is loaded again: re-registration is fine
+    assert registry.get("toy_direct").version == 4
+    with pytest.raises(ValueError, match="already a registered scorer"):
+        registry.register_folder(_direct_scorer(name="clf"))
+    registry.reset()
+    with pytest.raises(registry.UnknownScorer):
+        registry.get("toy_direct")

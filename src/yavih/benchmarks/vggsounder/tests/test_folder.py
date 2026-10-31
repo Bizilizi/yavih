@@ -2,7 +2,7 @@
 
 Run only this file: ``python -m pytest "$(yavih bench path vggsounder)/tests" -q -p no:cacheprovider``.
 
-Pure checks (yaml, manifest, classes, docs, probe.py contract) run anywhere. Tests that load the folder
+Pure checks (yaml, manifest, classes, docs, eval.py contract) run anywhere. Tests that load the folder
 through core (``Benchmark``, ``RawStream``, ``yavih.media.rules``) always run; the reader and bridge smokes
 run on synthetic raw files (tiny mp4 + wav), never on site media.
 Tests that call the official scorer skip unless ``vggsounder==1.0`` (the PyPI release) is installed.
@@ -44,8 +44,8 @@ def _cells(cell: str) -> list[str]:
 
 
 @pytest.fixture(scope="module")
-def probe_mod():
-    return _load("vggsounder_folder_probe", HERE / "probe.py")
+def eval_mod():
+    return _load("vggsounder_folder_eval", HERE / "eval.py")
 
 
 def test_folder_lint_clean():
@@ -56,8 +56,8 @@ def test_folder_lint_clean():
 
 
 def test_yaml_identity(spec):
-    assert spec["schema_version"] == 2 and spec["name"] == HERE.name == "vggsounder"
-    assert spec["readout"] == "clf" and spec["protocol_version"] == 1
+    assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "vggsounder"
+    assert spec["scorer"] == "clf" and spec["protocol_version"] == 1
     assert spec["manifest"]["label"]["kind"] == "multi_sets"
     assert spec["manifest"]["label"]["sets"] == {k: list(v) for k, v in SETS.items()}
     (entry,) = spec["changelog"]
@@ -79,7 +79,7 @@ def test_protocol_keys(spec):
 def test_input_contract(spec):
     ic = spec["input_contract"]
     assert set(ic) == {"handed_over", "info", "facts", "materialize"}
-    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["streams"]) == {"video", "audio"}
+    assert set(ic["handed_over"]) == set(ic["info"]) == set(F.file_fields(spec)) == {"video", "audio"}
     assert ic["info"]["video"] == ["duration_s", "fps", "width", "height", "container", "bytes"]
     assert ic["info"]["audio"] == [
         "duration_s",
@@ -90,11 +90,11 @@ def test_input_contract(spec):
         "bytes",
     ]
     assert ic["facts"] == [] and ic["materialize"] is None
-    assert {k: v["kind"] for k, v in spec["streams"].items()} == {
+    assert {k: v["kind"] for k, v in F.file_fields(spec).items()} == {
         "video": "video",
         "audio": "audio",
     }
-    for s in spec["streams"].values():
+    for s in F.file_fields(spec).values():
         assert s["layout"] == "dir" and s["root"] == "media_root" and s["required"] is True
 
 
@@ -109,13 +109,13 @@ def test_output_contract(spec):
     assert spec["targets"] is None and spec["readout_params"] == {}
 
 
-def test_external_entry(spec, probe_mod):
+def test_external_entry(spec, eval_mod):
     (e,) = spec["external"]
     assert set(e) == {"name", "pip", "version_pin", "used_for"}
     assert e["name"] == "vggsounder" and e["version_pin"] == "1.0"
     assert e["pip"] == "pip install --no-deps vggsounder==1.0"
-    assert probe_mod.external_entry() == {k: str(v) for k, v in e.items()}
-    assert (HERE / "probe.py").is_file()  # non-empty external requires probe.py
+    assert eval_mod.external_entry() == {k: str(v) for k, v in e.items()}
+    assert (HERE / "eval.py").is_file()  # non-empty external requires eval.py
 
 
 # ----------------------------------------------------------------------------- manifest (setup.md)
@@ -199,17 +199,17 @@ def test_curation_sums(spec, manifest_rows):
     assert mm.VGGSOUND_CSV_SHA[:8] in spec["manifest"]["upstream"]["draw"]
 
 
-def test_metric_names_resolve(spec, probe_mod):
+def test_metric_names_resolve(spec, eval_mod):
     F.assert_metric_names_resolve(HERE, spec)
     m = spec["metrics"]
     # only the package's own values: its 30 names on the reading's set and on its exclusive set, nothing else
-    assert list(probe_mod.METRICS) == [*probe_mod.PACKAGE_METRICS, *(n + "_only" for n in probe_mod.PACKAGE_METRICS)]
-    assert sorted(m["list"]) == sorted(probe_mod.METRICS) and len(m["list"]) == 60
+    assert list(eval_mod.METRICS) == [*eval_mod.PACKAGE_METRICS, *(n + "_only" for n in eval_mod.PACKAGE_METRICS)]
+    assert sorted(m["list"]) == sorted(eval_mod.METRICS) and len(m["list"]) == 60
     assert m["floors"] == [] and m["controls"] == [] and m["chance"] == {} and m["ci"] == {}
     assert m["headline"] == "auc_pr" and m["table"] == ["auc_pr", "hit_rate@1", "f1@1"]
-    assert len(probe_mod.PACKAGE_METRICS) == 30
-    assert {s.external for s in probe_mod.METRICS.values()} == {"vggsounder"}
-    for name, s in probe_mod.METRICS.items():
+    assert len(eval_mod.PACKAGE_METRICS) == 30
+    assert {s.external for s in eval_mod.METRICS.values()} == {"vggsounder"}
+    for name, s in eval_mod.METRICS.items():
         assert repr(name.removesuffix("_only")) in s.description and "vggsounder 1.0" in s.description
 
 
@@ -340,13 +340,13 @@ def test_make_manifest_check_against_public_files(monkeypatch):
     assert out["classes_bytes"] == (HERE / "classes.csv").read_bytes()
 
 
-# ----------------------------------------------------------------------------- probe.py
+# ----------------------------------------------------------------------------- eval.py
 
 
 def test_probe_imports_without_torch_and_package(monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", None)
     monkeypatch.setitem(sys.modules, "vggsounder", None)
-    mod = _load("vggsounder_probe_isolated", HERE / "probe.py")
+    mod = _load("vggsounder_probe_isolated", HERE / "eval.py")
     assert mod.READING_SETS == {"a": ("a", "a only"), "v": ("v", "v only"), "av": ("av", None)}
     assert mod.PROTOCOL_KEYS == frozenset()
     for name, m in {**mod.METRICS, **mod.JOIN_METRICS}.items():
@@ -363,26 +363,26 @@ def test_probe_imports_without_torch_and_package(monkeypatch):
     assert getattr(exc.value, "exit_code", 3) == 3
 
 
-def test_require_is_the_core_assert_import_with_the_version_pin(monkeypatch, probe_mod):
+def test_require_is_the_core_assert_import_with_the_version_pin(monkeypatch, eval_mod):
     """The authors' implementation through an assert-import: the one assert-import is yavih.external.require (no folder-local fallback)."""
     import importlib.metadata
 
     from yavih import external
 
-    assert not hasattr(probe_mod, "_fallback_require")
+    assert not hasattr(eval_mod, "_fallback_require")
     external.reset()
     monkeypatch.setitem(sys.modules, "vggsounder", types.ModuleType("vggsounder"))
     for installed in ("1.1", "1.0.1", "0.9"):  # another version than the pin 1.0: refused, nothing recorded
         monkeypatch.setattr(importlib.metadata, "version", lambda name, v=installed: v)
         with pytest.raises(external.ExternalVersion, match="E_EXTERNAL_VERSION") as exc:
-            probe_mod.require_vggsounder()
+            eval_mod.require_vggsounder()
         assert exc.value.exit_code == 3 and external.versions_used() == {}
     # the pin compares as a PEP 440 version: 1.0.0 is 1.0; what is recorded is the installed string
     monkeypatch.setattr(importlib.metadata, "version", lambda name: "1.0.0")
-    assert probe_mod.require_vggsounder() == "1.0.0" and external.versions_used() == {"vggsounder": "1.0.0"}
+    assert eval_mod.require_vggsounder() == "1.0.0" and external.versions_used() == {"vggsounder": "1.0.0"}
     external.reset()
     monkeypatch.setattr(importlib.metadata, "version", lambda name: "1.0")
-    assert probe_mod.require_vggsounder() == "1.0" and external.versions_used() == {"vggsounder": "1.0"}
+    assert eval_mod.require_vggsounder() == "1.0" and external.versions_used() == {"vggsounder": "1.0"}
     external.reset()
 
 
@@ -429,64 +429,64 @@ class _StubBench:
         return types.SimpleNamespace(clip_id=self._ids)
 
 
-def test_join_refusals(tmp_path, probe_mod):
+def test_join_refusals(tmp_path, eval_mod):
     rng = np.random.default_rng(0)
     bench = _StubBench([f"c{i}" for i in range(4)])
     ph = bench.protocol_hash
     a = _fake_result(tmp_path, "a", ph, "s", 4, rng)
     v = _fake_result(tmp_path, "v", ph, "s", 4, rng)
     av_other = _fake_result(tmp_path, "av", "q" * 64, "s", 4, rng)
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_MISSING"):
-        probe_mod.join(bench, {"a": a, "v": v})
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_MIXED"):
-        probe_mod.join(bench, {"a": a, "v": v, "av": av_other})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_MISSING"):
+        eval_mod.join(bench, {"a": a, "v": v})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_MIXED"):
+        eval_mod.join(bench, {"a": a, "v": v, "av": av_other})
     av_pop = _fake_result(tmp_path, "av2", ph, "t", 4, rng)
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_POPULATION"):
-        probe_mod.join(bench, {"a": a, "v": v, "av": av_pop})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_POPULATION"):
+        eval_mod.join(bench, {"a": a, "v": v, "av": av_pop})
     av = _fake_result(tmp_path, "av_ok", ph, "s", 4, rng)
     # swapped routing: the video-only reading passed as a=, the audio-only one as v=
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_ROUTING"):
-        probe_mod.join(bench, {"a": v, "v": a, "av": av})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_ROUTING"):
+        eval_mod.join(bench, {"a": v, "v": a, "av": av})
     # an "a" reading whose bridge also read the video
     a_av = _fake_result(tmp_path, "a_impure", ph, "s", 4, rng, reads=["audio", "video"])
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_ROUTING"):
-        probe_mod.join(bench, {"a": a_av, "v": v, "av": av})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_ROUTING"):
+        eval_mod.join(bench, {"a": a_av, "v": v, "av": av})
     # two model names (E_JOIN_MODEL)
     v_other = _fake_result(tmp_path, "v_model", ph, "s", 4, rng, model="other")
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_MODEL"):
-        probe_mod.join(bench, {"a": a, "v": v_other, "av": av})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_MODEL"):
+        eval_mod.join(bench, {"a": a, "v": v_other, "av": av})
     # one protocol and probe but another eval_hash (eval_hash is the comparability key)
     v_eval = _fake_result(tmp_path, "v_eval", ph, "s", 4, rng, eval_hash="e" * 64)
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_MIXED"):
-        probe_mod.join(bench, {"a": a, "v": v_eval, "av": av})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_MIXED"):
+        eval_mod.join(bench, {"a": a, "v": v_eval, "av": av})
     # one reading probed with another / a non-standard ProbeConfig
     v_probe = _fake_result(tmp_path, "v_probe", ph, "s", 4, rng, probe_hash="z" * 64)
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_PROBE"):
-        probe_mod.join(bench, {"a": a, "v": v_probe, "av": av})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_PROBE"):
+        eval_mod.join(bench, {"a": a, "v": v_probe, "av": av})
     v_fast = _fake_result(tmp_path, "v_fast", ph, "s", 4, rng, standard=False)
-    with pytest.raises(probe_mod.JoinRefused, match="E_JOIN_PROBE"):
-        probe_mod.join(bench, {"a": a, "v": v_fast, "av": av})
+    with pytest.raises(eval_mod.JoinRefused, match="E_JOIN_PROBE"):
+        eval_mod.join(bench, {"a": a, "v": v_fast, "av": av})
     (a / "DONE").unlink()
-    with pytest.raises(probe_mod.JoinRefused, match="DONE"):
-        probe_mod.join(bench, {"a": a, "v": v, "av": av_pop})
+    with pytest.raises(eval_mod.JoinRefused, match="DONE"):
+        eval_mod.join(bench, {"a": a, "v": v, "av": av_pop})
 
 
-def test_join_weights_differ_is_a_warning_not_a_refusal(tmp_path, probe_mod):
+def test_join_weights_differ_is_a_warning_not_a_refusal(tmp_path, eval_mod):
     """Different non-null ``weights_sha256`` among the three readings are ``W_JOIN_WEIGHTS``
     (recorded in the join output), never a refusal; a null fingerprint is not a difference."""
     rng = np.random.default_rng(1)
     ph = _StubBench.protocol_hash
     recs = {k: json.loads((_fake_result(tmp_path, k, ph, "s", 4, rng) / "result.json").read_text()) for k in ("a", "v", "av")}
-    assert probe_mod._check_readings(recs) == []
+    assert eval_mod._check_readings(recs) == []
     recs["a"]["bridge"]["describe"]["weights_sha256"] = None  # an unfingerprinted reading: no difference to report
-    assert probe_mod._check_readings(recs) == []
+    assert eval_mod._check_readings(recs) == []
     recs["v"]["bridge"]["describe"]["weights_sha256"] = "x" * 64
-    warnings = probe_mod._check_readings(recs)
+    warnings = eval_mod._check_readings(recs)
     assert [w["code"] for w in warnings] == ["W_JOIN_WEIGHTS"] and "m" in warnings[0]["message"]
     assert set(warnings[0]) == {"code", "message", "where"}
 
 
-def test_join_reads_the_handed_over_record(tmp_path, probe_mod):
+def test_join_reads_the_handed_over_record(tmp_path, eval_mod):
     """``report --join`` hands ``ResultRef``s whose ``.result`` is upgraded in memory; the hook reads
     that record, not the file; a record without a top-level ``model`` names it in ``describe()``."""
     rng = np.random.default_rng(2)
@@ -494,9 +494,9 @@ def test_join_reads_the_handed_over_record(tmp_path, probe_mod):
     d = _fake_result(tmp_path, "a", ph, "s", 4, rng)
     upgraded = {**json.loads((d / "result.json").read_text()), "model": "from-ref"}
     ref = types.SimpleNamespace(seed_dir=d, result=upgraded)
-    assert probe_mod._record(ref, d)["model"] == "from-ref"
-    assert probe_mod._record(d, d)["model"] == "m"
-    assert probe_mod._model({"bridge": {"describe": {"model": "x", "reading": "a"}}}) == "x"
+    assert eval_mod._record(ref, d)["model"] == "from-ref"
+    assert eval_mod._record(d, d)["model"] == "m"
+    assert eval_mod._model({"bridge": {"describe": {"model": "x", "reading": "a"}}}) == "x"
 
 
 def test_package_ground_truth_equals_label_sets(manifest_rows):
@@ -518,21 +518,21 @@ def test_package_ground_truth_equals_label_sets(manifest_rows):
         assert pkg == {k: s for k, s in mine.items() if s}, key
 
 
-def _pinned_package_or_skip(probe_mod):
+def _pinned_package_or_skip(eval_mod):
     try:
-        return probe_mod.require_vggsounder()
+        return eval_mod.require_vggsounder()
     except Exception as exc:  # absent or not the PyPI 1.0 release
         pytest.skip(f"official scorer not available at its pin: {exc}")
 
 
-def test_score_with_official_package(manifest_rows, spec, probe_mod):
-    _pinned_package_or_skip(probe_mod)
+def test_score_with_official_package(manifest_rows, spec, eval_mod):
+    _pinned_package_or_skip(eval_mod)
     ev_ids = [r["clip_id"] for r in manifest_rows if r["split"] == "test"]
     bench = _StubBench(ev_ids)
     rows = np.arange(len(ev_ids))
     rng = np.random.default_rng(0)
     logits = {k: rng.standard_normal((len(ev_ids), 309)) for k in ("a", "v", "av")}
-    per_reading = {k: probe_mod.score(bench, "test", rows, logits[k], reading=k) for k in logits}
+    per_reading = {k: eval_mod.score(bench, "test", rows, logits[k], reading=k) for k in logits}
     for k, out in per_reading.items():
         assert set(out) == set(spec["metrics"]["list"])
         assert all(v is None for n, v in out.items() if n.endswith("_only")) == (k == "av")
@@ -540,16 +540,16 @@ def test_score_with_official_package(manifest_rows, spec, probe_mod):
             assert (0.4 < out[n] < 0.6) if n == "auc_roc" else (0.0 < out[n] < 0.03), (k, n, out[n])
     # the per-reading scores are the package's compute_all_results numbers for the same logits
     payload = {c.removesuffix(".mp4"): {"logits": {k: logits[k][i].tolist() for k in logits}} for i, c in enumerate(ev_ids)}
-    full = probe_mod.official_scores(payload, ev_ids, probe_mod.PACKAGE_SETS)
-    for k, (own, only) in probe_mod.READING_SETS.items():
-        for m in probe_mod.PACKAGE_METRICS:
+    full = eval_mod.official_scores(payload, ev_ids, eval_mod.PACKAGE_SETS)
+    for k, (own, only) in eval_mod.READING_SETS.items():
+        for m in eval_mod.PACKAGE_METRICS:
             assert per_reading[k][m] == pytest.approx(full[own][m])
             if only is not None:
                 assert per_reading[k][m + "_only"] == pytest.approx(full[only][m])
     assert {"a", "v", "av"} <= {s for s, d in full.items() if "mu" in d}
 
 
-# ----------------------------------------------------------------------------- probe.py with a fake package
+# ----------------------------------------------------------------------------- eval.py with a fake package
 
 
 _SET_CODE = {"a": 1.0, "v": 2.0, "av": 3.0, "a only": 4.0, "v only": 5.0, "all": 6.0}
@@ -635,29 +635,29 @@ def fake_package(monkeypatch):
     external.reset()
 
 
-def _value(set_name: str, metric: str, probe_mod) -> float:
-    return _SET_CODE[set_name] + probe_mod.PACKAGE_METRICS.index(metric) / 1000
+def _value(set_name: str, metric: str, eval_mod) -> float:
+    return _SET_CODE[set_name] + eval_mod.PACKAGE_METRICS.index(metric) / 1000
 
 
-def test_score_ids_per_reading(spec, probe_mod, fake_package):
+def test_score_ids_per_reading(spec, eval_mod, fake_package):
     """Reading a / v: exactly the 30 + 30 ids, all values; reading av: the 30 ids with values and the 30
     ``_only`` ids None (not applicable). The id set never depends on the reading."""
     ids = [f"c{i}_000000" for i in range(5)]
     bench, rows, out = _StubBench(ids), np.arange(5), np.zeros((5, 309))
     listed = set(spec["metrics"]["list"])
     for reading in ("a", "v"):
-        got = probe_mod.score(bench, "test", rows, out, reading=reading)
+        got = eval_mod.score(bench, "test", rows, out, reading=reading)
         assert set(got) == listed and len(got) == 60 and all(isinstance(v, float) for v in got.values())
-    got = probe_mod.score(bench, "test", rows, out, reading="av")
+    got = eval_mod.score(bench, "test", rows, out, reading="av")
     assert set(got) == listed
-    assert {n for n, v in got.items() if v is not None} == set(probe_mod.PACKAGE_METRICS)
+    assert {n for n, v in got.items() if v is not None} == set(eval_mod.PACKAGE_METRICS)
     with pytest.raises(ValueError, match="reading"):
-        probe_mod.score(bench, "test", rows, out, reading="rgb")
+        eval_mod.score(bench, "test", rows, out, reading="rgb")
     with pytest.raises(ValueError, match="reading"):
-        probe_mod.score(bench, "test", rows, out)
+        eval_mod.score(bench, "test", rows, out)
 
 
-def test_score_routes_each_reading_to_its_own_sets_only(probe_mod, fake_package):
+def test_score_routes_each_reading_to_its_own_sets_only(eval_mod, fake_package):
     """The logits of a reading go under its own pkl key and are scored only on its sets: a → a, a only;
     v → v, v only; av → av. An audio reading is never scored on a visible set."""
     ids = [f"c{i}_000000" for i in range(3)]
@@ -665,51 +665,51 @@ def test_score_routes_each_reading_to_its_own_sets_only(probe_mod, fake_package)
     expect = {"a": [("a", "a"), ("a only", "a")], "v": [("v", "v"), ("v only", "v")], "av": [("av", "av")]}
     for reading, calls in expect.items():
         fake_package.clear()
-        got = probe_mod.score(bench, "test", rows, np.zeros((3, 309)), reading=reading)
+        got = eval_mod.score(bench, "test", rows, np.zeros((3, 309)), reading=reading)
         assert fake_package == calls
-        own, only = probe_mod.READING_SETS[reading]
-        assert got["hit_rate@1"] == _value(own, "hit_rate@1", probe_mod) and got["auc_pr"] == _value(own, "auc_pr", probe_mod)
+        own, only = eval_mod.READING_SETS[reading]
+        assert got["hit_rate@1"] == _value(own, "hit_rate@1", eval_mod) and got["auc_pr"] == _value(own, "auc_pr", eval_mod)
         if only is not None:
-            assert got["f1@10_only"] == _value(only, "f1@10", probe_mod)
+            assert got["f1@10_only"] == _value(only, "f1@10", eval_mod)
 
 
-def test_score_through_the_driver_hands_over_the_reading(spec, probe_mod, fake_package):
+def test_score_through_the_driver_hands_over_the_reading(spec, eval_mod, fake_package):
     """``evaluate_metrics`` with the folder's specs and ``ReadoutContext.scorer``: the hook receives the run's
     reading; the av reading's ``_only`` metrics are recorded as null."""
     from yavih.readouts.base import ReadoutContext, evaluate_metrics
 
     ids = [f"c{i}_000000" for i in range(4)]
-    specs = {"metrics": {n: probe_mod.METRICS[n] for n in spec["metrics"]["list"]}, "floors": {}, "controls": {}}
+    specs = {"metrics": {n: eval_mod.METRICS[n] for n in spec["metrics"]["list"]}, "floors": {}, "controls": {}}
     for reading in ("a", "av"):
-        ctx = types.SimpleNamespace(probe_mod=probe_mod, bench=_StubBench(ids), reading=reading)
+        ctx = types.SimpleNamespace(eval_mod=eval_mod, bench=_StubBench(ids), reading=reading)
         scorer = ReadoutContext.scorer(ctx, ["test"], np.arange(4), None)
         blocks = evaluate_metrics(specs, outputs=np.zeros((4, 309)), targets=None, protocol={}, split_meta={},
                                   floor_outputs=None, scorer=scorer)
         assert list(blocks["metrics"]) == spec["metrics"]["list"] and blocks["floors"] == {}
-        assert blocks["metrics"]["auc_pr"] == _value(reading, "auc_pr", probe_mod)
+        assert blocks["metrics"]["auc_pr"] == _value(reading, "auc_pr", eval_mod)
         assert (blocks["metrics"]["auc_pr_only"] is None) == (reading == "av")
 
 
-def test_join_returns_the_full_package_output(tmp_path, probe_mod, fake_package):
+def test_join_returns_the_full_package_output(tmp_path, eval_mod, fake_package):
     """``join``: compute_all_results on the five sets — 5 × 30 metrics + mu for a / v / av — and the compact
     table rows A / V / AV with mAP, HIT, F1 and mu (A / V / A∩V)."""
     rng = np.random.default_rng(3)
     bench = _StubBench([f"c{i}" for i in range(4)])
     runs = {k: _fake_result(tmp_path, k, bench.protocol_hash, "s", 4, rng) for k in ("a", "v", "av")}
-    out = probe_mod.join(bench, runs)
+    out = eval_mod.join(bench, runs)
     scores = out["scores"]
-    assert list(scores) == list(probe_mod.PACKAGE_SETS)
+    assert list(scores) == list(eval_mod.PACKAGE_SETS)
     n_values = sum(len(d) for d in scores.values())
     assert n_values == 5 * 30 + 3 and {s for s, d in scores.items() if "mu" in d} == {"a", "v", "av"}
-    for s in probe_mod.PACKAGE_SETS:
-        assert set(scores[s]) - {"mu"} == set(probe_mod.PACKAGE_METRICS)
+    for s in eval_mod.PACKAGE_SETS:
+        assert set(scores[s]) - {"mu"} == set(eval_mod.PACKAGE_METRICS)
     # each set scored from the logits key the package reads it from
     assert sorted(fake_package) == sorted([("a", "a"), ("v", "v"), ("av", "av"), ("a only", "a"), ("v only", "v")])
     table = out["table"]
     assert table["header"] == ["", "mAP", "HIT", "F1", "mu (A, V, A∩V)"]
     assert [r[0] for r in table["rows"]] == ["A", "V", "AV"]
-    assert table["rows"][2][1:] == [_value("av", "auc_pr", probe_mod), _value("av", "hit_rate@1", probe_mod),
-                                    _value("av", "f1@1", probe_mod), 0.33]
+    assert table["rows"][2][1:] == [_value("av", "auc_pr", eval_mod), _value("av", "hit_rate@1", eval_mod),
+                                    _value("av", "f1@1", eval_mod), 0.33]
     assert any("A∩V (mu_av)" in n and "both A and V top-1 hit when AV top-1 fails" in n for n in table["notes"])
     assert out["external"] == {"vggsounder": "1.0"} and out["n_eval"] == 4
 

@@ -23,7 +23,7 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
   bridge_template.py    a Bridge skeleton to copy
   make_manifest.py      upstream metadata -> manifest.csv.gz + classes.csv, byte-identical re-freeze
   prepare/              numbered steps: 01_download.sh, 02_verify.sh, 03_materialize.py, ...
-  probe.py              optional: folder metrics, targets, the authors' scorer (provenance, never hashed)
+  eval.py              optional: folder metrics, targets, the authors' scorer (provenance, never hashed)
   reader.py             optional: replaces the generic reader (provenance, never hashed)
   conformance/
     expected.json       the conformance fixture: the scoring path's numbers at this protocol_version (bench conformance --record)
@@ -39,16 +39,16 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
 | `benchmark.yaml` | yes | The protocol ([schema](#benchmarkyaml)). |
 | `manifest.csv.gz` | yes | Frozen rows; `manifest.sha256` is over the decompressed bytes. |
 | `classes.csv` | iff `manifest.classes` | `index,name[,mid]`. |
-| `bridge_template.py` | yes | The benchmark's streams, a `describe()` with a literal `"model"` and a `reading` in `a`/`v`/`av`, the `input` block to fill, `used` reporting, `TODO` markers and a "Preprocessing source" docstring slot for the model's own code. |
+| `bridge_template.py` | yes | The benchmark's streams, a `describe()` with a literal `"model"` and a `reading` in `a`/`v`/`av`/`t`, the `input` block to fill, `used` reporting, `TODO` markers and a "Preprocessing source" docstring slot for the model's own code. |
 | `make_manifest.py` | yes | Re-freezes `manifest.csv.gz` / `classes.csv` byte-identically (through `yavih.freeze`: `gzip_bytes`, `csv_bytes`, `write_if_changed`, `class_balanced_subsample`) and writes the `manifest.upstream.curation` counts it applied. |
 | `prepare/` | yes, non-empty | Prepare-time steps with expected sha256s: download, verify, index builders, materialization, target derivation. |
-| `probe.py` | no | [Hooks](#probepy-hooks) for the scoring side. |
+| `eval.py` | no | [Hooks](#evalpy-hooks) for the scoring side. |
 | `reader.py` | no | [Folder reader](#readerpy) for what the yaml cannot express. |
 | `tests/test_folder.py` | yes | Pins the folder's own facts (row counts, hashes, curation sums, reader smoke on synthetic media, docs). |
 | `assets/header.png` | no | The README header image, rendered from the `header:` block, and `assets/header.src.sha256`, the sha256 of the HTML it was rendered from ([header image](#header-image)); excluded from the wheel. |
 | `notes/` | no | Maintainer notes (freeze decisions, provenance); excluded from the wheel. |
 
-A folder is data plus scripts, never a Python package: there is no `__init__.py` in it or in `tests/`. `probe.py`,
+A folder is data plus scripts, never a Python package: there is no `__init__.py` in it or in `tests/`. `eval.py`,
 `reader.py`, `make_manifest.py` and `bridge_template.py` are loaded by path. pytest runs with
 `--import-mode=importlib`, so every folder's `tests/test_folder.py` is collected under a unique name. Run one folder's
 tests with `python -m pytest "$(yavih bench path <name>)/tests" -q -p no:cacheprovider`.
@@ -66,7 +66,7 @@ current directory, with `FOLDER=<folder>` and `YAVIH_BENCH=<name>` set. Helper s
 `prepare/derive_targets.py`) may sit next to the steps. A step resolves data roots through `yavih config get
 <name>.<root>`, never a hard-coded site path.
 
-### probe.py hooks
+### eval.py hooks
 
 All hooks are optional. Module scope imports only the standard library, numpy and yavih core (`yavih bench lint`
 imports it with torch and the folder's `external` packages blocked). It reuses the shared heads, trainer and
@@ -76,6 +76,7 @@ normalized source is recorded as provenance (`folder_source.probe`), and its beh
 An edit that moves the fixture's numbers is `E_CONFORMANCE_DRIFT` until `protocol_version` is bumped.
 
 ```python
+SCORER: Scorer                      # the folder's own scorer (kind stateless or direct), named after the folder; benchmark.yaml then says `scorer: <name>`
 METRICS: dict[str, MetricSpec]      # folder metrics; may replace a registry metric only with the same readouts/shape/kind
 PROTOCOL_KEYS: frozenset[str]       # protocol keys this file consumes (must be present in `protocol`)
 def targets(bench, split: str, rows: np.ndarray) -> np.ndarray            # replaces the readout's target construction
@@ -92,7 +93,7 @@ own metric name and definition). `join` may return `table: {header, rows, notes}
 prints in md instead of every key (the rest under `--detail`).
 
 Every call into an original-author package goes through `yavih.external.require(name, pip, version_pin)` with the
-matching `benchmark.yaml` `external` entry. A `probe.py` that re-implements the authors' code instead (because it is
+matching `benchmark.yaml` `external` entry. A `eval.py` that re-implements the authors' code instead (because it is
 not importable) says so in README "## In yavih" and setup.md "## Dependencies".
 
 ### reader.py
@@ -115,10 +116,10 @@ error (`SchemaError`). Keys are required unless the comment says optional. Which
 is in [hashing](hashing.md); in short, `aliases`, `title`, `capability`, `header`, `changelog`, `source`, `obtain`, `budget`,
 `data` and `manifest.upstream` are never hashed, and the hashed blocks enter through typed views that leave prose
 (`input_contract.handed_over`, `external[].used_for`) and display settings (`metrics.table`) out. No source file is
-hashed: `probe.py` / `reader.py` are provenance, their behaviour is `protocol_version` + the conformance fixture.
+hashed: `eval.py` / `reader.py` are provenance, their behaviour is `protocol_version` + the conformance fixture.
 
 ```yaml
-schema_version: 2                  # int, == yavih.versions.BENCHMARK_SCHEMA_VERSION
+schema_version: 3                  # int, == yavih.versions.BENCHMARK_SCHEMA_VERSION (2: `yavih bench migrate`)
 name: k400                         # [a-z0-9_]+, == the folder's directory name
 aliases: []                        # list of [a-z0-9_]+; Benchmark.load(alias) resolves here; not hashed
 title: Kinetics-400 action recognition   # one line; bench list / bench info and the benchmarks index
@@ -128,7 +129,7 @@ header:                            # optional for the loader, required by bench 
   title: The Kinetics Human Action Video Dataset   # the paper title
   venue: "Kay et al. · arXiv 2017"  # "authors · venue year"
   abstract: "..."                   # two or three neutral sentences on the data and the task, at most 60 words
-readout: clf                       # a registered readout: clf | seq | grid | box (yavih.readouts.registry)
+scorer: clf                        # a registered scorer: clf | seq | grid | box, or the folder's own (eval.py SCORER; yavih.readouts.registry)
 protocol_version: 1                # int >= 1, == the newest changelog entry's version
 changelog:                         # non-empty, newest last, strictly increasing versions; the version record
   - version: 1
@@ -175,7 +176,7 @@ manifest:
     allow_unknown: false           # optional: drop label tokens not in classes.csv (counted) instead of failing
     empty_ok: false                # optional: an empty label cell means "no labels" instead of failing
   columns:                         # every other manifest column, typed; key, split and label columns are implicit
-    rel_media: {type: str, role: media, stream: video}   # type str|int|float; role media|extra|label_aux
+    rel_media: {type: str, role: media, stream: video}   # type str|int|float|json; role media|cell|extra|label_aux
     offset_bin: {type: int, role: extra}                 # `stream` (a name or a list) only with role media
   upstream:                        # optional for the loader; bench lint requires `curation`; not hashed
     draw: "..."                    # optional str: how protocol.train_draw was drawn, in words (hashed parameters: cap/seed/balance)
@@ -200,8 +201,9 @@ splits:                            # every manifest split value in exactly one r
   unused: []                       # optional: present in the manifest, never read
   min_eval_coverage: 0.95          # optional, in (0, 1]: the probe refuses below it unless --allow-low-coverage
 
-streams:                           # name ([a-z][a-z0-9_]*) -> stream; names are Sample.streams keys
+fields:                            # name ([a-z][a-z0-9_]*) -> what each row hands the bridge
   video:
+    storage: file                  # file: stored bytes under a data root -> Sample.streams[name]
     kind: video                    # video | audio | image
     media_column: rel_media        # str or {split value | role: str}; a manifest column with {role: media, stream: <this>}
     root: media_root               # str or per split; a key of data.roots
@@ -209,6 +211,12 @@ streams:                           # name ([a-z][a-z0-9_]*) -> stream; names are
     layout_params: {}              # optional; per layout, may be per split
     required: true                 # optional: false = an empty or missing media cell does not make the row missing
   # Two streams may read the same media cell (one mp4 handed over as `video` and `audio`).
+  caption:
+    storage: cell                  # cell: a typed manifest column handed over as is -> Sample.cells[name] (a private copy)
+    kind: text                     # [a-z][a-z0-9_]*: what the value means (text, options, point_query, ...)
+    column: caption                # a manifest column {type: str|int|float|json, role: cell, field: caption}
+  # input_contract.handed_over names every field; input_contract.info only the file fields (a cell has no media facts).
+  # At least one field; it may be a cell alone (a text-to-audio benchmark hands over a caption and no file).
 
 targets: null                      # present iff the readout takes labels from targets (grid); then label.kind is none
   # train: {kind: dense_depth, source: derived_file, root: derived_root, file: train_depth_224.npy, sha256: "<64 hex>",
@@ -251,8 +259,11 @@ output_contract:                   # checked by validate (validation.md); setup.
     t_bins: null                   # seq: scored seconds that must hold >= 1 token; required by seq
     annotated_frame: null          # optional: {fact, stream, tol_s}; fact in input_contract.facts and a number in
                                    #   protocol; stream a video stream; tol_s > 0
+  schema: null                     # optional: what a bridge returns per row, {key: {type: <codec>, ...}} (codecs.md);
+                                   #   absent = the feature matrix; requires must be empty without feat/pos
+  sampling: optional               # optional: optional | required (the bridge generates: describe()["sampling"])
 
-external: []                       # original-author packages probe.py calls; never yavih dependencies
+external: []                       # original-author packages eval.py calls; never yavih dependencies
   # - name: vggsounder             # import name, unique
   #   pip: "pip install --no-deps vggsounder==1.0"   # a full `pip install ...` command; setup.md repeats it verbatim
   #   version_pin: "1.0"           # importlib.metadata.version(name) must equal it at call time
@@ -266,10 +277,10 @@ protocol:                          # label facts only, JSON values (finite numbe
     balance: class                 # class | first_label | session | null; the draw's description is manifest.upstream.draw
   views: none                      # none | rows: whether several rows derive from one source clip
   # Every other key is a per-benchmark label fact and must be consumed: named by a resolved metric, by the
-  # readout, by probe.py PROTOCOL_KEYS, or by input_contract.facts. target_region, when present, is
+  # readout, by eval.py PROTOCOL_KEYS, or by input_contract.facts. target_region, when present, is
   # [y0, x0, y1, x1] in full-frame fractions with 0 <= y0 < y1 <= 1 and 0 <= x0 < x1 <= 1.
 
-metrics:                           # names: yavih.metrics registry overlaid by probe.py METRICS (readouts.md)
+metrics:                           # names: yavih.metrics registry overlaid by eval.py METRICS (readouts.md)
   headline: acc                    # in `list`; the metric the report sorts on
   list: [acc, n_eval]              # non-empty; kinds metric | disclosure; result.json[metrics] holds exactly these
   table: [acc]                     # optional: the report's default markdown metrics, a subset of `list` holding the
@@ -285,9 +296,16 @@ readout_params: {}                 # keys exactly the readout's: clf {}; seq {T}
                                    #   box {grid, visual_stream, conditioning_stream, shuffled_control, shuffle_seed}
 ```
 
+### Migrating a schema-2 folder
+
+Schema 3 renamed `streams:` to `fields:` (every 1.0 entry gains `storage: file`) and `readout:` to `scorer:`. A
+schema-2 file is refused with a pointer to `yavih bench migrate <folder> [--write]`, which rewrites the yaml text
+keeping its comments and checks that the rewritten folder computes the hashes its changelog records: the hashed
+view of `fields` drops `storage: file` (`hashing.fields_view`), so no hash moves.
+
 ### What Benchmark.load validates
 
-`load_yaml` checks everything that can be checked from the yaml and the folder's `probe.py`; `Benchmark.from_dir`
+`load_yaml` checks everything that can be checked from the yaml and the folder's `eval.py`; `Benchmark.from_dir`
 then checks the folder files. Neither touches media or derived files; `yavih bench verify` does.
 
 From the yaml (`SchemaError`, exit 1):
@@ -309,20 +327,20 @@ From the yaml (`SchemaError`, exit 1):
 - `targets` present iff the readout takes labels from targets (then `label.kind: none`), one per read split;
 - `manifest.label.kind` is one the readout scores;
 - `protocol`: JSON values only; the fixed keys present; `target_region` valid; every per-benchmark key consumed
-  (an unknown key is refused) and every key a metric or `probe.py` declares present;
+  (an unknown key is refused) and every key a metric or `eval.py` declares present;
 - `input_contract`: `handed_over` and `info` keyed by exactly the stream names, `info` keys in the media-fact
   vocabulary of the stream's kind ([bridge](bridge.md)), `facts` are top-level protocol keys, the `materialize`
   envelope;
 - `output_contract`: `shape: fixed`, `coordinates: media`, `target_frame: full_frame` iff the readout is `grid` or
   `box`, the `requires` rules the readout declares, `annotated_frame` cross-references;
-- `external`: four non-empty strings per entry, unique names, a non-empty list requires `probe.py`, and every metric
+- `external`: four non-empty strings per entry, unique names, a non-empty list requires `eval.py`, and every metric
   computed by an external package names a declared entry;
-- `metrics`: every name resolves (registry or `probe.py` `METRICS`) with the right kind and is allowed for the
+- `metrics`: every name resolves (registry or `eval.py` `METRICS`) with the right kind and is allowed for the
   readout; no name in two lists; `headline`, `chance` and `ci` keys in `list`; `table` (when present) a non-empty
   subset of `list` holding the headline; ci kinds admissible; `bootstrap` and `aggregation` rules;
 - `readout_params`: exactly the readout's keys, `*_stream` values are declared streams, and the readout's own
   cross-checks;
-- `probe.py` imports, `METRICS` is a `dict[str, MetricSpec]` and `PROTOCOL_KEYS` a `frozenset[str]`.
+- `eval.py` imports, `METRICS` is a `dict[str, MetricSpec]` and `PROTOCOL_KEYS` a `frozenset[str]`.
 
 From the folder (`UnknownBenchmark` / `SchemaError`, exit 1; `ManifestError`, exit 2):
 
@@ -339,7 +357,7 @@ From the folder (`UnknownBenchmark` / `SchemaError`, exit 1; `ManifestError`, ex
 - `protocol.background_index`, when present, indexes `classes.csv`.
 
 Load then computes `manifest_hash`, `input_hash`, `scoring_hash` and `protocol_hash` from the yaml, the manifest,
-`reader.py`, `probe.py` and `yavih.versions` only (identical in the model env and the probe env), and registers the
+`reader.py`, `eval.py` and `yavih.versions` only (identical in the model env and the probe env), and registers the
 folder's changelog hashes with `yavih.hash_history`.
 
 ### Changelog hash keys
@@ -423,7 +441,7 @@ class Benchmark:
     def data_status(self, *, refresh: bool = False) -> DataStatus
     def media_info(self) -> MediaInfoTable | None
     def view(self) -> BenchmarkView
-    def probe_module(self)                       # the folder's probe.py as a module, or None
+    def probe_module(self)                       # the folder's eval.py as a module, or None
 ```
 
 - `data` overrides data roots for this instance ([configuration](configuration.md)); `fetch=True` first syncs the
@@ -544,7 +562,7 @@ them), then a link "All N benchmarks → the index" to `src/yavih/benchmarks/REA
 ### Capability
 
 `capability` tags what a benchmark measures, from the one vocabulary suites group by (`yavih.suites.CAPABILITIES`:
-`audio`, `visual`, `audio-visual`, `temporal`, `spatial`, `retrieval`). A benchmark may carry several, e.g.
+`audio`, `visual`, `audio-visual`, `temporal`, `spatial`, `retrieval`, `generation`). A benchmark may carry several, e.g.
 `[audio-visual, temporal]` for a synchronisation task; tag every capability a suite might list it under.
 `yavih bench list` and `yavih bench info` show the tags, the index and the `capabilities` table group by them.
 They are not hashed: retagging a folder changes no hash and needs no changelog entry.
@@ -584,12 +602,13 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `readme` | `E_README`, `E_README_HASH` | The [README.md contract](#readmemd-contract). |
 | `setup` | `E_SETUP` | The [setup.md contract](#setupmd-contract). |
 | `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |
+| `codecs` | `E_CODEC_SELFTEST` | Every folder or entry-point codec the output schema names passes `yavih.codecs.self_test` ([codecs](codecs.md#writing-a-codec)). |
 | `obtain` | `E_OBTAIN` | `obtain` is exactly `{tier, how}`, a known tier and a non-empty `how`. |
 | `capability` | `E_CAPABILITY`, `W_SUITE_CAPABILITY` (warning) | `capability` is a non-empty list of `yavih.suites.CAPABILITIES` ids. A shipped suite that lists the benchmark (by name or alias) in a group whose capability is not among its tags is a warning (`W_SUITE_CAPABILITY`). |
-| `template` | `E_TEMPLATE` | `bridge_template.py` has a literal `describe()["model"]` and a `reading` within `a`/`v`/`av`. |
+| `template` | `E_TEMPLATE` | `bridge_template.py` has a literal `describe()["model"]` and a `reading` within `a`/`v`/`av`/`t` (`t`: the model is given text). |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |
-| `imports` | `E_IMPORT` | `reader.py` / `probe.py` import in a fresh interpreter with torch and the `external` packages blocked. |
-| `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `probe.py`, `make_manifest.py`, `classes.csv`, and `TODO:` markers in `tests/*.py` and `prepare/*` (a folder test may name the bridge template's own `TODO` slots without the colon). |
+| `imports` | `E_IMPORT` | `reader.py` / `eval.py` import in a fresh interpreter with torch and the `external` packages blocked. |
+| `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `eval.py`, `make_manifest.py`, `classes.csv`, and `TODO:` markers in `tests/*.py` and `prepare/*` (a folder test may name the bridge template's own `TODO` slots without the colon). |
 
 A path without `benchmark.yaml` yields `E_LAYOUT`; an unknown name or check is a usage error (exit 1).
 
@@ -599,8 +618,9 @@ The full index with descriptions, media and sources is [src/yavih/benchmarks/REA
 `yavih bench list` shows the same set with sizes and site status.
 
 <!-- yavih:bench-table folder begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-| benchmark | readout | label kind | streams | headline | probe.py |
+| benchmark | scorer | label kind | streams | headline | eval.py |
 |---|---|---|---|---|---|
+| audiocaps_t2a | audiocaps_t2a | none | caption (cell) | `fd_passt` | yes, `external` |
 | audioset20k | clf | multi | video, audio | `map` |  |
 | ave | seq | segments | video, audio | `seg_acc` |  |
 | avsync | clf | single | video, audio (materialized) | `acc` | yes |
@@ -611,5 +631,6 @@ The full index with descriptions, media and sources is [src/yavih/benchmarks/REA
 | nyuv2_depth | grid | none (targets) | image | `d1` | yes, `external` |
 | ssv2 | clf | single | video | `acc` |  |
 | vggsounder | clf | multi_sets | video, audio | `auc_pr` | yes, `external` |
+| vggsounder_v2a | vggsounder_v2a | none | video (materialized) | `fd_passt` | yes, `external` |
 | vggss_box | box | box | video, audio | `iou_mean` |  |
 <!-- yavih:bench-table folder end -->

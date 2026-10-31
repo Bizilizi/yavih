@@ -68,7 +68,7 @@ def upgrade_protocol_hash(protocol_hash: Any) -> Any:
 
 
 def _v3_to_v4(record: dict[str, Any]) -> dict[str, Any]:
-    """Schema 4 added ``benchmark.folder_source`` (the folder's ``probe.py`` / ``reader.py`` digests at scoring,
+    """Schema 4 added ``benchmark.folder_source`` (the folder's ``eval.py`` / ``reader.py`` digests at scoring,
     provenance only). A schema-3 record did not record them: ``null``, which the report reads as unknown (never as a
     differing source). Its ``protocol_hash`` (computed under an earlier protocol schema) is moved to the current
     column by :func:`_current_hashes` through the folders' ``supersedes`` lists."""

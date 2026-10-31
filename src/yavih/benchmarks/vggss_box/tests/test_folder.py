@@ -56,15 +56,15 @@ def test_folder_lint_clean():
 
 
 def test_yaml_schema2_and_changelog(spec):
-    assert spec["schema_version"] == 2 and spec["name"] == HERE.name == "vggss_box"
-    assert spec["readout"] == "box" and spec["aliases"] == []
+    assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "vggss_box"
+    assert spec["scorer"] == "box" and spec["aliases"] == []
     assert spec["protocol_version"] == 1
     assert [c["version"] for c in spec["changelog"]] == [1]
     entry = spec["changelog"][0]
     assert entry["invalidates"] is False and entry["supersedes"] == []
     assert "requires" not in spec  # lives in output_contract
     assert not REMOVED_PROTOCOL_KEYS & set(spec["protocol"])  # windows, crop, padding are bridge decisions
-    assert all("bridge_decode_allowed" not in s for s in spec["streams"].values())
+    assert all("bridge_decode_allowed" not in s for s in F.file_fields(spec).values())
 
 
 def test_protocol_label_facts(spec):
@@ -79,14 +79,14 @@ def test_protocol_label_facts(spec):
 def test_input_contract(spec):
     ic = spec["input_contract"]
     assert set(ic) == {"handed_over", "info", "facts", "materialize"}
-    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["streams"]) == {"video", "audio"}
+    assert set(ic["handed_over"]) == set(ic["info"]) == set(F.file_fields(spec)) == {"video", "audio"}
     for name, keys in ic["info"].items():
-        assert set(keys) <= INFO_VOCAB[spec["streams"][name]["kind"]], name
+        assert set(keys) <= INFO_VOCAB[F.file_fields(spec)[name]["kind"]], name
     assert ic["info"]["video"] == ["duration_s", "fps", "width", "height", "container", "bytes"]
     assert ic["info"]["audio"] == ["duration_s", "sample_rate", "n_samples", "channels", "container", "bytes"]
     assert ic["facts"] == ["annotated_second"] and set(ic["facts"]) <= set(spec["protocol"])
     assert ic["materialize"] is None and spec["data"]["derived"] == {}
-    for s in spec["streams"].values():
+    for s in F.file_fields(spec).values():
         assert s["layout"] == "dir" and s["root"] == "media_root" and s["required"] is True
 
 
@@ -105,7 +105,7 @@ def test_output_contract(spec):
 
 def test_external_empty_no_probe(spec):
     # the official VGG-SS test.py scores heatmaps (cIoU/AUC), not boxes: not applicable (setup.md "Dependencies")
-    assert spec["external"] == [] and not (HERE / "probe.py").exists()
+    assert spec["external"] == [] and not (HERE / "eval.py").exists()
 
 
 def test_metrics_block(spec):

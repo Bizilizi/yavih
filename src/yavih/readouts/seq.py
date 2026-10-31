@@ -20,11 +20,11 @@ import numpy as np
 from yavih.readouts._targets import seq_targets
 from yavih.readouts.base import ProbeRefused, ReadoutContext, evaluate_metrics, lazy_module
 from yavih.readouts.coords import seq_params, seq_task_pos, task_pos
-from yavih.readouts.registry import Readout
+from yavih.readouts.registry import Scorer
 
 _fit = lazy_module("yavih.readouts._fit")  # torch: imported on first use, never by the descriptor
 
-__all__ = ["READOUT", "VERSION", "run_seq"]
+__all__ = ["SCORER", "VERSION", "run_seq"]
 
 #: The readout version: enters ``protocol_hash``; ``yavih.versions.READOUT_VERSION`` reads it here.
 #: The readout's conformance band on the synthetic end-to-end run (``tests/test_e2e_synthetic.py``): the oracle bridge's
@@ -210,8 +210,8 @@ def _floor_outputs(train_targets: Any, n_eval: int, *, protocol: dict, label_kin
     return out
 
 
-READOUT = Readout(
-    name="seq", version=VERSION, module=__name__, label_kinds=frozenset({"segments"}),
+SCORER = Scorer(
+    name="seq", version=VERSION, module=__name__, kind="probe", label_kinds=frozenset({"segments"}),
     protocol_keys=frozenset({"segment_seconds"}), param_keys=frozenset({"T"}), requires_t_bins=True,
     validate_spec=_validate_spec, dense=True, train=_SEQ_TRAIN, head=_head, loss=lambda label_kind: "ce_seq",
     task_sizes=_task_sizes, geometry=_geometry, head_families=frozenset({"dense_query_v1"}), losses=frozenset({"ce_seq"}),

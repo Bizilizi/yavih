@@ -5,10 +5,17 @@ Why yavih is built the way it is. This page states the philosophy and the reason
 
 ## What yavih is
 
-yavih is a frozen-feature benchmark harness for video, audio and audio-visual encoders. It owns the
-*protocol* side of an evaluation: which clips, which stored files, which labels, which readout, which
-metric, which floor, which hash. It does not own the model side, not even which seconds or which pixels
-the model looks at.
+yavih is a repository of frozen evaluation protocols. It began as a frozen-feature benchmark harness for
+video, audio and audio-visual encoders, and it still owns the *protocol* side of an evaluation: which rows,
+which stored files and cells, which labels, which scorer, which metric, which floor, which hash. It does not
+own the model side, not even which seconds or which pixels the model looks at.
+
+The split of responsibility is the same for every benchmark: the folder owns the semantics (what is handed
+over, what comes back, how it is scored), yavih owns the storage primitives and the checks (freezing, hashing,
+label opacity, determinism gates, conformance, the result record, the registry). The folder declares its inputs
+as `fields` (stored files or typed manifest cells), what a bridge returns as an output schema of codecs
+([codecs](codecs.md)), and its scorer: one of the shipped pinned probes, or its own in `eval.py`
+([adding a scorer](adding-a-scorer.md)). None of these is a closed list.
 
 A model is connected by a **bridge**: a small feature extractor, written per (model, benchmark), that runs
 in the model's own Python environment and writes features in yavih's format. yavih then validates those
@@ -27,7 +34,7 @@ prepare ──► extract ──► validate ──► probe ──► report
 | prepare | the agent, following the folder's `setup.md`; `yavih bench verify --census` | media on disk, verified manifest, coverage, the site's media-info table |
 | extract | `yavih extract` in the model env: reader (stored files + facts) → bridge → `FeatureWriter` | `features/<split>/shard-*.tar` + one sidecar per shard |
 | validate | `yavih features validate` (also the probe's prologue) | pass/fail findings, `_meta.json`, coverage, the readout's eligibility |
-| probe | `yavih probe run` | `result.json` per seed: metrics, floors, controls, intervals, hashes |
+| probe | `yavih eval run` | `result.json` per seed: metrics, floors, controls, intervals, hashes |
 | report | `yavih report build` | lm-evaluation-harness style tables, comparability-checked |
 
 ## What yavih is not
@@ -151,7 +158,7 @@ When a benchmark's authors ship an official loader, scorer or metric (VGGSounder
 Probe3D's depth metrics, the VGG-SS evaluation code), yavih calls it instead of re-implementing it, to stay
 faithful to the published numbers. Such code is **never a yavih dependency**: there is no extra for it. The
 folder's `setup.md` names the exact install command and version, `benchmark.yaml` lists it under
-`external`, the folder's `probe.py` reaches it only through `yavih.external.require(name, pip, version_pin)`
+`external`, the folder's `eval.py` reaches it only through `yavih.external.require(name, pip, version_pin)`
 (an assert-import that names the install line), and the probe records the version used in the result.
 
 This keeps the core installable into any model environment while letting each benchmark be as faithful
@@ -214,7 +221,7 @@ What a number means is decided by the benchmark and by the probe. The hashes cov
   rows and media a sample carries, splits, streams, both contracts, the readout's shape requirements, an
   optional `reader.py`);
 - `scoring_hash`: how features become numbers (protocol facts, metrics, label reading, targets, pinned
-  authors' packages, the readout version, the folder's `probe.py`);
+  authors' packages, the readout version, the folder's `eval.py`);
 - `protocol_hash = H(input_hash, scoring_hash)`; `probe_hash` for the head and training protocol;
 - `eval_hash = H(protocol_hash, probe_hash)`: **the** comparability key, printed in every report the way
   lm-evaluation-harness prints a task version.
@@ -288,7 +295,7 @@ machine-readable), the frozen `manifest.csv.gz` and `classes.csv`, `README.md` f
 changelog, checklist), `setup.md` for the agent that sets it up (obtain the data, independent
 dependencies, input and output contracts, prepare and verify, gotchas), numbered `prepare/` steps, a
 `make_manifest.py` that re-derives the frozen manifest byte for byte, a `bridge_template.py`, folder tests
-and an optional `probe.py`. Every table that lists benchmarks is generated from the folders, and
+and an optional `eval.py`. Every table that lists benchmarks is generated from the folders, and
 `yavih bench lint` checks any folder against the contract, so nothing outside the folder repeats its facts.
 Out-of-tree folders load the same way from `$YAVIH_BENCH_PATH` or a pip-installed pack.
 

@@ -31,7 +31,7 @@ the VGGSound train split, eval and floor clips from the VGGSound test split.
 
 ### Protocol
 
-`readout: clf` (single label, cross-entropy), 9 classes = `offsets_seconds` (`classes.csv` index = bin,
+`scorer: clf` (single label, cross-entropy), 9 classes = `offsets_seconds` (`classes.csv` index = bin,
 `class_key: index`), `protocol_version` 1. Rows are `(clip, offset)` pairs, `clip_id = <vggsound_clip>#<bin>`.
 
 | split | role | rows | clips | content | rows per bin |

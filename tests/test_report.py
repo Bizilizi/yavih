@@ -977,3 +977,19 @@ def test_packaged_tolerance_beats_a_recorded_one():
     assert ties({**packaged, "tolerance": {"acc": 0.2}}, 0.0001) == [True, True]  # the folder's declared entry wins
     assert ties({}, 0.1) == [True, True]  # not packaged here: the recorded tolerance
     assert ties({}, 0.0001) == [False, False]
+
+
+def test_reading_modalities_come_from_input_fields_and_cells():
+    """A generation bridge declares no stream tags: its modalities come from describe()["input"], a text cell counts as
+    the text modality, so a text-to-audio reading is never MISSING on a video-only benchmark and vice versa."""
+    from yavih.report.compare import _stream_modalities
+
+    def result(describe):
+        return {"bridge": {"describe": describe}}
+
+    v2a = result({"input": {"video": {"norm": {}, "decoder": {}}}})
+    t2a = result({"input": {"caption": {"note": "verbatim"}}})
+    assert _stream_modalities(v2a, {"video": "video"}) == frozenset({"visual"})
+    assert _stream_modalities(t2a, {}, {"caption": "text"}) == frozenset({"text"})
+    assert _stream_modalities(result({"input": {"options": {}}}), {}, {"options": "options"}) == frozenset({"cell:options"})
+    assert _stream_modalities(result({"streams": ["audio"], "input": {"audio": {}}}), {"audio": "audio"}) == frozenset({"audio"})

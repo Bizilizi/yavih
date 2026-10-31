@@ -104,7 +104,7 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
     assert env["data"]["setup"].startswith(f"# {name} — setup")
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "bench", "list"]), "bench list"))
     row = next(r for r in env["data"] if r["name"] == name)
-    assert row["readout"] == readout and row["clips"] == {"train": N_TRAIN, "val": N_EVAL}
+    assert row["scorer"] == readout and row["clips"] == {"train": N_TRAIN, "val": N_EVAL}
 
     # 2. bridges as files (what --bridge loads)
     bridges = {kind: T.write_bridge_file(tmp_path / f"{kind}_bridge.py", kind, D=D) for kind in ("random", "oracle")}
@@ -229,7 +229,7 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
 
     # the CLI probe path with the PINNED config (standard result) on the oracle, clf only (dense lr grids are slow)
     if readout == "clf":
-        env = _json(_ok(_run(["-m", "yavih.cli", "--json", "probe", "run", str(run_dirs["oracle"]), "--seeds", "1"]), "probe run"))
+        env = _json(_ok(_run(["-m", "yavih.cli", "--json", "eval", "run", str(run_dirs["oracle"]), "--seeds", "1"]), "probe run"))
         assert env["status"] == "ok" and env["data"][0]["status"] == "ok" and env["data"][0]["seed"] == 1
         assert env["data"][0]["metrics"][headline] > env["data"][0]["floors"][floor_name]
 
@@ -258,7 +258,7 @@ def test_features_stage_roundtrip(integration_env, yavih_home, runs_dir, tmp_pat
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "features", "stage", str(run_dir / "features"), str(tmp_path / "scratch")]), "stage"))
     staged = Path(env["data"]["staged"])
     assert staged.parent == tmp_path / "scratch" and set(env["data"]["splits"]) == {"train", "val"}
-    # <scratch>/<unit|run>.<host>.<pid>/features/<split>: the layout `probe run --scratch <staged>` consumes
+    # <scratch>/<unit|run>.<host>.<pid>/features/<split>: the layout `eval run --scratch <staged>` consumes
     assert (staged / "features" / "val" / "_meta.json").is_file() and len(list((staged / "features" / "val").glob("shard-*.tar"))) == N_SHARDS
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "features", "validate", str(staged / "features"), "--no-write-meta"]), "validate staged"))
     assert env["status"] == "ok" and all(r["ok"] for r in (env["data"] if isinstance(env["data"], list) else [env["data"]]))
@@ -403,7 +403,7 @@ def test_plan_build_sample_chain(integration_env, yavih_home, runs_dir, tmp_path
 
 def test_features_validate_ineligible_is_ok_and_probe_records_not_applicable(integration_env, yavih_home, runs_dir, tmp_path):
     """A pooled bridge (``pos_mode: none``) on a dense readout validates ``ok`` with
-    ``eligibility.eligible == false`` (exit 0, real benchmark through the CLI), and ``yavih probe run``
+    ``eligibility.eligible == false`` (exit 0, real benchmark through the CLI), and ``yavih eval run``
     then records ``not_applicable`` decided by validate, with a DONE marker."""
     folder = T.make_synthetic_benchmark(yavih_home / "benchmarks", "seq", n_train=8, n_eval=4, media="tiny")
     bfile = T.write_bridge_file(tmp_path / "pooled_bridge.py", "random", N=1, D=16, pos_mode="none", model="pooled")
@@ -416,7 +416,7 @@ def test_features_validate_ineligible_is_ok_and_probe_records_not_applicable(int
     for r in reports:
         assert r["ok"] is True and r["eligibility"]["eligible"] is False, r["eligibility"]
         assert any(m.startswith("pos.") for m in r["eligibility"]["missing"]), r["eligibility"]
-    env = _json(_ok(_run(["-m", "yavih.cli", "--json", "probe", "run", str(run_dir)]), "probe run ineligible"))
+    env = _json(_ok(_run(["-m", "yavih.cli", "--json", "eval", "run", str(run_dir)]), "probe run ineligible"))
     assert env["status"] == "not_applicable" and env["data"][0]["status"] == "not_applicable"
     result_path = Path(env["data"][0]["path"])
     rj = json.loads(result_path.read_text())

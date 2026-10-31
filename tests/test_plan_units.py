@@ -95,7 +95,7 @@ def test_unit_record_fields(tmp_path, monkeypatch):
     assert pr.probe_hash == QH and pr.eval_hash == eh and pr.launcher is None and pr.needs["gpu"] == 1 and pr.needs["minutes"] >= 30
     # probe/<eval_hash12>/seed<k>/DONE
     assert pr.done == os.path.join(run_dir, "probe", eh[:12], "seed0", "DONE")
-    assert pr.cmd[:5] == ["python", "-m", "yavih.cli", "probe", "run"] and pr.cmd[5] == run_dir
+    assert pr.cmd[:5] == ["python", "-m", "yavih.cli", "eval", "run"] and pr.cmd[5] == run_dir
     assert pr.id == hashing.unit_id(kind="probe", benchmark="synth_clf", model="synthmodel", reading="v", split=None, shard=None,
                                     protocol_hash=PROTO, probe_hash=QH, seed=0)
     rp = next(u for u in units if u.kind == "report")
@@ -525,3 +525,35 @@ def test_uncensused_frame_streams_of_a_packaged_benchmark(tmp_path, monkeypatch)
     census.parent.mkdir(parents=True)
     census.write_bytes(b"")
     assert U.uncensused_frame_streams(ssv2) == ()
+
+
+def test_a_generator_profile_plans_from_its_measured_bytes(tmp_path, monkeypatch):
+    """A profile measured on a declared output schema has no N / D / dtype: plan sizes shards from
+    ``outputs.bytes_per_row``, never short-cuts eligibility, and still plans the probe and report units."""
+    from yavih.plan.matrix import ProfileError
+
+    root = tmp_path / "m"
+    root.mkdir()
+    infos = {"synth_seq": make_info("synth_seq", readout="seq", requires_pos=("t",), requires_streams=("video",))}
+    install_benchmarks(monkeypatch, infos)
+    prof = make_profile("synth_seq", N=1, pos_mode="none")
+    d = {k: v for k, v in prof["describe"].items() if k not in ("dtype", "pos_mode", "layer", "pooling", "streams")}
+    d["outputs"] = ["audio"]
+    prof.update(describe=d, describe_sha256=hashing.describe_sha256(d), N=None, D=None, streams=[], dtype=None,
+                outputs={"schema": {"audio": {"type": "wav"}}, "schema_sha256": "a" * 64, "bound": {},
+                         "keys": {"audio": {"codec": "wav", "version": 1}}, "bytes_per_row": 400_000_000})
+    write_profile(root, "p.json", prof)
+    mp = write_matrix(root, {"e": {"script": "s.py", "benchmark": "synth_seq", "args": {"layer": 12}, "profile": "p.json"}})
+    units = plan(str(mp))
+    kinds = [u.kind for u in units]
+    assert "extract" in kinds and kinds[-1] == "report", "a generator is never ruled not_applicable at plan time"
+    probe = next(u for u in units if u.kind == "probe")
+    assert probe.expected_status == "ok"
+    # 400 MB a row: the 2 GiB shard cap forces several shards per split
+    assert len([u for u in units if u.kind == "extract"]) > 2
+
+    prof["describe"] = dict(d, outputs="audio")
+    prof["describe_sha256"] = hashing.describe_sha256(prof["describe"])
+    write_profile(root, "p.json", prof)
+    with pytest.raises((PlanError, ProfileError)):
+        plan(str(mp))

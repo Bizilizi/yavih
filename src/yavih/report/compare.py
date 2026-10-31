@@ -215,6 +215,9 @@ def _bench_meta(name: str) -> dict[str, Any]:
         if isinstance(streams, Mapping) and streams:
             kinds = {str(k): str(getattr(v, "kind", "") or (v.get("kind", "") if isinstance(v, Mapping) else "")) for k, v in streams.items()}
             out["stream_kinds"] = {k: v for k, v in kinds.items() if v}
+        cells = getattr(spec, "cells", None)
+        if isinstance(cells, Mapping) and cells:
+            out["cell_kinds"] = {str(k): str(getattr(v, "kind", "")) for k, v in cells.items() if getattr(v, "kind", "")}
         return out
     except Exception:  # noqa: BLE001
         return {}
@@ -405,14 +408,24 @@ def _unfingerprinted(result: dict) -> bool:
 _MODALITY = {"audio": "audio", "video": "visual", "image": "visual"}
 
 
-def _stream_modalities(result: dict, stream_kinds: Mapping[str, str] | None) -> frozenset[str] | None:
-    """Modalities of the streams the bridge read (``describe()["streams"]``, names or ``{"name": …}``),
-    via the benchmark's ``streams.*.kind`` or, for a stream the spec does not list, a name that IS a
-    kind; ``None`` when any stream cannot be placed (the caller then keeps the reading expected)."""
-    streams = _describe(result).get("streams") or []
+def _cell_modality(kind: str) -> str:
+    """A cell field's modality: ``text`` for a ``text`` cell (a caption, a prompt), else ``cell:<kind>``."""
+    return "text" if kind == "text" else f"cell:{kind}"
+
+
+def _stream_modalities(result: dict, stream_kinds: Mapping[str, str] | None, cell_kinds: Mapping[str, str] | None = None) -> frozenset[str] | None:
+    """Modalities of the fields the bridge read: ``describe()["streams"]`` (names or ``{"name": …}``), else the keys of
+    ``describe()["input"]`` (a generation bridge declares no stream tags), via the benchmark's ``streams.*.kind`` and
+    cell kinds or, for a stream the spec does not list, a name that IS a kind; ``None`` when any field cannot be placed
+    (the caller then keeps the reading expected)."""
+    d = _describe(result)
+    streams = d.get("streams") or (list(d["input"]) if isinstance(d.get("input"), Mapping) else [])
     out: set[str] = set()
     for s in streams:
         name = str(s.get("name") if isinstance(s, Mapping) else s)
+        if name in (cell_kinds or {}):
+            out.add(_cell_modality(cell_kinds[name]))
+            continue
         kind = (stream_kinds or {}).get(name) or name
         mod = _MODALITY.get(kind)
         if mod is None:
@@ -922,20 +935,22 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
     reading_mods: dict[tuple[str, str], frozenset[str] | None] = {}
     for (key, _std), results in groups.items():
         kinds = meta_of(key[0]).get("stream_kinds")
+        cells = meta_of(key[0]).get("cell_kinds")
         for r in results:
             mdl, rd = _model(r), _reading(r)
             if mdl and rd and rd not in readings_by_model.setdefault(mdl, []):
                 readings_by_model[mdl].append(rd)
             if mdl and rd:
-                mods = _stream_modalities(r, kinds)
+                mods = _stream_modalities(r, kinds, cells)
                 prev = reading_mods.get((mdl, rd), frozenset())
                 reading_mods[(mdl, rd)] = None if (mods is None or prev is None) else prev | mods
 
     def expected_readings(mdl: str, bench: str) -> list[str]:
-        kinds = meta_of(bench).get("stream_kinds")
-        if not kinds or any(k not in _MODALITY for k in kinds.values()):
+        kinds = meta_of(bench).get("stream_kinds") or {}
+        cells = meta_of(bench).get("cell_kinds") or {}
+        if (not kinds and not cells) or any(k not in _MODALITY for k in kinds.values()):
             return list(readings_by_model.get(mdl, []))
-        have = {_MODALITY[k] for k in kinds.values()}
+        have = {_MODALITY[k] for k in kinds.values()} | {_cell_modality(k) for k in cells.values()}
         return [rd for rd in readings_by_model.get(mdl, []) if not reading_mods.get((mdl, rd)) or reading_mods[(mdl, rd)] <= have]
 
     def col_sort(item):
@@ -1004,7 +1019,7 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             rep.warnings.append({
                 "code": "W_FOLDER_SOURCE_DIFFERS", "column": column_id,
                 "message": f"{bench}: results under one protocol hash were scored by {len(sources)} different versions of the "
-                           "folder's probe.py / reader.py (benchmark.folder_source); comparable by declaration (the "
+                           "folder's eval.py / reader.py (benchmark.folder_source); comparable by declaration (the "
                            "conformance fixture holds them within tolerance), shown for diagnosis",
             })
 
@@ -1146,7 +1161,7 @@ def report(
     """Index → the per-model lm-eval tables + the comparability columns → rendered text;
     writes ``runs/_index.jsonl`` and, when the runs root is known, ``runs/_report/report.<fmt>`` +
     ``DONE``. ``join={"<benchmark>": {"<reading>": run, ...}}`` calls that benchmark folder's
-    ``probe.py`` ``join()`` (:func:`yavih.report.join.run_join`; vggsounder: ``a``/``v``/``av``) and writes
+    ``eval.py`` ``join()`` (:func:`yavih.report.join.run_join`; vggsounder: ``a``/``v``/``av``) and writes
     the joined numbers to the model's results directory under ``<benchmark>:a+v+av``. ``merge_results`` merges every model's
     ``results_*.json`` under ``results_root`` (default ``yavih.config.results_root`` of the runs root)
     into one ``results_<timestamp>.json`` per model. ``suite`` (a name, a path or a ``yavih.suites.Suite``) adds the

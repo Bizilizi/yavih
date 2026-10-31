@@ -59,6 +59,10 @@ __all__ = [
     "MODEL_RE",
     "READING_RE",
     "DESCRIBE_REQUIRED",
+    "DESCRIBE_REQUIRED_CORE",
+    "DESCRIBE_REQUIRED_FEATURES",
+    "SAMPLING_KEYS",
+    "describe_outputs",
     "DESCRIBE_SHA_EXCLUDED",
     "DTYPES",
     "POS_MODES",
@@ -93,13 +97,17 @@ MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 READING_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
 DTYPES: frozenset[str] = frozenset({"float16", "float32"})
 POS_MODES: frozenset[str] = frozenset({"none", "constant", "per_sample"})
-STREAM_KINDS: frozenset[str] = frozenset({"video", "audio", "image"})
+from yavih.fields import SPATIAL_KINDS, STREAM_KINDS  # noqa: E402 - the one vocabulary
+
 AUTOCAST_MODES: frozenset[str | None] = frozenset({None, "bf16", "fp16"})
 MATMUL_PRECISIONS: frozenset[str] = frozenset({"highest", "high", "medium"})
 #: Keys of ``describe()["precision"]``; only ``autocast`` may be null.
 PRECISION_KEYS: tuple[str, ...] = ("autocast", "matmul_precision", "allow_tf32", "deterministic")
 #: Keys ``describe()`` MUST contain, with their types checked by ``validate_describe``.
 #: ``batch_tolerance`` and ``waive`` are optional.
+#: ``describe()`` keys every bridge declares; :data:`DESCRIBE_REQUIRED_FEATURES` only a bridge of the feature matrix (a
+#: benchmark without a declared output schema), which also declares ``outputs`` otherwise.
+DESCRIBE_REQUIRED_FEATURES: tuple[str, ...] = ("dtype", "streams", "pos_mode", "layer", "pooling")
 DESCRIBE_REQUIRED: tuple[str, ...] = (
     "model",
     "reading",
@@ -116,6 +124,8 @@ DESCRIBE_REQUIRED: tuple[str, ...] = (
     "precision",
     "args",
 )
+#: The keys every bridge declares whatever the output schema.
+DESCRIBE_REQUIRED_CORE: tuple[str, ...] = tuple(k for k in DESCRIBE_REQUIRED if k not in DESCRIBE_REQUIRED_FEATURES)
 #: ``describe()`` keys outside ``describe_sha256``. The hashing
 #: module owns the digest and the set; this is the same object.
 DESCRIBE_SHA_EXCLUDED: frozenset[str] = _hashing.DESCRIBE_SHA_EXCLUDED
@@ -126,7 +136,6 @@ MAX_BATCH_TOLERANCE: float = 1e-3
 #: The temporal rule vocabulary: rule → stream kinds it is legal for (one definition: ``yavih.media.rules``).
 TEMPORAL_RULES: Mapping[str, frozenset[str]] = _rules.TEMPORAL_RULES
 #: Kinds that carry a ``spatial`` rule.
-SPATIAL_KINDS: frozenset[str] = frozenset({"video", "image"})
 
 # Error codes carried by DescribeError / ArgError (the CLI prints them).
 E_DESCRIBE = "E_DESCRIBE"  # generic describe() schema violation (exit 2)
@@ -209,6 +218,8 @@ class BenchmarkView:
     #: The benchmark's input side: what the bridge is handed and must produce. A bridge that records a
     #: benchmark digest records this one — ``protocol_hash`` also moves on scoring edits, which never touch features.
     input_hash: str = ""
+    #: Every field: ``{name: {"storage": "file" | "cell", "kind"}}`` (``streams`` holds the file fields' kinds).
+    fields: dict = field(default_factory=dict)
 
     @classmethod
     def from_benchmark(cls, bench: Any) -> BenchmarkView:
@@ -307,6 +318,7 @@ class Bridge:
     streams: ClassVar[tuple[str, ...]] = ()  # stream tags used in pos; order = tag index
     ARGS: ClassVar[dict[str, ArgSpec | dict]] = {}  # argparse-like spec of consumed --arg k=v
     keep_bytes: ClassVar[bool] = False  # True: encode() still reads the stored bytes after prepare()
+    outputs: ClassVar[tuple[str, ...]] = ()  # a declared output schema: the keys encode() returns (= describe()["outputs"])
     decode_workers: int = 1
 
     def __init__(self, bench: BenchmarkView, args: dict | None = None) -> None:
@@ -328,9 +340,11 @@ class Bridge:
         encode-only path: no prepare threads, bytes kept until the batch is written."""
         return None
 
-    def encode(self, samples: list[Sample]) -> tuple[Any, Any | None, list[dict]]:
-        """REQUIRED override. Returns ``(feats [B, N, D], pos None | [N, 4] | [B, N, 4], used)`` with ``used`` a
-        list of ``B`` dicts, one entry per stream in ``describe()["input"]``."""
+    def encode(self, samples: list[Sample]) -> tuple[Any, Any | None, list[dict]] | dict[str, Any]:
+        """REQUIRED override. For the feature matrix (a benchmark without a declared output schema): ``(feats [B, N,
+        D], pos None | [N, 4] | [B, N, 4], used)``, or the same as ``{"feat", "pos", "used"}``. For a declared
+        ``output_contract.schema``: ``{key: B values, ..., "used": [B dicts]}`` with one entry per key of
+        ``describe()["outputs"]``. ``used`` holds one entry per stream in ``describe()["input"]``."""
         raise NotImplementedError("Bridge.encode must be overridden by the bridge")
 
     def profile(self) -> dict | None:
@@ -455,19 +469,36 @@ def _rule_check(where: str, fn: Any, *args: Any) -> None:
         raise DescribeError(f"describe()['input']{where}: {e}", E_INPUT) from e
 
 
-def validate_input(inp: Any, kinds: Mapping[str, str], tagged: Sequence[str]) -> None:
-    """The declared-rule checks on ``describe()["input"]``: non-empty, keys ⊆ the benchmark's streams and ⊇ the tagged
-    ``streams``; per stream ``temporal`` (every kind but image; the closed vocabulary of
+def is_cell_entry(entry: Any) -> bool:
+    """A ``describe()["input"]`` entry that declares a cell field: ``{}`` or ``{"note": str}`` (a stream entry always
+    carries ``norm`` and ``decoder``, ``validate_input``). A cell has no ``used`` record and no rule to check."""
+    return isinstance(entry, Mapping) and set(entry) <= {"note"}
+
+
+def input_streams(inp: Any) -> list[str]:
+    """The file streams a bridge declares it reads (the ``describe()["input"]`` keys that are not cell entries)."""
+    return [n for n, e in (inp.items() if isinstance(inp, Mapping) else ()) if not is_cell_entry(e)]
+
+
+def validate_input(inp: Any, kinds: Mapping[str, str], tagged: Sequence[str], cells: Mapping[str, str] | None = None) -> None:
+    """The declared-rule checks on ``describe()["input"]``: non-empty, keys ⊆ the benchmark's fields (file streams and
+    ``cells``) and ⊇ the tagged ``streams``; a cell entry is ``{}`` or ``{"note": str}`` (the value is handed over as
+    is, there is no rule to declare); per stream ``temporal`` (every kind but image; the closed vocabulary of
     ``yavih.media.rules.check_temporal``), ``spatial`` (video, image; ``check_spatial``), ``front_end`` (audio: at least ``sample_rate``, ``resample``, ``features``), ``norm`` (every kind,
     with a non-empty ``source``) and ``decoder`` (every kind: ``{lib, version, …}``). Raises ``DescribeError``
     (``E_INPUT``)."""
-    _in("", isinstance(inp, Mapping) and len(inp) > 0, f"must be a non-empty dict per stream the bridge reads, got {inp!r}")
-    unknown = sorted(set(inp) - set(kinds))
-    _in("", not unknown, f"names stream(s) {unknown} the benchmark does not have ({sorted(kinds)})")
+    cells = dict(cells or {})
+    _in("", isinstance(inp, Mapping) and len(inp) > 0, f"must be a non-empty dict per field the bridge reads, got {inp!r}")
+    unknown = sorted(set(inp) - set(kinds) - set(cells))
+    _in("", not unknown, f"names field(s) {unknown} the benchmark does not have ({sorted(set(kinds) | set(cells))})")
     untagged = sorted(set(tagged) - set(inp))
     _in("", not untagged, f"lacks the tagged stream(s) {untagged}: every stream in describe()['streams'] is read and declared")
     for sname, entry in inp.items():
         where = f"[{sname!r}]"
+        if sname in cells:
+            _in(where, isinstance(entry, Mapping) and set(entry) <= {"note"} and isinstance(entry.get("note", ""), str),
+                f"a cell field is declared as {{}} or {{'note': str}}, got {entry!r}")
+            continue
         kind = kinds[sname]
         _in(where, isinstance(entry, Mapping), f"must be a dict, got {type(entry).__name__}")
         allowed = {"norm", "decoder"} | ({"temporal"} if kind != "image" else set()) | ({"spatial"} if kind in SPATIAL_KINDS else set()) | (
@@ -565,8 +596,15 @@ def validate_describe(d: dict, bridge: Bridge, bench: Any) -> None:
     ``W_WEIGHTS_UNFINGERPRINTED``; nothing is gated, marked or forked by it.
     """
     _require(isinstance(d, Mapping), f"must return a dict, got {type(d).__name__}")
-    missing = [k for k in DESCRIBE_REQUIRED if k not in d]
-    _require(not missing, f"missing required key(s) {missing}")
+    from yavih import codecs as _codecs
+
+    oc = BenchmarkView.from_benchmark(bench).output_contract or {}
+    schema = _codecs.schema_of(oc)
+    features = _codecs.has_default_feature_keys(schema)
+    required = DESCRIBE_REQUIRED if features else DESCRIBE_REQUIRED_CORE + ("outputs",)
+    missing = [k for k in required if k not in d]
+    _require(not missing, f"missing required key(s) {missing}" + ("" if features else
+             " (a benchmark with a declared output schema: the feature keys dtype, pos_mode, streams, layer and pooling are optional)"))
     try:
         canon(d)  # JSON primitives only; a tensor or a Path would land here
     except (TypeError, ValueError) as e:
@@ -585,18 +623,27 @@ def validate_describe(d: dict, bridge: Bridge, bench: Any) -> None:
              f"weights_sha256 must be 64 lower-case hex or null, got {w!r}")
     _require(isinstance(d["weights_ref"], str), f"weights_ref must be a str, got {d['weights_ref']!r}")
 
-    _require(d["dtype"] in DTYPES, f"dtype must be one of {sorted(DTYPES)}, got {d['dtype']!r}")
-    _require(d["dtype"] == bridge.dtype, f"dtype {d['dtype']!r} != Bridge.dtype {bridge.dtype!r}")
-    _require(bridge.dtype in DTYPES, f"Bridge.dtype must be one of {sorted(DTYPES)}, got {bridge.dtype!r}")
+    if features:
+        _require(d["dtype"] in DTYPES, f"dtype must be one of {sorted(DTYPES)}, got {d['dtype']!r}")
+        _require(d["dtype"] == bridge.dtype, f"dtype {d['dtype']!r} != Bridge.dtype {bridge.dtype!r}")
+        _require(bridge.dtype in DTYPES, f"Bridge.dtype must be one of {sorted(DTYPES)}, got {bridge.dtype!r}")
+        _require(d["pos_mode"] in POS_MODES, f"pos_mode must be one of {sorted(POS_MODES)}, got {d['pos_mode']!r}")
+        _require(d["pos_mode"] == bridge.pos_mode, f"pos_mode {d['pos_mode']!r} != Bridge.pos_mode {bridge.pos_mode!r}")
+    else:
+        _check_outputs_key(d, bridge, schema)
     bs = d["batch_size"]
     _require(_is_int(bs) and bs >= 1, f"batch_size must be an int >= 1, got {bs!r}")
     _require(bs == bridge.batch_size, f"batch_size {bs!r} != Bridge.batch_size {bridge.batch_size!r}")
-    _require(d["pos_mode"] in POS_MODES, f"pos_mode must be one of {sorted(POS_MODES)}, got {d['pos_mode']!r}")
-    _require(d["pos_mode"] == bridge.pos_mode, f"pos_mode {d['pos_mode']!r} != Bridge.pos_mode {bridge.pos_mode!r}")
     _require(_is_int(d["views"]) and d["views"] == 1,
              f"views must be 1 (one deterministic view per clip: no multi-crop, multi-clip or test-time-augmentation averaging), got {d['views']!r}")
+    sampling_mode = str(oc.get("sampling") or "optional")
+    if sampling_mode == "required":
+        _require("sampling" in d, "the benchmark's output_contract.sampling is required: describe()['sampling'] must declare the generation "
+                 "budget and selection rule {seed, steps, guidance, n_candidates, selection} (matched budgets, disclosed selection)")
+    if "sampling" in d:
+        _check_sampling(d["sampling"])
 
-    streams = d["streams"]
+    streams = d.get("streams", [])
     _require(isinstance(streams, list | tuple) and all(isinstance(s, str) for s in streams),
              f"streams must be a list of str, got {streams!r}")
     _require(list(streams) == list(bridge.streams), f"streams {list(streams)!r} != Bridge.streams {list(bridge.streams)!r}")
@@ -605,9 +652,13 @@ def validate_describe(d: dict, bridge: Bridge, bench: Any) -> None:
     unknown = [s for s in streams if s not in kinds]
     _require(not unknown, f"streams {unknown!r} are not streams of the benchmark ({sorted(kinds)})")
 
-    _require(isinstance(d["pooling"], str) and d["pooling"] != "", f"pooling must be a non-empty str, got {d['pooling']!r}")
-    _require(isinstance(d["layer"], str | int) and not isinstance(d["layer"], bool), f"layer must be str | int, got {d['layer']!r}")
-    validate_input(d["input"], kinds, list(streams))
+    if features or "pooling" in d:
+        _require(isinstance(d["pooling"], str) and d["pooling"] != "", f"pooling must be a non-empty str, got {d['pooling']!r}")
+    if features or "layer" in d:
+        _require(isinstance(d["layer"], str | int) and not isinstance(d["layer"], bool), f"layer must be str | int, got {d['layer']!r}")
+    view = BenchmarkView.from_benchmark(bench)
+    cells = {n: str(e.get("kind")) for n, e in (view.fields or {}).items() if isinstance(e, Mapping) and e.get("storage") == "cell"}
+    validate_input(d["input"], kinds, list(streams), cells)
     _check_rule_facts(d["input"], kinds, bench)
 
     prec = d["precision"]
@@ -643,6 +694,45 @@ def validate_describe(d: dict, bridge: Bridge, bench: Any) -> None:
     if "E_ARGS_UNCONSUMED" not in waived:  # waived: bridge check records W_WAIVED (args_unconsumed)
         problems = args_unconsumed(d, bridge)
         _require(not problems, "; ".join(problems), E_ARGS_UNCONSUMED)
+
+
+#: ``describe()["sampling"]``: the generation budget and the selection rule of a generative bridge.
+SAMPLING_KEYS: tuple[str, ...] = ("seed", "steps", "guidance", "n_candidates", "selection")
+
+
+def _check_sampling(sp: Any) -> None:
+    _require(isinstance(sp, Mapping) and set(sp) == set(SAMPLING_KEYS),
+             f"sampling must be {{{', '.join(SAMPLING_KEYS)}}} (null where a key does not apply), got {sp!r}")
+    _require(_is_int(sp["seed"]), f"sampling.seed must be an int (generation is seeded: a rerun must reproduce it), got {sp['seed']!r}")
+    _require(sp["steps"] is None or (_is_int(sp["steps"]) and sp["steps"] >= 1), f"sampling.steps must be an int >= 1 or null, got {sp['steps']!r}")
+    _require(sp["guidance"] is None or _is_num(sp["guidance"]), f"sampling.guidance must be a number or null, got {sp['guidance']!r}")
+    _require(_is_int(sp["n_candidates"]) and sp["n_candidates"] >= 1, f"sampling.n_candidates must be an int >= 1, got {sp['n_candidates']!r}")
+    _require(isinstance(sp["selection"], str) and sp["selection"].strip() != "",
+             "sampling.selection must name the rule that picks one of n_candidates ('first' when n_candidates is 1)")
+
+
+def _check_outputs_key(d: Mapping[str, Any], bridge: Bridge, schema: Mapping[str, Any]) -> None:
+    """A declared output schema: ``describe()["outputs"]`` lists the keys ``encode`` returns (every non-optional
+    schema key, no key outside the schema) and equals ``Bridge.outputs`` when the class declares it."""
+    outs = d["outputs"]
+    _require(isinstance(outs, list | tuple) and all(isinstance(k, str) for k in outs) and len(set(outs)) == len(outs),
+             f"outputs must be a list of distinct schema keys, got {outs!r}")
+    unknown = [k for k in outs if k not in schema]
+    _require(not unknown, f"outputs {unknown} are not keys of the benchmark's output schema ({sorted(schema)})")
+    lacking = [k for k, e in schema.items() if not e.get("optional", False) and k not in outs]
+    _require(not lacking, f"outputs lack the schema key(s) {lacking} (not optional)")
+    declared = tuple(getattr(bridge, "outputs", ()) or ())
+    _require(not declared or list(declared) == list(outs), f"outputs {list(outs)} != Bridge.outputs {list(declared)}")
+
+
+def describe_outputs(d: Mapping[str, Any], schema: Mapping[str, Any] | None) -> list[str]:
+    """The schema keys a bridge's features carry: ``feat`` (+ ``pos`` unless ``pos_mode`` is ``none``) for the feature
+    matrix, else ``describe()["outputs"]``."""
+    from yavih import codecs as _codecs
+
+    if _codecs.has_default_feature_keys(schema):
+        return ["feat"] + (["pos"] if d.get("pos_mode", "none") != "none" else [])
+    return list(d.get("outputs") or [])
 
 
 def args_unconsumed(d: Mapping[str, Any], bridge: Bridge) -> list[str]:

@@ -1,8 +1,8 @@
-"""Tests for report joins (the folder ``probe.py`` ``join``, the results store, vggsounder): one ``model``,
+"""Tests for report joins (the folder ``eval.py`` ``join``, the results store, vggsounder): one ``model``,
 three readings, refusals on ``eval_hash`` / population / model, ``W_JOIN_WEIGHTS`` recorded, the entry
 ``<benchmark>:a+v+av`` in the model's results directory).
 
-``report --join <benchmark> ...`` goes through the benchmark folder's ``probe.py`` ``join()`` hook
+``report --join <benchmark> ...`` goes through the benchmark folder's ``eval.py`` ``join()`` hook
 (:mod:`yavih.report.join`): the generic tests use a fake folder, the vggsounder tests the packaged folder's
 ``probe.join``.
 
@@ -147,7 +147,7 @@ def fake_vggsounder(monkeypatch: pytest.MonkeyPatch):
 
 
 def _vgg_bench(tmp_path: Path | None = None):
-    """The packaged vggsounder folder (its real probe.py join) over the N synthetic eval clips."""
+    """The packaged vggsounder folder (its real eval.py join) over the N synthetic eval clips."""
     import yaml
 
     spec = yaml.safe_load((VGGSOUNDER_FOLDER / "benchmark.yaml").read_text(encoding="utf-8"))
@@ -204,7 +204,7 @@ def test_vggsounder_folder_join_calls_official_scorer(three_runs, fake_vggsounde
     assert doc["config"]["external"] == {"vggsounder": "1.0"}
 
 
-# --------------------------------------------------------------------------- the folder probe.py path
+# --------------------------------------------------------------------------- the folder eval.py path
 
 FOLDER_PROBE = """
 import numpy as np
@@ -227,11 +227,11 @@ def _fake_bench(tmp_path: Path, *, with_join: bool = True, external=()):
     folder = tmp_path / "vggsounder_folder"
     folder.mkdir(parents=True, exist_ok=True)
     if with_join:
-        (folder / "probe.py").write_text(textwrap.dedent(FOLDER_PROBE))
+        (folder / "eval.py").write_text(textwrap.dedent(FOLDER_PROBE))
     return SimpleNamespace(name="vggsounder", folder=folder, spec=SimpleNamespace(external=list(external)))
 
 
-def test_run_join_calls_the_folder_probe_join_and_writes_the_store(three_runs, tmp_path: Path):
+def test_run_join_calls_the_folder_eval_join_and_writes_the_store(three_runs, tmp_path: Path):
     from yavih.report.join import ResultRef, run_join
 
     bench = _fake_bench(tmp_path)
@@ -390,7 +390,7 @@ def test_run_join_keeps_the_folders_refusal_code(three_runs, tmp_path: Path):
 
     folder = tmp_path / "refusing"
     folder.mkdir()
-    (folder / "probe.py").write_text(textwrap.dedent('''
+    (folder / "eval.py").write_text(textwrap.dedent('''
         class JoinRefused(Exception):
             def __init__(self, code, message):
                 super().__init__(f"{code}: {message}")

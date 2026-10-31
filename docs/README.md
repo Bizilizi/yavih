@@ -18,6 +18,7 @@ Normative descriptions of current behaviour.
 |---|---|
 | [Benchmark folder](benchmark-folder.md) | the folder contract, the `benchmark.yaml` schema, manifest and classes, the `Benchmark` API and resolution order, README.md / setup.md contracts, what `yavih bench lint` checks |
 | [Bridge](bridge.md) | what a bridge receives (`Sample`, `RawStream`, media facts, canaries), the `Bridge` API, `describe()` keys and declared rules, the `encode()` contract, positions, `used`, guardrails, `yavih bridge check` |
+| [Output schemas and codecs](codecs.md) | what a bridge returns per row: `output_contract.schema`, the default feature matrix, the built-in codecs (`array`, `json`, `bytes`, `wav`), writing a codec, the lint self-test, what enters the hash |
 | [Features](features.md) | the feature WebDataset format: shards, members, sidecars, `_layout.json`, `_meta.json`, missing rows, `NOT_APPLICABLE.json`, resumption and claims, `FeatureWriter` / `FeatureReader` |
 | [Validation](validation.md) | `yavih features validate`: every check and code with its level, eligibility, waivers and custom rules |
 | [Readouts](readouts.md) | the metric registry, common probe rules, `ProbeConfig`, the `clf` / `seq` / `grid` / `box` readouts, floors, controls, intervals |
@@ -38,5 +39,5 @@ Normative descriptions of current behaviour.
   pull request: scaffold, protocol, freeze, prepare, docs, bridge template, hashes, tests, header, trials, CI.
 - [Trial run](trial-run.md): the required pre-PR run of a new benchmark by a fresh agent with only the wheel and
   the skill: protocol, worker prompt, report template, pass criteria.
-- [Adding a readout](adding-a-readout.md): the readout registry, drivers, metrics, entry points.
+- [Adding a scorer](adding-a-scorer.md): the readout registry, drivers, metrics, entry points.
 - [Releasing](releasing.md): versions from git tags, CI, the release workflow, PyPI trusted publishing.

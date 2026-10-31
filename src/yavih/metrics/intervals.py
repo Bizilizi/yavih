@@ -11,7 +11,7 @@ them to a statistic recomputed on every resample (``map``: macro AP over the fix
 the resample's integer clip weights, so a duplicated clip is one more tied row exactly as in
 ``classification.macro_average_precision`` on the materialised resample). ``registry.CI_ADMISSIBLE`` is
 the declarative table ``Benchmark.load`` checks; ``tests/test_metrics_intervals.py`` pins it equal to
-what this module computes. A folder metric (``probe.py`` ``METRICS``) brings its own per-clip function and the
+what this module computes. A folder metric (``eval.py`` ``METRICS``) brings its own per-clip function and the
 interval kinds it admits (``MetricSpec.per_clip`` / ``MetricSpec.ci``); ``interval(..., spec=...)`` uses them."""
 
 from __future__ import annotations
@@ -258,7 +258,12 @@ def interval(kind: str, name: str, outputs, targets, protocol, split_meta, *, sp
     """Dispatch on ``metrics.ci[name]`` → ``[lo, hi]`` for ``result.ci95[name]``.
     ``bootstrap_clip`` reads ``samples``/``seed`` from ``split_meta["bootstrap"]`` (``metrics.bootstrap``;
     default 2 000 / 0). ``spec`` is the metric's ``MetricSpec``: a folder metric that declares ``kind`` in its
-    ``ci`` is computed from its own ``per_clip``; every other name uses this module's tables."""
+    ``ci`` is computed by its own ``interval`` when it has one, else from its own ``per_clip``; every other name
+    uses this module's tables."""
+    own = getattr(spec, "interval", None)
+    if own is not None and kind in (getattr(spec, "ci", None) or ()):
+        lo, hi = own(kind, outputs, targets, protocol, split_meta)
+        return [float(lo), float(hi)]
     per_clip = getattr(spec, "per_clip", None)
     if per_clip is not None and kind in (getattr(spec, "ci", None) or ()):
         return _folder_interval(kind, name, per_clip, outputs, targets, protocol, split_meta)

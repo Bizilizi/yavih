@@ -33,6 +33,8 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   (or say "None"); the contract yaml copies equal ``benchmark.yaml``; ``yavih bench verify <name>``;
   the prepare steps run as ``yavih bench prepare <name> <step>``; ``source.revision`` in "## Obtain the data".
 - ``external``: every ``external[].pip`` is a runnable ``pip install …`` command.
+- ``codecs``: every folder or entry-point codec the output schema names passes ``yavih.codecs.self_test``
+  (``E_CODEC_SELFTEST``).
 - ``obtain``: the ``obtain: {tier, how}`` block.
 - ``capability``: a non-empty ``capability:`` list of ``yavih.suites.CAPABILITIES`` ids (``E_CAPABILITY``; optional for
   the loader); a shipped suite that lists the benchmark under a capability it does not carry is a warning
@@ -43,7 +45,7 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   the source tree); a ``https://github.com/Bizilizi/yavih`` URL is the exception. No shipped text file of the folder
   (``*.md``, ``*.yaml``, ``*.py``, ``*.sh`` in the folder, ``prepare/``, ``tests/``) names a ``notes/`` path
   (``E_NOTES_LINK``): a folder may keep maintainer ``notes/``, but they are never packaged.
-- ``imports``: ``reader.py`` / ``probe.py`` import with torch and the folder's external packages blocked.
+- ``imports``: ``reader.py`` / ``eval.py`` import with torch and the folder's external packages blocked.
 - ``todo``: unfilled ``TODO`` markers (a ``yavih bench new`` scaffold) are reported as warnings: ``TODO`` in the
   folder's yaml, docs and scripts, ``TODO:`` in ``tests/*.py`` and ``prepare/*`` (where a test may name the bridge
   template's own ``TODO`` slots).
@@ -97,7 +99,8 @@ OBTAIN_TIERS: frozenset[str] = frozenset({"auto", "manual-download", "needs-lice
 #: Headings neither README.md nor setup.md carries: the yaml ``changelog`` is the version record, and the
 #: re-freeze notes live in README "## In yavih".
 RETIRED_HEADINGS: frozenset[str] = frozenset({"Changelog", "History", "Checklist", "Maintainers"})
-READINGS: frozenset[str] = frozenset({"a", "v", "av"})
+#: Reading tags a bridge template may declare: what the model is given (a = audio, v = video, av = both, t = text).
+READINGS: frozenset[str] = frozenset({"a", "v", "av", "t"})
 #: A numbered prepare step (``prepare/01_download.sh``): what ``yavih bench prepare <name> <step>`` runs.
 _STEP_FILE_RE = re.compile(r"^\d+_[A-Za-z0-9_.-]+\.(?:sh|py)$")
 #: What a pip-installed user cannot open: the repository's docs/ pages by relative path (the wheel does not ship them;
@@ -117,7 +120,7 @@ _TODO = re.compile(r"\bTODO\b")
 #: The marker in ``tests/*.py`` and ``prepare/*``: ``TODO:`` (a folder test may assert on the template's ``TODO`` slots).
 _TODO_MARK = re.compile(r"\bTODO:")
 #: The folder files ``todo`` reads with ``_TODO`` (the bridge template's TODOs are for the bridge author).
-_TODO_FILES: tuple[str, ...] = ("benchmark.yaml", "README.md", "setup.md", "reader.py", "probe.py", "make_manifest.py",
+_TODO_FILES: tuple[str, ...] = ("benchmark.yaml", "README.md", "setup.md", "reader.py", "eval.py", "make_manifest.py",
                                 "classes.csv")
 
 
@@ -537,6 +540,23 @@ def _c_external(c: _Ctx) -> Iterator[Finding]:
             yield _err("external", "E_EXTERNAL", f"external {ext.get('name')!r}: pip {ext.get('pip')!r} is not a full `pip install …` command", "benchmark.yaml")
 
 
+@_check("codecs")
+def _c_codecs(c: _Ctx) -> Iterator[Finding]:
+    """Every codec the folder's schema names that is not a built-in passes the self-test on every entry naming it
+    (lossless round trip, ``distance(x, x) == 0``, ``distance(x, y) > 0``, ``check`` accepts its own sample): a codec
+    whose distance is blind would let any bridge through the determinism gates."""
+    bench = c.bench
+    if bench is None or getattr(bench.spec.output_contract, "schema", None) is None:
+        return
+    from yavih.codecs import BUILTIN, self_test
+
+    for key, (spec, codec) in bench.output_schema().items():
+        if codec.name in BUILTIN:
+            continue
+        for problem in self_test(codec, spec):
+            yield _err("codecs", "E_CODEC_SELFTEST", f"output_contract.schema.{key}: codec {codec.name!r} v{codec.version}: {problem}", "eval.py")
+
+
 @_check("obtain")
 def _c_obtain(c: _Ctx) -> Iterator[Finding]:
     if c.raw is None:
@@ -648,7 +668,7 @@ sys.path.insert(0, sys.argv[2])  # the yavih the linter runs from, not whichever
 for m in sys.argv[3:]:
     sys.modules[m] = None   # `import m` raises ImportError, as in an env without the package
 folder = sys.argv[1]
-for f in ("reader.py", "probe.py"):
+for f in ("reader.py", "eval.py"):
     p = os.path.join(folder, f)
     if not os.path.isfile(p):
         continue
@@ -667,7 +687,7 @@ def _c_imports(c: _Ctx) -> Iterator[Finding]:
                           capture_output=True, text=True, timeout=120)
     if proc.returncode != 0 or not proc.stdout.strip().endswith("ok"):
         tail = (proc.stderr or "").strip().splitlines()[-1:] or ["?"]
-        yield _err("imports", "E_IMPORT", "reader.py / probe.py must import without torch and without the external "
+        yield _err("imports", "E_IMPORT", "reader.py / eval.py must import without torch and without the external "
                    f"packages (assert-import at call time): {tail[0][:300]}", "reader.py")
 
 
@@ -698,7 +718,7 @@ def _c_todo(c: _Ctx) -> Iterator[Finding]:
 
 def lint_folder(folder: str | Path, *, checks: Iterable[str] | None = None, skip: Iterable[str] = ()) -> LintReport:
     """Run the folder contract on ``folder`` (a directory holding ``benchmark.yaml``)."""
-    folder = Path(folder)
+    folder = Path(folder).resolve()
     if not (folder / "benchmark.yaml").is_file():
         return LintReport(folder=folder, name=folder.name, findings=[
             _err("yaml", "E_LAYOUT", f"{folder} holds no benchmark.yaml", "benchmark.yaml")])

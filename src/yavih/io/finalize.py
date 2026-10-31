@@ -66,12 +66,29 @@ def _ordered_shards(sidecars: list[dict]) -> list[dict]:
     return sorted(sidecars, key=lambda s: int(s["shard"]["index"]))
 
 
+def generic_outputs(sidecars: list[dict]) -> dict | None:
+    """The ``outputs`` block of a generic set (a declared output schema), else ``None`` (the feature matrix)."""
+    for s in sidecars:
+        o = s.get("outputs")
+        if isinstance(o, dict) and o.get("schema") is not None:
+            return o
+    return None
+
+
 def meta_fingerprint(sidecars: list[dict], *, pos_sha256: str | None = None, n_present: int | None = None) -> str:
     """``features_fingerprint`` from the sidecars alone: ``shards = [[lo, hi, tar sha256]
     …]`` in row order, ``n_present = Σ rows.n_written``. The validator's re-run check recomputes
     this and compares with ``_meta.json.fingerprint``."""
     ordered = _ordered_shards(sidecars)
     first = ordered[0]
+    outputs = generic_outputs(ordered)
+    if outputs is not None:
+        return hashing.features_fingerprint(
+            format_version=int(first["format_version"]), dtype="none", N=0, D=0, pos_mode="none", pos_sha256=None,
+            shards=[[int(s["shard"]["rows"][0]), int(s["shard"]["rows"][1]), str(s["tar"]["sha256"])] for s in ordered],
+            n_present=int(n_present if n_present is not None else sum(len(s["members"]) for s in ordered)),
+            outputs_sha256=str(outputs.get("schema_sha256")),
+        )
     feats = next((s["features"] for s in ordered if (s.get("features") or {}).get("N") is not None), first["features"])
     if pos_sha256 is None:
         pos_sha256 = feats.get("pos_sha256")
@@ -121,16 +138,29 @@ def build_meta(
     feat_src = next((s for s in ordered if (s.get("features") or {}).get("N") is not None), first)
     feats = dict(feat_src["features"])
     bridge = dict(first["bridge"])
-    if feats.get("N") is None or feats.get("D") is None:
-        raise ValueError("build_meta: no shard recorded features.N/D (every shard empty?)")
-    N, D = int(feats["N"]), int(feats["D"])
-    itemsize = 2 if feats["dtype"] == "float16" else 4
+    outputs = generic_outputs(ordered)
+    if outputs is not None:  # a generic set: no feature matrix; the outputs block says what it carries
+        N = D = 0
+        itemsize = 0
+        feats = {"dtype": None, "N": None, "D": None, "pos_mode": "none", "pos_sha256": None}
+        bound: dict[str, int] = {}
+        for s in ordered:
+            bound.update((s.get("outputs") or {}).get("bound") or {})
+        keys = next(((s.get("outputs") or {}).get("keys") for s in ordered if (s.get("outputs") or {}).get("keys")), None)
+        outputs = {**outputs, "bound": bound, "keys": keys}
+    else:
+        if feats.get("N") is None or feats.get("D") is None:
+            raise ValueError("build_meta: no shard recorded features.N/D (every shard empty?)")
+        N, D = int(feats["N"]), int(feats["D"])
+        itemsize = 2 if feats["dtype"] == "float16" else 4
 
     if present_clip_ids is None:
         present_clip_ids = [str(m["clip_id"]) for s in ordered for m in s["members"]]
     n_present = len(present_clip_ids)
     if nominal is None:
         nominal = max((int(s["shard"]["rows"][1]) for s in ordered), default=0)
+    if bytes_total is None and outputs is not None:
+        bytes_total = sum(int(p.get("nbytes", 0)) for s in ordered for m in s["members"] for p in (m.get("parts") or {}).values())
     if bytes_total is None:
         bytes_total = n_present * N * D * itemsize + (n_present * N * 16 if feats["pos_mode"] == "per_sample" else 0)
     if canary is None:
@@ -176,9 +206,9 @@ def build_meta(
             "source_sha256": bridge.get("source_sha256"),
         },
         "features": {
-            "dtype": str(feats["dtype"]),
-            "N": N,
-            "D": D,
+            "dtype": None if outputs is not None else str(feats["dtype"]),
+            "N": None if outputs is not None else N,
+            "D": None if outputs is not None else D,
             "pos_mode": str(feats["pos_mode"]),
             "pos_sha256": pos_sha256,
             "bytes": int(bytes_total),
@@ -199,6 +229,8 @@ def build_meta(
         "eligibility": dict(eligibility),
         "validation": dict(validation),
     }
+    if outputs is not None:
+        meta["outputs"] = outputs
     return meta
 
 

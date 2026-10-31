@@ -12,10 +12,12 @@ import re
 
 import numpy as np
 
-from yavih.versions import FEATURE_FORMAT_VERSION
+from yavih.versions import FEATURE_FORMAT_VERSION, READABLE_FEATURE_FORMATS
 
 __all__ = [
     "FEATURE_FORMAT_VERSION",
+    "READABLE_FEATURE_FORMATS",
+    "output_member_name",
     "FormatError",
     "FeatureShapeError",
     "FeatureValueError",
@@ -55,8 +57,9 @@ STALE_DIR = "_stale"
 TMP_SUFFIX = ".tmp"
 #: ``shard-{i:06d}.tar`` | ``shard-{i:06d}.json``.
 SHARD_RE = re.compile(r"^shard-(?P<index>\d{6})\.(?P<ext>tar|json)$")
-#: ``{row:09d}`` or ``c{row:09d}`` (canary) followed by ``.json`` | ``.feat.npy`` | ``.pos.npy``.
-MEMBER_RE = re.compile(r"^(?P<canary>c?)(?P<row>\d{9})\.(?P<ext>json|feat\.npy|pos\.npy)$")
+#: ``{row:09d}`` or ``c{row:09d}`` (canary) followed by ``.json`` | ``.feat.npy`` | ``.pos.npy`` (the default schema) or,
+#: for a declared ``output_contract.schema``, ``.<key>.<ext>`` per schema key (format 5).
+MEMBER_RE = re.compile(r"^(?P<canary>c?)(?P<row>\d{9})\.(?P<ext>json|feat\.npy|pos\.npy|[a-z][a-z0-9_]{0,31}\.[a-z0-9]{1,8})$")
 
 
 class FormatError(ValueError):
@@ -114,6 +117,11 @@ def parse_member_name(name: str) -> tuple[int, str, bool]:
     if m is None:
         raise FormatError(f"malformed member name {name!r}")
     return int(m.group("row")), m.group("ext"), bool(m.group("canary"))
+
+
+def output_member_name(row: int, key: str, ext: str, *, canary: bool = False) -> str:
+    """``{row:09d}.{key}.{ext}`` (``c`` prefix for a canary): one schema key of one row (format 5)."""
+    return f"{canary_basename(row) if canary else member_basename(row)}.{key}.{ext}"
 
 
 def parse_shard_name(name: str) -> tuple[int, str]:

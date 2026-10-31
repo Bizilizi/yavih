@@ -57,10 +57,10 @@ def test_folder_lint_clean():
 
 
 def test_yaml_shape(spec):
-    assert spec["schema_version"] == 2 and spec["name"] == HERE.name == "audioset20k"
-    assert spec["aliases"] == [] and spec["readout"] == "clf"
-    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "readout", "protocol_version", "changelog", "source",
-                          "obtain", "budget", "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract",
+    assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "audioset20k"
+    assert spec["aliases"] == [] and spec["scorer"] == "clf"
+    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "scorer", "protocol_version", "changelog", "source",
+                          "obtain", "budget", "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract",
                           "external", "protocol", "metrics", "readout_params"]
     assert spec["header"]["name"] == "AudioSet-20K" and "Gemmeke" in spec["header"]["venue"]
     assert sorted(p.name for p in (HERE / "prepare").iterdir() if p.name != "__pycache__") == ["01_download.sh", "02_verify.sh"]
@@ -88,7 +88,7 @@ def test_source_pins_the_published_dataset(spec, mm):
 
 def test_streams_one_member_two_streams(spec):
     """setup.md "## Input contract": one media column, one tar member read once, handed over as ``video`` and ``audio``."""
-    s = spec["streams"]
+    s = F.file_fields(spec)
     assert list(s) == ["video", "audio"]
     for name in ("video", "audio"):
         assert s[name] == {"kind": name, "media_column": "rel_media", "root": "media_root", "layout": "tar_index", "layout_params": {}, "required": True}
@@ -99,7 +99,7 @@ def test_streams_one_member_two_streams(spec):
 def test_input_output_contract(spec):
     ic, oc = spec["input_contract"], spec["output_contract"]
     assert set(ic) == {"handed_over", "info", "facts", "materialize"}
-    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["streams"])
+    assert set(ic["handed_over"]) == set(ic["info"]) == set(F.file_fields(spec))
     assert ic["info"] == {"video": ["duration_s", "fps", "n_frames", "width", "height", "container", "bytes"],
                           "audio": ["duration_s", "sample_rate", "n_samples", "channels", "container", "bytes"]}
     assert REPO_ID in ic["handed_over"]["video"] and REVISION in ic["handed_over"]["video"]  # the release is hashed with the protocol
@@ -116,7 +116,7 @@ def test_info_keys_in_vocabulary(spec):
     from yavih.sample import INFO_VOCAB
 
     for name, ks in spec["input_contract"]["info"].items():
-        assert set(ks) <= set(INFO_VOCAB[spec["streams"][name]["kind"]]), name
+        assert set(ks) <= set(INFO_VOCAB[F.file_fields(spec)[name]["kind"]]), name
 
 
 # ----------------------------------------------------------------------------- manifest / classes
@@ -247,7 +247,7 @@ def test_benchmarks_index_row(spec):
     rows_ = [ln for ln in idx.read_text(encoding="utf-8").splitlines() if ln.startswith("| [audioset20k]")]
     assert rows_, "benchmarks/README.md index has no audioset20k row"
     cells = [c.strip() for c in rows_[0].strip("|").split("|")]
-    assert cells[0] == "[audioset20k](audioset20k/README.md)" and cells[2] == spec["readout"]
+    assert cells[0] == "[audioset20k](audioset20k/README.md)" and cells[2] == spec["scorer"]
     assert "public" in cells[4].lower() and cells[3] == "video + audio"  # generated from benchmark.yaml streams
 
 

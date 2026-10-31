@@ -1,0 +1,101 @@
+{
+ "benchmark": "audiocaps_t2a",
+ "generator": 1,
+ "population": {
+  "eval": 32,
+  "floor": 0,
+  "folds": 0,
+  "train": 0
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "fa7ac592b642eaf876d62e30f2eda8f1ad98fa5d+dirty",
+  "externals": {
+   "av_bench": "1.0.0"
+  },
+  "folder_source": {
+   "probe": "fc731792afcbada6bc6d642c20cf87cf722903ff767a1f3c5f6147e2d59a6b96",
+   "reader": null
+  },
+  "protocol_hash": "22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552",
+  "scorer": {
+   "kind": "direct",
+   "name": "audiocaps_t2a",
+   "version": 1
+  },
+  "scoring_hash": "6e95bd37dbf92595045f04f3d345d71d9820a741edc78fc56ef32911406dc9a5",
+  "yavih_version": "1.0.1.dev2+gfa7ac592b.d20261030"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "clap_laion": 0.001,
+  "clap_laion_floor": 0.001,
+  "clap_laion_ref": 0.001,
+  "clap_ms": 0.001,
+  "clap_ms_floor": 0.001,
+  "clap_ms_ref": 0.001,
+  "fd_panns": 0.001,
+  "fd_passt": 0.001,
+  "fd_vgg": 0.001,
+  "is_panns": 0.001,
+  "is_passt": 0.001,
+  "kad_panns": 0.001,
+  "kad_passt": 0.001,
+  "kl_panns": 0.001,
+  "kl_passt": 0.001,
+  "kl_passt_floor": 0.001,
+  "n_eval": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "clap_laion": [
+     -0.1258959631357105,
+     -0.02653077516443749
+    ],
+    "clap_ms": [
+     0.13226235378763923,
+     0.21964577190381818
+    ],
+    "kad_panns": [
+     38.759551869262204,
+     45.06119091759636
+    ],
+    "kad_passt": [
+     35.23544401145443,
+     40.042723895561736
+    ],
+    "kl_panns": [
+     5.410795140204865,
+     6.6442184165752565
+    ],
+    "kl_passt": [
+     4.70594654731604,
+     5.7196416460536925
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "clap_laion_floor": -0.01561539527028799,
+    "clap_ms_floor": 0.07208496332168579,
+    "kl_passt_floor": 5.526005268096924
+   },
+   "metrics": {
+    "clap_laion": -0.07683949917554855,
+    "clap_laion_ref": 0.3762761354446411,
+    "clap_ms": 0.17175672948360443,
+    "clap_ms_ref": 0.4255646765232086,
+    "fd_panns": 202.65316246986714,
+    "fd_passt": 1309.5467812971642,
+    "fd_vgg": 33.749355389607956,
+    "is_panns": 1.0033219659727983,
+    "is_passt": 1.0085314961523215,
+    "kad_panns": 40.84412770978412,
+    "kad_passt": 36.23962679185122,
+    "kl_panns": 6.013112545013428,
+    "kl_passt": 5.213017463684082,
+    "n_eval": 32
+   }
+  }
+ }
+}

@@ -12,17 +12,18 @@ from yavih import versions
 
 def test_pinned_values():
     """The pinned version constants."""
-    assert versions.FEATURE_FORMAT_VERSION == 4
-    assert versions.BENCHMARK_SCHEMA_VERSION == 2
+    assert versions.FEATURE_FORMAT_VERSION == 5 and versions.READABLE_FEATURE_FORMATS == (4, 5)
+    assert versions.BENCHMARK_SCHEMA_VERSION == 3
     assert versions.RESULT_SCHEMA_VERSION == 4
     assert versions.RESULTS_FILE_VERSION == 2
     assert versions.PLAN_SCHEMA_VERSION == 3
-    assert dict(versions.READOUT_VERSION) == {"clf": 1, "seq": 2, "grid": 2, "box": 2}
+    # the built-ins (a folder's eval.py SCORER registers when its folder loads, so later entries depend on test order)
+    assert {k: versions.READOUT_VERSION[k] for k in ("clf", "seq", "grid", "box")} == {"clf": 1, "seq": 2, "grid": 2, "box": 2}
     assert versions.PROBE_SCHEMA == "yavih-probe-1"
     assert versions.PROTOCOL_SCHEMA == "yavih-protocol-5"
     assert versions.DESCRIBE_SCHEMA == "yavih-describe-2"
     assert isinstance(versions.__version__, str) and versions.__version__
-    assert set(versions.READOUTS) == {"clf", "seq", "grid", "box"}
+    assert tuple(versions.READOUTS)[:4] == ("clf", "seq", "grid", "box") and set(versions.READOUTS) == set(versions.READOUT_VERSION)
     assert versions.GIT_HASH is None or isinstance(versions.GIT_HASH, str)
 
 

@@ -233,20 +233,20 @@ def benchmark_entry(results: Sequence[Mapping[str, Any]], *, bench: Any = None, 
     name = str(bmeta.get("name"))
     spec = _spec_of(bench)
     ok = [r for r in results if r.get("status") == "ok"]
-    probe_mod = None
+    eval_mod = None
     if bench is not None:
         try:
-            from yavih.readouts.base import folder_probe
+            from yavih.readouts.base import folder_eval
 
-            probe_mod = folder_probe(bench)
-        except Exception:  # noqa: BLE001 - facts only; a broken probe.py was refused by the probe already
-            probe_mod = None
+            eval_mod = folder_eval(bench)
+        except Exception:  # noqa: BLE001 - facts only; a broken eval.py was refused by the probe already
+            eval_mod = None
 
     if ok:
         metric_names = list((ok[0].get("metrics") or {}).keys())
         floor_names = list((ok[0].get("floors") or {}).keys())
         control_names = list((ok[0].get("controls") or {}).keys())
-        info = metric_info(metric_names, floors=floor_names, probe_metrics=getattr(probe_mod, "METRICS", None))
+        info = metric_info(metric_names, floors=floor_names, probe_metrics=getattr(eval_mod, "METRICS", None))
         block: dict[str, Any] = {}
         for m in metric_names:
             vals = [(r.get("metrics") or {}).get(m) for r in ok]
@@ -315,7 +315,7 @@ def benchmark_entry(results: Sequence[Mapping[str, Any]], *, bench: Any = None, 
         "protocol_hash": bmeta.get("protocol_hash"),
         "probe_hash": (first.get("probe") or {}).get("hash"),
         "manifest_hash": bmeta.get("manifest_hash"),
-        "folder_source": bmeta.get("folder_source"),  # provenance: the folder's probe.py / reader.py digests
+        "folder_source": bmeta.get("folder_source"),  # provenance: the folder's eval.py / reader.py digests
         "roles": roles,
         "metrics": {
             "headline": getattr(metrics_cfg, "headline", None) or block.get("headline"),

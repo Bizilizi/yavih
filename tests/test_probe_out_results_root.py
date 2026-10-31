@@ -1,9 +1,9 @@
-"""Results-store root, ``probe run --out``, ``--allow-loopback`` and ``probe run --device``.
+"""Results-store root, ``eval run --out``, ``--allow-loopback`` and ``eval run --device``.
 
 - The results-store root is never guessed from directory depth: ``--results`` → ``YAVIH_RESULTS`` /
   ``[results] root`` → ``results/`` next to the runs root of a STANDARD run directory
   ``<runs root>/<benchmark>/<model>/<reading>``; any other layout is ``E_RESULTS_ROOT`` (exit 1) before training.
-- ``probe run --out DIR`` probes a read-only feature set (shards mirrored as symlinks, ``_meta.json`` and
+- ``eval run --out DIR`` probes a read-only feature set (shards mirrored as symlinks, ``_meta.json`` and
   ``probe/`` written under DIR, the source never touched).
 - ``--allow-loopback`` lets ``encode`` reach 127.0.0.0/8 / ::1 (recorded in the sidecar); any other connect
   is still ``E_NETWORK``.
@@ -101,7 +101,7 @@ def test_results_store_write_failure_is_never_fatal(tmp_path, fakes, monkeypatch
     assert "could not write the results store" in capsys.readouterr().err
 
 
-# ============================================================================ 2.6 probe run --out
+# ============================================================================ 2.6 eval run --out
 
 
 def test_probe_out_on_a_read_only_source(tmp_path, fakes):
@@ -155,10 +155,10 @@ def test_cli_probe_run_passes_out_and_device(monkeypatch, capsys):
         return []
 
     monkeypatch.setattr(RO, "probe", fake_probe)
-    assert cli.main(["probe", "run", "/r", "--out", "/o", "--device", "cpu"]) == 0
+    assert cli.main(["eval", "run", "/r", "--out", "/o", "--device", "cpu"]) == 0
     assert seen["out"] == "/o" and seen["device"] == "cpu" and seen["run_dir"] == "/r"
     seen.clear()
-    assert cli.main(["probe", "run", "/r"]) == 0
+    assert cli.main(["eval", "run", "/r"]) == 0
     assert "out" not in seen and "device" not in seen
 
 

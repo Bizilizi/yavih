@@ -4,7 +4,7 @@
 # tar member read once) exactly as published, for every published clip; the 3 clips without an audio track are
 # handed over with audio info has_track: false. Every model-side choice (frames, window, resolution, crop, front
 # end, what to feed for an absent track) is the bridge's, declared in describe().
-schema_version: 2
+schema_version: 3
 name: audioset20k
 aliases: []
 title: AudioSet-20K (balanced) 527-class multi-label audio-visual tagging, published raw clips (macro mAP)
@@ -18,7 +18,7 @@ header:
     ontology. AS-20K trains on the class-balanced list of 22 160 segments and evaluates on the 20 371-segment
     eval list: every event present in a clip is predicted from its audio, its video or both (multi-label),
     scored by macro mAP.
-readout: clf
+scorer: clf
 protocol_version: 1
 changelog:
   - version: 1
@@ -108,8 +108,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:                      # hashed: what is handed over; both streams read the same tar member
+fields:                      # hashed: what is handed over; both streams read the same tar member
   video:
+    storage: file
     kind: video
     media_column: rel_media     # index key <split>/<key>.mp4
     root: media_root
@@ -117,6 +118,7 @@ streams:                      # hashed: what is handed over; both streams read t
     layout_params: {}
     required: true
   audio:
+    storage: file
     kind: audio
     media_column: rel_media     # the same mp4 member as video (read once)
     root: media_root

@@ -123,7 +123,7 @@ class _ComputedByScore:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         raise RuntimeError(
-            f"{self.name} is computed by the vggsounder folder's probe.py score() with the official "
+            f"{self.name} is computed by the vggsounder folder's eval.py score() with the official "
             "vggsounder package; it has no registry function"
         )
 

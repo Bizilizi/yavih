@@ -19,9 +19,9 @@ import yaml
 from yavih import cli
 from yavih.metrics import registry as R
 
-REQUIRED_TOP_LEVEL_KEYS = {  # benchmark.yaml schema 2; there is no top-level `requires` (it lives in output_contract)
-    "schema_version", "name", "aliases", "title", "readout", "protocol_version", "changelog", "source", "budget",
-    "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract", "external", "protocol",
+REQUIRED_TOP_LEVEL_KEYS = {  # benchmark.yaml schema 3; there is no top-level `requires` (it lives in output_contract)
+    "schema_version", "name", "aliases", "title", "scorer", "protocol_version", "changelog", "source", "budget",
+    "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract", "external", "protocol",
     "metrics", "readout_params",
 }
 
@@ -72,7 +72,7 @@ def test_raw_stream_fields_are_read_only(tmp_path):
 def test_cli_help_lists_the_full_command_tree(capsys):
     parser = cli.build_parser()
     sub = next(a for a in parser._actions if a.dest == "command")
-    assert set(sub.choices) == {"init", "doctor", "skill", "bench", "bridge", "extract", "features", "probe", "report", "plan", "exec", "config", "suite", "registry"}
+    assert set(sub.choices) == {"init", "doctor", "skill", "bench", "bridge", "extract", "features", "eval", "report", "plan", "exec", "config", "suite", "registry"}
 
     def subs(name):
         p = sub.choices[name]
@@ -81,17 +81,17 @@ def test_cli_help_lists_the_full_command_tree(capsys):
 
     assert subs("skill") == {"install", "show"}
     # files / show / prepare and bridge new: one command surface for shipped files
-    assert subs("bench") == {"list", "info", "path", "fetch", "verify", "lint", "new", "files", "show", "prepare", "trial", "conformance", "hash"}
+    assert subs("bench") == {"list", "info", "path", "fetch", "verify", "lint", "new", "files", "show", "prepare", "trial", "conformance", "hash", "migrate"}
     assert subs("bridge") == {"check", "new"}
     assert subs("features") == {"validate", "inspect", "diff", "stage"}
-    assert subs("probe") == {"run"}
+    assert subs("eval") == {"run"}
     assert subs("report") == {"build"}
     assert subs("config") == {"show", "get"}
     assert subs("plan") == {"init", "build", "status", "calibrate", "run"}  # run --local
     assert subs("suite") == {"list", "show", "new", "missing"}
     assert cli.main(["--help"]) == 0
     out = capsys.readouterr().out
-    for cmd in ["doctor", "bench", "features", "probe", "report", "plan", "exec"]:
+    for cmd in ["doctor", "bench", "features", "eval", "report", "plan", "exec"]:
         assert cmd in out
 
 
@@ -176,8 +176,8 @@ def test_synthetic_fixture_is_a_valid_benchmark_folder(synthetic_benchmark):
     sb = synthetic_benchmark
     spec = yaml.safe_load(sb.yaml_path.read_text())
     assert set(spec) == REQUIRED_TOP_LEVEL_KEYS
-    assert spec["schema_version"] == 2 and spec["name"] == sb.folder.name
-    assert set(spec["input_contract"]["handed_over"]) == set(spec["streams"]) == set(spec["input_contract"]["info"])
+    assert spec["schema_version"] == 3 and spec["name"] == sb.folder.name
+    assert set(spec["input_contract"]["handed_over"]) == set(spec["fields"]) == set(spec["input_contract"]["info"])
     with gzip.open(sb.folder / "manifest.csv.gz", "rb") as fh:
         raw = fh.read()
     assert hashlib.sha256(raw).hexdigest() == spec["manifest"]["sha256"]
@@ -194,9 +194,9 @@ def test_synthetic_fixture_is_a_valid_benchmark_folder(synthetic_benchmark):
     assigned = list(roles["train"]) + list(roles["eval"]) + list(roles["floor"]) + list(roles["unused"]) + list(roles["folds"] or [])
     assert sorted(assigned) == sorted({r["split"] for r in rows})
     # media column declared, stream references resolve, metrics resolve in the registry
-    assert spec["streams"]["video"]["media_column"] in spec["manifest"]["columns"]
-    R.resolve_names(spec["metrics"]["list"], spec["readout"], kinds=["metric", "disclosure"])
-    R.resolve_names(spec["metrics"]["floors"], spec["readout"], kinds=["floor"])
+    assert spec["fields"]["video"]["media_column"] in spec["manifest"]["columns"]
+    R.resolve_names(spec["metrics"]["list"], spec["scorer"], kinds=["metric", "disclosure"])
+    R.resolve_names(spec["metrics"]["floors"], spec["scorer"], kinds=["floor"])
     assert spec["metrics"]["headline"] in spec["metrics"]["list"]
     assert all(v in R.CI_KINDS for v in spec["metrics"]["ci"].values())
     # curation invariant

@@ -85,13 +85,14 @@ yavih bench list               # every benchmark: task, size, how to get the dat
 <!-- yavih:bench-table capabilities begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
 | capability | benchmarks | examples |
 |---|---|---|
-| `audio` | 2 | [esc50](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/esc50/README.md), [fsd50k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/fsd50k/README.md) |
+| `audio` | 3 | [audiocaps_t2a](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audiocaps_t2a/README.md), [esc50](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/esc50/README.md), [fsd50k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/fsd50k/README.md) |
 | `visual` | 4 | [in1k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/in1k/README.md), [k400](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/k400/README.md), [nyuv2_depth](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/nyuv2_depth/README.md), [ssv2](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ssv2/README.md) |
-| `audio-visual` | 5 | [audioset20k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audioset20k/README.md), [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md), [vggsounder](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/vggsounder/README.md) + 1 more |
+| `audio-visual` | 6 | [audioset20k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audioset20k/README.md), [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md), [vggsounder](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/vggsounder/README.md) + 2 more |
 | `temporal` | 2 | [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md) |
 | `spatial` | 2 | [nyuv2_depth](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/nyuv2_depth/README.md), [vggss_box](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/vggss_box/README.md) |
+| `generation` | 2 | [audiocaps_t2a](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audiocaps_t2a/README.md), [vggsounder_v2a](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/vggsounder_v2a/README.md) |
 
-[All 11 benchmarks → the index](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/README.md)
+[All 13 benchmarks → the index](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/README.md)
 <!-- yavih:bench-table capabilities end -->
 
 Each benchmark is one self-contained folder with its own page: the paper, how to get the data, and exactly how yavih

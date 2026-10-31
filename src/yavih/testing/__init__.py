@@ -413,11 +413,11 @@ def _spec_for(
     derived = {t["file"]: t["sha256"] for t in targets.values()} if targets else {}
     n_rows = n_train + n_eval
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "name": name,
         "aliases": [f"{name}_alias"],
         "title": title,
-        "readout": readout,
+        "scorer": readout,
         "protocol_version": 1,
         "changelog": [
             {"version": 1, "date": "2026-10-12", "reason": "Synthetic test fixture (yavih.testing.make_synthetic_benchmark).", "invalidates": False},
@@ -454,7 +454,7 @@ def _spec_for(
             },
         },
         "splits": {"train": ["train"], "eval": ["val"], "floor": [], "folds": None, "unused": [], "min_eval_coverage": 0.95},
-        "streams": streams,
+        "fields": {n: {"storage": "file", **e} for n, e in streams.items()},
         "targets": targets,
         "data": {"roots": roots, "tar_index": None, "derived": derived},
         "input_contract": {
@@ -487,7 +487,7 @@ def _write_readme(folder: Path, spec: dict[str, Any], *, n_train: int, n_eval: i
 Homepage: `yavih.testing.make_synthetic_benchmark` · [setup.md](setup.md)
 
 ## Description
-A synthetic `{spec['readout']}` benchmark: every label, box and depth map is a pure function of the row's
+A synthetic `{spec['scorer']}` benchmark: every label, box and depth map is a pure function of the row's
 `clip_id`, so `oracle_bridge` can encode it and `random_bridge` cannot. Roles: train = `train` ({n_train} rows),
 eval = `val` ({n_eval} rows).
 
@@ -497,7 +497,7 @@ eval = `val` ({n_eval} rows).
 ```
 
 ## In yavih
-Readout `{spec['readout']}`; headline `metrics.headline` = `{headline}`, floor `{floor}`. `protocol_version`
+Scorer `{spec['scorer']}`; headline `metrics.headline` = `{headline}`, floor `{floor}`. `protocol_version`
 {spec['protocol_version']}. What is handed over (the stored tiny media, raw) is in [setup.md](setup.md). Alias
 `{spec['aliases'][0]}`; no other variant. `oracle_bridge` under `ProbeConfig.pinned(r).fast()` clears `{floor}`;
 `random_bridge` does not.
@@ -646,7 +646,7 @@ HERE = Path(__file__).resolve().parent.parent
 
 def test_folder():
     spec = yaml.safe_load((HERE / "benchmark.yaml").read_text())
-    assert spec["name"] == HERE.name and spec["schema_version"] == 2
+    assert spec["name"] == HERE.name and spec["schema_version"] == 3
     with gzip.open(HERE / spec["manifest"]["file"], "rb") as fh:
         raw = fh.read()
     assert hashlib.sha256(raw).hexdigest() == spec["manifest"]["sha256"]
@@ -738,7 +738,7 @@ def make_synthetic_benchmark(
     if media == "tiny":
         for r in rows:
             for col, stream in ((c, s["stream"]) for c, s in spec["manifest"]["columns"].items() if s["role"] == "media"):
-                kind = spec["streams"][stream]["kind"]
+                kind = spec["fields"][stream]["kind"]
                 path = media_dir / r[col]
                 if path.exists():
                     continue
@@ -752,7 +752,7 @@ def make_synthetic_benchmark(
     _write_readme(folder, spec, n_train=n_train, n_eval=n_eval)
     _write_setup(folder, spec)
     (folder / "reader.py").write_text(_READER_PY, encoding="utf-8")
-    (folder / "bridge_template.py").write_text(_BRIDGE_TEMPLATE_PY.format(name=name, streams=tuple(spec["streams"])), encoding="utf-8")
+    (folder / "bridge_template.py").write_text(_BRIDGE_TEMPLATE_PY.format(name=name, streams=tuple(spec["fields"])), encoding="utf-8")
     (folder / "make_manifest.py").write_text(
         _MAKE_MANIFEST_PY.format(readout=readout, n_train=n_train, n_eval=n_eval, media=media, n_classes=n_classes, name=name), encoding="utf-8"
     )
@@ -1066,7 +1066,7 @@ class OracleBridgeBase(_SyntheticBridge):
         spec = yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))
         manifest = spec["manifest"]
         label = manifest["label"]
-        self.readout = str(spec["readout"])
+        self.readout = str(spec["scorer"])
         self.label_column = label.get("column")
         self.label_sep = str(label.get("sep") or ";")
         class_key = str(label.get("class_key") or "name")

@@ -34,6 +34,7 @@ class Sample:
     clip_id: str                          # manifest key, unique per row (several rows may share a media file)
     split: str
     streams: dict[str, RawStream]         # every present stream, under its declared name
+    cells: dict[str, Any]                 # the cell fields: a typed manifest value per field (a caption, an option list), a private copy
     meta: dict                            # {"facts": {key: protocol[key] for key in input_contract.facts}}
     _canary_of: int | None                # private: a bridge MUST NOT read it
     prepared: Any                         # what Bridge.prepare returned for this sample (None without prepare)
@@ -42,6 +43,7 @@ class Sample:
 class BenchmarkView:                      # Benchmark.view(); JSON primitives only
     name: str; aliases: list[str]; readout: str; protocol_version: int; protocol_hash: str
     streams: dict[str, str]               # {name: kind}
+    fields: dict[str, dict]               # every field: {name: {storage: file | cell, kind}}
     input_contract: dict; output_contract: dict
     facts: dict                           # = Sample.meta["facts"] of every row
     input_hash: str                       # the benchmark's input-side digest (hashing.md)
@@ -250,7 +252,13 @@ class MyBridge(yavih.Bridge):
 
 ## `describe()`
 
-`describe()` MUST return JSON primitives only and contain the keys below. Every key is recorded wherever the
+`describe()` MUST return JSON primitives only and contain the keys below. For a benchmark that declares an output
+schema ([codecs](codecs.md)), `dtype`, `streams`, `pos_mode`, `layer` and `pooling` are optional (they describe the
+feature matrix) and `outputs` is required: the schema keys `encode()` returns, every non-optional key and none
+outside the schema, equal to `Bridge.outputs` when the class sets it. When the folder's `output_contract.sampling`
+is `required`, `sampling` is required too: `{seed: int, steps: int | null, guidance: number | null, n_candidates:
+int, selection: str}`, the generation budget and the rule that picks one of `n_candidates`. Generation is seeded:
+`bridge check`'s rerun must reproduce it. Every key is recorded wherever the
 features go (profile, sidecars, `_meta.json`, `result.json`, results files). None of it is comparability, a
 path component or a result key: the model is a NAME the user chooses, read in a declared reading. The third
 column says whether the key is covered by `describe_sha256`, the consistency digest ([hashing](hashing.md)).
@@ -293,8 +301,10 @@ other than `autocast`); a `batch_tolerance` outside `(0, 1e-3]` or without reaso
 
 ## Declared rules: `describe()["input"]`
 
-`input` is non-empty, its keys are a subset of the benchmark's streams and a superset of `describe()["streams"]`
-(a tagged stream is read and declared). Each entry has exactly these keys, by kind:
+`input` is non-empty, its keys are a subset of the benchmark's fields and a superset of `describe()["streams"]`
+(a tagged stream is read and declared). A cell field the bridge reads is declared as `{}` or `{"note": str}` (the
+value is handed over as is: there is no rule to declare; name a prompt template in the note). Each file-field entry
+has exactly these keys, by kind:
 
 | kind | keys |
 |---|---|
@@ -428,6 +438,14 @@ def encode(self, samples: list[Sample]) -> tuple[feats, pos, used]:
     # used:  list of B dicts, one entry per stream in describe()["input"]
 ```
 
+The same may be returned as `{"feat": feats, "pos": pos, "used": used}`. For a benchmark with a declared output
+schema ([codecs](codecs.md)) `encode()` returns `{key: B values, ..., "used": [...]}` with exactly the keys of
+`describe()["outputs"]`; every value passes its codec's check (symbols bound once per feature set), else
+`E_FEATURES` naming the key and the clip (exit 2). `bridge check` compares the rerun, alone and shuffled passes
+per key through the codec's distance: an exact key must be equal, the rest within the tolerance; every key must
+be equal on a rerun when `precision.deterministic` is true. The profile records `outputs: {schema, schema_sha256,
+bound, keys, bytes_per_row}` (`N`, `D`, `dtype` are null), and `plan` sizes shards from `bytes_per_row`.
+
 - **Shapes.** `feats` is `[B, N, D]` with `B = len(samples)`; the writer stores it in `Bridge.dtype`. `N` and `D`
   are fixed for every row of every split: the writer fixes them from the first clip and refuses a mismatch by
   `clip_id` (`FeatureShapeError`). Pad or crop to a fixed length inside the bridge, per clip, never to the batch
@@ -446,7 +464,8 @@ def encode(self, samples: list[Sample]) -> tuple[feats, pos, used]:
   the crop region then differ too.
 - **Stream tags.** `Bridge.streams` lists the stream tags in tag order; concatenate per-stream token blocks in
   token order (e.g. `[cls, video, audio]`), each tagged with its index.
-- **`used`** reports per clip what the bridge actually consumed, one entry per stream in `describe()["input"]`:
+- **`used`** reports per clip what the bridge actually consumed, one entry per file stream in `describe()["input"]`
+  (a cell entry has none; a bridge that reads only cells returns `{}` per clip):
 
 | stream kind | `used[i][stream]` |
 |---|---|

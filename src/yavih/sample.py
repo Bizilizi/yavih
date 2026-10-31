@@ -56,23 +56,14 @@ __all__ = [
     "MAX_DECODE_WORKERS",
 ]
 
-STREAM_KINDS: frozenset[str] = frozenset({"video", "audio", "image"})
-LAYOUTS: frozenset[str] = frozenset({"dir", "tar_index"})
-#: Every ``RawStream.info`` carries these keys (null where unknown or not applicable).
-#: ``has_track`` (video, audio): ``True`` when the stored file holds the track the stream names, ``False`` when it
-#: holds none (the row is still handed over; the track's facts are then null), null for image streams.
-MEDIA_INFO_KEYS: tuple[str, ...] = ("duration_s", "fps", "n_frames", "sample_rate", "n_samples", "channels", "width", "height", "container", "bytes",
-                                    "has_track")
-#: Keys ``input_contract.info[stream]`` may guarantee, per stream kind. ``rotation`` is
-#: recorded for video when tagged but can never be guaranteed.
-INFO_VOCAB: Mapping[str, frozenset[str]] = {
-    "video": frozenset({"duration_s", "fps", "n_frames", "width", "height", "container", "bytes"}),
-    "audio": frozenset({"duration_s", "sample_rate", "n_samples", "channels", "container", "bytes"}),
-    "image": frozenset({"width", "height", "container", "bytes"}),
-}
-#: Facts of a stream's TRACK (null when ``has_track`` is false: a file without that track); ``container``
-#: and ``bytes`` describe the file and stay set.
-TRACK_FACTS: Mapping[str, frozenset[str]] = {k: v - {"container", "bytes"} for k, v in INFO_VOCAB.items() if k in ("video", "audio")}
+from yavih.fields import (  # noqa: E402 - the one vocabulary
+    INFO_VOCAB,
+    LAYOUTS,
+    MEDIA_INFO_KEYS,
+    STREAM_KINDS,
+    TRACK_FACTS,
+    spec_streams,
+)
 
 
 def _missing(clip_id: str, stream: str, reason: str) -> Exception:
@@ -408,6 +399,8 @@ class Sample:
     streams: dict[str, RawStream]
     meta: dict = field(default_factory=dict)
     _canary_of: int | None = field(default=None, repr=False, compare=False)
+    #: the cell fields: a typed manifest value per field (a caption, an option list), a private deep copy
+    cells: dict = field(default_factory=dict)
     prepared: Any = field(default=None, init=False, repr=False, compare=False)
 
 
@@ -601,8 +594,10 @@ class _SplitCtx:
         self.facts = json.loads(json.dumps({k: protocol[k] for k in facts_keys}))  # a private deep copy
         self.streams = {
             name: _StreamCtx(bench, split, name, sspec, roots, roles, info_req.get(name, ()))
-            for name, sspec in _spec_get(spec, "streams").items()
+            for name, sspec in spec_streams(spec).items()
         }
+        #: cell field -> its manifest column (``Sample.cells``)
+        self.cells: dict[str, str] = {name: str(_spec_get(c, "column")) for name, c in dict(_spec_get(spec, "cells") or {}).items()}
         self.info_table = info_table
 
 
@@ -636,7 +631,11 @@ def build_sample(bench: Any, split: str, manifest: Any, i: int, roots: Mapping[s
         streams[name] = RawStream(name, sc.kind, src=shared(sc.source(cell)), clip_id=clip_id, info_entry=entry, required_info=sc.info_keys, ext=_ext(cell),
                                   handle=salt)
     meta = {"facts": json.loads(json.dumps(ctx.facts))}
-    return Sample(row=int(manifest.row[i]), clip_id=clip_id, split=split, streams=streams, meta=meta, _canary_of=canary_of)
+    cell_values: dict[str, Any] = {}
+    if ctx.cells:
+        extra = manifest.extra[i]
+        cell_values = {name: json.loads(json.dumps(extra.get(col))) for name, col in ctx.cells.items()}
+    return Sample(row=int(manifest.row[i]), clip_id=clip_id, split=split, streams=streams, meta=meta, _canary_of=canary_of, cells=cell_values)
 
 
 def rehandle(sample: Sample, salt: str, **identity: Any) -> Sample:
@@ -648,6 +647,8 @@ def rehandle(sample: Sample, salt: str, **identity: Any) -> Sample:
 
     streams = {n: (st.with_handle(f"{salt}:{st._handle}") if isinstance(st, RawStream) else copy.copy(st)) for n, st in sample.streams.items()}
     if dataclasses.is_dataclass(sample):
+        if "cells" in {f.name for f in dataclasses.fields(sample)}:  # a private copy of the cell values
+            identity = {"cells": json.loads(json.dumps(getattr(sample, "cells", {}) or {})), **identity}
         return dataclasses.replace(sample, streams=streams, **identity)
     clone = copy.copy(sample)
     for key, v in {"streams": streams, **identity}.items():

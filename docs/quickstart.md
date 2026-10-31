@@ -168,7 +168,7 @@ yavih suite missing default --model mymodel                 # what the suite sti
 
 ```bash
 yavih features validate $RUN/features
-yavih probe run        $RUN --seeds 0,1,2
+yavih eval run        $RUN --seeds 0,1,2
 yavih report build     "$RUNS/*" --fmt md
 ```
 
