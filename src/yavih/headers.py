@@ -46,10 +46,13 @@ CHROME_ARGS: tuple[str, ...] = ("--headless=new", "--disable-gpu", "--hide-scrol
                                 "--default-background-color=00000000")
 _CHROMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome")
 _KIND_ORDER = ("video", "image", "audio")
+#: The media kind an output codec carries, for the "given → generated" chip of a generation benchmark.
+_CODEC_KIND = {"wav": "audio"}
 #: The headline metric as people read it (the metric registry carries ids only); any other id is shown as is.
 METRIC_LABELS: dict[str, str] = {
     "acc": "accuracy", "acc_mean": "mean acc", "map": "mAP", "seg_acc": "segment acc", "d1": "δ₁", "iou_mean": "mean IoU",
     "auc_pr": "mAP",  # vggsounder: the package's auc_pr, the paper's mAP
+    "fd_passt": "FD (PaSST)",
 }
 
 
@@ -80,6 +83,10 @@ def chips(bench) -> list[tuple[str, str]]:
     kinds = {s.kind for s in spec.streams.values()}
     modality = " + ".join(k for k in _KIND_ORDER if k in kinds) or "+".join(sorted(kinds))
     readout = spec.readout + (" · multi-label" if spec.manifest.label.kind in ("multi", "multi_sets") else "")
+    if "generation" in spec.capability:  # what the model is given and what it generates; the readout is its scorer
+        given = [k for k in _KIND_ORDER if k in kinds] + (["text"] if any(c.kind == "text" for c in (spec.cells or {}).values()) else [])
+        made = sorted({_CODEC_KIND.get(str(o.get("type")), name) for name, o in spec.output_contract.schema.items()})
+        modality, readout = f"{' + '.join(given)} → {' + '.join(made)}", "generation"
     out = [("a", html.escape(modality)), ("b", html.escape(readout))]
     clips = sum(int(v) for v in spec.budget.clips.values())
     out.append(("", f"<b>{_num(clips)}</b> {'images' if kinds == {'image'} else 'clips'}"))

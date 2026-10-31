@@ -22,6 +22,9 @@ def test_chips_are_derived_from_the_yaml():
     assert multi[:2] == ["video + audio", "clf · multi-label"] and "a / v / av" in multi
     images = [inner for _, inner in headers.chips(Benchmark.load("in1k"))]
     assert images[2].endswith(" images") and any(" train · " in c for c in images)
+    t2a = [inner for _, inner in headers.chips(Benchmark.load("audiocaps_t2a"))]
+    assert t2a == ["text → audio", "generation", "<b>776</b> clips", "FD (PaSST)"]
+    assert [inner for _, inner in headers.chips(Benchmark.load("vggsounder_v2a"))][:2] == ["video → audio", "generation"]
 
 
 def test_headline_metric_reads_as_a_name():
