@@ -28,8 +28,10 @@ weights from `<checkout>/weights` and runs the checkout's `extract_text.py` for 
 pip install -e git+https://github.com/hkchengrex/av-benchmark.git@f351b9a6fc6abde746d5f8e1d4c47c883319cb41#egg=av_bench
 ```
 
-then download its two weight files into the checkout's `weights/` (as its README says; av-benchmark builds every
-encoder it knows, so the synchrony model's weights are needed even though this benchmark has no video):
+then download its two weight files into the checkout's `weights/` (as its README says): the LAION-CLAP checkpoint
+and the Synchformer checkpoint (av-benchmark's audio-visual synchrony model, hosted in the MMAudio release). This
+benchmark has no video and Synchformer scores nothing, but av-benchmark's `extract` and `evaluate` load it
+unconditionally and fail without the file:
 
 ```bash
 cd <checkout>   # e.g. src/av-bench

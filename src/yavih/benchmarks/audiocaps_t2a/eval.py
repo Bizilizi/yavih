@@ -59,8 +59,8 @@ PER_CLIP_METRICS: tuple[str, ...] = ("kl_passt", "kl_panns", "clap_laion", "clap
 #: cosine metrics: (reference-side feature file, generation-side feature file) in the caches
 PAIRED_FEATURES: dict[str, tuple[str, str]] = {"clap_laion": ("clap_laion_text.pth", "clap_laion_audio.pth"),
                                                "clap_ms": ("clap_ms_text.pth", "clap_ms_audio.pth")}
-#: the checkpoints av_bench loads from ``<checkout>/weights`` (its README; it builds every encoder, Synchformer included),
-#: with the sha256 of the files its README links (downloaded 2026-10-30)
+#: the checkpoints av_bench loads from ``<checkout>/weights`` (its README), with the sha256 of the files its README links
+#: (downloaded 2026-10-30); Synchformer scores nothing here, but av_bench's ``extract`` and ``evaluate`` load it unconditionally
 WEIGHTS: dict[str, str] = {
     "music_speech_audioset_epoch_15_esc_89.98.pt": "51c68f12f9d7ea25fdaaccf741ec7f81e93ee594455410f3bca4f47f88d8e006",
     "synchformer_state_dict.pth": "8aff082f2df5c3bc52759db0c865c7ee772ae6400b860d1b7e90413f2defb67c",
@@ -119,28 +119,6 @@ def _cos_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     den = np.maximum(np.linalg.norm(a, axis=-1) * np.linalg.norm(b, axis=-1), 1e-8)
     c = num / den
     return c.reshape(c.shape[0], -1).mean(axis=1)
-
-
-def _desync_rows(root: Path, gt: Path, pred: Path, ids: Sequence[str]) -> np.ndarray:
-    """Per clip DeSync: the mean |offset| Synchformer predicts on the first and the last 14 segments, as av_bench's
-    ``evaluate`` computes them (its DeSync is the mean over both windows of every clip)."""
-    import torch
-    from av_bench.synchformer.synchformer import Synchformer, make_class_grid
-
-    v_all, a_all = _load_feats(gt, "synchformer_video.pth"), _load_feats(pred, "synchformer_audio.pth")
-    model = Synchformer().to("cuda").eval()
-    model.load_state_dict(torch.load(root / "weights" / "synchformer_state_dict.pth", weights_only=True))
-    grid = make_class_grid(-2, 2, 21)
-    out: list[float] = []
-    with torch.inference_mode():
-        for s in range(0, len(ids), 16):
-            batch = ids[s:s + 16]
-            v = torch.stack([v_all[i] for i in batch]).to("cuda")
-            a = torch.stack([a_all[i] for i in batch]).to("cuda")
-            first = torch.argmax(model.compare_v_a(v[:, :14], a[:, :14]), dim=-1).cpu().numpy()
-            last = torch.argmax(model.compare_v_a(v[:, -14:], a[:, -14:]), dim=-1).cpu().numpy()
-            out += [(abs(float(grid[f])) + abs(float(grid[la]))) / 2.0 for f, la in zip(first, last, strict=True)]
-    return np.asarray(out, dtype=np.float64)
 
 
 def _sq_dists(a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -212,7 +190,7 @@ def _kad_interval_of(name: str):
     return interval
 
 
-def details(root: Path, gt: Path, pred: Path, ids: Sequence[str], scores: Mapping[str, Any]) -> dict[str, Any]:
+def details(gt: Path, pred: Path, ids: Sequence[str], scores: Mapping[str, Any]) -> dict[str, Any]:
     """Per-clip values of the paired metrics and KAD with its kernels, recomputed from av_bench's caches; every
     per-clip mean must equal av_bench's own number (else av_bench and this folder disagree on the definition)."""
     per: dict[str, np.ndarray] = {}
@@ -221,8 +199,6 @@ def details(root: Path, gt: Path, pred: Path, ids: Sequence[str], scores: Mappin
     per["kl_passt"] = _kl_rows(_rows(_load_feats(gt, "passt_logits.pth"), ids), _rows(_load_feats(pred, "passt_logits.pth"), ids))
     for metric, (gt_file, pred_file) in PAIRED_FEATURES.items():
         per[metric] = _cos_rows(_rows(_load_feats(gt, gt_file), ids), _rows(_load_feats(pred, pred_file), ids))
-    if "desync" in PER_CLIP_METRICS:
-        per["desync"] = _desync_rows(root, gt, pred, ids)
     off = {m: (float(np.mean(v)), float(scores[m])) for m, v in per.items() if m in scores and scores[m] is not None
            and abs(float(np.mean(v)) - float(scores[m])) > 1e-4 * max(1.0, abs(float(scores[m])))}
     if off:
@@ -561,7 +537,7 @@ def score(bench: Any, split: str, rows: Any, outputs: Any, targets: Any = None) 
         _free_gpu()
         check_cache(pred_cache, [t["clip_id"] for t in tg])
         scores = _evaluate(gt, pred_cache)
-        det = details(root, gt, pred_cache, [t["clip_id"] for t in tg], scores)
+        det = details(gt, pred_cache, [t["clip_id"] for t in tg], scores)
     scores.update(det["kad"])
     if len(_DETAILS) > 8:
         _DETAILS.clear()
