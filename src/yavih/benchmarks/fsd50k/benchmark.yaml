@@ -1,6 +1,6 @@
-# yavih benchmark folder — FSD50K (schema 2). Rows frozen by make_manifest.py from the official FSD50K
+# yavih benchmark folder — FSD50K (schema 3). Rows frozen by make_manifest.py from the official FSD50K
 # ground truth (FSD50K.ground_truth/{dev,eval,vocabulary}.csv).
-schema_version: 2
+schema_version: 3
 name: fsd50k
 aliases: []
 title: FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP)
@@ -13,7 +13,7 @@ header:
     FSD50K is 51 197 variable-length Freesound clips manually labelled with 200 sound-event classes of the
     AudioSet Ontology, split into a development and an evaluation set. The task is multi-label tagging: predict
     every class present in a clip from its audio, scored by macro-averaged precision on the evaluation set.
-readout: clf
+scorer: clf
 protocol_version: 1
 changelog:
   - version: 1
@@ -113,8 +113,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:
+fields:
   audio:
+    storage: file
     kind: audio
     media_column: rel_path
     root: media_root

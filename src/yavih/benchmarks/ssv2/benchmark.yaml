@@ -1,6 +1,6 @@
 # ssv2 — schema 2; people read README.md, the agent reads setup.md first.
 # Values under `manifest` are produced by make_manifest.py from the official label files (`--check` confirms them).
-schema_version: 2
+schema_version: 3
 name: ssv2
 aliases: []
 title: Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val)
@@ -13,7 +13,7 @@ header:
     220 847 short crowd-sourced clips of people performing 174 template actions with everyday objects, such as
     pushing something from left to right or pretending to put something down. Classes are object-agnostic and
     differ in motion and temporal order, so recognising them requires more than scene or object appearance.
-readout: clf
+scorer: clf
 protocol_version: 1
 changelog:
   - version: 1
@@ -111,8 +111,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:
+fields:
   video:
+    storage: file
     kind: video
     media_column: rel_media
     root: media_root

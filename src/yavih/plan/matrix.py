@@ -135,7 +135,7 @@ class Matrix:
     schema_version: int = MATRIX_SCHEMA_VERSION
     #: Directory of the matrix file; relative ``script``/``profile``/``out`` paths resolve against it.
     root: str = "."
-    #: ``results``: results-store root for the probe units (``probe run --results``); ``None`` = the
+    #: ``results``: results-store root for the probe units (``eval run --results``); ``None`` = the
     #: usual resolution (``YAVIH_RESULTS`` / config ``[results] root`` / sibling ``results`` of the runs root).
     results: str | None = None
     #: rows cap of the shard-count estimate (``estimate.n_shards_for``); an entry's own key wins
@@ -303,6 +303,13 @@ def load_matrix(path: str) -> Matrix:
 # ----------------------------------------------------------------------------- profile
 
 
+def is_generic_profile(profile: dict) -> bool:
+    """Whether the profile was measured on a declared output schema (``profile.outputs.schema``): no feature
+    matrix, so no ``N`` / ``D`` / ``dtype``; plan sizes its shards from ``outputs.bytes_per_row``."""
+    out = profile.get("outputs")
+    return isinstance(out, dict) and out.get("schema") is not None
+
+
 def load_profile(path: str) -> dict:
     """Load ``profile.json`` and check ``PROFILE_KEYS``."""
     if not os.path.isfile(path):
@@ -319,7 +326,12 @@ def load_profile(path: str) -> dict:
         raise ProfileError(f"profile {path} lacks keys {missing}; re-run `yavih bridge check`")
     if not isinstance(prof["describe"], dict):
         raise ProfileError(f"profile {path}: describe must be an object")
-    if not isinstance(prof["N"], int) or not isinstance(prof["D"], int) or prof["N"] < 1 or prof["D"] < 1:
+    generic = is_generic_profile(prof)
+    if generic:
+        bpr = (prof["outputs"] or {}).get("bytes_per_row")
+        if bpr is not None and (not isinstance(bpr, int) or isinstance(bpr, bool) or bpr < 1):
+            raise ProfileError(f"profile {path}: outputs.bytes_per_row must be a positive int or null")
+    elif not isinstance(prof["N"], int) or not isinstance(prof["D"], int) or prof["N"] < 1 or prof["D"] < 1:
         raise ProfileError(f"profile {path}: N and D must be positive ints")
     if prof["pos_mode"] not in ("none", "constant", "per_sample"):
         raise ProfileError(f"profile {path}: pos_mode {prof['pos_mode']!r} unknown")
@@ -393,7 +405,11 @@ def check_reading(v: Any, *, where: str = "describe.reading") -> str:
     return v
 
 
-def check_describe(d: dict) -> None:
+#: The ``describe()`` keys only a bridge of the feature matrix declares (``yavih.bridge.DESCRIBE_REQUIRED_FEATURES``).
+DESCRIBE_FEATURE_KEYS: tuple[str, ...] = ("dtype", "streams", "pos_mode", "layer", "pooling")
+
+
+def check_describe(d: dict, *, generic: bool = False) -> None:
     """Structural check of a *recorded* ``describe()``.
 
     ``yavih.bridge.validate_describe(d, bridge, bench)`` needs a live bridge instance, which only
@@ -404,10 +420,13 @@ def check_describe(d: dict) -> None:
     """
     if not isinstance(d, dict):
         raise ProfileError("describe must be an object")
-    missing = [k for k in DESCRIBE_REQUIRED if k not in d]
+    required = {k: t for k, t in DESCRIBE_REQUIRED.items() if not (generic and k in DESCRIBE_FEATURE_KEYS)}
+    if generic:
+        required["outputs"] = (list,)
+    missing = [k for k in required if k not in d]
     if missing:
         raise ProfileError(f"describe lacks required keys {missing}")
-    for k, types in DESCRIBE_REQUIRED.items():
+    for k, types in required.items():
         v = d[k]
         if isinstance(v, bool) and bool not in types:
             raise ProfileError(f"describe.{k} has the wrong type (bool)")
@@ -418,9 +437,9 @@ def check_describe(d: dict) -> None:
     w = d["weights_sha256"]
     if w is not None and not _HEX64.match(w):
         raise ProfileError("describe.weights_sha256 must be 64 lower-case hex or null")
-    if d["dtype"] not in ("float16", "float32"):
+    if not generic and d["dtype"] not in ("float16", "float32"):
         raise ProfileError(f"describe.dtype {d['dtype']!r} must be float16|float32")
-    if d["pos_mode"] not in ("none", "constant", "per_sample"):
+    if not generic and d["pos_mode"] not in ("none", "constant", "per_sample"):
         raise ProfileError(f"describe.pos_mode {d['pos_mode']!r} unknown")
     if d["views"] != 1:
         raise ProfileError(f"describe.views must be 1 (one deterministic view per clip), got {d['views']!r}")
@@ -433,11 +452,13 @@ def check_describe(d: dict) -> None:
             raise ProfileError(f"describe.batch_tolerance must be {{rel_l2 <= {MAX_TOLERANCE:g}, reason}}, got {bt!r}")
     if d["batch_size"] < 1:
         raise ProfileError("describe.batch_size must be >= 1")
+    if generic and not all(isinstance(k, str) for k in d["outputs"]):
+        raise ProfileError("describe.outputs must be a list of schema keys")
     try:
         describe_waivers(d)  # describe()["waive"]: codes and reasons
     except WaiveError as e:
         raise ProfileError(f"{e} (E_WAIVE_INVALID)") from e
-    if not all(isinstance(s, str) for s in d["streams"]):
+    if not all(isinstance(s, str) for s in d.get("streams") or []):
         raise ProfileError("describe.streams must be a list of stream names")
     prec = d["precision"]
     lacking = [k for k in PRECISION_KEYS if k not in prec]
@@ -486,7 +507,8 @@ def check_profile(profile: dict, entry: MatrixEntry, *, bench_names: tuple[str, 
             f"entry {entry.key!r}: profile.args differ from the entry's args on {sorted(diffs)} "
             f"(profile {pargs}, matrix {entry.args}); re-run `yavih bridge check` with the matrix args"
         )
-    check_describe(profile["describe"])
+    generic = is_generic_profile(profile)
+    check_describe(profile["describe"], generic=generic)
     d = profile["describe"]
     # Consistency, not computation (plan takes model and reading from the profile and never
     # computes them): the profile must agree with its own describe, else bridge check, extract's drift
@@ -500,7 +522,7 @@ def check_profile(profile: dict, entry: MatrixEntry, *, bench_names: tuple[str, 
                                f"{d[key]!r}; re-run `yavih bridge check`")
     # The top-level copies bridge check writes must agree with describe (plan reads describe for bytes_per_row).
     for key in ("dtype", "pos_mode"):
-        if key in profile and profile[key] != d[key]:
+        if not generic and key in profile and profile[key] != d[key]:
             raise ProfileError(f"entry {entry.key!r}: profile.{key} {profile[key]!r} disagrees with describe.{key} {d[key]!r}")
-    if list(profile["streams"]) != list(d["streams"]):
+    if list(profile["streams"]) != list(d.get("streams") or []):
         raise ProfileError(f"entry {entry.key!r}: profile.streams disagrees with describe.streams")

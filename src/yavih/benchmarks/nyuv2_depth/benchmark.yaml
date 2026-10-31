@@ -1,11 +1,11 @@
 # yavih benchmark: NYUv2 dense monocular depth, 14x14 grid readout. Manifest frozen by make_manifest.py; images
 # re-containered as lossless PNG by prepare/recontainer_png.py; targets by prepare/derive_targets.py; see setup.md.
-schema_version: 2
+schema_version: 3
 name: nyuv2_depth
 aliases: []
 title: NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid)
 capability: [visual, spatial]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
-readout: grid
+scorer: grid
 protocol_version: 1
 header:
   name: NYUv2 Depth
@@ -114,8 +114,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:
+fields:
   image:
+    storage: file
     kind: image
     media_column: rel_media
     root: derived_root

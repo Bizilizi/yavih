@@ -1,6 +1,6 @@
 """Report: index, the per-model lm-evaluation-harness table and
 the comparability columns (keyed by ``eval_hash``; rows ``(model, reading)``), tables, result-schema migration, the results store (``store``) and joins
-through a benchmark folder's ``probe.py`` (``join``; the authors' scorer lives only there, reached through
+through a benchmark folder's ``eval.py`` (``join``; the authors' scorer lives only there, reached through
 ``yavih.external.require``). stdlib only.
 
 ``migrate`` is NOT re-exported as a name: it would shadow the ``yavih.report.migrate`` submodule, the

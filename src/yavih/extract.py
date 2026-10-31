@@ -57,6 +57,8 @@ from yavih.bridge import (
     batch_tolerance,
     bridge_label,
     has_prepare,
+    input_streams,
+    is_cell_entry,
     parse_args,
     preprocessing_source_check,
     validate_describe,
@@ -75,7 +77,7 @@ from yavih.io.sidecar import (
     write_not_applicable,
 )
 from yavih.io.validate import rel_l2_stored
-from yavih.io.writer import FeatureWriter, split_dir_for
+from yavih.io.writer import FeatureWriter, output_schema_of, split_dir_for
 from yavih.media import DecoderMissing, MediaMissing
 from yavih.resources import MAX_DECODE_WORKERS  # per task; the one definition
 from yavih.versions import __version__
@@ -377,7 +379,7 @@ def _bridge_source(bridge_cls: type) -> tuple[str, str | None]:
 
 def parse_deadline(text: str | None, env: Mapping[str, str] | None = None, *, margin: float = DEFAULT_DEADLINE_MARGIN_S) -> float | None:
     """``--deadline`` → epoch seconds or ``None``: ``yavih.deadline.parse_deadline``, the one parser
-    ``exec``, ``extract`` and ``probe run`` share. ``None`` → ``$YAVIH_DEADLINE`` (set by ``yavih exec``) if present;
+    ``exec``, ``extract`` and ``eval run`` share. ``None`` → ``$YAVIH_DEADLINE`` (set by ``yavih exec``) if present;
     ``none``; ``slurm`` (``SLURM_JOB_END_TIME − margin``; unset inside a SLURM job → ``DeadlineError``, exit 1);
     ``+<seconds>`` / a duration; an epoch; an ISO time."""
     from yavih.deadline import parse_deadline as _parse
@@ -848,6 +850,17 @@ class _Out:
     feats: np.ndarray | None = None
     pos: np.ndarray | None = None  # [N, 4] (constant) | [B, N, 4] (per_sample) | None
     used: list[dict] = field(default_factory=list)
+    outputs: dict[str, list[Any]] | None = None  # a declared output schema: {key: one value per kept sample}
+
+    def value_of(self, key: str, k: int) -> Any:
+        """Sample ``k``'s value of schema key ``key`` (``feat`` / ``pos`` of the feature matrix included)."""
+        if self.outputs is not None:
+            return self.outputs[key][k]
+        if key == "feat":
+            return None if self.feats is None else self.feats[k]
+        if key == "pos":
+            return self.pos_of(k)
+        raise KeyError(key)
 
     def pos_of(self, k: int) -> np.ndarray | None:
         if self.pos is None:
@@ -884,8 +897,12 @@ class _Engine:
         allow_not_applicable: bool = False,
         allow_loopback: bool = False,
         release_bytes: bool = False,
+        resolved: Mapping[str, Any] | None = None,
     ) -> None:
         self.bridge = bridge
+        #: a declared output schema: {key: (entry, codec)}; None = the feature matrix
+        self.resolved = dict(resolved) if resolved is not None else None
+        self.bound: dict[str, int] = {}
         self.has_prepare = has_prepare(bridge)
         self.keep_bytes = bool(getattr(bridge, "keep_bytes", False))
         self.release_bytes = bool(release_bytes)
@@ -893,7 +910,7 @@ class _Engine:
         self.allow_loopback = bool(allow_loopback)
         self.loopback: list[str] = []  # loopback connects the --allow-loopback opt-in let through (recorded)
         self.describe = describe
-        self.inputs = list((describe.get("input") or {}).keys())
+        self.inputs = input_streams(describe.get("input"))  # a cell entry has no `used` record to check
         self.workers = max(1, int(decode_workers))
         self.read_ahead = max(0, int(read_ahead))
         self.torch = torch
@@ -1039,6 +1056,14 @@ class _Engine:
             if net:
                 raise ExtractError(E_NETWORK, f"the bridge opened network connection(s) during encode: {net[:3]}; weights and everything else "
                                    "must be loaded before the first sample", exit_code=2)
+        if self.resolved is not None:
+            return self._outputs_of(list(samples), out)
+        if isinstance(out, Mapping):  # the feature matrix as a dict: {"feat", "pos"?, "used"}
+            extra = sorted(set(out) - {"feat", "pos", "used"})
+            if extra or "feat" not in out or "used" not in out:
+                raise ExtractError(E_FEATURES, f"encode() returned a dict with keys {sorted(out)}; the feature matrix is "
+                                   "{'feat', 'pos' (optional), 'used'} (this benchmark declares no output schema)", exit_code=2)
+            out = (out["feat"], out.get("pos"), out["used"])
         if not (isinstance(out, tuple | list) and len(out) == 3):
             got = f"a {len(out)}-tuple" if isinstance(out, tuple | list) else type(out).__name__
             raise ExtractError(E_USED if isinstance(out, tuple | list) and len(out) == 2 else E_FEATURES,
@@ -1064,6 +1089,39 @@ class _Engine:
             pos = np.ascontiguousarray(pos, dtype=np.float32)
         used = self._check_used(list(samples), out[2])
         return _Out(list(samples), feats, pos, used)
+
+    def _outputs_of(self, samples: list[Any], out: Any) -> _Out:
+        """A declared output schema: ``encode()`` returns ``{key: B values, ..., "used": [...]}`` with exactly the keys
+        of ``describe()["outputs"]``; every value passes its codec's ``check`` (symbols bound once per feature set).
+        Anything else is ``E_FEATURES`` naming the key and the clip (exit 2)."""
+        assert self.resolved is not None
+        if not isinstance(out, Mapping):
+            raise ExtractError(E_FEATURES, f"encode() must return a dict {{key: values, ..., 'used': [...]}} for this benchmark's output "
+                               f"schema ({sorted(self.resolved)}), got {type(out).__name__}", exit_code=2)
+        if "used" not in out:
+            raise ExtractError(E_USED, "encode() returned no 'used' entry", exit_code=2)
+        want = [str(k) for k in (self.describe.get("outputs") or [])]
+        got = sorted(k for k in out if k != "used")
+        if sorted(want) != got:
+            raise ExtractError(E_FEATURES, f"encode() returned keys {got}, describe()['outputs'] declares {sorted(want)}", exit_code=2)
+        B = len(samples)
+        values: dict[str, list[Any]] = {}
+        for key in want:
+            vals = out[key]
+            seq = [vals[i] for i in range(vals.shape[0])] if isinstance(vals, np.ndarray) else list(vals) if not hasattr(vals, "detach") else list(_to_numpy(vals))
+            if len(seq) != B:
+                raise ExtractError(E_FEATURES, f"encode() output {key!r} holds {len(seq)} values for a batch of {B}", exit_code=2)
+            spec, codec = self.resolved[key]
+            for i, s in enumerate(samples):
+                v = _to_numpy(seq[i]) if codec.name == "array" else seq[i]
+                seq[i] = v
+                errors = [f for f in codec.check(v, spec, self.bound) if f.is_error]
+                if errors:
+                    raise ExtractError(E_FEATURES, f"encode() output {key!r} for {s.clip_id}: " + "; ".join(f"{f.code}: {f.message}" for f in errors),
+                                       exit_code=2)
+            values[key] = seq
+        used = self._check_used(samples, out["used"])
+        return _Out(samples, used=used, outputs=values)
 
     def encode(self, samples: list[Any]) -> _Out:
         """Encode a batch. ``MediaUndecodable`` (or a ``MediaMissing`` the bridge's own read raised) drops the
@@ -1173,8 +1231,11 @@ def _write_rows(writer: FeatureWriter, res: _Out, media_keys: Sequence[str | Non
     (``E_WRITE``, exit 5), not a bare TypeError out of the engine's error mapping."""
     rows = [int(_canary_of(s)) if canary else int(s.row) for s in res.samples]
     try:
-        writer.write(rows, [s.clip_id for s in res.samples], res.feats, res.pos,
-                     meta=[_row_meta(s, u, media_keys) for s, u in zip(res.samples, res.used, strict=True)], canary=canary)
+        meta = [_row_meta(s, u, media_keys) for s, u in zip(res.samples, res.used, strict=True)]
+        if res.outputs is not None:
+            writer.write_outputs(rows, [s.clip_id for s in res.samples], res.outputs, meta=meta, canary=canary)
+        else:
+            writer.write(rows, [s.clip_id for s in res.samples], res.feats, res.pos, meta=meta, canary=canary)
     except (TypeError, ValueError, OSError) as e:
         raise ExtractError(E_WRITE, f"cannot write rows {rows[:5]} ({'canary' if canary else 'regular'}): {_reason(e)}", exit_code=5) from e
 
@@ -1264,7 +1325,8 @@ def run_extract(
         state = peek_shard(
             split_dir, i, manifest_hash=bench_obj.manifest_hash, input_hash=bench_obj.input_hash,
             model=planned.model, reading=planned.reading, describe_sha256=planned.describe_sha256, n=n,
-            dtype=str(planned.dtype or bridge_cls.dtype), pos_mode=str(planned.pos_mode or bridge_cls.pos_mode),
+            dtype=str(planned.dtype or bridge_cls.dtype) if output_schema_of(bench_obj)[1] is None else None,
+            pos_mode=str(planned.pos_mode or bridge_cls.pos_mode) if output_schema_of(bench_obj)[1] is None else "none",
             rows=frozen["ranges"][i] if frozen is not None and frozen.get("ranges") else None,
         )
         if state == "skip":
@@ -1286,10 +1348,11 @@ def run_extract(
     if d.get("weights_sha256") is None:
         _log(f"{W_WEIGHTS_UNFINGERPRINTED}: describe()['weights_sha256'] is null; the weights are recorded only by weights_ref "
              f"({d.get('weights_ref')!r})")
+    _schema, schema = output_schema_of(bench_obj)  # a declared output schema: per-key members (the writer's `features` block is null)
     plan_kw = dict(
         manifest_hash=bench_obj.manifest_hash, input_hash=bench_obj.input_hash,
         model=prep.model, reading=prep.reading, describe_sha256=prep.describe_sha256,
-        dtype=str(bridge_cls.dtype), pos_mode=str(bridge_cls.pos_mode),
+        dtype=str(bridge_cls.dtype) if schema is None else None, pos_mode=str(bridge_cls.pos_mode) if schema is None else "none",
     )
     want = plan_values(**plan_kw)
     # The run directory does not name the configuration, so first move EVERY shard another
@@ -1342,7 +1405,7 @@ def run_extract(
         writer = FeatureWriter(out, split, shard=(i, n), rows=(lo, hi), bench=bench_obj, bridge=prep.bridge,
                                describe=d, source_sha256=prep.source_sha256, claim=claim,
                                batch_size=int(layout.get("batch_size") or batch_size))
-        store_dtype = np.dtype(bridge_cls.dtype)
+        store_dtype = np.dtype(bridge_cls.dtype) if schema is None else np.dtype("float32")
         canary_targets = {int(_canary_of(s)) for s in canary_samples}
         originals: dict[int, tuple[np.ndarray, np.ndarray | None, dict]] = {}
 
@@ -1354,7 +1417,7 @@ def run_extract(
         # release_bytes: a batch's stored bytes are dropped once it is written (and after prepare); the canaries are
         # Samples of their own (their own byte sources), read again by the canary pass
         engine = _Engine(prep.bridge, d, decode_workers=workers, read_ahead=read_ahead, torch=prep.torch, on_missing=on_missing,
-                         kinds=prep.view.streams, run_dir=run_dir, allow_not_applicable=True, allow_loopback=allow_loopback,
+                         kinds=prep.view.streams, run_dir=run_dir, allow_not_applicable=True, allow_loopback=allow_loopback, resolved=schema,
                          release_bytes=True)
         canary_stats: dict[str, Any] = {"max_abs_diff": 0.0, "max_rel_l2": 0.0, "n": 0, "tolerance": tol, "mismatch": []}
         try:
@@ -1364,7 +1427,10 @@ def run_extract(
                 _write_rows(writer, res, media_keys)
                 for k, s in enumerate(res.samples):
                     if s.row in canary_targets:
-                        originals[s.row] = (np.ascontiguousarray(res.feats[k], dtype=store_dtype), res.pos_of(k), res.used[k])
+                        if res.outputs is not None:
+                            originals[s.row] = ({key: vals[k] for key, vals in res.outputs.items()}, None, res.used[k])  # type: ignore[assignment]
+                        else:
+                            originals[s.row] = (np.ascontiguousarray(res.feats[k], dtype=store_dtype), res.pos_of(k), res.used[k])
             live_canaries = [s for s in canary_samples if int(_canary_of(s)) in originals]
             for res in engine.run(_batched(live_canaries, batch_size), dl):
                 if not res.samples:
@@ -1372,6 +1438,21 @@ def run_extract(
                 _write_rows(writer, res, media_keys, canary=True)
                 for k, s in enumerate(res.samples):
                     o_feat, o_pos, o_used = originals[int(_canary_of(s))]
+                    if res.outputs is not None:  # per key through the codec: exact keys must be equal, the rest within tolerance
+                        assert schema is not None
+                        worst, differs = 0.0, False
+                        for key, vals in res.outputs.items():
+                            spec, codec = schema[key]
+                            dist = float(codec.distance(vals[k], o_feat[key], spec))  # type: ignore[index]
+                            if codec.is_exact(spec):
+                                differs = differs or dist != 0.0
+                            else:
+                                worst = max(worst, dist)
+                        canary_stats["max_rel_l2"] = max(canary_stats["max_rel_l2"], worst)
+                        canary_stats["n"] += 1
+                        if differs or hashing.canon(res.used[k]) != hashing.canon(o_used):
+                            canary_stats["mismatch"].append(int(_canary_of(s)))
+                        continue
                     c = np.ascontiguousarray(res.feats[k], dtype=store_dtype)
                     diff = float(np.abs(c.astype(np.float64) - o_feat.astype(np.float64)).max()) if c.size else 0.0
                     canary_stats["max_abs_diff"] = max(canary_stats["max_abs_diff"], diff)
@@ -1537,21 +1618,26 @@ def scramble(sample: Any, k: int) -> Any:
 
 @dataclass
 class _PassResult:
-    """Per input index: ``(feat float32 [N, D], pos [N, 4] | None, used dict)``; missing indices are absent."""
+    """Per input index: ``(feat float32 [N, D], pos [N, 4] | None, used dict)`` for the feature matrix, ``({key:
+    value}, None, used)`` for a declared output schema (``schema``); missing indices are absent."""
 
-    by_index: dict[int, tuple[np.ndarray, np.ndarray | None, dict]] = field(default_factory=dict)
+    by_index: dict[int, tuple[Any, np.ndarray | None, dict]] = field(default_factory=dict)
     wall_s: float = 0.0
+    schema: dict[str, Any] | None = None
 
 
 def _run_pass(engine: _Engine, samples: list[Any], order: Sequence[int], batch_size: int) -> _PassResult:
     """Encode ``samples`` in the given index ``order`` and batch size; results keyed by original index."""
     seq = [samples[j] for j in order]
     index_of = {id(s): j for s, j in zip(seq, order, strict=True)}
-    out = _PassResult()
+    out = _PassResult(schema=engine.resolved)
     t0 = time.perf_counter()
     for res in engine.run(_batched(seq, batch_size)):
         for k, s in enumerate(res.samples):
-            out.by_index[index_of[id(s)]] = (np.ascontiguousarray(res.feats[k], dtype=np.float32), res.pos_of(k), res.used[k])
+            if res.outputs is not None:
+                out.by_index[index_of[id(s)]] = ({key: vals[k] for key, vals in res.outputs.items()}, None, res.used[k])
+            else:
+                out.by_index[index_of[id(s)]] = (np.ascontiguousarray(res.feats[k], dtype=np.float32), res.pos_of(k), res.used[k])
     out.wall_s = time.perf_counter() - t0
     return out
 
@@ -1565,6 +1651,21 @@ def _compare(name: str, a: _PassResult, b: _PassResult, samples: list[Any], tol:
             problems.append(f"{samples[j].clip_id}: encoded in pass A but missing in pass {name}")
             continue
         fb, pb, ub = b.by_index[j]
+        if a.schema is not None:  # per key through the codec: exact keys (and every key of an exact rerun) must be equal
+            for key in sorted(set(fa) | set(fb)):
+                if key not in fa or key not in fb:
+                    problems.append(f"{samples[j].clip_id}: output {key!r} in one pass only")
+                    continue
+                spec, codec = a.schema[key]
+                r = float(codec.distance(fb[key], fa[key], spec))
+                must_equal = exact or codec.is_exact(spec)
+                if not codec.is_exact(spec):
+                    worst = max(worst, r)
+                if (must_equal and r != 0.0) or (not must_equal and r > tol):
+                    problems.append(f"{samples[j].clip_id}: output {key!r} distance {r:.3e}" + ("" if must_equal else f" > {tol:.1e}"))
+            if hashing.canon(ua) != hashing.canon(ub):
+                problems.append(f"{samples[j].clip_id}: used differs ({ua} vs {ub})")
+            continue
         if fa.shape != fb.shape:
             problems.append(f"{samples[j].clip_id}: feature shape {fb.shape} ≠ {fa.shape}")
             continue
@@ -1647,6 +1748,10 @@ def unfilled_describe(d: Mapping[str, Any]) -> list[str]:
             problems.append(f"{key} = {d.get(key)!r}")
     inp = d.get("input")
     for sname, entry in (inp.items() if isinstance(inp, Mapping) else ()):
+        if is_cell_entry(entry):  # a cell field (validate_input checked the shape)
+            if "TODO" in str(entry.get("note") or ""):
+                problems.append(f"input[{sname!r}]['note'] = {entry.get('note')!r}")
+            continue
         norm = entry.get("norm") if isinstance(entry, Mapping) else None
         if not isinstance(norm, Mapping):
             problems.append(f"input[{sname!r}]['norm'] is null")
@@ -1665,6 +1770,8 @@ def constant_features(res: _PassResult) -> bool:
     if len(feats) < 2:
         return False
     first = feats[0]
+    if res.schema is not None:  # a declared schema: every key equal (within 1e-7 for a non-exact codec) across the clips
+        return all(all(float(res.schema[key][1].distance(f[key], first[key], res.schema[key][0])) <= 1e-7 for key in first) for f in feats[1:])
     return all(f.shape == first.shape and (f.tobytes() == first.tobytes() or _rel_l2(f, first) <= 1e-7) for f in feats[1:])
 
 
@@ -1897,7 +2004,8 @@ def _bridge_check(
 
     def engine() -> _Engine:
         return _Engine(prep.bridge, d, decode_workers=workers, read_ahead=read_ahead, torch=prep.torch, on_missing=on_missing,
-                       kinds=kinds, run_dir=None, allow_not_applicable=True, allow_loopback=allow_loopback)
+                       kinds=kinds, run_dir=None, allow_not_applicable=True, allow_loopback=allow_loopback,
+                       resolved=output_schema_of(prep.bench)[1])
 
     status, reason = "ok", None
     idx = list(range(len(smoke)))
@@ -1967,11 +2075,22 @@ def _bridge_check(
     fx = _Collect()
     n_streams = len(d.get("streams") or [])
     unchecked: dict[str, int] = {}
-    shapes = {fa.shape for fa, _, _ in pass_a.by_index.values()}
+    generic = pass_a.schema is not None
+    bound_check: dict[str, int] = {}
+    if generic:  # a declared schema: each value through its codec (symbols bound across the smoke set), then the used checks
+        for j, (fa, _pa, ua) in sorted(pass_a.by_index.items()):
+            s = smoke[j]
+            where = f"{s.clip_id} (row {s.row})"
+            for key, v in fa.items():
+                spec, codec = pass_a.schema[key]  # type: ignore[index]
+                for f in codec.check(v, spec, bound_check):
+                    fx.add(f.code, f"output {key!r}: {f.message}", where)
+            check_member({"media": _media_block(s), "used": ua}, None, describe=d, kinds=kinds, where=where, fx=fx, unchecked=unchecked)
+    shapes = set() if generic else {fa.shape for fa, _, _ in pass_a.by_index.values()}
     if len(shapes) > 1:
         fx.add("E_MEMBERS", f"N/D differ across clips: {sorted(shapes)} (fixed N and D for every sample)", "encode")
     fp16_max = 0.0
-    for j, (fa, pa, ua) in sorted(pass_a.by_index.items()):
+    for j, (fa, pa, ua) in ([] if generic else sorted(pass_a.by_index.items())):
         s = smoke[j]
         where = f"{s.clip_id} (row {s.row})"
         if not bool(np.isfinite(fa).all()):
@@ -2009,11 +2128,25 @@ def _bridge_check(
     N = D = None
     used0: dict[str, Any] = {}
     media0: dict[str, Any] = {}
+    outputs_block: dict[str, Any] | None = None
     if first_j is not None:
         f0, _, u0 = pass_a.by_index[first_j]
-        N, D = int(f0.shape[0]), int(f0.shape[1])
+        if not generic:
+            N, D = int(f0.shape[0]), int(f0.shape[1])
         used0 = dict(u0)
         media0 = _media_block(smoke[first_j])
+    if generic:
+        from yavih import codecs as _codecs
+
+        sizes = [sum(len(pass_a.schema[k][1].encode(v, pass_a.schema[k][0])) for k, v in fa.items())  # type: ignore[index]
+                 for fa, _, _ in pass_a.by_index.values()]
+        outputs_block = {
+            "schema": {k: dict(e) for k, (e, _c) in pass_a.schema.items()},  # type: ignore[union-attr]
+            "schema_sha256": _codecs.schema_sha256({k: dict(e) for k, (e, _c) in pass_a.schema.items()}),  # type: ignore[union-attr]
+            "bound": dict(bound_check),
+            "keys": {k: {"codec": c.name, "version": int(c.version)} for k, (_e, c) in pass_a.schema.items()},  # type: ignore[union-attr]
+            "bytes_per_row": int(round(sum(sizes) / len(sizes))) if sizes else None,
+        }
     clips_per_s = round(len(pass_a.by_index) / pass_a.wall_s, 4) if pass_a.wall_s > 0 and pass_a.by_index else None
     profile = {
         **base,
@@ -2027,10 +2160,11 @@ def _bridge_check(
         "media": media0,
         "N": N,
         "D": D,
-        "pos_mode": d["pos_mode"],
-        "streams": list(d["streams"]),
+        "pos_mode": d.get("pos_mode", "none"),
+        "streams": list(d.get("streams") or []),
         "batch_size": batch_size,
-        "dtype": d["dtype"],
+        "dtype": d.get("dtype"),
+        "outputs": outputs_block,
         "invariance": {
             "rerun_bit_identical": rerun_max == 0.0,
             "rerun_rel_l2": rerun_max,

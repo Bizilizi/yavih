@@ -1004,7 +1004,7 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             rep.warnings.append({
                 "code": "W_FOLDER_SOURCE_DIFFERS", "column": column_id,
                 "message": f"{bench}: results under one protocol hash were scored by {len(sources)} different versions of the "
-                           "folder's probe.py / reader.py (benchmark.folder_source); comparable by declaration (the "
+                           "folder's eval.py / reader.py (benchmark.folder_source); comparable by declaration (the "
                            "conformance fixture holds them within tolerance), shown for diagnosis",
             })
 
@@ -1146,7 +1146,7 @@ def report(
     """Index → the per-model lm-eval tables + the comparability columns → rendered text;
     writes ``runs/_index.jsonl`` and, when the runs root is known, ``runs/_report/report.<fmt>`` +
     ``DONE``. ``join={"<benchmark>": {"<reading>": run, ...}}`` calls that benchmark folder's
-    ``probe.py`` ``join()`` (:func:`yavih.report.join.run_join`; vggsounder: ``a``/``v``/``av``) and writes
+    ``eval.py`` ``join()`` (:func:`yavih.report.join.run_join`; vggsounder: ``a``/``v``/``av``) and writes
     the joined numbers to the model's results directory under ``<benchmark>:a+v+av``. ``merge_results`` merges every model's
     ``results_*.json`` under ``results_root`` (default ``yavih.config.results_root`` of the runs root)
     into one ``results_<timestamp>.json`` per model. ``suite`` (a name, a path or a ``yavih.suites.Suite``) adds the

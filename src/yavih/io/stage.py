@@ -1,6 +1,6 @@
 """``yavih features stage``: copy shards + sidecars + ``_meta.json`` of a ``features/``
 tree to ``<scratch>/<unit_id|run>.<host>.<pid>/`` and return the staged path for
-``probe run --scratch``.
+``eval run --scratch``.
 
 Staging is a plain copy on purpose: the probe memmaps shards by sidecar offsets, so a
 byte-identical copy on local disk is all it needs, and ``_meta.json`` travels along so the probe

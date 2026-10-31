@@ -22,8 +22,8 @@ SKILL_ROOT = Path(cli.__file__).resolve().parent / "skill" / "yavih"
 SKILL_MD = SKILL_ROOT / "SKILL.md"
 REFERENCES = ("bridge", "data", "readouts", "slurm", "cli")
 # the skill's step table: "<i> <step>" in the first column
-STEPS = ("install", "setup.md", "prepare", "bridge", "smoke", "extract", "validate", "probe", "report")
-GROUPS = ("init", "doctor", "config", "skill", "bench", "bridge", "extract", "features", "probe", "report", "registry", "plan", "exec", "suite")
+STEPS = ("install", "setup.md", "prepare", "bridge", "smoke", "extract", "validate", "eval", "report")
+GROUPS = ("init", "doctor", "config", "skill", "bench", "bridge", "extract", "features", "eval", "report", "registry", "plan", "exec", "suite")
 # the operational rules that follow the guardrail checklist, carried verbatim (whitespace-normalized)
 OPERATIONAL_RULES = (
     "Install with `--no-deps`; never let pip touch the model env's torch; install original-author packages "
@@ -32,7 +32,7 @@ OPERATIONAL_RULES = (
     "bridge must comply with.",
     "Default dtype float16; switch to float32 when `bridge check` warns about range.",
     "Many small shards, never one unit per GPU; resubmit from `plan status`.",
-    "`validate` before `probe`; read the floor before the metric; a CI overlapping the floor, `floor_violated` or "
+    "`validate` before `eval`; read the floor before the metric; a CI overlapping the floor, `floor_violated` or "
     "`audio_blind` is not a result.",
     "Write all readings (audio, video, av) of an audio-visual model; never present a joint number alone.",
     "One model, one `model` name in every bridge; two configurations you want side by side (another layer, another "
@@ -46,7 +46,7 @@ OPERATIONAL_RULES = (
 DOCUMENTED_FLAGS = {
     ("bench", "info"): ("--setup",),
     ("bench", "verify"): ("--census",),
-    ("probe", "run"): ("--log-samples", "--results", "--no-results"),
+    ("eval", "run"): ("--log-samples", "--results", "--no-results"),
     ("report", "build"): ("--results", "--merge-results"),
 }
 DOCUMENTED_EXTRACT_FLAGS = ("--read-ahead",)
@@ -128,7 +128,7 @@ def test_step_rows_carry_commands_and_stop_conditions():
         "extract": ("R=$(yavih config get runs.root)", "yavih plan build", "$R/_plans/", "yavih plan status", "pending == 0", "preempted == 0", "failed == 0"),
         "validate": ("yavih features validate $R/<b>/<model>/<reading>/features", "coverage", "N_RULE_CUSTOM",
                      "W_RULE_UNCHECKED", "not_applicable"),
-        "probe": ("yavih probe run $R/<b>/<model>/<reading>", "--log-samples", "floor", "floor_violated", "audio_blind",
+        "eval": ("yavih eval run $R/<b>/<model>/<reading>", "--log-samples", "floor", "floor_violated", "audio_blind",
                   "external"),
         "report": ("yavih report build \"$R/*\"", "$(yavih config get results.root)/<model>/results_<timestamp>.json", "`reading`", "`eval_hash`", "ci95",
                    "floor", "W_BRIDGE_CHANGED"),
@@ -233,11 +233,11 @@ def test_exploring_a_benchmark_block_runs():
     skill = SKILL_MD.read_text(encoding="utf-8")
     block = skill[skill.index("Exploring a benchmark:"):]
     block = block[block.index("```bash") + 7: block.index("```", block.index("```bash") + 7)]
-    for cmd in ("suite list", "bench list", "bench files <b>", "bench show <b> setup", "bench show <b> readme|yaml|probe",
+    for cmd in ("suite list", "bench list", "bench files <b>", "bench show <b> setup", "bench show <b> readme|yaml|eval",
                 "bench show <b> prepare/<file>", "bench prepare <b> [<step>]", "bench path <b> [<file>]", "skill show --ref"):
         assert f"yavih {cmd}" in block, cmd
     for argv in (["suite", "list"], ["bench", "list"], ["bench", "files", "esc50"], ["bench", "show", "esc50", "setup"],
-                 ["bench", "show", "esc50", "readme"], ["bench", "show", "esc50", "yaml"], ["bench", "show", "avsync", "probe"],
+                 ["bench", "show", "esc50", "readme"], ["bench", "show", "esc50", "yaml"], ["bench", "show", "avsync", "eval"],
                  ["bench", "show", "esc50", "prepare/01_download.sh"], ["bench", "prepare", "esc50"],
                  ["bench", "path", "esc50", "prepare/01_download.sh"], ["skill", "show", "--ref", "bridge"]):
         with contextlib.redirect_stdout(io.StringIO()):
@@ -400,7 +400,7 @@ def test_every_mentioned_command_parses_with_argparse():
         assert _parse_help(list(argv)) == 0, f"`yavih {' '.join(argv)} --help` does not parse"
     # the nine steps' commands are among them
     for argv in (("doctor",), ("bench", "list"), ("bench", "info"), ("bench", "verify"), ("bridge", "check"),
-                 ("plan", "build"), ("plan", "status"), ("features", "validate"), ("probe", "run"),
+                 ("plan", "build"), ("plan", "status"), ("features", "validate"), ("eval", "run"),
                  ("report", "build"), ("exec",), ("skill", "install"), ("skill", "show")):
         assert argv in seen, f"skill never mentions `yavih {' '.join(argv)}`"
 
@@ -469,7 +469,7 @@ def test_data_md_rows_match_the_frozen_benchmark_yaml():
         row = rows[name]
         assert isinstance(y["budget"]["media_gb"], (int, float)), f"{name}: budget.media_gb is not a number yet"
         assert f"{y['budget']['media_gb']:g} GB = `budget.media_gb`" in row, (name, y["budget"]["media_gb"])
-        assert row.split("|")[2].strip().startswith(y["readout"]), (name, y["readout"])
+        assert row.split("|")[2].strip().startswith(y["scorer"]), (name, y["scorer"])
         for split, n_rows in y["budget"]["clips"].items():
             n = f"{n_rows:,}".replace(",", " ")
             assert n in row, (name, split, n)

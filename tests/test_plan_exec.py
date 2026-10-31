@@ -220,7 +220,7 @@ def test_slots_exit_code_is_the_worst(workspace):
 # ----------------------------------------------------------------------------- stdlib-only controller + signal forwarding (subprocess)
 
 
-def test_extract_exec_loads_no_torch_or_probe_modules(workspace):
+def test_extract_exec_loads_no_torch_or_eval_modules(workspace):
     root, script = workspace
     u = fake_unit(root, script, mode="ok", launcher=python_launcher())
     plan = _plan(root, u)
@@ -333,7 +333,7 @@ def test_probe_unit_scratch_preflight_exit_3(workspace, monkeypatch):
     u.needs["scratch_gb"] = 10**6  # a petabyte: no filesystem has it
     monkeypatch.delenv("YAVIH_SCRATCH", raising=False)
     monkeypatch.delenv("SLURM_TMPDIR", raising=False)
-    # no scratch configured: like `probe run`, the probe reads the features in place (memmap, W_SIZE) instead of an
+    # no scratch configured: like `eval run`, the probe reads the features in place (memmap, W_SIZE) instead of an
     # exit-3 loop
     seen: list = []
 

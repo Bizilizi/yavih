@@ -59,13 +59,13 @@ Values are illustrative.
 |---|---|
 | `schema_version` | `RESULT_SCHEMA_VERSION` (4) |
 | `status`, `reason` | `reason` is null for `ok`, a string otherwise |
-| `standard` | true iff the probe config's `probe_hash` equals the pinned one |
+| `standard` | true iff the configuration's hash equals the scorer's pinned one (`probe_hash` for a probe; always the constant `scorer_config_hash` for a stateless or direct scorer, so true unless a testing configuration overrides it) |
 | `eval_hash` | full hex; must equal the hash of `benchmark.protocol_hash` and `probe.hash` |
-| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash`, `folder_source` (`{probe, reader}` normalized-source digests of the folder's `probe.py` / `reader.py` at scoring: provenance, never a key; `null` in a schema-3 record read through [`report.migrate`](hashing.md#reportmigrate)) |
+| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash`, `folder_source` (`{probe, reader}` normalized-source digests of the folder's `eval.py` / `reader.py` at scoring: provenance, never a key; `null` in a schema-3 record read through [`report.migrate`](hashing.md#reportmigrate)) |
 | `model`, `reading` | from the bridge's `describe()`; `model` matches `[A-Za-z0-9][A-Za-z0-9_.-]{0,63}`, `reading` `[A-Za-z0-9][A-Za-z0-9_-]{0,31}` |
 | `bridge` | exactly `name`, `describe`, `describe_sha256` (current describe schema), `source_sha256`; recorded, never a key |
 | `features` | exactly `fingerprint` (the split's, or a sha256 over the per-split ones), `dtype`, `N`, `D`, `pos_mode`, `bytes` (summed), `backend` (`ram` / `memmap`), `canary_max_rel_l2`, `batch_tolerance`, `rules_checked` (per stream: the temporal rule or `"custom"`, the spatial check). Null for a plan-time `not_applicable`; every key present with null geometry for a bridge-declared one |
-| `probe` | exactly `hash`, `config` (`ProbeConfig.to_json()`), `seed`, `selected_lr`, `epochs_run`, `best_epoch`, `stop`, `n_train`, `n_val` (fit fields null for a non-ok status; under folds, means over folds) |
+| `probe` | exactly `hash`, `config` (`ProbeConfig.to_json()`, or `ScorerConfig.to_json()` = `{scorer, version, kind}` for a scorer that trains nothing), `seed`, `selected_lr`, `epochs_run`, `best_epoch`, `stop`, `n_train`, `n_val` (fit fields null for a non-ok status or a non-probe scorer; under folds, means over folds) |
 | `metrics`, `ci95`, `floors`, `controls` | `ok` only (see rules) |
 | `chance` | `metrics.chance` |
 | `external` | `{package: version}` of the packages whose code produced a reported number; `{}` when none |
@@ -254,7 +254,7 @@ is `missing` with the note `partial only`.
 |---|---|
 | `W_BRIDGE_CHANGED` | a row key holds several bridge configurations; newest shown |
 | `W_FEATURES_DIFFER` | the shown configuration holds several feature sets; newest shown, never averaged |
-| `W_FOLDER_SOURCE_DIFFERS` | results in a column were scored by different versions of the folder's `probe.py` / `reader.py` (`benchmark.folder_source`); comparable by declaration, listed for diagnosis. A result without a recorded source (`null`: schema 3, a registry entry without one) is unknown and not compared |
+| `W_FOLDER_SOURCE_DIFFERS` | results in a column were scored by different versions of the folder's `eval.py` / `reader.py` (`benchmark.folder_source`); comparable by declaration, listed for diagnosis. A result without a recorded source (`null`: schema 3, a registry entry without one) is unknown and not compared |
 | `W_POPULATION_DIFFERS` | eval populations differ within a column |
 | `W_MISSING_READING` | a model lacks an expected reading in a column |
 | `W_NONSTANDARD` | a column of non-pinned probe configs: comparable with nothing |
@@ -266,7 +266,7 @@ To show two configurations of one model side by side, give them two `model` name
 
 `--join <benchmark> <reading>=RUN ...` (e.g. `--join vggsounder a=RUN v=RUN av=RUN`; a RUN is a run directory,
 a `probe/<eval_hash12>/` directory or a seed directory; the lowest seed is used) calls the benchmark folder's
-`probe.py` `join()` hook. The core refuses (exit 2) results of different benchmarks or `eval_hash`es
+`eval.py` `join()` hook. The core refuses (exit 2) results of different benchmarks or `eval_hash`es
 (`E_JOIN_MIXED`), different eval `ids_sha256` (`E_JOIN_POPULATION`), readings of more than one `model`
 (`E_JOIN_MODEL`), a missing result or `eval_logits.npy` (`E_JOIN_MISSING`) and a non-`ok` status
 (`E_JOIN_STATUS`); a benchmark without a `join()` hook is `E_JOIN_UNSUPPORTED` (exit 1); the folder's
@@ -302,7 +302,7 @@ prints the same statuses for one model without building a report.
 
 ### Root
 
-Decided before any training (`yavih.readouts.base.resolve_results_root`): `probe run --results DIR` (a matrix
+Decided before any training (`yavih.readouts.base.resolve_results_root`): `eval run --results DIR` (a matrix
 `results` key), else `YAVIH_RESULTS`, else config `[results] root` ([configuration](configuration.md)), else
 `yavih-bench/results` when a project is discovered ([project layout](project-layout.md)), else the directory
 `results` next to the runs root of a standard run directory: the absolute run directory's last three components

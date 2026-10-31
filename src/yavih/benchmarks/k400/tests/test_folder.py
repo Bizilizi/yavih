@@ -69,9 +69,9 @@ def test_folder_lint_clean():
 
 
 def test_yaml_schema2_and_versions(spec):
-    assert spec["schema_version"] == 2
+    assert spec["schema_version"] == 3
     assert spec["name"] == HERE.name == "k400" and spec["aliases"] == []
-    assert spec["readout"] == "clf" and spec["manifest"]["label"]["kind"] == "single"
+    assert spec["scorer"] == "clf" and spec["manifest"]["label"]["kind"] == "single"
     assert spec["source"]["kind"] == "torrent"
     log = spec["changelog"]
     assert [e["version"] for e in log] == [1] and spec["protocol_version"] == log[-1]["version"] == 1
@@ -82,17 +82,17 @@ def test_yaml_schema2_and_versions(spec):
 
 
 def test_stream_layouts(spec):
-    for s in spec["streams"].values():
+    for s in F.file_fields(spec).values():
         assert s["layout"] in {"dir", "tar_index"}
 
 
 def test_streams_and_input_contract(spec):
-    assert spec["streams"] == {
+    assert F.file_fields(spec) == {
         "video": {"kind": "video", "media_column": "rel_media", "root": "media_root", "layout": "dir", "layout_params": {}, "required": True}
     }
     ic = spec["input_contract"]
     assert set(ic) == {"handed_over", "info", "facts", "materialize"}
-    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["streams"]) == {"video"}
+    assert set(ic["handed_over"]) == set(ic["info"]) == set(F.file_fields(spec)) == {"video"}
     assert "exactly as stored" in ic["handed_over"]["video"]
     assert ic["info"]["video"] == ["duration_s", "fps", "width", "height", "container", "bytes"]
     assert set(ic["info"]["video"]) <= VIDEO_INFO_VOCAB
@@ -112,7 +112,7 @@ def test_output_contract(spec):
 def test_external_empty_and_no_probe_py(spec):
     # the Kinetics authors ship no scorer package; top-1 is the registry metric `acc`
     assert spec["external"] == []
-    assert not (HERE / "probe.py").exists()
+    assert not (HERE / "eval.py").exists()
 
 
 def test_protocol_holds_label_facts_only(spec):
@@ -307,7 +307,7 @@ def test_setup_obtain_lists_source_hashes(spec, setup_md):
 
 
 def test_docs_quote_no_stale_hashes(readme, setup_md):
-    """protocol_hash depends on core, the yaml, the manifest and probe.py; the docs must not quote one."""
+    """protocol_hash depends on core, the yaml, the manifest and eval.py; the docs must not quote one."""
     for text in (readme, setup_md):
         assert not re.findall(r"protocol_hash`?\s*`?\s*[0-9a-f]{12,64}", text)
 

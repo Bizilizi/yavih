@@ -1,4 +1,4 @@
-"""Cross-reading joins through the benchmark folder's ``probe.py`` (vggsounder's probe.py):
+"""Cross-reading joins through the benchmark folder's ``eval.py`` (vggsounder's eval.py):
 ``report --join <benchmark> <reading>=RUN ...`` resolves every RUN to one DONE-marked seed directory,
 refuses mixed ``eval_hash``es (protocol or probe) or eval populations and readings of more than one
 ``model`` (``E_JOIN_MODEL``), records differing non-null ``weights_sha256`` as ``W_JOIN_WEIGHTS`` (a bridge
@@ -172,15 +172,15 @@ def run_join(
             bench = Benchmark.load(str(benchmark))
         except Exception as e:  # noqa: BLE001 - an unknown join name is a usage error
             raise JoinError("E_JOIN_UNKNOWN", f"join {benchmark!r}: no such benchmark ({type(e).__name__}: {e})", exit_code=1) from e
-    from yavih.readouts.base import ProbeRefused, check_externals, folder_probe
+    from yavih.readouts.base import ProbeRefused, check_externals, folder_eval
 
     try:
-        mod = folder_probe(bench)
+        mod = folder_eval(bench)
     except ProbeRefused as e:
         raise JoinError(e.code, e.message, exit_code=e.exit_code) from e
     hook = getattr(mod, "join", None)
     if hook is None:
-        raise JoinError("E_JOIN_UNSUPPORTED", f"benchmark {benchmark!r} defines no join(): its folder has no probe.py join hook", exit_code=1)
+        raise JoinError("E_JOIN_UNSUPPORTED", f"benchmark {benchmark!r} defines no join(): its folder has no eval.py join hook", exit_code=1)
 
     refs = {str(k): load_ref(str(k), v, seed=seed) for k, v in routing.items()}
     names = {(r.result.get("benchmark") or {}).get("name") for r in refs.values()}

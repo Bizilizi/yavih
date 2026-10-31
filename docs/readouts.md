@@ -1,11 +1,12 @@
-# Readouts
+# Scorers and the shipped readouts
 
-A benchmark is scored by exactly one standardized readout, named by `benchmark.yaml[readout]`: `clf`
-(classification), `seq` (per-segment classification), `grid` (dense regression, depth) or `box` (one box per
-clip). The readout trains a pinned probe head on the extracted features and scores it with the metric functions
-the benchmark lists. The heads, the trainer and `ProbeConfig` below are the only ones: a benchmark folder's
-`probe.py` may supply targets, metrics, an external scorer and a cross-reading join,
-but never a head, a loss or a training loop.
+A benchmark is scored by exactly one scorer, named by `benchmark.yaml[scorer]`. yavih ships four, the pinned
+probe readouts: `clf` (classification), `seq` (per-segment classification), `grid` (dense regression, depth) and
+`box` (one box per clip). Each trains a pinned probe head on the extracted features and scores it with the metric
+functions the benchmark lists; the heads, the trainer and `ProbeConfig` below are the only ones a probe scorer
+uses. A benchmark folder's `eval.py` may supply targets, metrics, an external scorer and a cross-reading join for
+a shipped scorer, or own its whole scoring path by exporting a `SCORER` of its own under the folder's name
+([adding a scorer](adding-a-scorer.md)).
 
 What the probe writes is described in [results](results.md); the hashes that key it (`probe_hash`,
 `eval_hash`) in [hashing](hashing.md); the eligibility verdict it reads in [validation](validation.md); the
@@ -14,7 +15,7 @@ What the probe writes is described in [results](results.md); the hashes that key
 
 ## Entry point
 
-Module `yavih.readouts` (the `[probe]` extra: torch). CLI: `yavih probe run RUN_DIR`.
+Module `yavih.readouts` (the `[probe]` extra: torch). CLI: `yavih eval run RUN_DIR`.
 
 ```python
 def probe(run_dir, *, seeds=(0,), readout=None, cfg=None, deadline=None, scratch=None,
@@ -46,19 +47,21 @@ symlinks (refreshed on every run), copies an existing `_meta.json`, and makes `D
 everything the probe writes; the source tree is never written, and the results-store root is still judged on
 the source run directory.
 
-## Readout registry
+## Scorer registry
 
-Readouts are not hard-coded. `yavih.readouts.registry` holds one `Readout` descriptor per readout; a readout
-module exports `READOUT = Readout(...)` and a driver `run_<name>(ctx)`. The built-in modules are
-`yavih.readouts.{clf, seq, grid, box}`; a package adds one through the entry-point group `yavih.readouts`.
-`benchmark.yaml` validation, `protocol_hash` (the readout `version`), the pinned `ProbeConfig`, the floor
-outputs, the dense-readout checks of `features validate` and `plan`, and the metric table all ask the registry
-(`registry.get(name)`, `registry.names()`). Importing a readout module never imports torch; the driver imports
-its torch code lazily.
+Scorers are not hard-coded. `yavih.readouts.registry` holds one `Scorer` descriptor per scorer; a scorer
+module exports `SCORER = Scorer(...)` and a driver (`score` on the descriptor, or `run_<name>(ctx)`). The
+built-in modules are `yavih.readouts.{clf, seq, grid, box}` (kind `probe`); a package adds one through the
+entry-point group `yavih.scorers`; a benchmark folder adds its own through `eval.py` (`SCORER`, registered under
+the folder's name). `benchmark.yaml` validation, `protocol_hash` (the scorer `version`), the pinned configuration
+and its hash, the floor outputs, eligibility, the dense checks of `features validate` and `plan`, the conformance
+population and the metric table all ask the registry (`registry.get(name)`, `registry.names()`). Importing a
+scorer module never imports torch; the driver imports its torch code lazily.
 
 | field | role |
 |---|---|
-| `name`, `version` | the readout name; `version` enters `protocol_hash` (scoring side) |
+| `name`, `version` | the scorer name; `version` enters `protocol_hash` (scoring side) |
+| `kind`, `family` | `probe` (trains the pinned head), `stateless` (scores stored outputs as they are) or `direct` (scores stored predictions); `family` names the scorer whose metrics, targets and conformance population it shares |
 | `label_kinds` | the `manifest.label.kind` values it scores |
 | `protocol_keys`, `param_keys` | the per-benchmark `protocol` keys its driver consumes; the exact `readout_params` key set |
 | `targets`, `full_frame` | labels come from `benchmark.yaml[targets]`; `output_contract.target_frame` must be `full_frame` |
@@ -67,10 +70,11 @@ its torch code lazily.
 | `dense` | features need media positions (`features validate`, `plan`) |
 | `train`, `head`, `loss`, `task_sizes`, `geometry` | the pinned training block, head descriptor and loss; sizes taken from a benchmark |
 | `head_families`, `losses` | values a `ProbeConfig` of this readout may carry |
-| `floor_outputs` | the label-only constant output the floor metrics score |
-| `check_outputs`, `input_keys`, `synthetic` | optional output-contract check, the keys it reads (they enter `input_hash`), a test fixture builder |
+| `floor_outputs` | the label-only constant output the floor metrics score; `None` = no floors (the folder declares `metrics.floors: []`) |
+| `score`, `eligibility`, `config_hash`, `pinned`, `conformance_population`, `needs_gpu` | the driver; the eligibility verdict on a validated feature set (default: the `requires` rules); the configuration hash and the pinned configuration (defaults per kind); the conformance population; whether its unit needs a GPU |
+| `input_keys`, `output_keys` | the `readout_params` / `protocol` keys eligibility reads (they enter `input_hash`); the `output_contract.schema` keys a feature set must carry |
 
-Adding a readout: [adding-a-readout](adding-a-readout.md).
+Adding a scorer: [adding-a-scorer](adding-a-scorer.md).
 
 ## Metric registry
 
@@ -90,7 +94,8 @@ class MetricSpec:
     floor_of: tuple[str, ...] = ()     # floors only: the metrics this floor is the floor of
     external: str | None = None        # the external[].name whose code computes it (folder metrics)
     per_clip: Callable | None = None   # folder metrics: per-clip values for intervals
-    ci: frozenset[str] = frozenset()   # folder metrics: the interval kinds per_clip supports
+    ci: frozenset[str] = frozenset()   # folder metrics: the interval kinds per_clip (or interval) supports
+    interval: Callable | None = None   # folder metrics whose statistic is no per-clip mean (KAD): (lo, hi) per kind
     description: str = ""              # folder metrics: what computes it (an external package's metric name and definition)
 ```
 
@@ -126,7 +131,7 @@ hard-codes a metric name.
 
 ### Folder metrics
 
-A benchmark folder's `probe.py` may export `METRICS: dict[str, MetricSpec]`, which overlays the registry for
+A benchmark folder's `eval.py` may export `METRICS: dict[str, MetricSpec]`, which overlays the registry for
 that benchmark only. A folder metric may replace a registry entry of the same name only if it keeps its
 `readouts`, `shape` and `kind`. `PROTOCOL_KEYS: frozenset[str]` names the protocol keys the folder consumes
 that no metric declares. `Benchmark.load` requires every key a resolved metric or `PROTOCOL_KEYS` declares and
@@ -136,8 +141,8 @@ refuses a per-benchmark protocol key that nothing consumes (a metric, the readou
 package metrics under the package's own names (`auc_pr`, `auc_roc`, `f1@k`, `f1_macro@k`, `accuracy@k`,
 `jaccard@k`, `precision@k`, `recall@k`, `hit_rate@k`) on the reading's own label set and, with `_only`, on its
 exclusive set, every value computed by the official package; nyuv2_depth's depth metrics,
-computed by Probe3D's code. The other `probe.py` hooks (`targets`, `score`, `join`) are listed
-in [benchmark-folder](benchmark-folder.md#probepy-hooks).
+computed by Probe3D's code. The other `eval.py` hooks (`targets`, `score`, `join`) are listed
+in [benchmark-folder](benchmark-folder.md#evalpy-hooks).
 
 ### External packages
 
@@ -241,7 +246,14 @@ Intervals are not metrics: `metrics.ci[name]` makes the driver emit `result.ci95
 The resampling unit is the clip: a per-clip quantity (for `seg_acc` the clip's segment cells, pooled exactly as
 the point estimate pools them) or, for `map`, the macro AP recomputed on every clip resample (fixed `C`,
 zero-positive classes 0). A folder metric admits the kinds its `MetricSpec.ci` names, computed from its own
-`per_clip`. `Benchmark.load` refuses any other pairing (`registry.CI_ADMISSIBLE`).
+`per_clip`, or by its own `interval(kind, outputs, targets, protocol, split_meta)` when the statistic is not a mean of
+per-clip values (a distribution distance recomputed on each resample; it resamples with
+`yavih.metrics.intervals.bootstrap_draws` and `split_meta["bootstrap"]`, the scheme every interval shares).
+`Benchmark.load` refuses any other pairing (`registry.CI_ADMISSIBLE`).
+
+With `--log-samples`, a folder scorer may hand the samples file its per-clip metric values (a part
+`{"role", "rows", "clip_ids", "values": {metric: [n]}}`; each line's `prediction` is `{metric: value}`): two
+systems' lines on the same clips give paired per-clip differences.
 
 ### Aggregation
 
@@ -268,7 +280,7 @@ happens in the report ([results](results.md#yavih-report)), never in the probe.
 | `E_NO_FEATURES` | 3 | no `features/` directory or no split directory |
 | `E_SCRATCH_SPACE` | 3 | scratch free space below 1.1 × the train bytes |
 | `E_EXTERNAL_MISSING`, `E_EXTERNAL_VERSION` | 3 | authors' package absent or mis-versioned |
-| `E_RESULTS_ROOT`, `E_NONSTANDARD_CONFIG`, `E_READOUT`, `E_PROBE_PY` | 1 | no results-store root; non-pinned config outside testing; readout mismatch; `probe.py` failed to import |
+| `E_RESULTS_ROOT`, `E_NONSTANDARD_CONFIG`, `E_READOUT`, `E_EVAL_PY` | 1 | no results-store root; non-pinned config outside testing; readout mismatch; `eval.py` failed to import |
 
 Features are never checked against `protocol_hash` or `scoring_hash`: a scoring edit re-probes, it never
 refuses the features ([hashing](hashing.md#scoring-side)). An exception inside the readout driver writes a `failed`
@@ -445,7 +457,7 @@ scale 64) of their task coordinate; queries are initialized from sincos of the t
   to `S × S`, then `exp`; loss `l1_log`.
 - Metrics, per image then mean over images (`pred · valid` first): `d1`, `d2`, `d3` (fraction of valid pixels
   with `max(gt/pred, pred/gt) < 1.25^k`), `absrel`, `rmse`, `n_eval`. nyuv2_depth computes them with Probe3D's
-  code through its `probe.py`.
+  code through its `eval.py`.
 - Floor: `d1_floor` of `exp` of the per-pixel mean train log-depth map, computed in one streaming pass over the
   train targets (pixels valid in no train image take the global mean).
 - Eligibility (validate): the median fraction of the `h × w` region cells holding a visual token centre reaches

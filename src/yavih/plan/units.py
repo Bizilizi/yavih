@@ -33,7 +33,14 @@ from typing import Any
 from yavih import hashing
 from yavih.io.sidecar import identity_value
 from yavih.plan import estimate
-from yavih.plan.matrix import Matrix, MatrixEntry, check_profile, load_matrix, load_profile
+from yavih.plan.matrix import (
+    Matrix,
+    MatrixEntry,
+    check_profile,
+    is_generic_profile,
+    load_matrix,
+    load_profile,
+)
 from yavih.versions import PLAN_SCHEMA_VERSION, READOUTS
 
 __all__ = [
@@ -78,7 +85,7 @@ def is_dense(readout: str) -> bool:
 
     try:
         return bool(registry.get(readout).dense)
-    except registry.UnknownReadout:
+    except registry.UnknownScorer:
         return False
 NOT_APPLICABLE_FILE = "NOT_APPLICABLE.json"
 #: Placeholder for the report unit's benchmark/bridge/model/reading fields (it spans every entry).
@@ -91,8 +98,8 @@ INPUTS_SCHEME = 2
 #: ``--waive`` (an operator's validation waivers) is recorded in the cmd but changes nothing the unit computes on
 #: valid features: it never makes a DONE stale.
 _LOGGED_FLAGS = frozenset({"--out", "--bridge", "--expect-profile", "--results", "--decode-workers", "--waive"})
-#: ``(group, command)`` whose first positional is a host path (``probe run <run_dir>``, ``report build <glob>``).
-_PATH_POSITIONAL = (("probe", "run"), ("report", "build"))
+#: ``(group, command)`` whose first positional is a host path (``eval run <run_dir>``, ``report build <glob>``).
+_PATH_POSITIONAL = (("eval", "run"), ("report", "build"))
 
 
 class PlanError(ValueError):
@@ -117,7 +124,7 @@ class Unit:
 
     ``model`` + ``reading`` name the configuration; ``eval_hash`` is set on probe units, ``null`` otherwise;
     ``input_hash``: an extract unit's id, ``inputs_hash`` and DONE check
-    key on it, so editing ``probe.py`` or bumping a metric pin re-plans the probes and never the extraction.
+    key on it, so editing ``eval.py`` or bumping a metric pin re-plans the probes and never the extraction.
     """
 
     id: str
@@ -200,7 +207,7 @@ def resolve_path(unit: Unit, path: str) -> str:
 def identity_cmd(cmd: list[str]) -> list[str]:
     """The part of a unit's ``cmd`` that says what it computes: the interpreter, the values of
     ``--out`` / ``--bridge`` / ``--expect-profile`` / ``--results`` / ``--decode-workers`` and the run-directory
-    positional of ``probe run`` / ``report build`` are dropped. Those are host paths (a plan built on the host must not
+    positional of ``eval run`` / ``report build`` are dropped. Those are host paths (a plan built on the host must not
     be stale in a container mounting the project at ``/workspace``) and worker counts (``exec --cpus`` may change
     them); the configuration they point at is covered by ``describe_sha256`` and the protocol / probe hashes."""
     toks = list(cmd[1:])  # cmd[0] is the interpreter the launcher replaces
@@ -247,6 +254,8 @@ class BenchmarkInfo:
     input_hash: str | None = None
     #: Full lr-grid fits per probe seed: 2 when ``readout_params.shuffled_control`` (estimate.py docstring).
     probe_fits: int = 1
+    #: Whether the scorer's unit asks for a GPU (``Scorer.gpu``: probes do, a stateless or direct scorer says).
+    needs_gpu: bool = True
     #: Video streams whose input contract guarantees ``n_frames`` while this site has no media-info census
     #: (``W_NO_CENSUS``): every extract unit then probes each clip's header, a demuxing pass for webm / mkv.
     uncensused_frame_streams: tuple[str, ...] = ()
@@ -272,9 +281,10 @@ class BenchmarkInfo:
 
 
 def benchmark_info(bench: Any) -> BenchmarkInfo:
-    """Project a ``yavih.benchmark.Benchmark`` onto ``BenchmarkInfo`` and compute the pinned ``probe_hash``
-    via ``ProbeConfig.pinned(readout, bench)``."""
-    from yavih.probes.config import ProbeConfig  # torch-free
+    """Project a ``yavih.benchmark.Benchmark`` onto ``BenchmarkInfo`` and compute the pinned configuration hash
+    (``Scorer.hash_config(Scorer.pinned_config(bench))``: ``probe_hash`` of the pinned ``ProbeConfig`` for a probe
+    scorer, the constant ``scorer_config_hash`` otherwise)."""
+    from yavih.readouts import registry  # torch-free
 
     spec = bench.spec
     roles = bench.roles()
@@ -285,7 +295,7 @@ def benchmark_info(bench: Any) -> BenchmarkInfo:
     ref = spec.budget.probe_minutes_ref
     if spec.readout not in ref:
         raise PlanError(f"benchmark {bench.name}: budget.probe_minutes_ref lacks readout {spec.readout!r}")
-    cfg = ProbeConfig.pinned(spec.readout, bench)
+    scorer = registry.get(spec.readout)
     rp = getattr(spec, "readout_params", None) or {}
     return BenchmarkInfo(
         name=bench.name,
@@ -299,8 +309,9 @@ def benchmark_info(bench: Any) -> BenchmarkInfo:
         requires_streams=tuple(spec.requires.streams),
         stream_names=tuple(spec.streams),
         probe_minutes_ref=float(ref[spec.readout]),
-        probe_hash=hashing.probe_hash(cfg),
+        probe_hash=scorer.hash_config(scorer.pinned_config(bench)),
         names=(bench.name, *spec.aliases),
+        needs_gpu=scorer.gpu,
         probe_fits=probe_fits_for(rp),
         uncensused_frame_streams=uncensused_frame_streams(bench),
     )
@@ -528,8 +539,11 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
     describe = profile["describe"]
     dsha: str = profile["describe_sha256"]
     batch_size = int(describe.get("batch_size", 1))
-    dtype = describe["dtype"]
-    bpr = estimate.bytes_per_row(profile["N"], profile["D"], dtype, profile["pos_mode"])
+    generic = is_generic_profile(profile)
+    if generic:  # a declared output schema: the bytes per row bridge check measured on the smoke set
+        bpr = int((profile.get("outputs") or {}).get("bytes_per_row") or 1)
+    else:
+        bpr = estimate.bytes_per_row(profile["N"], profile["D"], describe["dtype"], profile["pos_mode"])
     cps = float(profile["clips_per_s"])
     gpu = estimate.gpu_for_profile(profile)
     mult = calibration.get("multipliers") or {}
@@ -538,7 +552,7 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
     # the rows each split contributes: all of them, or the first N of a capped run (manifest order)
     split_rows = {s: (min(int(sample), int(r)) if sample is not None else int(r)) for s, r in info.n_rows.items()}
     ih = info.input_hash or info.protocol_hash  # extract units follow the input side only
-    na = _not_applicable(info, profile)
+    na = None if generic else _not_applicable(info, profile)  # a generic set's eligibility is the scorer's (validate)
     units: list[Unit] = []
     extract_ids: list[str] = []
 
@@ -590,15 +604,15 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
         uid = _sampled_id(hashing.unit_id(kind="probe", benchmark=info.name, model=model, reading=reading, split=None, shard=None,
                                           protocol_hash=info.protocol_hash, probe_hash=qh, seed=seed), sample)
         if na is None:
-            needs = estimate.probe_needs(bytes_train=bytes_train, N=profile["N"], D=profile["D"],
+            needs = estimate.probe_needs(bytes_train=bytes_train, N=1 if generic else profile["N"], D=1 if generic else profile["D"],
                                          probe_minutes_ref=info.probe_minutes_ref, seeds=1,
                                          ram_budget_bytes=ram_budget_bytes, multipliers=mult, cpus=entry.cpus,
-                                         fits=info.probe_fits, gpu=gpu)
+                                         fits=info.probe_fits, gpu=gpu if info.needs_gpu else 0)
         else:
             # Writing a planned not_applicable result is a few file writes: no GPU, token wall.
             needs = {"gpu": 0, "cpus": 1, "mem_gb": 4, "scratch_gb": 0, "minutes": 5}
         needs["minutes"] = int(math.ceil(needs["minutes"] * _unit_factor(calibration, uid)))
-        cmd = ["python", "-m", "yavih.cli", "probe", "run", run_dir, "--seeds", str(seed)]
+        cmd = ["python", "-m", "yavih.cli", "eval", "run", run_dir, "--seeds", str(seed)]
         if sample is not None:  # a capped run's result never reaches the results store
             cmd += ["--no-results"]
         elif matrix.results:  # matrix `results`; exec's in-process probe reads it back from cmd

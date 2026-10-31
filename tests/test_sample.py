@@ -241,7 +241,7 @@ def test_meta_holds_exactly_the_input_contract_facts(tmp_path: Path, monkeypatch
         s["protocol"].update({"annotated_second": 5.0, "offsets_seconds": [-1.0, 0.0, 1.0]})
         s["input_contract"]["facts"] = ["annotated_second", "clip_seconds"]
 
-    # offsets_seconds: a label fact the folder's probe.py consumes, never handed over
+    # offsets_seconds: a label fact the folder's eval.py consumes, never handed over
     b, _ = _video_bench(tmp_path, monkeypatch, write=False, mutate=mut, probe_py='PROTOCOL_KEYS = frozenset({"offsets_seconds"})\n')
     s = b.sample("train", 0)
     assert s.meta == {"facts": {"annotated_second": 5.0, "clip_seconds": 10.0}}  # never offsets, labels or columns

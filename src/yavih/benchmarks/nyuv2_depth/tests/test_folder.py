@@ -6,7 +6,7 @@ Three groups:
 - file-level checks (yaml, manifest, listing, README.md / setup.md sections, prepare rules, the PNG codec, the
   manifest freeze helpers, the output-contract geometry) that need only numpy + pyyaml (+ scipy / pillow where
   noted);
-- checks through the core (``Benchmark``, ``RawStream``, ``probe.py``'s ``MetricSpec``): always run;
+- checks through the core (``Benchmark``, ``RawStream``, ``eval.py``'s ``MetricSpec``): always run;
 - real-data checks, run when the derived root resolves through yavih's config resolver
   (``YAVIH_DATA__NYUV2_DEPTH__DERIVED_ROOT``, the site config ``[data.nyuv2_depth] derived_root``) and is built,
   skipped otherwise; the GeoNet source cross-checks and the re-freeze check additionally need ``geonet_root``.
@@ -74,7 +74,7 @@ def test_folder_lint_clean():
 
 def test_folder_specific_files():
     """The folder layout is ``yavih bench lint``'s; these are the files only this folder ships."""
-    for name in ("probe.py", "curation.json", "rgb_png.sha256.csv.gz", "prepare/derive_targets.py", "prepare/recontainer_png.py"):
+    for name in ("eval.py", "curation.json", "rgb_png.sha256.csv.gz", "prepare/derive_targets.py", "prepare/recontainer_png.py"):
         assert (HERE / name).exists(), name
     assert not (HERE / "classes.csv").exists()  # a grid readout has none
     scripts = sorted(p.name for p in (HERE / "prepare").glob("*.sh"))
@@ -82,7 +82,7 @@ def test_folder_specific_files():
 
 
 def test_yaml_schema_and_changelog(spec):
-    assert spec["schema_version"] == 2 and spec["name"] == "nyuv2_depth" == HERE.name and spec["readout"] == "grid"
+    assert spec["schema_version"] == 3 and spec["name"] == "nyuv2_depth" == HERE.name and spec["scorer"] == "grid"
     assert spec["protocol_version"] == spec["changelog"][-1]["version"] == 1
     assert [c["version"] for c in spec["changelog"]] == [1] and spec["changelog"][0]["supersedes"] == []
 
@@ -159,7 +159,7 @@ def test_metric_names_resolve(spec):
 
 
 def test_contracts_and_protocol(spec, derive):
-    assert spec["streams"] == {"image": {"kind": "image", "media_column": "rel_media", "root": "derived_root",
+    assert F.file_fields(spec) == {"image": {"kind": "image", "media_column": "rel_media", "root": "derived_root",
                                          "layout": "dir", "layout_params": {}, "required": True}}
     ic = spec["input_contract"]
     assert list(ic["handed_over"]) == ["image"] and "PNG" in ic["handed_over"]["image"]
@@ -182,8 +182,8 @@ def test_contracts_and_protocol(spec, derive):
 
 
 def test_external_entry_matches_probe_py(spec):
-    """benchmark.yaml external[0] == probe.py's constants (read with ast: importing probe.py needs the core)."""
-    tree = ast.parse((HERE / "probe.py").read_text(encoding="utf-8"))
+    """benchmark.yaml external[0] == eval.py's constants (read with ast: importing eval.py needs the core)."""
+    tree = ast.parse((HERE / "eval.py").read_text(encoding="utf-8"))
     consts = {t.id: n.value.value for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
               for t in n.targets if isinstance(t, ast.Name)}
     (ext,) = spec["external"]
@@ -432,8 +432,8 @@ def test_reader_missing_png_is_missing_media(tmp_path, rows, png):
         list(b.reader("train", rows=range(2, 3), batch_size=1, canaries=0))[0].streams["image"].bytes()
 
 
-def _probe_module():
-    return F.load_module(HERE / "probe.py", "nyuv2_probe")
+def _eval_module():
+    return F.load_module(HERE / "eval.py", "nyuv2_probe")
 
 
 PROTO = {"max_depth": 10.0, "target_size": 224, "depth_param": "log", "source_size": [480, 640], "target_region": REGION}
@@ -456,10 +456,10 @@ class _FakeProbe3D:
 
 
 def test_probe_py_metrics_and_missing_package():
-    """probe.py: METRICS name Probe3D as external; without the package the assert-import fails with the pip line;
+    """eval.py: METRICS name Probe3D as external; without the package the assert-import fails with the pip line;
     with a Probe3D-semantics module the per-image numbers equal yavih's transcription."""
     pytest.importorskip("torch")
-    mod = _probe_module()
+    mod = _eval_module()
     assert set(mod.METRICS) == {"d1", "d2", "d3", "rmse", "d1_floor"}
     assert all(m.external == "evals" and m.readouts == frozenset({"grid"}) for m in mod.METRICS.values())
     assert mod.METRICS["rmse"].higher_is_better is False and mod.METRICS["d1_floor"].kind == "floor"
@@ -483,7 +483,7 @@ def test_probe3d_real_package_matches_transcription():
     """When Probe3D (``evals``) is installed as setup.md says, its numbers equal yavih's transcription."""
     if not _has("evals"):
         pytest.skip("Probe3D not installed (" + F.load_yaml(HERE)["external"][0]["pip"] + ")")
-    mod = _probe_module()
+    mod = _eval_module()
     from yavih.metrics import depth as D
 
     rng = np.random.default_rng(1)

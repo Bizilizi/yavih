@@ -37,11 +37,14 @@ __version__: Final[str] = _package_version()
 
 #: Bumped when the tar layout, member names, sidecar or ``_meta.json`` schema change. Sidecars, ``_meta.json`` and
 #: ``NOT_APPLICABLE.json`` carry ``model`` + ``reading``; the sidecar's ``benchmark`` block carries ``input_hash`` and
-#: its components, the ``yavih`` block the writer's version and commit. Only this format is read.
-FEATURE_FORMAT_VERSION: Final[int] = 4
+#: its components, the ``yavih`` block the writer's version and commit. 5: the ``outputs`` block and per-key members
+#: ``{row}.{key}.{ext}`` of a declared ``output_contract.schema``; a default-schema shard is written exactly as in 4.
+FEATURE_FORMAT_VERSION: Final[int] = 5
+#: Formats the readers accept: a format-4 set is a default-schema set and stays usable (no re-extraction).
+READABLE_FEATURE_FORMATS: Final[tuple[int, ...]] = (4, 5)
 
-#: Bumped when the ``benchmark.yaml`` schema changes.
-BENCHMARK_SCHEMA_VERSION: Final[int] = 2
+#: Bumped when the ``benchmark.yaml`` schema changes. 3: ``fields:`` (file and cell storage) replaces ``streams:``; hashes unchanged.
+BENCHMARK_SCHEMA_VERSION: Final[int] = 3
 
 #: Bumped when the ``result.json`` schema changes (``eval_hash``, ``model``, ``reading``, ...). 4: ``benchmark.folder_source``.
 RESULT_SCHEMA_VERSION: Final[int] = 4
@@ -61,15 +64,15 @@ DEFAULT_TOLERANCE: Final[float] = 0.001
 PLAN_SCHEMA_VERSION: Final[int] = 3
 
 class _ReadoutVersions(Mapping):
-    """``{readout: version}`` read from the readout registry on first use (each ``yavih/readouts/<name>.py``, or an
-    entry-point readout, declares its own ``VERSION``). Any change to a readout's head,
+    """``{scorer: version}`` read from the scorer registry on first use (each ``yavih/readouts/<name>.py``, an
+    entry-point scorer or a folder's ``eval.py`` declares its own ``VERSION``). Any change to a scorer's head,
     loss, floor, metric or protocol bumps its version and thereby forks ``protocol_hash``. Read-only;
     this module stays stdlib-only at import time."""
 
     def _map(self) -> dict[str, int]:
         from yavih.readouts import registry
 
-        return {name: r.version for name, r in registry.all_readouts().items()}
+        return {name: r.version for name, r in registry.all_scorers().items()}
 
     def __getitem__(self, key: str) -> int:
         return self._map()[key]
@@ -114,8 +117,12 @@ class _ReadoutNames(Sequence):
 #: Per-readout version, from the readout registry.
 READOUT_VERSION: Final[Mapping[str, int]] = _ReadoutVersions()
 
-#: The ``probe_hash`` payload schema tag.
+#: The ``probe_hash`` payload schema tag (the configuration hash of a ``probe`` scorer).
 PROBE_SCHEMA: Final[str] = "yavih-probe-1"
+
+#: The configuration-hash payload schema tag of a non-probe scorer (``hashing.scorer_config_hash``): the constant
+#: ``{schema, scorer, version}`` that fills the second slot of ``eval_hash`` when nothing is trained.
+SCORER_SCHEMA: Final[str] = "yavih-scorer-1"
 
 #: The ``protocol_hash`` payload schema tag: ``protocol_hash = H(input_hash, scoring_hash)`` over the benchmark's
 #: declaration only (manifest content, typed yaml views, declared versions; no source file since 5). Bumped when
@@ -151,6 +158,7 @@ READOUTS: Final[Sequence[str]] = _ReadoutNames()
 __all__ = [
     "__version__",
     "FEATURE_FORMAT_VERSION",
+    "READABLE_FEATURE_FORMATS",
     "BENCHMARK_SCHEMA_VERSION",
     "RESULT_SCHEMA_VERSION",
     "RESULTS_FILE_VERSION",
@@ -159,6 +167,7 @@ __all__ = [
     "DEFAULT_TOLERANCE",
     "READOUT_VERSION",
     "PROBE_SCHEMA",
+    "SCORER_SCHEMA",
     "PROTOCOL_SCHEMA",
     "DESCRIBE_SCHEMA",
     "GIT_HASH",  # noqa: F822 - resolved lazily by the module __getattr__

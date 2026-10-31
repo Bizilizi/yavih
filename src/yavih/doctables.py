@@ -14,7 +14,7 @@ comments::
     <!-- yavih:bench-table index end -->
 
 and this module renders the block from each folder's ``benchmark.yaml`` (read with pyyaml; nothing is loaded or
-scanned; ``probe.py`` is only tested for existence), so adding a folder changes no hand-written row. ``python -m yavih.doctables --write`` rewrites the blocks
+scanned; ``eval.py`` is only tested for existence), so adding a folder changes no hand-written row. ``python -m yavih.doctables --write`` rewrites the blocks
 in place; ``--check`` exits 1 when a committed block differs (the repo test does the same). ``yavih bench list
 --fmt md`` prints the ``readme`` table for any set of discoverable folders.
 """
@@ -29,6 +29,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from yavih.fields import cell_fields, file_fields
 
 __all__ = ["KINDS", "SOURCE_WORDS", "UNTAGGED", "render", "replace_blocks", "repo_documents", "main"]
 
@@ -72,7 +74,9 @@ def _rows(y: Mapping[str, Any]) -> str:
 
 
 def _media(y: Mapping[str, Any]) -> str:
-    kinds = [str((s or {}).get("kind")) for s in (y.get("streams") or {}).values()]
+    """The kinds handed over: file fields by media kind, cell fields as ``<kind> (cell)`` (a caption: ``text (cell)``)."""
+    kinds = [str((s or {}).get("kind")) for s in file_fields(y.get("fields")).values()]
+    kinds += [f"{(c or {}).get('kind')} (cell)" for c in cell_fields(y.get("fields")).values()]
     seen: list[str] = []
     for k in kinds:
         if k not in seen:
@@ -90,7 +94,7 @@ def _readout(y: Mapping[str, Any]) -> str:
         extra.append("folds")
     if (y.get("splits") or {}).get("floor"):
         extra.append("floor role")
-    return f"{y.get('readout')}" + (f" ({', '.join(extra)})" if extra else "")
+    return f"{y.get('scorer')}" + (f" ({', '.join(extra)})" if extra else "")
 
 
 def _source(y: Mapping[str, Any]) -> str:
@@ -133,7 +137,7 @@ def _index(folders: Mapping[str, Path]) -> str:
         rows = []
         for name in names:
             y = _yaml(folders[name])
-            rows.append([f"[{name}]({name}/README.md)", f"{y.get('title')}{_aliases(y)}", str(y.get("readout")),
+            rows.append([f"[{name}]({name}/README.md)", f"{y.get('title')}{_aliases(y)}", str(y.get("scorer")),
                          _media(y), f"{_source(y)} (obtain: {_tier(y)})"])
         blocks.append(f"### {cap} ({len(names)})\n\n" + _table(["Benchmark", "Description", "Readout", "Media", "Source"], rows))
     return "\n\n".join(blocks)
@@ -158,9 +162,9 @@ def _readme(folders: Mapping[str, Path]) -> str:
     rows = []
     for name, folder in folders.items():
         y = _yaml(folder)
-        rows.append([f"`{name}`", f"{y.get('title')}{_aliases(y)}", f"`{y.get('readout')}`",
+        rows.append([f"`{name}`", f"{y.get('title')}{_aliases(y)}", f"`{y.get('scorer')}`",
                      f"`{(y.get('metrics') or {}).get('headline')}`", _source(y), _rows(y)])
-    return _table(["benchmark", "task", "readout", "headline", "source", "frozen rows"], rows)
+    return _table(["benchmark", "task", "scorer", "headline", "source", "frozen rows"], rows)
 
 
 def _data(folders: Mapping[str, Path]) -> str:
@@ -176,7 +180,7 @@ def _data(folders: Mapping[str, Path]) -> str:
                      f"`{src.get('kind')}`" + (f"; {sbytes / 1e9:.1f} GB = `source.bytes`" if isinstance(sbytes, (int, float)) else ""),
                      f"{gb:g} GB = `budget.media_gb`" if isinstance(gb, (int, float)) else "TODO",
                      _rows(y), _media(y), _tier(y), f"`yavih bench info {name} --setup`"])
-    return _table(["benchmark", "readout", "source", "media touched (frozen)", "frozen rows", "handed over", "obtain",
+    return _table(["benchmark", "scorer", "source", "media touched (frozen)", "frozen rows", "handed over", "obtain",
                    "how to stage it"], rows)
 
 
@@ -194,7 +198,7 @@ def _and(words: list[str]) -> str:
 
 
 def _folder(folders: Mapping[str, Path]) -> str:
-    """The benchmark-folder page's "Packaged benchmarks" table: readout, label kind, streams, headline, ``probe.py``."""
+    """The benchmark-folder page's "Packaged benchmarks" table: readout, label kind, streams, headline, ``eval.py``."""
     rows = []
     for name, folder in folders.items():
         y = _yaml(folder)
@@ -202,16 +206,16 @@ def _folder(folders: Mapping[str, Path]) -> str:
         label = str((((y.get("manifest") or {}).get("label")) or {}).get("kind"))
         if label == "none" and y.get("targets"):
             label += " (targets)"
-        streams = ", ".join(y.get("streams") or {})
+        streams = ", ".join([*file_fields(y.get("fields")), *(f"{n} (cell)" for n in cell_fields(y.get("fields")))])
         if ((y.get("input_contract") or {}).get("materialize")) is not None:
             streams += " (materialized)"
-        probe = "yes" if (folder / "probe.py").is_file() else ""
+        probe = "yes" if (folder / "eval.py").is_file() else ""
         if probe and y.get("external"):
             probe += ", `external`"
         rows.append([f"{name}{' (' + _aliases(y)[2:] + ')' if _aliases(y) else ''}",
-                     f"{y.get('readout')}" + (f" ({len(folds)} folds)" if folds else ""), label, streams,
+                     f"{y.get('scorer')}" + (f" ({len(folds)} folds)" if folds else ""), label, streams,
                      f"`{(y.get('metrics') or {}).get('headline')}`", probe])
-    return _table(["benchmark", "readout", "label kind", "streams", "headline", "probe.py"], rows)
+    return _table(["benchmark", "scorer", "label kind", "streams", "headline", "eval.py"], rows)
 
 
 def _readout_groups(folders: Mapping[str, Path]) -> str:
@@ -220,7 +224,7 @@ def _readout_groups(folders: Mapping[str, Path]) -> str:
 
     groups: dict[str, list[str]] = {r: [] for r in registry.names()}
     for name, folder in folders.items():
-        groups.setdefault(str(_yaml(folder).get("readout")), []).append(name)
+        groups.setdefault(str(_yaml(folder).get("scorer")), []).append(name)
     return "Packaged benchmarks per readout: " + " · ".join(
         f"`{r}` {', '.join(names)}" for r, names in groups.items() if names) + "."
 

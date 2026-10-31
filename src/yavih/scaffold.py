@@ -1,7 +1,7 @@
-"""``yavih bench new <name> [--readout R] [--like B] [--dir D]``: scaffold a benchmark folder.
+"""``yavih bench new <name> [--scorer S] [--like B] [--dir D]``: scaffold a benchmark folder.
 
 The scaffold is a copy of an existing folder's machinery (``--like``: its frozen manifest, classes and bridge
-template, and any ``reader.py`` / ``probe.py`` with a ``# TODO: copied verbatim …`` banner as their first lines; never
+template, and any ``reader.py`` / ``eval.py`` with a ``# TODO: copied verbatim …`` banner as their first lines; never
 its ``curation.json``, notes, tests, prepare steps or header image) with ``benchmark.yaml`` renamed and reset to
 ``protocol_version`` 1, and a README.md, setup.md, ``make_manifest.py``, ``prepare/`` and ``tests/test_folder.py``
 written from the folder contract, plus a ``header:`` block for the README header image
@@ -34,9 +34,11 @@ from typing import Any
 
 import yaml
 
+from yavih.fields import file_fields
+
 __all__ = ["DEFAULT_LIKE", "ScaffoldError", "new_benchmark", "scaffold_conformance"]
 
-#: The folder a readout's scaffold copies when ``--like`` is not given.
+#: The folder a scorer's scaffold copies when ``--like`` is not given.
 DEFAULT_LIKE: dict[str, str] = {"clf": "esc50", "seq": "ave", "grid": "nyuv2_depth", "box": "vggss_box"}
 #: Files of the ``--like`` folder that are written fresh instead of copied.
 _WRITTEN = {"README.md", "setup.md", "make_manifest.py", "benchmark.yaml"}
@@ -47,7 +49,7 @@ _SKIPPED_DIRS = {"notes", "tests", "prepare", "assets", "conformance", "__pycach
 _BANNERED = {
     "reader.py": "the reader of this benchmark's own layout (or delete it: without reader.py the generic "
                  "yavih.sample.iter_samples reads what benchmark.yaml declares)",
-    "probe.py": "this benchmark's own targets, metrics or authors' scorer (or delete it together with what "
+    "eval.py": "this benchmark's own targets, metrics or authors' scorer (or delete it together with what "
                 "benchmark.yaml takes from it)",
 }
 
@@ -75,7 +77,7 @@ TODO: the BibTeX entry of the paper
 ```
 
 ## In yavih
-TODO: what is scored, on which rows, with which readout. Readout `{y['readout']}`; headline `metrics.headline` =
+TODO: what is scored, on which rows, with which scorer. Scorer `{y['scorer']}`; headline `metrics.headline` =
 `{m['headline']}`; `protocol_version` {y['protocol_version']}. (Scaffolded from `{like}`: every number here is
 `{like}`'s until the manifest and protocol are replaced.) What the bridge gets and returns: see
 [setup.md](setup.md).
@@ -167,12 +169,12 @@ def _py(obj: Any, indent: int) -> str:
     return pprint.pformat(obj, width=max(40, 116 - indent), sort_dicts=False).replace("\n", "\n" + " " * indent)
 
 
-def _test_folder(y: dict[str, Any], like: str, *, readings: list[str], has_probe: bool) -> str:
+def _test_folder(y: dict[str, Any], like: str, *, readings: list[str], has_eval: bool) -> str:
     """``tests/test_folder.py`` of a scaffold: the shared checks of ``yavih.testing.folder``, pins of the values the
     scaffold carries (still ``like``'s), and ``pytest.skip("TODO: …")`` for the tests that need the benchmark's own
     data. Every test passes or skips on the fresh scaffold; ``bench lint`` reports each ``TODO:`` left."""
     name = y["name"]
-    streams = {k: (v or {}).get("kind") for k, v in (y.get("streams") or {}).items()}
+    streams = {k: (v or {}).get("kind") for k, v in file_fields(y.get("fields")).items()}
     clips = dict((y.get("budget") or {}).get("clips") or {})
     external = [e.get("name") for e in y.get("external") or []]
     head = f'''"""Folder tests of {name} (run: ``python -m pytest "$(yavih bench path {name})/tests" -q -p no:cacheprovider``).
@@ -196,7 +198,7 @@ HERE = F.folder_of(__file__)
 _isolated_yavih_home = F.isolated_yavih_home
 spec, rows = F.spec, F.rows
 
-READOUT = {y.get("readout")!r}
+READOUT = {y.get("scorer")!r}
 HEADLINE = {(y.get("metrics") or {}).get("headline")!r}
 STREAMS = {_py(streams, 10)}
 CLIPS = {_py(clips, 8)}
@@ -224,19 +226,19 @@ def test_splits_assigned_once(spec: dict, rows: list[dict[str, str]]):
 
 def test_metric_names_resolve(spec: dict):
     F.assert_metric_names_resolve(HERE, spec)
-    assert spec["readout"] == READOUT and spec["metrics"]["headline"] == HEADLINE
+    assert spec["scorer"] == READOUT and spec["metrics"]["headline"] == HEADLINE
 
 
 def test_input_contract(spec: dict):
     ic = spec["input_contract"]
-    assert {k: v["kind"] for k, v in spec["streams"].items()} == STREAMS
+    assert {k: v["kind"] for k, v in spec["fields"].items() if v.get("storage", "file") == "file"} == STREAMS
     assert set(ic["handed_over"]) == set(ic["info"]) == set(STREAMS)
 
 
 def test_output_contract_and_external(spec: dict):
     assert spec["output_contract"] == OUTPUT_CONTRACT
     assert [e["name"] for e in spec["external"] or []] == EXTERNAL
-    assert (HERE / "probe.py").is_file() is HAS_PROBE
+    assert (HERE / "eval.py").is_file() is HAS_EVAL
 
 
 # ----------------------------------------------------------------------------- README.md + prepare/
@@ -282,7 +284,7 @@ def test_reader_smoke_synthetic_raw():
     pytest.skip("TODO: write synthetic media for a few manifest rows and assert what Benchmark.reader hands over "
                 "(streams, info keys, meta, canaries)")
 '''
-    return head + f"HAS_PROBE = {has_probe!r}\n" + body
+    return head + f"HAS_EVAL = {has_eval!r}\n" + body
 
 
 def _dest(dir_: str | os.PathLike | None) -> Path:
@@ -297,7 +299,7 @@ def _dest(dir_: str | os.PathLike | None) -> Path:
     return Path(bp[0]).expanduser() if bp else Path.cwd()
 
 
-def new_benchmark(name: str, *, readout: str | None = None, like: str | None = None, dir: str | os.PathLike | None = None) -> Path:
+def new_benchmark(name: str, *, scorer: str | None = None, like: str | None = None, dir: str | os.PathLike | None = None) -> Path:
     """Write the scaffold of benchmark ``name`` and return its folder."""
     import re
 
@@ -307,21 +309,21 @@ def new_benchmark(name: str, *, readout: str | None = None, like: str | None = N
 
     if not re.fullmatch(r"[a-z][a-z0-9_]*", name or ""):
         raise ScaffoldError(f"benchmark name {name!r} must match [a-z][a-z0-9_]*")
-    if readout is not None and readout not in registry.names():
-        raise ScaffoldError(f"unknown readout {readout!r}; registered: {list(registry.names())}")
+    if scorer is not None and scorer not in registry.names():
+        raise ScaffoldError(f"unknown scorer {scorer!r}; registered: {list(registry.names())}")
     if like is None:
-        if readout is None:
-            raise ScaffoldError("give --readout (clf, seq, grid, box, …) or --like <benchmark>")
-        like = DEFAULT_LIKE.get(readout)
+        if scorer is None:
+            raise ScaffoldError("give --scorer (clf, seq, grid, box, …) or --like <benchmark>")
+        like = DEFAULT_LIKE.get(scorer)
         if like is None:
-            raise ScaffoldError(f"readout {readout!r} has no default folder to copy; give --like <benchmark>")
+            raise ScaffoldError(f"scorer {scorer!r} has no default folder to copy; give --like <benchmark>")
     src = resolve_folder(like)
     if src is None:
         raise ScaffoldError(f"--like {like!r} is not a benchmark folder (name, alias or path)")
     y = yaml.safe_load((src / "benchmark.yaml").read_text(encoding="utf-8"))
     like_name = str(y.get("name", src.name))
-    if readout is not None and y.get("readout") != readout:
-        raise ScaffoldError(f"--like {like_name} has readout {y.get('readout')!r}, not {readout!r}; pick a folder of that readout")
+    if scorer is not None and y.get("scorer") != scorer:
+        raise ScaffoldError(f"--like {like_name} has scorer {y.get('scorer')!r}, not {scorer!r}; pick a folder of that scorer")
     if resolve_folder(name) is not None and not Path(name).is_dir():
         raise ScaffoldError(f"a benchmark named {name!r} already resolves ({resolve_folder(name)}); pick another name")
     dest = _dest(dir) / name
@@ -384,10 +386,10 @@ def new_benchmark(name: str, *, readout: str | None = None, like: str | None = N
     tpl = dest / "bridge_template.py"
     readings = sorted(template_readings(tpl.read_text(encoding="utf-8"))) if tpl.is_file() else []
     (dest / "tests" / "test_folder.py").write_text(
-        _test_folder(y, like_name, readings=readings, has_probe=(dest / "probe.py").is_file()), encoding="utf-8")
+        _test_folder(y, like_name, readings=readings, has_eval=(dest / "eval.py").is_file()), encoding="utf-8")
     # the conformance fixture of the scaffold's (copied) protocol: re-recorded by the author once the protocol is theirs.
     # Recording needs the protocol's external package (Probe3D's `evals`, ...); absent here, the --like folder's fixture
-    # is copied with this folder's identity: the scoring path (manifest, classes, probe.py, metrics) is --like's unchanged
+    # is copied with this folder's identity: the scoring path (manifest, classes, eval.py, metrics) is --like's unchanged
     try:
         from yavih.benchmark import Benchmark
         from yavih.conformance import W_SKIPPED, ConformanceError, record, record_copied

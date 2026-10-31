@@ -97,7 +97,14 @@ def test_every_shipped_bridge_declares_a_v_or_av(path: Path) -> None:
     """The report groups a model's results by the ``reading`` string and ``report --join`` routes ``a``/``v``/``av``:
     any other spelling would split one model over two report rows."""
     readings = _template_readings(path)
-    assert readings and readings <= {"a", "v", "av"}, f"{path}: {readings}"
+    allowed = {"a", "v", "av"}
+    if path.name == "bridge_template.py":
+        import yaml
+
+        fields = yaml.safe_load((path.parent / "benchmark.yaml").read_text(encoding="utf-8")).get("fields") or {}
+        if all((f or {}).get("storage") == "cell" for f in fields.values()):
+            allowed = {"t"}  # nothing but text is handed over (a caption): the model reads text
+    assert readings and readings <= allowed, f"{path}: {readings}"
 
 
 def test_reading_vocabulary_is_documented_once() -> None:

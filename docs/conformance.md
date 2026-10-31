@@ -10,7 +10,7 @@ and the first stage of `yavih bench trial --synthetic`.
 ## The principle
 
 `protocol_hash` is computed from the frozen manifest, typed views of `benchmark.yaml` and declared versions
-(`protocol_version`, `READOUT_VERSION`). A folder's `probe.py` and `reader.py`, and yavih's own readouts and
+(`protocol_version`, `READOUT_VERSION`). A folder's `eval.py` and `reader.py`, and yavih's own readouts and
 metrics, may be refactored, re-implemented in another framework or ported by a third party without moving it. Two
 scores recorded under one hash are therefore comparable only if every implementation that claims the hash produces
 the same numbers. The fixture is the operational meaning of "the same": the numbers the folder's whole scoring path
@@ -23,13 +23,16 @@ do that); it asserts that nothing moved since the version was declared.
 
 ## What is checked
 
-Every packaged folder carries one fixture, whatever its readout. At check time `yavih.conformance.compute` runs:
+Every packaged folder carries one fixture, whatever its scorer. The population builder is the scorer's:
+`Scorer.conformance_population(ctx, tag)` when it declares one, else the built-in population of its family
+(`clf`, `seq`, `grid`, `box`); a scorer with neither has no fixture (`E_CONFORMANCE_UNSUPPORTED`). At check time
+`yavih.conformance.compute` runs:
 
 1. the readout's target construction on real manifest rows (`clf` labels and sets, `seq` segments, `box` cells;
    `grid` targets are fabricated, since dense targets live in site files);
 2. the floor outputs the readout defines (`Readout.floor_outputs`) from the drawn train rows;
 3. `yavih.readouts.base.evaluate_metrics` with the folder's resolved metric specs: the metrics registry with the
-   folder's `protocol` values, the folder's `probe.py` `METRICS` and `score` hook, the pinned `external` package
+   folder's `protocol` values, the folder's `eval.py` `METRICS` and `score` hook, the pinned `external` package
    where one exists, the floor role (avsync), the folds (esc50), the shuffled control (vggss_box);
 4. for a reading-routed `score` hook (one that takes `reading=`), once per reading in the hook's `READINGS` tuple.
 
@@ -97,7 +100,7 @@ concatenates them in `splits` order. Under folds, fold `k` scores the eval draw 
 split, and its training targets are the train draws (`role = train`, 64 rows each) of every other fold split; the
 folds' eval rows, targets and outputs are concatenated in fold order. `grid` draws its one train and one eval split
 with `role` = `train` / `eval`. Targets are what the readout builds from those manifest rows (or the folder's
-`probe.py` `targets` hook); `grid` targets are the fabricated maps above. The floor outputs are the readout's own
+`eval.py` `targets` hook); `grid` targets are the fabricated maps above. The floor outputs are the readout's own
 (`Readout.floor_outputs`) on the drawn train targets.
 
 **The derangement** of `n >= 2` items from tag `D` (`n < 2`: the identity): `u = stream(D, n)`, `perm = [0, …, n-1]`;
@@ -181,7 +184,7 @@ The fixture is keyed on `protocol_version`, not on the hash, so it answers the q
   passes: record the new hash on the newest changelog entry and list the old one under `supersedes`
   ([hashing: migration](hashing.md#migration)); nothing to re-record;
 - the fixture fails: bump `protocol_version` (a new changelog entry with `invalidates: true`), then `--record`;
-- the fixture fails but the protocol did not change (a bug fixed in `probe.py`, a wrong fixture): `--record
+- the fixture fails but the protocol did not change (a bug fixed in `eval.py`, a wrong fixture): `--record
   --same-version --reason TEXT`, which stores the reason; results under that version were produced by code that
   gave other numbers, and the registry's `folder_source` provenance tells them apart.
 

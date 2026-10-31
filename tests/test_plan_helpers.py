@@ -283,7 +283,7 @@ def fake_unit(root: Path, script: Path, *, mode: str = "ok", uid: str | None = N
         out = run_dir
         qh = probe_hash or QH
         done = os.path.join(run_dir, "probe", hashing.eval_hash(protocol_hash, qh)[:12], f"seed{seed or 0}", "DONE")
-        cmd = ["python", "-m", "yavih.cli", "probe", "run", run_dir, "--seeds", str(seed or 0)]
+        cmd = ["python", "-m", "yavih.cli", "eval", "run", run_dir, "--seeds", str(seed or 0)]
         sh, sp = None, None
     else:
         out = os.path.join(runs, "_report")

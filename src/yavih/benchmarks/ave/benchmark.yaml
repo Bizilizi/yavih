@@ -1,11 +1,11 @@
 # yavih benchmark folder — AVE audio-visual event localization (schema 2, seq readout). Rows: make_manifest.py
 # from the public AVE annotation and split files. People: README.md; the agent: setup.md.
-schema_version: 2
+schema_version: 3
 name: ave
 aliases: []
 title: AVE audio-visual event localization (28 events + background, per-second labels)
 capability: [audio-visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
-readout: seq
+scorer: seq
 protocol_version: 1
 changelog:
   - version: 1
@@ -114,8 +114,9 @@ splits:
   unused: [val]
   min_eval_coverage: 0.95
 
-streams:
+fields:
   video:
+    storage: file
     kind: video
     media_column: rel_media
     root: media_root
@@ -123,6 +124,7 @@ streams:
     layout_params: {}
     required: true
   audio:
+    storage: file
     kind: audio
     media_column: rel_media
     root: media_root

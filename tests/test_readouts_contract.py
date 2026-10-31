@@ -1,6 +1,6 @@
-"""Readout contract (docs/readouts.md, docs/results.md, folder ``probe.py``): media-coordinate
+"""Readout contract (docs/readouts.md, docs/results.md, folder ``eval.py``): media-coordinate
 binning (seq by absolute second, grid/box by full-frame fractions over the target region), per-sample
-pos for box incl. the shuffled control, the folder ``probe.py`` hooks (targets, external scorer), the
+pos for box incl. the shuffled control, the folder ``eval.py`` hooks (targets, external scorer), the
 assert-import of the authors' packages (exit 3 with the pip line, version recorded), and the
 lm-evaluation-harness results store + samples file. Reuses the fakes of ``test_readouts.py``."""
 
@@ -259,7 +259,7 @@ def test_box_constant_pos_still_constant(tmp_path, fakes):
     assert fakes[0]["pos"] == (nv + 3, 4)
 
 
-# ============================================================================ folder probe.py + external packages
+# ============================================================================ folder eval.py + external packages
 
 
 def _fake_package(root: Path, name: str, version: str) -> Path:
@@ -273,7 +273,7 @@ def _fake_package(root: Path, name: str, version: str) -> Path:
 
 
 PROBE_PY = '''
-"""Folder probe.py fixture: an external metric computed by the authors' package."""
+"""Folder eval.py fixture: an external metric computed by the authors' package."""
 from types import SimpleNamespace as MetricSpec  # the registry's MetricSpec shape; the driver reads attributes only
 
 import numpy as np
@@ -310,7 +310,7 @@ def _external_world(tmp_path: Path, *, with_targets_hook: bool = False):
     src = PROBE_PY.replace("from yavih.external import require  # noqa: F401 - the assert-import path when the core module exists\n    ", "")
     if with_targets_hook:
         src += "\ndef targets(bench, split, rows):\n    return np.zeros(len(rows), dtype=np.int64)\n"
-    (folder / "probe.py").write_text(textwrap.dedent(src))
+    (folder / "eval.py").write_text(textwrap.dedent(src))
     bench.folder = folder
     run = tmp_path / "runs" / bench.name / MODEL / READING
     for split in ("train", "val"):
@@ -358,11 +358,11 @@ def test_external_finer_identity_recorded_by_the_folder_reaches_the_result(tmp_p
     from yavih import external
 
     bench, run = _external_world(tmp_path)
-    src = (bench.folder / "probe.py").read_text().replace(
+    src = (bench.folder / "eval.py").read_text().replace(
         "    import fakeauthors\n",
         "    import fakeauthors\n    from yavih.external import record_version\n    record_version('fakeauthors', '1.0+abc1234 (scorer.py sha256 0123456789ab)')\n",
     )
-    (bench.folder / "probe.py").write_text(src)
+    (bench.folder / "eval.py").write_text(src)
     monkeypatch.syspath_prepend(str(_fake_package(tmp_path / "site", "fakeauthors", "1.0")))
     external.reset()
     res = probe(run, bench=bench, cfg=clf_cfg(3))
@@ -488,7 +488,7 @@ def test_samples_cover_the_floor_role(tmp_path, fakes):
     d = clf_yaml("avsync_like", n_classes=3, floor=("stationary",), controls=["acc_floor_arm", "floor_violated"],
                  protocol_extra={"floor_sigmas": 3.0, "offsets_seconds": [-1.0, 0.0, 1.0]})
     rows = clf_rows("train", 12, 3) + clf_rows("val", 6, 3) + clf_rows("stationary", 4, 3)
-    bench = FakeBench(d, rows, classes_list(3), probe_module=avsync_probe())
+    bench = FakeBench(d, rows, classes_list(3), eval_module=avsync_probe())
     run = tmp_path / "runs" / bench.name / MODEL / READING
     for split in ("train", "val", "stationary"):
         labels = np.asarray([r["label_ids"] for r in rows if r["split"] == split])
@@ -506,3 +506,52 @@ def test_result_dir_unchanged_by_the_store(tmp_path, fakes):
     res = probe(run, bench=bench, cfg=clf_cfg(3))
     assert res[0].path.parent == result_dir(run, bench.protocol_hash, hashing.probe_hash(clf_cfg(3)), 0)
     assert (res[0].path.parent / "DONE").exists()
+
+
+def test_sample_lines_of_a_folder_scorer_carry_per_clip_values():
+    from yavih.readouts.samples import sample_lines
+
+    part = {"role": "eval", "rows": [3, 7], "clip_ids": ["a", "b"], "values": {"clap": [0.25, float("nan")], "kl": [1.0, 2.0]}}
+    lines = sample_lines([part], readout="audiocaps_t2a", seed=0)
+    assert lines == [
+        {"clip_id": "a", "row": 3, "seed": 0, "role": "eval", "prediction": {"clap": 0.25, "kl": 1.0}, "target": None},
+        {"clip_id": "b", "row": 7, "seed": 0, "role": "eval", "prediction": {"clap": None, "kl": 2.0}, "target": None},
+    ]
+    with pytest.raises(ValueError, match="disagree"):
+        sample_lines([{**part, "values": {"kl": [1.0]}}], readout="x", seed=0)
+
+
+def test_a_folder_metric_may_bring_its_own_interval():
+    from yavih.metrics import intervals
+    from yavih.metrics.registry import MetricSpec
+
+    seen = []
+
+    def own(kind, outputs, targets, protocol, split_meta):
+        seen.append((kind, outputs))
+        return (0.25, 0.75)
+
+    spec = MetricSpec(name="kad_x", fn=lambda *a: 0.5, readouts=frozenset({"some_folder"}), ci=frozenset({"bootstrap_clip"}), interval=own)
+    assert intervals.interval("bootstrap_clip", "kad_x", "OUT", None, {}, {}, spec=spec) == [0.25, 0.75]
+    assert seen == [("bootstrap_clip", "OUT")]
+    with pytest.raises(ValueError, match="per_clip or an interval"):
+        MetricSpec(name="kad_y", fn=lambda *a: 0.5, readouts=frozenset({"some_folder"}), ci=frozenset({"bootstrap_clip"}))
+
+
+def test_a_failing_folder_scorer_runs_once_per_population():
+    from yavih.readouts.base import ProbeRefused, evaluate_metrics
+    from yavih.metrics.registry import MetricSpec
+
+    calls = []
+
+    def scorer(inputs):
+        calls.append(inputs)
+        raise RuntimeError("CUDA out of memory")
+
+    def spec(name, kind="metric", floor_of=()):
+        return MetricSpec(name=name, fn=lambda *a: 0.0, readouts=frozenset({"f"}), kind=kind, external="pkg", floor_of=floor_of)
+
+    specs = {"metrics": {"a": spec("a"), "b": spec("b"), "c": spec("c")}, "floors": {"a_floor": spec("a_floor", "floor", ("a",))}}
+    with pytest.raises(ProbeRefused, match="CUDA out of memory") as e:
+        evaluate_metrics(specs, outputs="OUT", targets=None, protocol={}, split_meta={}, floor_outputs="FLOOR", scorer=scorer)
+    assert calls == ["OUT", "FLOOR"] and e.value.message.count("CUDA out of memory") == 4

@@ -1358,7 +1358,7 @@ def results_root(
 
 def configured_scratch_root(env: Mapping[str, str] | None = None, config: dict | None = None) -> Path | None:
     """The configured scratch root: ``$YAVIH_SCRATCH`` / ``[scratch] root`` (env beats files) → ``$SLURM_TMPDIR``
-    → ``None`` (never ``TMPDIR``). ``yavih exec`` and ``probe run`` share it: without one a probe reads the
+    → ``None`` (never ``TMPDIR``). ``yavih exec`` and ``eval run`` share it: without one a probe reads the
     features in place (memmap backend, ``W_SIZE``) instead of staging them."""
     return _settings(env, config).configured_scratch_root()
 

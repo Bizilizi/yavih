@@ -28,7 +28,7 @@ metric is the segment accuracy over every segment of the test set (`compute_acc`
 
 ### Protocol
 
-`readout: seq`, `T = 10`: the probe reads frozen audio-visual tokens that carry a time coordinate and predicts one
+`scorer: seq`, `T = 10`: the probe reads frozen audio-visual tokens that carry a time coordinate and predicts one
 of 29 classes (28 events + `background` at index 28) for every one-second segment `s = 0 … 9` of the media;
 segment `s` carries the row's category iff `event_start ≤ s < event_end`, else `background` (targets derived from
 the manifest, never stored). `protocol_version: 1`.
