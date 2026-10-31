@@ -1705,6 +1705,16 @@ def _headline_name(bench_name: str | None, bench_ref: str | None, cache: dict[st
     return cache[ref]
 
 
+def cmd_report_paired(ns: argparse.Namespace) -> Envelope:
+    from yavih.report.paired import PairedError, paired, paired_text
+
+    try:
+        res = paired(ns.first, ns.second, metrics=ns.metric, samples=ns.bootstrap_samples, seed=ns.bootstrap_seed, sample_seed=ns.seed)
+    except (PairedError, OSError) as e:
+        raise CliError("E_USAGE", str(e), exit_code=EXIT_USAGE) from e
+    return Envelope(data=res, text=paired_text(res))
+
+
 def cmd_report_build(ns: argparse.Namespace) -> Envelope:
     from yavih.report import report
 
@@ -2254,6 +2264,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--suite", default=None, metavar="S", help="append the suite's completeness per model (done / missing / join-missing)")
     s.add_argument("--registry", default=None, metavar="DIR", help="a model registry (yavih registry export): its accepted entries join the table as rows, under the same comparability rule")
     s.set_defaults(func=cmd_report_build)
+    s = rsub.add_parser("paired", parents=[common_nr],
+                        help="per-clip paired differences between two systems' samples files (eval run --log-samples) on their common clips")
+    s.add_argument("first", metavar="<samples_first.jsonl>")
+    s.add_argument("second", metavar="<samples_second.jsonl>")
+    s.add_argument("--metric", action="append", default=None, metavar="M", help="only these metrics (repeatable); default every common one")
+    s.add_argument("--bootstrap-samples", type=int, default=2000, metavar="N")
+    s.add_argument("--bootstrap-seed", type=int, default=0, metavar="S")
+    s.add_argument("--seed", type=int, default=None, metavar="S", help="the probe seed to read when a samples file holds several")
+    s.set_defaults(func=cmd_report_paired)
 
     # registry
     sp = sub.add_parser("registry", parents=[common_r], help="the model registry: export scores from a results store, check a registry")
