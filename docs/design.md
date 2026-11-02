@@ -29,6 +29,12 @@ prepare ──► extract ──► validate ──► probe ──► report
                           manifest     readout   eval_hash
 ```
 
+The same pipeline carries benchmarks that are not probes. A generation benchmark (`vggsounder_v2a`,
+`audiocaps_t2a`) declares an output schema (`audio: wav`), its bridge returns one generated clip per row with
+the sampling budget it used, `validate` checks the clips through the `wav` codec and the seeded rerun, and the
+"probe" step is the folder's own scorer (`eval.py`), which wraps the evaluation code the folder pins. A
+training-free readout (`knn`) scores stored features as they are.
+
 | stage | who | output |
 |---|---|---|
 | prepare | the agent, following the folder's `setup.md`; `yavih bench verify --census` | media on disk, verified manifest, coverage, the site's media-info table |
