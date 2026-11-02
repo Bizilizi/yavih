@@ -54,7 +54,7 @@ def test_readout_descriptors_import_without_torch():
             "from yavih.readouts import registry; from yavih.benchmark import Benchmark\n"
             "print(registry.names(), Benchmark.load('esc50').protocol_hash[:12])")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert out.returncode == 0 and "('clf', 'seq', 'grid', 'box')" in out.stdout, out.stderr
+    assert out.returncode == 0 and "('clf', 'seq', 'grid', 'box', 'knn')" in out.stdout, out.stderr
 
 
 def _toy_readout(module: str = "toy_readout_mod") -> registry.Scorer:

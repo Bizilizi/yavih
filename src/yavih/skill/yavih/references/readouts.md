@@ -1,6 +1,6 @@
 # Readouts reference — what is measured, floors, controls, results
 
-One protocol, one readout per benchmark (`benchmark.yaml[readout]`): `clf`, `seq`, `grid`, `box`.
+One protocol, one scorer per benchmark (`benchmark.yaml[scorer]`): the probes `clf`, `seq`, `grid`, `box`; `knn` (stateless, in the `clf` family: a weighted 20-nearest-neighbour vote over mean-pooled features, nothing trained); or a folder's own scorer in its `eval.py` (the generation benchmarks).
 The probe is pinned (`ProbeConfig.pinned(readout)`); any other config needs `YAVIH_TESTING=1` and
 marks the result `standard: false` (never comparable). Features are read from validated shards
 (`_meta.json` required); train rows = union of `splits.train` present rows, eval = `splits.eval`,

@@ -39,7 +39,7 @@ from yavih.fields import file_fields
 __all__ = ["DEFAULT_LIKE", "ScaffoldError", "new_benchmark", "scaffold_conformance"]
 
 #: The folder a scorer's scaffold copies when ``--like`` is not given.
-DEFAULT_LIKE: dict[str, str] = {"clf": "esc50", "seq": "ave", "grid": "nyuv2_depth", "box": "vggss_box"}
+DEFAULT_LIKE: dict[str, str] = {"clf": "esc50", "seq": "ave", "grid": "nyuv2_depth", "box": "vggss_box", "knn": "esc50"}
 #: Files of the ``--like`` folder that are written fresh instead of copied.
 _WRITTEN = {"README.md", "setup.md", "make_manifest.py", "benchmark.yaml"}
 #: Files of the ``--like`` folder that are not copied: its own re-freeze record.

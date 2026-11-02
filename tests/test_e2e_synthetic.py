@@ -71,7 +71,11 @@ def _extract_all(bench_name: str, bridge_file: Path, run_dir: Path, splits: list
             )
 
 
-@pytest.mark.parametrize("readout", T.READOUTS)
+#: the probe scorers (this test trains under ProbeConfig.fast(); knn, stateless, has its own tests/test_knn.py)
+PROBE_READOUTS = tuple(r for r in T.READOUTS if r in HEADLINE)
+
+
+@pytest.mark.parametrize("readout", PROBE_READOUTS)
 def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tmp_path, monkeypatch):
     from yavih.benchmark import Benchmark
     from yavih.probes.config import ProbeConfig

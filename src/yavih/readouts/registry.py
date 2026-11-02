@@ -42,7 +42,7 @@ __all__ = [
 ]
 
 #: The scorer modules shipped with yavih, in documentation order.
-BUILTIN: tuple[str, ...] = ("yavih.readouts.clf", "yavih.readouts.seq", "yavih.readouts.grid", "yavih.readouts.box")
+BUILTIN: tuple[str, ...] = ("yavih.readouts.clf", "yavih.readouts.seq", "yavih.readouts.grid", "yavih.readouts.box", "yavih.readouts.knn")
 ENTRY_POINT_GROUP = "yavih.scorers"
 #: ``Scorer.kind``: ``probe`` trains the shared pinned head; ``stateless`` scores stored outputs without training;
 #: ``direct`` scores stored predictions (a folder's own or an authors' scorer).

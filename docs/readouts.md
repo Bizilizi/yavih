@@ -51,7 +51,8 @@ the source run directory.
 
 Scorers are not hard-coded. `yavih.readouts.registry` holds one `Scorer` descriptor per scorer; a scorer
 module exports `SCORER = Scorer(...)` and a driver (`score` on the descriptor, or `run_<name>(ctx)`). The
-built-in modules are `yavih.readouts.{clf, seq, grid, box}` (kind `probe`); a package adds one through the
+built-in modules are `yavih.readouts.{clf, seq, grid, box}` (kind `probe`) and `yavih.readouts.knn` (kind `stateless`,
+family `clf`); a package adds one through the
 entry-point group `yavih.scorers`; a benchmark folder adds its own through `eval.py` (`SCORER`, registered under
 the folder's name). `benchmark.yaml` validation, `protocol_hash` (the scorer `version`), the pinned configuration
 and its hash, the floor outputs, eligibility, the dense checks of `features validate` and `plan`, the conformance
@@ -486,3 +487,17 @@ scale 64) of their task coordinate; queries are initialized from sincos of the t
   `audio_blind = not (McNemar z over paired acc@0.5 successes > 3)`.
 - Eligibility (validate): both named streams are present, the visual stream covers at least
   `min_cell_coverage` of the cells (median over the sample), and any `requires.annotated_frame` condition holds.
+
+## knn
+
+- Kind `stateless`, family `clf`: nothing is trained and nothing depends on the seed. Inputs: features
+  `[n, N, D]`, mean-pooled over the tokens and L2-normalized; `pos` is ignored. `readout_params: {}`; the train
+  split is required (it holds the voters).
+- Scores: each eval clip's `K = 20` most similar train clips by cosine similarity vote with weights
+  `exp(similarity / 0.07)`, normalized to sum to 1 (weighted kNN, as in DINO's evaluation); single-label train
+  targets vote one-hot, multi-label ones their multi-hot rows. Ties in similarity go to the lower train row. The
+  `[n_eval, C]` scores are `clf` outputs, so every `clf` metric, floor, interval, control and samples line applies;
+  folds run one vote per held-out fold.
+- `K`, the temperature and the pooling are part of `knn`'s `VERSION`; numpy only, no GPU.
+- Use: a cheap first look at a bridge's features, and a check on how much of a probe's score comes from training
+  the head.

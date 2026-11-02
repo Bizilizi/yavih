@@ -987,9 +987,12 @@ def test_make_synthetic_benchmark_folder_is_valid(tmp_path, readout):
     assigned = s["train"] + s["eval"] + s["floor"] + s["unused"] + (s["folds"] or [])
     assert sorted(assigned) == sorted({r["split"] for r in rows})
     # metrics resolve in the registry for this readout; protocol keys declared
-    specs = dict(R.resolve_names(spec["metrics"]["list"], readout, kinds=["metric", "disclosure"]))
-    specs.update(R.resolve_names(spec["metrics"]["floors"], readout, kinds=["floor"]))
-    specs.update(R.resolve_names(spec["metrics"]["controls"], readout, kinds=["control"]))
+    from yavih.readouts import registry as scorers
+
+    families = scorers.get(readout).families()  # a scorer in another's family (knn: clf) serves its metrics
+    specs = dict(R.resolve_names(spec["metrics"]["list"], families, kinds=["metric", "disclosure"]))
+    specs.update(R.resolve_names(spec["metrics"]["floors"], families, kinds=["floor"]))
+    specs.update(R.resolve_names(spec["metrics"]["controls"], families, kinds=["control"]))
     for key in R.protocol_keys_for(specs.values()):
         assert key in spec["protocol"], key
     assert spec["metrics"]["headline"] in spec["metrics"]["list"]

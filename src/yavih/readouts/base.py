@@ -2014,7 +2014,8 @@ def _probe(
             if log_samples:
                 from yavih.readouts.samples import sample_lines
 
-                samples = sample_lines(blocks.get("samples") or [], readout=readout, seed=seed, protocol=ctx.protocol)
+                family = scorer_of(readout).family or readout  # a scorer in another's family writes that family's lines
+                samples = sample_lines(blocks.get("samples") or [], readout=family, seed=seed, protocol=ctx.protocol)
             results.append(ProbeResult("ok", seed, path, rec, None, samples=samples))
     except ProbeInterrupted:
         if staged is not None:
