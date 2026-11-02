@@ -1625,7 +1625,7 @@ def test_spec_is_frozen_and_raw_is_the_hashed_yaml(tmp_path):
     assert spec.manifest.upstream.curation.invariant_holds()
     assert bm.READOUT_PARAM_KEYS["box"] == {"grid", "visual_stream", "conditioning_stream", "shuffled_control", "shuffle_seed"}
     assert bm.PROTOCOL_FIXED_KEYS == set(raw["protocol"]) == {"clip_seconds", "train_draw", "views"}
-    assert bm.LAYOUTS == {"dir", "tar_index", "parquet"} and "window" not in bm.COLUMN_ROLES
+    assert bm.LAYOUTS == {"dir", "tar_index", "parquet", "npy_rows"} and "window" not in bm.COLUMN_ROLES
 
 
 def test_core_import_boundary_for_benchmark_module():
@@ -1733,3 +1733,35 @@ def test_parquet_cells_and_params_are_checked(tmp_path):
 
     with pytest.raises(SchemaError, match="layout_params"):
         Benchmark.from_dir(make_folder(tmp_path, "pqbad", header=TAR_HEADER, rows=TAR_ROWS, classes=TAR_CLASSES, mutate=mutate))
+
+
+def test_npy_rows_layout_hands_over_one_row(tmp_path, yavih_home, monkeypatch):
+    from yavih.media import npyrows
+
+    rows = [[r[0], r[1], r[2], f"clouds.npy#{i}"] for i, r in enumerate(TAR_ROWS)]
+
+    def mutate(s):
+        _tar_mutate(s)
+        s["data"]["tar_index"] = None
+        s["fields"]["audio"].update(kind="pointcloud", layout="npy_rows", layout_params={})
+        s["input_contract"]["info"]["audio"] = ["container", "bytes"]
+
+    folder = make_folder(tmp_path, "npybench", header=TAR_HEADER, rows=rows, classes=TAR_CLASSES, mutate=mutate)
+    media = tmp_path / "arrays"
+    media.mkdir()
+    arr = np.random.default_rng(0).standard_normal((5, 128, 3)).astype(np.float32)  # row 5 (b1) is beyond the array
+    np.save(media / "clouds.npy", arr)
+    npyrows._CACHE.clear()
+    with_roots(monkeypatch, "npybench", media_root=media)
+    b = Benchmark.from_dir(folder)
+    st = b.data_status()
+    assert st.per_split["train"]["present"] == 4 and st.per_split["eval"] == {"present": 1, "nominal": 2, "missing_first10": ["b1"]}
+    s = next(b.reader("eval"))
+    got = np.load(io.BytesIO(s.streams["audio"].bytes()), allow_pickle=False)
+    assert np.array_equal(got, arr[4]) and s.streams["audio"].info["container"] == "npy" and s.streams["audio"].path is None
+    rep = bench_verify(str(folder), decode_sample=3, data={"media_root": str(media)})
+    assert rep["media_fingerprint"] is not None and rep["decode_sample"]["failed"] == 0
+    arr[0, 0, 0] += 1.0
+    np.save(media / "clouds.npy", arr)
+    npyrows._CACHE.clear()
+    assert bench_verify(str(folder), decode_sample=0, data={"media_root": str(media)})["media_fingerprint"] != rep["media_fingerprint"]

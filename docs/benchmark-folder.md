@@ -207,12 +207,14 @@ fields:                            # name ([a-z][a-z0-9_]*) -> what each row han
     kind: video                    # video | audio | image (media: header facts, rules), or any [a-z][a-z0-9_]* (opaque: bytes + path; info only container, bytes)
     media_column: rel_media        # str or {split value | role: str}; a manifest column with {role: media, stream: <this>}
     root: media_root               # str or per split; a key of data.roots
-    layout: dir                    # optional, default dir: dir | tar_index | parquet (per split allowed)
+    layout: dir                    # optional, default dir: dir | tar_index | parquet | npy_rows (per split allowed)
     layout_params: {}              # optional; per layout, may be per split. parquet: {column, struct_field?, ext?}
   # layout parquet (an HF dataset's files, read in place; the `hf` extra): each media cell is "<file>#<row>", the row
   # within that file; `column` holds the bytes, `struct_field` picks them from a {bytes, path} struct (an HF Audio or
   # Image feature), `ext` names the container when the bytes carry no name. Only that column of the row's row group is
   # read; presence is the file's row count, the fingerprint reads the row group's column chunk.
+  # layout npy_rows (one [n, ...] array for the whole dataset: point clouds, spectrograms, embeddings): each media cell is
+  # "<file>.npy#<row>", handed over as the .npy bytes of that row alone (container npy); usually with an opaque kind.
     required: true                 # optional: false = an empty or missing media cell does not make the row missing
   # Two streams may read the same media cell (one mp4 handed over as `video` and `audio`).
   caption:

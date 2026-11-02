@@ -55,7 +55,7 @@ FIELD_ROLES: frozenset[str] = frozenset({"input"})
 #: its schema-3 ``fields`` migration hash identically.
 FIELD_DEFAULTS: Mapping[str, str] = {"storage": "file", "role": "input"}
 #: Layouts of a ``file`` field.
-LAYOUTS: frozenset[str] = frozenset({"dir", "tar_index", "parquet"})
+LAYOUTS: frozenset[str] = frozenset({"dir", "tar_index", "parquet", "npy_rows"})
 #: ``manifest.columns[*].role``: ``media`` (a file field's relative path), ``cell`` (a cell field's value), ``extra``
 #: (recorded, never handed over), ``label_aux`` (label structure).
 COLUMN_ROLES: frozenset[str] = frozenset({"media", "cell", "extra", "label_aux"})

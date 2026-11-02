@@ -1083,6 +1083,8 @@ _LAYOUT_PARAM_KEYS: Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     # cells "<file>#<row>"; the column holding the bytes, the struct field of a {bytes, path} column (an HF Audio /
     # Image feature), the file extension when the struct names none
     "parquet": (("column",), ("struct_field", "ext")),
+    # cells "<file>.npy#<row>": one row of an [n, ...] array, handed over as the .npy bytes of that row
+    "npy_rows": ((), ()),
 }
 
 
@@ -2558,6 +2560,17 @@ class _Presence:
         if layout == "tar_index":
             loc = self._tar_index(root).locate(cell)
             return [(Path(loc[0]), int(loc[1]), int(loc[2]))] if loc is not None else None
+        if layout == "npy_rows":
+            from yavih.media.npyrows import has_row as npy_has_row
+            from yavih.media.npyrows import row_location
+            from yavih.media.parquet import parse_cell
+
+            rel, row = parse_cell(cell)
+            path = str(root / rel)
+            if not npy_has_row(path, row):
+                return None
+            p, off, size = row_location(path, row)
+            return [(Path(p), off, size)]
         if layout == "parquet":
             from yavih.media.parquet import chunk_location, has_row, parse_cell
 

@@ -79,6 +79,7 @@ class _Source:
     the same location (AVE / avsync: ``video`` and ``audio`` are two tracks of one mp4).
 
     ``loc``: ``("file", path)`` | ``("member", tar_path, offset, size)`` | ``("parquet", path, row, column, struct_field)``
+    | ``("npy_row", path, row)``
     | ``("absent", reason)``.
     """
 
@@ -120,6 +121,18 @@ class _Source:
             kind = self.loc[0]
             if kind == "absent":
                 raise _missing(clip_id, stream, str(self.loc[1]))
+            if kind == "npy_row":
+                from yavih.media.npyrows import read_row
+
+                _, path, row = self.loc
+                try:
+                    data = read_row(path, int(row))
+                except FileNotFoundError:
+                    raise _missing(clip_id, stream, f"absent array file {path}") from None
+                except (OSError, IndexError, ValueError) as exc:
+                    raise _missing(clip_id, stream, f"unreadable array row {path}#{row}: {exc}") from exc
+                self._data = data
+                return data
             if kind == "parquet":
                 from yavih.media.parquet import read_cell
 
@@ -319,8 +332,15 @@ class RawStream:
 
     @property
     def nbytes(self) -> int | None:
-        """Stored size without reading."""
-        return self._src.size
+        """Stored size: without reading for a file or a tar member; a parquet cell or an array row is read (its size is
+        that of the bytes handed over)."""
+        size = self._src.size
+        if size is None and self._src.loc[0] in ("parquet", "npy_row"):
+            try:
+                return len(self.bytes())
+            except Exception:  # noqa: BLE001 - a missing cell: the size stays unknown, the row is reported missing on read
+                return None
+        return size
 
     # -- facts --------------------------------------------------------------------
     def _resolve_info(self) -> dict:
@@ -583,6 +603,11 @@ class _StreamCtx:
     def source(self, cell: str) -> _Source:
         if self.layout == "dir":
             return _Source(("file", os.path.join(self.root, cell)))
+        if self.layout == "npy_rows":
+            from yavih.media.parquet import parse_cell
+
+            rel, row = parse_cell(cell)
+            return _Source(("npy_row", os.path.join(self.root, rel), row))
         if self.layout == "parquet":
             from yavih.media.parquet import parse_cell
 
@@ -602,10 +627,16 @@ class _StreamCtx:
         """Cheap presence (stat / index lookup), for ``required: false`` streams only."""
         if self.layout == "dir":
             return os.path.isfile(os.path.join(self.root, cell))
-        if self.layout == "parquet":
-            from yavih.media.parquet import has_row, parse_cell
+        if self.layout in ("parquet", "npy_rows"):
+            from yavih.media.parquet import parse_cell
 
             rel, row = parse_cell(cell)
+            if self.layout == "npy_rows":
+                from yavih.media.npyrows import has_row as npy_has_row
+
+                return npy_has_row(os.path.join(self.root, rel), row)
+            from yavih.media.parquet import has_row
+
             return has_row(os.path.join(self.root, rel), row)
         return self.tar is not None and self.tar.has(cell)
 
@@ -658,7 +689,7 @@ def build_sample(bench: Any, split: str, manifest: Any, i: int, roots: Mapping[s
             continue
         entry = ctx.info_table.get(name, cell) if ctx.info_table is not None else None
         # one handle per row: two streams of one stored file (AVE, avsync) share one opaque path
-        streams[name] = RawStream(name, sc.kind, src=shared(sc.source(cell)), clip_id=clip_id, info_entry=entry, required_info=sc.info_keys, ext=(sc.params.get("ext") if sc.layout == "parquet" else _ext(cell)),
+        streams[name] = RawStream(name, sc.kind, src=shared(sc.source(cell)), clip_id=clip_id, info_entry=entry, required_info=sc.info_keys, ext=(sc.params.get("ext") if sc.layout == "parquet" else "npy" if sc.layout == "npy_rows" else _ext(cell)),
                                   handle=salt)
     meta = {"facts": json.loads(json.dumps(ctx.facts))}
     cell_values: dict[str, Any] = {}
