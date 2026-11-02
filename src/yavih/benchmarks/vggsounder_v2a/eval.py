@@ -52,6 +52,13 @@ AV_BENCH_KEYS: dict[str, str] = {
 }
 LOWER_IS_BETTER = frozenset({"fd_passt", "fd_panns", "fd_vgg", "kad_passt", "kad_panns", "kl_passt", "kl_panns", "desync"})
 PROTOCOL_KEYS: frozenset[str] = frozenset({"audio_length", "floor_seed"})
+#: VGGish's two release files, which av_bench loads through ``torch.hub`` (harritaylor/torchvggish; the hub code comes
+#: from that repository's unpinned master branch, the weights from its v0.1 release): checked by sha256 in the torch hub
+#: cache whenever present, and required after an extraction
+HUB_WEIGHTS: dict[str, str] = {
+    "vggish-10086976.pth": "10086976245803799d9194e9a73d9b6c1549c71d1b80106f5cade5608a561f4b",
+    "vggish_pca_params-970ea276.pth": "970ea276ddb99e236d4140292aa5c7ba53128f3ebb0b4bda3efccabf94f5b7b4",
+}
 #: av_bench extraction batch (its default, 128 ten-second clips, exceeds a 24 GB GPU in PaSST); not part of the protocol
 EXTRACT_BATCH = 16
 #: the paired metrics recomputed per clip from av_bench's caches (intervals, samples): their means are av_bench's values
@@ -287,6 +294,7 @@ def require_av_bench(bench: Any) -> Path:
     mod = require(e["name"], e["pip"], e["version_pin"])
     root = Path(mod.__file__).resolve().parent.parent
     missing = _check_weights(root)
+    check_hub_weights(required=False)
     if missing:
         from yavih.external import ExternalMissing
 
@@ -348,6 +356,26 @@ def _free_gpu() -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def check_hub_weights(*, required: bool) -> None:
+    """VGGish's files in the torch hub cache have the pinned sha256 (``HUB_WEIGHTS``); absent ones pass unless
+    ``required`` (av_bench downloads them on first use)."""
+    import torch
+
+    root = Path(torch.hub.get_dir()) / "checkpoints"
+    for name, want in HUB_WEIGHTS.items():
+        p = root / name
+        if not p.is_file():
+            if required:
+                raise RuntimeError(f"{NAME}: {p} is missing after av_bench's extraction")
+            continue
+        h = hashlib.sha256()
+        with open(p, "rb") as f:
+            for block in iter(lambda: f.read(1 << 24), b""):
+                h.update(block)
+        if h.hexdigest() != want:
+            raise RuntimeError(f"{NAME}: {p} sha256 {h.hexdigest()[:12]} != pinned {want[:12]} (another VGGish release)")
 
 
 class _in_dir:
@@ -513,6 +541,7 @@ def score(bench: Any, split: str, rows: Any, outputs: Any, targets: Any = None) 
             extract(audio_path=pred_audio, output_path=pred_cache, audio_length=audio_length, device="cuda", skip_clap=True, batch_size=EXTRACT_BATCH, num_workers=8)
         _free_gpu()
         check_cache(pred_cache, [t["clip_id"] for t in tg])
+        check_hub_weights(required=True)
         scores = _evaluate(gt, pred_cache)
         det = details(root, gt, pred_cache, [t["clip_id"] for t in tg], scores)
     scores.update(det["kad"])

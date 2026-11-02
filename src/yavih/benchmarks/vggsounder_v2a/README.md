@@ -90,6 +90,26 @@ av-benchmark's own means; `kad_passt` and `kad_panns` carry the same bootstrap w
 FD and IS have no interval. `yavih eval run --log-samples` writes every clip's values to the samples file, so two
 systems scored on the same clips can be compared by paired differences.
 
+### Metric validity
+
+What each number has been validated against, following practice 3 of *Audio generative models in the multimodal era*
+(its Table of evaluation measures); a new study validating one of these metrics on generated audio belongs here, with
+whether its agreement is at clip or system level.
+
+- `fd_*`, `kad_*` (distributional realism): agreement with human judgments is weak and depends on the encoder (the
+  review's Table of measures); FD is biased at finite sample sizes, so compare FD only at the same n (this folder
+  fixes n), and KAD's estimator is unbiased but still depends on the encoder and reference set. Neither score is
+  sensitive to which output belongs to which input: re-pairing leaves both unchanged.
+- `kl_*` (agreement with the recording's class posteriors) and `is_*` (reference-free): no validation against human
+  judgments is reported; read `kl_*` together with its floor.
+- `ib_score` (audio-visual semantic alignment): no validation against human judgments on generated soundtracks is
+  reported.
+- `desync` (temporal synchrony): the Synchformer offset has no standalone validation against human judgments and
+  classifies offsets on a 0.2 s grid, coarser than perceptual synchrony thresholds.
+- `*_ref` values are the correctly paired recordings' scores, not ceilings: VGGSound soundtracks are web audio, often
+  off-screen or out of sync, and a generator can score above them. The floors (`*_floor`) are near chance by
+  construction; a model must clear them clearly to be read as aligned.
+
 ### Re-freezing the manifest
 
 `make_manifest.py` re-derives `manifest.csv.gz` byte for byte from the packaged `vggsounder` folder's frozen

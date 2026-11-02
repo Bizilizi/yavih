@@ -81,6 +81,24 @@ features and checks against av-benchmark's own means; `kad_passt` and `kad_panns
 recomputed on each resample. FD and IS have no interval. `yavih eval run --log-samples` writes every clip's values to
 the samples file, so two systems scored on the same clips can be compared by paired differences.
 
+### Metric validity
+
+What each number has been validated against, following practice 3 of *Audio generative models in the multimodal era*
+(its Table of evaluation measures); a new study validating one of these metrics on generated audio belongs here, with
+whether its agreement is at clip or system level.
+
+- `fd_*`, `kad_*` (distributional realism): agreement with human judgments is weak and depends on the encoder (the
+  review's Table of measures); FD is biased at finite sample sizes, so compare FD only at the same n (this folder
+  fixes n), and KAD's estimator is unbiased but still depends on the encoder and reference set. Neither score is
+  sensitive to which output belongs to which input: re-pairing leaves both unchanged.
+- `kl_*` (agreement with the recording's class posteriors) and `is_*` (reference-free): no validation against human
+  judgments is reported; read `kl_*` together with its floor.
+- `clap_*` (text-audio semantic alignment): moderate agreement with human judgments (the review's Table of measures),
+  but clip-level cosine similarity is insensitive to event order and weak on attribute binding; two encoders are
+  reported because they disagree.
+- `*_ref` values are the correctly paired recordings' scores, not ceilings: a generator can score above them. The
+  floors (`*_floor`) are near chance by construction; a model must clear them clearly to be read as aligned.
+
 ### Re-freezing the manifest
 
 `make_manifest.py --root <source_root>` re-derives `manifest.csv.gz` byte for byte from the official `test.csv`

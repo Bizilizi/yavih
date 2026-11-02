@@ -54,8 +54,9 @@ folder was validated with this resolution (record yours with `pip freeze`):
 
 Keep the installed torch when installing (a constraints file holding the three torch versions above). On first use the
 encoders download their own checkpoints into the user's caches (about 8 GB): PANNs Cnn14 (`audioldm_eval`), VGGish
-(`torch.hub` from `harritaylor/torchvggish` at its `master` branch: not pinned), PaSST, ImageBind huge and MS-CLAP. The
-two weight files above are checked by sha256 before every scoring run (`eval.py` `WEIGHTS`).
+(`torch.hub` from `harritaylor/torchvggish`: its code from the unpinned `master` branch, its two v0.1 release files
+checked by sha256, `eval.py` `HUB_WEIGHTS`), PaSST, ImageBind huge and MS-CLAP. The two weight files above are checked
+by sha256 before every scoring run (`eval.py` `WEIGHTS`).
 
 ## Input contract
 
