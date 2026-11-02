@@ -1,7 +1,7 @@
 """Comparability and the ``report()`` entry point.
 
 Comparability is decided only by what yavih controls: two results are comparable iff the benchmark name
-(after alias), ``eval_hash = sha256(canon({protocol_hash, probe_hash}))`` and ``standard`` agree. Bridge
+(after alias), ``eval_hash = sha256(canon({protocol_hash, probe_hash: scorer_hash}))`` and ``standard`` agree. Bridge
 decisions (``describe()``, ``describe_sha256``, weights, dtype, batch size) are recorded and shown, never a key.
 
 Selection (both views): results are keyed ``(benchmark, eval_hash, model, reading)``; within a key the
@@ -14,7 +14,7 @@ Results a re-probe moved to ``probe/_stale/`` (index records ``moved_aside``) ar
 (``W_BRIDGE_CHANGED``, ``--detail``; the in-place reconfiguration of one run directory); one of a live configuration
 (a re-extraction or a re-probe of the same configuration) is ignored.
 
-View 1: per model, the lm-evaluation-harness table ``benchmark | reading | version | eval_hash | readout |
+View 1: per model, the lm-evaluation-harness table ``benchmark | reading | version | eval_hash | scorer |
 metric | value | ci95 | floor`` (:func:`lm_eval_tables`; the floor is the one whose ``floor_of`` names the
 metric). View 2: columns ``(benchmark, eval_hash)`` (standard and non-standard apart), rows ``(model,
 reading)``; ``mean ± std`` with ``n_seeds``; a row is greyed when its headline CI overlaps its floor or it
@@ -106,7 +106,7 @@ class Report:
     joins: dict[str, Any] = field(default_factory=dict)
     n_results: int = 0
     paths: dict[str, str] = field(default_factory=dict)
-    #: view 1: ``{model: [row]}`` with rows ``{benchmark, reading, version, eval_hash, readout, metric, value,
+    #: view 1: ``{model: [row]}`` with rows ``{benchmark, reading, version, eval_hash, scorer, metric, value,
     #: std, n_seeds, ci95, floor, status, reason}``
     lm_eval: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     merged: list[str] = field(default_factory=list)
@@ -234,7 +234,7 @@ def _eval_hash_of(result: dict) -> str:
     if isinstance(eh, str) and eh:
         return eh
     ph = (result.get("benchmark") or {}).get("protocol_hash")
-    qh = (result.get("probe") or {}).get("hash")
+    qh = (result.get("scorer") or {}).get("hash")
     if isinstance(ph, str) and ph and isinstance(qh, str) and qh:
         return hashing.eval_hash(ph, qh)
     return ""
@@ -305,7 +305,7 @@ def _dedup_seeds(results: Sequence[dict]) -> list[dict]:
     """One result per ``probe.seed`` (the newest ``created`` wins), sorted by seed: ``n_seeds`` counts distinct seeds."""
     by_seed: dict[int, dict] = {}
     for r in results:
-        sd = int((r.get("probe") or {}).get("seed", 0) or 0)
+        sd = int((r.get("scorer") or {}).get("seed", 0) or 0)
         if sd not in by_seed or _created(r) > _created(by_seed[sd]):
             by_seed[sd] = r
     return [by_seed[k] for k in sorted(by_seed)]
@@ -635,7 +635,7 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         "benchmark": key[0],
         "eval_hash": key[1],
         "protocol_hash": (first.get("benchmark") or {}).get("protocol_hash"),
-        "probe_hash": (first.get("probe") or {}).get("hash"),
+        "scorer_hash": (first.get("scorer") or {}).get("hash"),
         "model": _model(first),
         "reading": _reading(first),
         "bridge_name": str(bridge.get("name", "")),
@@ -646,7 +646,7 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         "reason": first.get("reason") if status != "ok" else None,
         "not_applicable": na,
         "seed": seed,
-        "seeds": sorted({int((r.get("probe") or {}).get("seed", 0)) for r in ok}),
+        "seeds": sorted({int((r.get("scorer") or {}).get("seed", 0)) for r in ok}),
         "n_seeds": n_seeds,
         "registry": next((r["registry"].get("id") for r in results if r.get("registry")), None),
         "headline": headline,
@@ -673,7 +673,7 @@ def _missing_row(column: dict[str, Any], model: str, reading: str) -> dict[str, 
         "benchmark": column["benchmark"],
         "eval_hash": column["eval_hash"],
         "protocol_hash": column["protocol_hash"],
-        "probe_hash": column["probe_hash"],
+        "scorer_hash": column["scorer_hash"],
         "model": model,
         "reading": reading,
         "bridge_name": "",
@@ -786,13 +786,13 @@ def _row_detail(sel: Selection, headline: str | None) -> dict[str, Any]:
         "features_fingerprint": sel.fingerprint or None,
         "older_configs": [
             {"describe_sha256": dsha or None, "diff": describe_diff(shown_describe, _describe(rs[0])),
-             "seeds": sorted({int((r.get("probe") or {}).get("seed", 0) or 0) for r in rs}),
+             "seeds": sorted({int((r.get("scorer") or {}).get("seed", 0) or 0) for r in rs}),
              "headline": _headline_value(_dedup_seeds(rs), headline), "created": _newest(rs),
              "moved_aside": dsha in sel.moved_aside}
             for dsha, rs in sel.configs[1:]
         ],
         "older_feature_sets": [
-            {"fingerprint": fp or None, "seeds": [int((r.get("probe") or {}).get("seed", 0) or 0) for r in rs],
+            {"fingerprint": fp or None, "seeds": [int((r.get("scorer") or {}).get("seed", 0) or 0) for r in rs],
              "headline": _headline_value(rs, headline), "created": _newest(rs)}
             for fp, rs in sel.feature_sets[1:]
         ],
@@ -837,7 +837,7 @@ def lm_eval_tables(records: Sequence[dict], aliases: Mapping[str, str] | None = 
             first = results[0]
             bmeta = first.get("benchmark") or {}
             base = {"benchmark": bench + ("" if std else " (nonstandard)"), "reading": reading, "version": bmeta.get("protocol_version"),
-                    "eval_hash": eh[:12], "readout": bmeta.get("readout")}
+                    "eval_hash": eh[:12], "scorer": bmeta.get("scorer")}
             waived = waived_of(results)
             if waived:  # marked († and a footnote), never greyed
                 base["waived"] = waived
@@ -977,16 +977,16 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
         meta = bench_meta.get(bench, {})
         headline = _pick_headline(metric_names, floor_names, meta)
         pvs = sorted({(r.get("benchmark") or {}).get("protocol_version") for r in results if isinstance((r.get("benchmark") or {}).get("protocol_version"), int)})
-        readouts = sorted({str((r.get("benchmark") or {}).get("readout", "")) for r in results})
+        scorers = sorted({str((r.get("benchmark") or {}).get("scorer", "")) for r in results})
         first = results[0]
         column: dict[str, Any] = {
             "id": column_id,
             "benchmark": bench,
             "eval_hash": eh,
             "protocol_hash": (first.get("benchmark") or {}).get("protocol_hash"),
-            "probe_hash": (first.get("probe") or {}).get("hash"),
+            "scorer_hash": (first.get("scorer") or {}).get("hash"),
             "protocol_version": pvs[0] if len(pvs) == 1 else (pvs or None),
-            "readout": readouts[0] if len(readouts) == 1 else readouts,
+            "scorer": scorers[0] if len(scorers) == 1 else scorers,
             "standard": std,
             "comparable": std,
             "metrics": metric_names,
@@ -1051,7 +1051,7 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             if seeds == "aggregate":
                 part_rows = [_row_from(sel.shown, seed=None, paths=[paths_of.get(id(r), "") for r in sel.shown], **row_kw)]
             else:
-                part_rows = [_row_from([r], seed=int((r.get("probe") or {}).get("seed", 0)), paths=[paths_of.get(id(r), "")], **row_kw)
+                part_rows = [_row_from([r], seed=int((r.get("scorer") or {}).get("seed", 0)), paths=[paths_of.get(id(r), "")], **row_kw)
                              for r in sel.shown]
             for row in part_rows:
                 row["n_configs"], row["n_feature_sets"] = len(sel.configs), len(sel.feature_sets)

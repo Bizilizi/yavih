@@ -53,6 +53,7 @@ __all__ = [
     "check",
     "records",
     "read_entries",
+    "upgrade_entry",
 ]
 
 ENTRIES_DIR = "entries"
@@ -146,6 +147,12 @@ def _seed_records(unit_results: Sequence[str], *, base: Path | None) -> list[dic
                 except (OSError, ValueError):
                     break
                 if isinstance(r, dict) and r.get("status") == "ok":
+                    try:
+                        from yavih.report.migrate import migrate
+
+                        r = migrate(r)  # the current names (``scorer``), whatever schema wrote it
+                    except ValueError:
+                        break
                     out.append(r)
                 break
     return out
@@ -197,27 +204,27 @@ def entry_from_results(doc: Mapping[str, Any], key: str, *, org: str, source: st
     model = str(cfg.get("model") or (doc.get("config") or {}).get("model") or "")
     if not _MODEL_RE.match(model):
         raise RegistryError(E_SCHEMA, f"{source}: model name {model!r} outside [A-Za-z0-9][A-Za-z0-9_.-]{{0,63}}")
-    probe = dict(cfg.get("probe") or {})
+    scoring = dict(cfg.get("scoring") or {})
     bridge = dict(cfg.get("bridge") or {})
     metrics_cfg = dict(cfg.get("metrics") or {})
     names = list(metrics_cfg.get("list") or [])
     floor_names = list(metrics_cfg.get("floors") or [])
     control_names = list(metrics_cfg.get("controls") or [])
     seeds_rec = _seed_records(list(cfg.get("unit_results") or []), base=Path(unit_base) if unit_base is not None else None)
-    seeds: list[dict[str, Any]] = [{"seed": int((r.get("probe") or {}).get("seed", 0)), "metrics": r.get("metrics") or {},
+    seeds: list[dict[str, Any]] = [{"seed": int((r.get("scorer") or {}).get("seed", 0)), "metrics": r.get("metrics") or {},
                                     "floors": r.get("floors") or {}, "controls": r.get("controls") or {}, "ci95": r.get("ci95") or {},
-                                    "created": r.get("created")} for r in sorted(seeds_rec, key=lambda r: int((r.get("probe") or {}).get("seed", 0)))]
+                                    "created": r.get("created")} for r in sorted(seeds_rec, key=lambda r: int((r.get("scorer") or {}).get("seed", 0)))]
     if not seeds:
-        seeds = [{"seed": int(s), "metrics": None} for s in (probe.get("seeds") or [])]
+        seeds = [{"seed": int(s), "metrics": None} for s in (scoring.get("seeds") or [])]
     first = seeds_rec[0] if seeds_rec else {}
-    eval_hash = str(cfg.get("eval_hash") or hashing.eval_hash(str(cfg["protocol_hash"]), str(cfg["probe_hash"])))
+    eval_hash = str(cfg.get("eval_hash") or hashing.eval_hash(str(cfg["protocol_hash"]), str(cfg["scorer_hash"])))
     identity = {
-        "benchmark": benchmark, "reading": reading, "readout": cfg.get("readout"), "readout_version": cfg.get("readout_version"),
+        "benchmark": benchmark, "reading": reading, "scorer": cfg.get("scorer"), "scorer_version": cfg.get("scorer_version"),
         "protocol_version": cfg.get("protocol_version"), "protocol_hash": cfg.get("protocol_hash"),
         "input_hash": bench.input_hash if bench is not None and bench.protocol_hash == cfg.get("protocol_hash") else None,
         "scoring_hash": bench.scoring_hash if bench is not None and bench.protocol_hash == cfg.get("protocol_hash") else None,
-        "manifest_hash": cfg.get("manifest_hash"), "probe_hash": cfg.get("probe_hash"), "eval_hash": eval_hash,
-        "standard": bool(probe.get("standard", False)),
+        "manifest_hash": cfg.get("manifest_hash"), "scorer_hash": cfg.get("scorer_hash"), "eval_hash": eval_hash,
+        "standard": bool(scoring.get("standard", False)),
     }
     describe = dict(bridge.get("describe") or {})
     coverage = first.get("coverage") if isinstance(first.get("coverage"), dict) else None
@@ -254,7 +261,7 @@ def entry_from_results(doc: Mapping[str, Any], key: str, *, org: str, source: st
         "provenance": {
             "yavih_version": doc.get("yavih_version"), "commit": doc.get("git_hash"), "date": doc.get("date"),
             "folder_source": cfg.get("folder_source"), "external": dict(cfg.get("external") or {}) if isinstance(cfg.get("external"), dict) else cfg.get("external"),
-            "probe_config": probe.get("config"), "results_file": str(source), "results_file_sha256": _sha256_file(Path(source)) if Path(source).is_file() else None,
+            "scorer_config": scoring.get("config"), "results_file": str(source), "results_file_sha256": _sha256_file(Path(source)) if Path(source).is_file() else None,
             "unit_results": list(cfg.get("unit_results") or []), "env": doc.get("env"),
             "exported_with": {"yavih_version": __version__}, "replaces": None,
         },
@@ -354,8 +361,8 @@ def export(source: str | os.PathLike, *, org: str, out: str | os.PathLike, inclu
             if "+" in str(cfg.get("reading") or ""):
                 skipped.append({"key": f"{path}:{key}", "reason": "a join entry"})
                 continue
-            if not bool((cfg.get("probe") or {}).get("standard", False)) and not include_nonstandard:
-                skipped.append({"key": f"{path}:{key}", "reason": "non-standard probe (pass --include-nonstandard to register it as such)"})
+            if not bool((cfg.get("scoring") or {}).get("standard", False)) and not include_nonstandard:
+                skipped.append({"key": f"{path}:{key}", "reason": "non-standard scorer configuration (pass --include-nonstandard to register it as such)"})
                 continue
             bench = _load_bench(str(cfg.get("benchmark")), bench_cache)
             try:
@@ -381,11 +388,37 @@ def export(source: str | os.PathLike, *, org: str, out: str | os.PathLike, inclu
 
 
 _ENTRY_KEYS = frozenset({"registry_version", "id", "identity", "model", "score", "population", "conformance", "provenance"})
-_IDENTITY_KEYS = frozenset({"benchmark", "reading", "protocol_version", "protocol_hash", "probe_hash", "eval_hash", "standard"})
+_IDENTITY_KEYS = frozenset({"benchmark", "reading", "protocol_version", "protocol_hash", "scorer_hash", "eval_hash", "standard"})
+
+
+def upgrade_entry(entry: Any) -> Any:
+    """A registry entry in the current shape (a copy; anything that is not a version-1 entry is returned as is).
+    Version 2 renamed ``identity.readout`` / ``readout_version`` / ``probe_hash`` to ``scorer`` / ``scorer_version`` /
+    ``scorer_hash``, ``provenance.probe_config`` to ``scorer_config`` and ``folder_source.probe`` to ``.eval``; the
+    id, the path and every hash are unchanged."""
+    rv = entry.get("registry_version") if isinstance(entry, dict) else None
+    if not isinstance(rv, int) or isinstance(rv, bool) or rv != 1:
+        return entry
+    e = json.loads(json.dumps(entry))
+    i = e.get("identity")
+    if isinstance(i, dict):
+        for old, new in (("readout", "scorer"), ("readout_version", "scorer_version"), ("probe_hash", "scorer_hash")):
+            if old in i:
+                i[new] = i.pop(old)
+    prov = e.get("provenance")
+    if isinstance(prov, dict):
+        if "probe_config" in prov:
+            prov["scorer_config"] = prov.pop("probe_config")
+        fs = prov.get("folder_source")
+        if isinstance(fs, dict) and "probe" in fs:
+            prov["folder_source"] = {"eval": fs.get("probe"), **{k: v for k, v in fs.items() if k != "probe"}}
+    e["registry_version"] = 2
+    return e
 
 
 def read_entries(root: str | os.PathLike) -> list[tuple[Path, dict[str, Any]]]:
-    """Every ``entries/**/*.json`` under ``root`` (unreadable ones raise ``RegistryError``), sorted by path."""
+    """Every ``entries/**/*.json`` under ``root`` (unreadable ones raise ``RegistryError``), sorted by path, in the
+    current shape (:func:`upgrade_entry`)."""
     base = Path(root) / ENTRIES_DIR
     out: list[tuple[Path, dict[str, Any]]] = []
     for p in sorted(base.rglob("*.json")) if base.is_dir() else []:
@@ -393,7 +426,7 @@ def read_entries(root: str | os.PathLike) -> list[tuple[Path, dict[str, Any]]]:
             d = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
             raise RegistryError(E_SCHEMA, f"{p}: {e}") from e
-        out.append((p, d))
+        out.append((p, upgrade_entry(d)))
     return out
 
 
@@ -446,9 +479,9 @@ def check(root: str | os.PathLike) -> RegistryReport:
                 rep.findings.append(Finding("error", E_ID, f"{rel}: filed at the wrong path (expected {entry_path(root, e).relative_to(Path(root))})", rel))
         except (KeyError, TypeError):
             rep.findings.append(Finding("error", E_ID, f"{rel}: model block lacks org / model", rel))
-        ph, qh, eh = i.get("protocol_hash"), i.get("probe_hash"), i.get("eval_hash")
+        ph, qh, eh = i.get("protocol_hash"), i.get("scorer_hash"), i.get("eval_hash")
         if not (isinstance(ph, str) and isinstance(qh, str) and isinstance(eh, str)) or hashing.eval_hash(ph, qh) != eh:
-            rep.findings.append(Finding("error", E_HASH, f"{rel}: eval_hash is not sha256(canon({{protocol_hash, probe_hash}}))", rel))
+            rep.findings.append(Finding("error", E_HASH, f"{rel}: eval_hash is not sha256(canon({{protocol_hash, probe_hash: scorer_hash}}))", rel))
             continue
         pp = protocol_path(root, str(i["benchmark"]), ph)
         if pp not in payloads:
@@ -508,8 +541,8 @@ def records(root: str | os.PathLike, *, accepted_only: bool = True) -> list[dict
         coverage = (e.get("population") or {}).get("coverage") or {}
         base = {
             "schema_version": RESULT_SCHEMA_VERSION, "status": "ok", "reason": None, "standard": bool(i.get("standard")), "eval_hash": i["eval_hash"],
-            "benchmark": {"name": i["benchmark"], "protocol_version": i.get("protocol_version"), "readout": i.get("readout"),
-                          "readout_version": i.get("readout_version"), "manifest_hash": i.get("manifest_hash"), "protocol_hash": i["protocol_hash"],
+            "benchmark": {"name": i["benchmark"], "protocol_version": i.get("protocol_version"), "scorer": i.get("scorer"),
+                          "scorer_version": i.get("scorer_version"), "manifest_hash": i.get("manifest_hash"), "protocol_hash": i["protocol_hash"],
                           "folder_source": prov.get("folder_source")},
             "model": str(m.get("name") or f"{m.get('org')}/{m.get('model')}"), "reading": i["reading"],
             "bridge": {"name": m.get("bridge"), "describe": m.get("describe") or {}, "describe_sha256": m.get("describe_sha256"), "source_sha256": m.get("source_sha256")},
@@ -525,14 +558,14 @@ def records(root: str | os.PathLike, *, accepted_only: bool = True) -> list[dict
         per_seed = [sd for sd in (s.get("seeds") or []) if isinstance(sd.get("metrics"), dict) and sd["metrics"]]
         if per_seed:
             for sd in per_seed:
-                r = dict(base, probe={"hash": i["probe_hash"], "seed": int(sd.get("seed", 0)), "config": prov.get("probe_config")},
+                r = dict(base, scorer={"hash": i["scorer_hash"], "seed": int(sd.get("seed", 0)), "config": prov.get("scorer_config")},
                          metrics=sd["metrics"], ci95=sd.get("ci95") or {}, floors=sd.get("floors") or {}, controls=sd.get("controls") or {})
                 r["registry"] = dict(base["registry"], n_seeds=1)
                 r["created"] = str(sd.get("created") or base["created"])
                 out.append({"path": str(path), "mtime_ns": 0, "size": 0, "result": r})
         else:
             seed0 = int(((s.get("seeds") or [{}])[0]).get("seed", 0))
-            r = dict(base, probe={"hash": i["probe_hash"], "seed": seed0, "config": prov.get("probe_config")},
+            r = dict(base, scorer={"hash": i["scorer_hash"], "seed": seed0, "config": prov.get("scorer_config")},
                      metrics=dict(s.get("metrics") or {}), ci95=dict(s.get("ci95") or {}), floors=floors, controls=dict(s.get("controls") or {}))
             out.append({"path": str(path), "mtime_ns": 0, "size": 0, "result": r})
     return out

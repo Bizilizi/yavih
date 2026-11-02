@@ -416,13 +416,13 @@ def _ok_record(**over) -> dict:
     rec = {
         "schema_version": RESULT_SCHEMA_VERSION, "status": "ok", "reason": None, "standard": True,
         "eval_hash": hashing.eval_hash("p" * 64, "q" * 64),
-        "benchmark": {"name": "x", "protocol_version": 1, "readout": "clf", "readout_version": READOUT_VERSION["clf"], "manifest_hash": "m" * 64, "protocol_hash": "p" * 64,
-                      "folder_source": {"probe": None, "reader": None}},
+        "benchmark": {"name": "x", "protocol_version": 1, "scorer": "clf", "scorer_version": READOUT_VERSION["clf"], "manifest_hash": "m" * 64, "protocol_hash": "p" * 64,
+                      "folder_source": {"eval": None, "reader": None}},
         "model": MODEL, "reading": READING,
         "bridge": {"name": "b", "describe": {}, "describe_sha256": "d" * 64, "source_sha256": None},
         "features": {"fingerprint": "f" * 64, "dtype": "float32", "N": 4, "D": 8, "pos_mode": "none", "bytes": 10, "backend": "ram", "canary_max_rel_l2": 0.0,
                      "batch_tolerance": 1e-05, "rules_checked": None},
-        "probe": {"hash": "q" * 64, "config": {}, "seed": 0, "selected_lr": 1e-4, "epochs_run": 3, "best_epoch": 1, "stop": "patience", "n_train": 10, "n_val": 2},
+        "scorer": {"hash": "q" * 64, "config": {}, "seed": 0, "selected_lr": 1e-4, "epochs_run": 3, "best_epoch": 1, "stop": "patience", "n_train": 10, "n_val": 2},
         "metrics": {"acc": 1.0, "n_eval": 6}, "ci95": {"acc": [0.6, 1.0]}, "floors": {"acc_floor": 0.33}, "controls": {}, "chance": {"acc": 0.33},
         "coverage": {"train": {"present": 12, "nominal": 12, "ids_sha256": "i" * 64}, "eval": {"present": 6, "nominal": 6, "ids_sha256": "j" * 64}, "floor": None},
         "not_applicable": None,
@@ -450,13 +450,13 @@ def test_check_result_accepts_ok_and_pins_metric_key_sets():
         (lambda r: r.update(status="weird"), "status"),
         (lambda r: r.update(extra_key=1), "unknown result keys"),
         (lambda r: r.pop("timing"), "missing result keys"),
-        (lambda r: r["benchmark"].update(readout_version=99), "readout_version"),
+        (lambda r: r["benchmark"].update(scorer_version=99), "scorer_version"),
         (lambda r: r.update(status="failed", reason="x"), "must be ABSENT"),
         (lambda r: r.update(not_applicable={"missing": [], "reason": "r", "decided_by": "plan"}), "must be null"),
         (lambda r: r["ci95"].update(acc=[1.0]), r"\[lo, hi\]"),
         # the comparability key must be the one over the two hashes; names keep their charsets
         (lambda r: r.update(eval_hash="e" * 64), "eval_hash"),
-        (lambda r: r["probe"].update(hash="r" * 64), "eval_hash"),
+        (lambda r: r["scorer"].update(hash="r" * 64), "eval_hash"),
         (lambda r: r.update(model="vjepa@0123456789ab"), "model"),
         (lambda r: r.update(model=".."), "model"),
         (lambda r: r.update(model="_stale"), "model"),  # a leading _ is invisible to the report index
@@ -523,13 +523,13 @@ def test_probe_clf_ok_end_to_end(tmp_path, fakes):
     assert rec["floors"]["acc_floor"] == pytest.approx(1 / 3)
     assert rec["ci95"]["acc"][0] < 1.0 <= rec["ci95"]["acc"][1]
     assert rec["standard"] is False  # a non-pinned cfg under YAVIH_TESTING=1
-    assert rec["probe"]["hash"] == hashing.probe_hash(clf_cfg(3)) and rec["probe"]["seed"] == 0
-    assert rec["probe"]["n_train"] == 11 and rec["probe"]["n_val"] == 1 and rec["probe"]["stop"] == "patience"
-    assert rec["benchmark"] == {"name": "synth_clf", "protocol_version": 2, "readout": "clf", "readout_version": READOUT_VERSION["clf"],
+    assert rec["scorer"]["hash"] == hashing.probe_hash(clf_cfg(3)) and rec["scorer"]["seed"] == 0
+    assert rec["scorer"]["n_train"] == 11 and rec["scorer"]["n_val"] == 1 and rec["scorer"]["stop"] == "patience"
+    assert rec["benchmark"] == {"name": "synth_clf", "protocol_version": 2, "scorer": "clf", "scorer_version": READOUT_VERSION["clf"],
                                 "manifest_hash": bench.manifest_hash, "protocol_hash": bench.protocol_hash,
-                                "folder_source": {"probe": None, "reader": None}}
+                                "folder_source": {"eval": None, "reader": None}}
     assert (rec["model"], rec["reading"]) == (MODEL, READING) and rec["bridge"]["describe"] == DESCRIBE and rec["features"]["backend"] == "ram"
-    assert rec["eval_hash"] == hashing.eval_hash(bench.protocol_hash, rec["probe"]["hash"])
+    assert rec["eval_hash"] == hashing.eval_hash(bench.protocol_hash, rec["scorer"]["hash"])
     assert res[0].path.parent.parent.name == rec["eval_hash"][:12]
     # no decoders block; the batch tolerance and the rules validate checked; no external code
     assert rec["features"]["batch_tolerance"] == 1e-05 and rec["features"]["rules_checked"] == {"video": {"temporal": "uniform", "spatial": True}}
@@ -556,8 +556,8 @@ def test_probe_pinned_config_is_standard_and_defaults_from_bench(tmp_path, fakes
     res = probe(run, bench=bench)
     rec = res[0].result
     assert rec["standard"] is True
-    assert rec["probe"]["config"]["head"]["out"] == 3 and rec["probe"]["config"]["loss"] == "ce"
-    assert rec["probe"]["hash"] == hashing.probe_hash(ProbeConfig.pinned("clf", num_classes=3, label_kind="single"))
+    assert rec["scorer"]["config"]["head"]["out"] == 3 and rec["scorer"]["config"]["loss"] == "ce"
+    assert rec["scorer"]["hash"] == hashing.probe_hash(ProbeConfig.pinned("clf", num_classes=3, label_kind="single"))
 
 
 def test_nonstandard_config_requires_testing_env(tmp_path, fakes, monkeypatch):
@@ -774,7 +774,7 @@ def test_not_applicable_from_meta_eligibility(tmp_path, fakes):
     assert rec["reason"] == "N == 1" and "metrics" not in rec and "floors" not in rec
     assert rec["features"]["N"] == N_TOK and rec["features"]["D"] == D_FEAT and rec["features"]["dtype"] == "float32"
     assert rec["coverage"]["train"]["present"] == 12 and rec["coverage"]["eval"]["present"] == 6
-    assert rec["probe"]["epochs_run"] is None and rec["probe"]["hash"] == hashing.probe_hash(clf_cfg(3))
+    assert rec["scorer"]["epochs_run"] is None and rec["scorer"]["hash"] == hashing.probe_hash(clf_cfg(3))
     assert (res[0].path.parent / "DONE").exists() and fakes == []  # exit 0 path, no fit
 
 

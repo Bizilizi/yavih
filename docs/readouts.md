@@ -371,7 +371,7 @@ choice, `T`, the grid and the target size. Pinned values:
 Optimizer AdamW (betas 0.9 / 0.999); linear warmup over `ceil(warmup_fraction · total)` steps, then cosine
 1 → 0 over the rest of `steps_per_epoch · max_epochs`. `ProbeConfig` validates itself on construction (head
 family, loss, schedule, selection, precision, positive sizes) so a bad config is refused before it is hashed.
-`to_json()` is what `result.probe.config` records; `probe_hash` hashes an explicit field list
+`to_json()` is what `result.scorer.config` records; `probe_hash` hashes an explicit field list
 ([hashing](hashing.md#probe_hash)).
 
 ### Standard and non-standard

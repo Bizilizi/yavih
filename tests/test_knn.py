@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from yavih import testing as T
 from yavih.readouts import knn, registry
@@ -62,7 +61,7 @@ def test_knn_scores_the_synthetic_clf_fixture(tmp_path, yavih_home):
         res = probe(run, seeds=(0,), write_results=False, bench=str(folder))
         assert res[0].status == "ok", res[0].reason
         rec = res[0].result
-        assert rec["probe"]["config"] == {"scorer": "knn", "version": knn.VERSION, "kind": "stateless"}
+        assert rec["scorer"]["config"] == {"scorer": "knn", "version": knn.VERSION, "kind": "stateless"}
         assert set(rec["metrics"]) == {"acc", "n_eval"} and "acc_floor" in rec["floors"]
         headline[kind] = rec["metrics"]["acc"]
     assert headline["oracle"] >= knn.CONFORMANCE["oracle_min"] and headline["random"] <= knn.CONFORMANCE["random_max"], headline

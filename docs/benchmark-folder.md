@@ -71,7 +71,7 @@ current directory, with `FOLDER=<folder>` and `YAVIH_BENCH=<name>` set. Helper s
 All hooks are optional. Module scope imports only the standard library, numpy and yavih core (`yavih bench lint`
 imports it with torch and the folder's `external` packages blocked). It reuses the shared heads, trainer and
 `ProbeConfig`; it never defines a head, loss or training loop. Its source never enters a hash: the digest of its
-normalized source is recorded as provenance (`folder_source.probe`), and its behaviour is pinned by
+normalized source is recorded as provenance (`folder_source.eval`), and its behaviour is pinned by
 `protocol_version` and the folder's conformance fixture (`conformance/expected.json`, [conformance](conformance.md)).
 An edit that moves the fixture's numbers is `E_CONFORMANCE_DRIFT` until `protocol_version` is bumped.
 

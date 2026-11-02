@@ -1401,7 +1401,7 @@ def cmd_bench_hash(ns: argparse.Namespace) -> Envelope:
     lines = [f"{bench.name} (protocol_version {bench.spec.protocol_version})",
              f"  protocol_hash  {bench.protocol_hash}", f"  input_hash     {bench.input_hash}",
              f"  scoring_hash   {bench.scoring_hash}", f"  manifest_hash  {bench.manifest_hash}",
-             f"  folder_source  probe={bench.folder_source.get('probe') or 'null'} reader={bench.folder_source.get('reader') or 'null'}"]
+             f"  folder_source  eval={bench.folder_source.get('eval') or 'null'} reader={bench.folder_source.get('reader') or 'null'}"]
     if ns.explain:
         ex = bench.hashes.explain()
         data["explain"] = ex
@@ -1601,7 +1601,7 @@ def cmd_features_validate(ns: argparse.Namespace) -> Envelope:
         elig = report.eligibility or {}
         lines.append(
             f"{report.split}: {'ok' if report.ok else 'FAILED'}  coverage {cov.get('present')}/{cov.get('nominal')}  "
-            + (f"outputs {', '.join(map(str, getattr(report, 'describe')['outputs']))}"
+            + (f"outputs {', '.join(map(str, report.describe['outputs']))}"
                if (getattr(report, "describe", None) or {}).get("outputs") and not report.N
                else f"N={report.N} D={report.D} {report.dtype} pos={report.pos_mode}")
             + f"  missing shards: {n_missing}"

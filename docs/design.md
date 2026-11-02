@@ -229,7 +229,7 @@ What a number means is decided by the benchmark and by the probe. The hashes cov
 - `scoring_hash`: how features become numbers (protocol facts, metrics, label reading, targets, pinned
   authors' packages, the readout version, the folder's `eval.py`);
 - `protocol_hash = H(input_hash, scoring_hash)`; `probe_hash` for the head and training protocol;
-- `eval_hash = H(protocol_hash, probe_hash)`: **the** comparability key, printed in every report the way
+- `eval_hash = H(protocol_hash, scorer_hash)`: **the** comparability key, printed in every report the way
   lm-evaluation-harness prints a task version.
 
 Two numbers of one benchmark compare iff their `eval_hash` agrees and both come from the pinned (standard)

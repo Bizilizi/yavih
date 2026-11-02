@@ -419,15 +419,15 @@ def test_results_file_and_samples_file(tmp_path, fakes):
     assert r["n_eval"] == 6 and r["status"] == "ok" and r["headline"] == "acc" and r["n_seeds"] == 2 and r["coverage_eval"] == 1.0
     assert "acc_std" in r and "n_eval_std" not in r
     cfg = doc["configs"][key]
-    assert cfg["protocol_hash"] == bench.protocol_hash and cfg["probe_hash"] == hashing.probe_hash(clf_cfg(3))
+    assert cfg["protocol_hash"] == bench.protocol_hash and cfg["scorer_hash"] == hashing.probe_hash(clf_cfg(3))
     assert (cfg["benchmark"], cfg["reading"]) == ("synth_clf", READING) and cfg["eval_hash"] == res[0].result["eval_hash"]
     assert cfg["bridge"]["describe"] == DESCRIBE and cfg["describe_sha256"] == hashing.describe_sha256(DESCRIBE)
-    assert cfg["protocol_version"] == 2 and cfg["readout"] == "clf" and cfg["roles"]["eval"] == {"splits": ["val"], "n": 6}
+    assert cfg["protocol_version"] == 2 and cfg["scorer"] == "clf" and cfg["roles"]["eval"] == {"splits": ["val"], "n": 6}
     assert cfg["unit_results"] == [str(x.path) for x in res]
     assert doc["versions"] == {key: 2} and doc["higher_is_better"][key] == {"acc": True}
     assert doc["n_samples"][key] == {"train": 12, "eval": 6}
     assert doc["config"]["model"] == MODEL and doc["config"]["bridge"]["describe"] == DESCRIBE
-    assert doc["config"]["probe"]["seeds"] == [0, 1] and doc["config"]["external"] == {}
+    assert doc["config"]["scoring"]["seeds"] == [0, 1] and doc["config"]["external"] == {}
     sf = res[0].samples_file
     assert sf.name == rf.name.replace("results_", f"samples_synth_clf_{READING}_").replace(".json", ".jsonl")
     lines = [json.loads(x) for x in sf.read_text().splitlines()]
@@ -539,8 +539,8 @@ def test_a_folder_metric_may_bring_its_own_interval():
 
 
 def test_a_failing_folder_scorer_runs_once_per_population():
-    from yavih.readouts.base import ProbeRefused, evaluate_metrics
     from yavih.metrics.registry import MetricSpec
+    from yavih.readouts.base import ProbeRefused, evaluate_metrics
 
     calls = []
 

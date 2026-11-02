@@ -34,12 +34,13 @@ Every digest by role:
 | `scoring_hash` | the [scoring components](#scoring-side) | benchmark (+ `READOUT_VERSION`) | part of `protocol_hash`; recorded in sidecars as provenance |
 | `protocol_hash` | `{input_hash, scoring_hash}` | benchmark (+ `READOUT_VERSION`) | comparability (via `eval_hash`); probe and report unit ids |
 | `probe_hash` | `ProbeConfig`: head and training | probe (task sizes from the benchmark) | comparability (via `eval_hash`) |
-| `eval_hash` | `{protocol_hash, probe_hash}` | benchmark + probe | **the** comparability key: report columns, probe directory, results `configs` |
+| `scorer_hash` | `Scorer.hash_config`: `probe_hash` for a probe, `scorer_config_hash` otherwise | scorer | comparability (via `eval_hash`); `result.scorer.hash`, results `configs[key].scorer_hash`, registry `identity.scorer_hash` |
+| `eval_hash` | `{protocol_hash, scorer_hash}` (payload key `probe_hash`) | benchmark + scorer | **the** comparability key: report columns, probe directory, results `configs` |
 | `describe_sha256` | `describe_subset(describe())` | bridge | consistency and provenance; never a key |
 | `features_fingerprint` | shard sha256s, `N`, `D`, dtype, pos, `n_present` | bridge output (+ site presence) | integrity and staleness (probe DONE gate); never a row key |
 | tar `sha256`, `pos_sha256`, `result_sha256` | file bytes | outputs | integrity |
 | `source_sha256` (bridge) | bridge file bytes | bridge | provenance (`W_SOURCE_SHA`) |
-| `folder_source` | `{probe, reader}`: normalized-source digests of the folder's `eval.py` / `reader.py` | benchmark folder | provenance in sidecars, `result.json` and results files; `W_FOLDER_SOURCE_DIFFERS` in the report; never identity |
+| `folder_source` | `{eval, reader}`: normalized-source digests of the folder's `eval.py` / `reader.py` | benchmark folder | provenance in sidecars, `result.json` and results files; `W_FOLDER_SOURCE_DIFFERS` in the report; never identity |
 | `weights_sha256` | state dict | bridge | provenance (`W_WEIGHTS_UNFINGERPRINTED` when null; `W_JOIN_WEIGHTS`) |
 | `coverage.*.ids_sha256` | present clip ids | site | recorded; "population differs" in the report, `E_JOIN_POPULATION` |
 | `media_fingerprint`, `media_info_sha256` | staged media, census | site | provenance (`W_MEDIA_FP`) |
@@ -105,7 +106,7 @@ deterministic draw.
 A folder's `reader.py` and `eval.py` never enter a hash. Each is digested as provenance:
 ```
 source_sha256(text) = sha256(normalized_source(text))
-Benchmark.folder_source = {"probe": source_sha256(eval.py) | null, "reader": source_sha256(reader.py) | null}
+Benchmark.folder_source = {"eval": source_sha256(eval.py) | null, "reader": source_sha256(reader.py) | null}
 ```
 `normalized_source` parses the file with `ast.parse`, removes every bare string statement (module, class and
 function docstrings, attribute docstrings, any other string used as a statement), and serializes the tree as
@@ -275,9 +276,11 @@ The second slot of `eval_hash` is the scorer's configuration hash (`Scorer.hash_
 scorer_config_hash = sha256(canon({"schema": SCORER_SCHEMA, "scorer": name, "version": version}))
 ```
 
-so every consumer of `probe_hash` (DONE markers, unit ids, result and registry records) keeps its shape, and such a
-scorer's `eval_hash` moves only with `protocol_hash`. The hashed component names `readout` (input and scoring side)
-and `readout_inputs` are payload keys and keep their names: the yaml key is `scorer`.
+so every consumer of the scorer's hash (DONE markers, unit ids, result and registry records) keeps its shape, and
+such a scorer's `eval_hash` moves only with `protocol_hash`. Records call it `scorer_hash` (`result.scorer.hash`);
+inside hashed payloads it keeps the key `probe_hash` (`eval_hash`, unit ids, `inputs_hash`, DONE markers), as the
+hashed component names `readout` (input and scoring side) and `readout_inputs` keep theirs: renaming a payload key
+would move every hash for nothing. The yaml key is `scorer`.
 
 ## features_fingerprint
 
@@ -320,7 +323,7 @@ it. See
 ## eval_hash and comparability
 
 ```
-eval_hash = sha256(canon({"protocol_hash": protocol_hash, "probe_hash": probe_hash}))
+eval_hash = sha256(canon({"protocol_hash": protocol_hash, "probe_hash": scorer_hash}))
 ```
 
 `hashing.eval_hash` has no schema tag of its own (each component carries one) and refuses an empty component. It
@@ -420,6 +423,7 @@ on disk is never rewritten. A record of the current `RESULT_SCHEMA_VERSION` is c
 | step | change |
 |---|---|
 | 3 → 4 | adds `benchmark.folder_source = null` (unknown: never reported as a differing source) |
+| 4 → 5 | renames `probe` → `scorer`, `benchmark.readout` / `readout_version` → `scorer` / `scorer_version`, `benchmark.folder_source.probe` → `.eval`; no hash moves |
 
 Schemas 1 and 2 are not read.
 

@@ -47,14 +47,19 @@ READABLE_FEATURE_FORMATS: Final[tuple[int, ...]] = (4, 5)
 BENCHMARK_SCHEMA_VERSION: Final[int] = 3
 
 #: Bumped when the ``result.json`` schema changes (``eval_hash``, ``model``, ``reading``, ...). 4: ``benchmark.folder_source``.
-RESULT_SCHEMA_VERSION: Final[int] = 4
+#: 5: the ``scorer`` block and ``benchmark.scorer`` / ``scorer_version`` (were ``probe``, ``readout``, ``readout_version``).
+RESULT_SCHEMA_VERSION: Final[int] = 5
 
 #: Bumped when the results-store file schema changes (``results_<timestamp>.json``): one directory per ``model``,
-#: entries keyed ``<benchmark>:<reading>``.
-RESULTS_FILE_VERSION: Final[int] = 2
+#: entries keyed ``<benchmark>:<reading>``. 3: ``scorer`` / ``scorer_version`` / ``scorer_hash`` (were ``readout``,
+#: ``readout_version``, ``probe_hash``) and the ``scoring`` provenance blocks (were ``probe``); a version-2 file is
+#: upgraded in memory.
+RESULTS_FILE_VERSION: Final[int] = 3
 
 #: Bumped when the registry entry schema changes (``yavih.registry``: ``entries/<benchmark>/<eval_hash12>/<org>/<model>/<reading>.json``).
-REGISTRY_ENTRY_VERSION: Final[int] = 1
+#: 2: ``identity.scorer`` / ``scorer_version`` / ``scorer_hash`` and ``provenance.scorer_config`` (were ``readout``,
+#: ``readout_version``, ``probe_hash``, ``probe_config``); a version-1 entry is upgraded in memory.
+REGISTRY_ENTRY_VERSION: Final[int] = 2
 #: Absolute tolerance per metric on its reported scale when a folder's ``metrics.tolerance`` names none: a tenth of a
 #: point. Bounds what the conformance fixture accepts as "same protocol" (``yavih.conformance``) and what the report
 #: shows as a tie (``yavih.report.compare``); not hashed (it changes no number).

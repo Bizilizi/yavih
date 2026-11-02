@@ -600,7 +600,7 @@ def test_probe_py_metrics_overlay_and_protocol_keys(tmp_path):
     assert b.metric_specs["my_score"].fn(None, None, None, None) == 0.0
     assert b.spec.folder_metrics == ("my_score",)
     assert b.eval_sha256 == hashing.source_sha256(PROBE_PY) and b.protocol_hash == _expected_protocol_hash(b)
-    assert b.folder_source == {"probe": b.eval_sha256, "reader": None}
+    assert b.folder_source == {"eval": b.eval_sha256, "reader": None}
     assert b.eval_module().PROTOCOL_KEYS == {"helper_key"}
     # eval.py is provenance, never identity (yavih-protocol-5): a comment edit leaves its digest, a code edit moves
     # the digest, and neither moves protocol_hash — behaviour is pinned by protocol_version and the conformance fixture
@@ -608,7 +608,7 @@ def test_probe_py_metrics_overlay_and_protocol_keys(tmp_path):
     assert Benchmark.from_dir(f).folder_source == b.folder_source
     (f / "eval.py").write_text(PROBE_PY + "EXTRA = 1\n")
     b2 = Benchmark.from_dir(f)
-    assert b2.folder_source["probe"] != b.folder_source["probe"]
+    assert b2.folder_source["eval"] != b.folder_source["eval"]
     assert b2.protocol_hash == b.protocol_hash and b2.input_hash == b.input_hash and b2.scoring_hash == b.scoring_hash
     # without eval.py the folder metric is unknown and the helper key unconsumed
     (f / "eval.py").unlink()
@@ -1370,7 +1370,7 @@ def test_folder_reader_is_provenance_and_receives_the_shard(tmp_path, monkeypatc
     folder = make_folder(tmp_path, rows=rows, mutate=lambda s: (s["budget"].__setitem__("clips", {"train": 20, "val": 6}), s["manifest"].__setitem__("upstream", None)))
     with_roots(monkeypatch, "synth", media_root=tmp_path / "media")
     b0 = Benchmark.from_dir(folder)
-    assert b0.folder_source == {"probe": None, "reader": None}
+    assert b0.folder_source == {"eval": None, "reader": None}
     (folder / "reader.py").write_text(READER_PY, encoding="utf-8")
     b = Benchmark.from_dir(folder)
     assert b.folder_source["reader"] == hashing.source_sha256(READER_PY)

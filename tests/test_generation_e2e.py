@@ -175,9 +175,9 @@ def test_a_folder_scorer_scores_a_generated_set(tmp_path, yavih_home, train_spli
     rec = res[0].result
     assert rec["standard"] is True and set(rec["metrics"]) == {"mean_rms", "n_eval"} and rec["metrics"]["n_eval"] == 4
     assert 0.05 < rec["metrics"]["mean_rms"] < 0.2
-    assert rec["probe"]["hash"] == hashing.scorer_config_hash("synth_clf", 1)
-    assert rec["probe"]["config"] == {"scorer": "synth_clf", "version": 1, "kind": "direct"}
-    assert rec["eval_hash"] == hashing.eval_hash(bench.protocol_hash, rec["probe"]["hash"])
+    assert rec["scorer"]["hash"] == hashing.scorer_config_hash("synth_clf", 1)
+    assert rec["scorer"]["config"] == {"scorer": "synth_clf", "version": 1, "kind": "direct"}
+    assert rec["eval_hash"] == hashing.eval_hash(bench.protocol_hash, rec["scorer"]["hash"])
 
 
 class Louder(ToyGenerator):

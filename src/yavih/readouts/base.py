@@ -89,12 +89,12 @@ RESULT_STATUSES: frozenset[str] = frozenset({"ok", "not_applicable", "failed"})
 RESULT_KEYS: frozenset[str] = frozenset(
     {
         "schema_version", "status", "reason", "standard", "eval_hash", "benchmark", "model", "reading", "bridge", "features",
-        "probe", "metrics", "ci95", "floors", "controls", "chance", "coverage", "not_applicable",
+        "scorer", "metrics", "ci95", "floors", "controls", "chance", "coverage", "not_applicable",
         "timing", "env", "created", "warnings", "external", "waived", "sample",
     }
 )
 _METRIC_BLOCKS: tuple[str, ...] = ("metrics", "floors", "controls", "ci95")
-_BENCHMARK_KEYS = frozenset({"name", "protocol_version", "readout", "readout_version", "manifest_hash", "protocol_hash", "folder_source"})
+_BENCHMARK_KEYS = frozenset({"name", "protocol_version", "scorer", "scorer_version", "manifest_hash", "protocol_hash", "folder_source"})
 #: The result's ``bridge`` block: recorded, never a key.
 _BRIDGE_KEYS = frozenset({"name", "describe", "describe_sha256", "source_sha256"})
 #: Charsets of ``describe()["model"]`` / ``["reading"]`` (they key paths, results files and report rows).
@@ -108,7 +108,7 @@ W_WEIGHTS_UNFINGERPRINTED = "W_WEIGHTS_UNFINGERPRINTED"
 #: rules validate re-checked.
 _FEATURES_KEYS = frozenset({"fingerprint", "dtype", "N", "D", "pos_mode", "bytes", "backend", "canary_max_rel_l2",
                             "batch_tolerance", "rules_checked"})
-_PROBE_KEYS = frozenset({"hash", "config", "seed", "selected_lr", "epochs_run", "best_epoch", "stop", "n_train", "n_val"})
+_SCORER_KEYS = frozenset({"hash", "config", "seed", "selected_lr", "epochs_run", "best_epoch", "stop", "n_train", "n_val"})
 _COVERAGE_ROLE_KEYS = frozenset({"present", "nominal", "ids_sha256"})
 _TIMING_KEYS = frozenset({"validate_s", "materialize_s", "fit_s", "score_s", "wall_s", "s_per_epoch"})
 _ENV_KEYS = frozenset({"host", "gpu", "torch", "python", "yavih", "slurm_job_id"})
@@ -366,20 +366,20 @@ def check_result(result: Mapping[str, Any], *, expect: Mapping[str, Any] | None 
     if not isinstance(result["standard"], bool):
         raise ResultSchemaError("standard must be a bool")
     _expect_keys(result["benchmark"], _BENCHMARK_KEYS, "benchmark")
-    if result["benchmark"]["readout"] not in READOUT_VERSION:
-        raise ResultSchemaError(f"benchmark.readout {result['benchmark']['readout']!r} unknown")
-    if result["benchmark"]["readout_version"] != READOUT_VERSION[result["benchmark"]["readout"]]:
-        raise ResultSchemaError("benchmark.readout_version differs from yavih.versions.READOUT_VERSION")
+    if result["benchmark"]["scorer"] not in READOUT_VERSION:
+        raise ResultSchemaError(f"benchmark.scorer {result['benchmark']['scorer']!r} unknown")
+    if result["benchmark"]["scorer_version"] != READOUT_VERSION[result["benchmark"]["scorer"]]:
+        raise ResultSchemaError("benchmark.scorer_version differs from the scorer's VERSION (yavih.versions.READOUT_VERSION)")
     for key, pattern in (("model", _MODEL_RE), ("reading", _READING_RE)):
         v = result[key]
         if not isinstance(v, str) or not pattern.match(v) or v in (".", ".."):
             raise ResultSchemaError(f"{key} {v!r} must match {pattern.pattern} (describe()[{key!r}])")
     eh = result["eval_hash"]
-    want = hashing.eval_hash(str(result["benchmark"]["protocol_hash"]), str(result["probe"]["hash"])) if isinstance(result.get("probe"), Mapping) else None
+    want = hashing.eval_hash(str(result["benchmark"]["protocol_hash"]), str(result["scorer"]["hash"])) if isinstance(result.get("scorer"), Mapping) else None
     if not isinstance(eh, str) or not _HEX64_RE.match(eh) or eh != want:
-        raise ResultSchemaError("eval_hash must equal sha256(canon({protocol_hash, probe_hash}))")
+        raise ResultSchemaError("eval_hash must equal sha256(canon({protocol_hash, probe_hash: scorer.hash}))")
     _expect_keys(result["bridge"], _BRIDGE_KEYS, "bridge")
-    _expect_keys(result["probe"], _PROBE_KEYS, "probe")
+    _expect_keys(result["scorer"], _SCORER_KEYS, "scorer")
     _expect_keys(result["timing"], _TIMING_KEYS, "timing")
     _expect_keys(result["env"], _ENV_KEYS, "env")
     if not isinstance(result["created"], str):
@@ -474,7 +474,7 @@ def write_result(
         marker = {
             "result_sha256": hashlib.sha256(data).hexdigest(),
             "protocol_hash": result["benchmark"]["protocol_hash"],
-            "probe_hash": result["probe"]["hash"],
+            "probe_hash": result["scorer"]["hash"],  # DONE keeps the hash payloads' name (plan --pending reads it)
             "eval_hash": result["eval_hash"],
             "model": result["model"],
             "reading": result["reading"],
@@ -1146,12 +1146,12 @@ def _benchmark_block(bench: Any) -> dict:
     return {
         "name": bench.name,
         "protocol_version": int(bench.spec.protocol_version),
-        "readout": bench.spec.readout,
-        "readout_version": READOUT_VERSION[bench.spec.readout],
+        "scorer": bench.spec.readout,
+        "scorer_version": READOUT_VERSION[bench.spec.readout],
         "manifest_hash": bench.manifest_hash,
         "protocol_hash": bench.protocol_hash,
         # provenance: the folder's eval.py / reader.py normalized-source digests (never identity)
-        "folder_source": dict(getattr(bench, "folder_source", None) or {"probe": None, "reader": None}),
+        "folder_source": dict(getattr(bench, "folder_source", None) or {"eval": None, "reader": None}),
     }
 
 
@@ -1286,7 +1286,7 @@ def _coverage_union(metas: Mapping[str, dict], splits: Sequence[str], ctx: Reado
     return {"present": present, "nominal": nominal, "ids_sha256": sha}
 
 
-def _probe_block(cfg: Any, qh: str, seed: int, fit: Mapping[str, Any] | None) -> dict:
+def _scorer_block(cfg: Any, qh: str, seed: int, fit: Mapping[str, Any] | None) -> dict:
     fit = fit or {}
     return {
         "hash": qh,
@@ -1417,7 +1417,7 @@ def _not_applicable_result(
         "reading": reading,
         "bridge": bridge,
         "features": features,
-        "probe": _probe_block(cfg, qh, seed, None),
+        "scorer": _scorer_block(cfg, qh, seed, None),
         "chance": _json_native(dict(bench.spec.metrics.chance)),
         "coverage": coverage,
         "not_applicable": {"missing": list(missing), "reason": reason, "decided_by": decided_by},
@@ -2103,7 +2103,7 @@ def _ok_result(ctx: ReadoutContext, blocks: Mapping[str, Any], *, bridge: dict, 
         "reading": reading,
         "bridge": bridge,
         "features": _features_block(ctx.metas, backend=backend),
-        "probe": _probe_block(ctx.cfg, qh, ctx.seed, fit),
+        "scorer": _scorer_block(ctx.cfg, qh, ctx.seed, fit),
         "metrics": _json_native(blocks["metrics"]),
         "ci95": _json_native(blocks.get("ci95") or {}),
         "floors": _json_native(blocks.get("floors") or {}),
@@ -2151,7 +2151,7 @@ def _failed_result(ctx: ReadoutContext, *, bridge: dict, model: str, reading: st
         "reading": reading,
         "bridge": bridge,
         "features": _features_block(ctx.metas),
-        "probe": _probe_block(ctx.cfg, qh, ctx.seed, None),
+        "scorer": _scorer_block(ctx.cfg, qh, ctx.seed, None),
         "chance": ctx.chance,
         "coverage": {
             "train": _coverage_union(ctx.metas, ctx.roles["train"], None),

@@ -44,7 +44,7 @@ from yavih import config as _config
 from yavih import hash_history as _hash_history
 from yavih import hashing
 from yavih.metrics import registry as _registry
-from yavih.sample import INFO_VOCAB, MediaInfoTable, Sample, media_info_path
+from yavih.sample import MediaInfoTable, Sample, media_info_path
 from yavih.shipped import bench_file, bench_file_text, bench_files, prepare_steps
 from yavih.suites import CAPABILITIES
 from yavih.versions import BENCHMARK_SCHEMA_VERSION
@@ -2712,9 +2712,8 @@ class Benchmark:
         eval_py = eval_path(self.folder)
         self.reader_sha256: str | None = hashing.source_sha256(reader_py.read_bytes()) if reader_py.is_file() else None
         self.eval_sha256: str | None = hashing.source_sha256(eval_py.read_bytes()) if eval_py is not None else None
-        #: ``{"probe": sha256|None, "reader": sha256|None}``: the folder's source provenance (never identity). The key
-        #: ``probe`` names the folder's ``eval.py`` digest (the result-schema key is kept).
-        self.folder_source: dict[str, str | None] = {"probe": self.eval_sha256, "reader": self.reader_sha256}
+        #: ``{"eval": sha256|None, "reader": sha256|None}``: the folder's source provenance (never identity).
+        self.folder_source: dict[str, str | None] = {"eval": self.eval_sha256, "reader": self.reader_sha256}
         raw = spec.raw
         self.codecs: dict[str, Any] = self._codec_registry()
         schema = spec.output_contract.schema

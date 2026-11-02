@@ -407,7 +407,7 @@ def _fake_result(tmp: Path, name: str, ph: str, ids_sha: str, n: int, rng, *, re
         "bridge": {"describe": {"model": model, "reading": routing, "weights_sha256": weights,
                                 "input": {s: {} for s in inputs}},
                    "describe_sha256": hashlib.sha256(name.encode()).hexdigest()},
-        "probe": {"hash": probe_hash},
+        "scorer": {"hash": probe_hash},
     }
     (d / "result.json").write_text(json.dumps(rec))
     (d / "DONE").write_text("")

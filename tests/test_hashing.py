@@ -408,7 +408,7 @@ def test_packaged_protocol_hashes_are_recorded_in_the_folder(name):
         codec_versions={str(e["type"]): int(b.codecs[str(e["type"])].version) for e in (raw["output_contract"].get("schema") or {}).values()},
     )
     assert (again.protocol_hash, again.input_hash) == (rec.protocol_hash, rec.input_hash) == (b.protocol_hash, b.input_hash)
-    assert b.folder_source == {"probe": b.eval_sha256, "reader": None}  # the packaged folders ship no reader.py
+    assert b.folder_source == {"eval": b.eval_sha256, "reader": None}  # the packaged folders ship no reader.py
     assert not hashing.find_prose(b.hashes.input_values) and not hashing.find_prose(b.hashes.scoring_values)
 
 

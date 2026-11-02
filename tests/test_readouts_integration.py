@@ -71,7 +71,7 @@ def test_clf_oracle_clears_floor_and_random_does_not(tmp_path):
                               "controls": list(bench.spec.metrics.controls), "ci": dict(bench.spec.metrics.ci)})
     metric, floor = HEADLINE["clf"]
     assert rec["metrics"][metric] > rec["floors"][floor], rec
-    assert rec["standard"] is False and rec["probe"]["hash"] == hashing.probe_hash(cfg)
+    assert rec["standard"] is False and rec["scorer"]["hash"] == hashing.probe_hash(cfg)
     assert rec["benchmark"]["protocol_hash"] == bench.protocol_hash and rec["benchmark"]["manifest_hash"] == bench.manifest_hash
     assert rec["features"]["N"] == 4 and rec["features"]["D"] == 16 and rec["features"]["backend"] in {"ram", "memmap"}
     assert rec["coverage"]["eval"]["present"] == 12 and rec["metrics"]["n_eval"] == 12

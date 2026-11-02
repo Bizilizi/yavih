@@ -397,7 +397,7 @@ def _check_readings(recs: Mapping[str, Mapping[str, Any]]) -> list[dict]:
             f"the three readings are not one model: describe()['model'] {models} "
             "(every bridge of one model declares the same `model` name)",
         )
-    probes = {str((r.get("probe") or {}).get("hash")) for r in recs.values()}
+    probes = {str((r.get("scorer") or {}).get("hash")) for r in recs.values()}
     nonstd = [k for k, r in recs.items() if not bool(r.get("standard"))]
     if len(probes) != 1 or nonstd:
         raise JoinRefused(

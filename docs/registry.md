@@ -25,18 +25,21 @@ and three readings is on the order of 60 MB of JSON.
 
 ## An entry
 
-`REGISTRY_ENTRY_VERSION = 1`. Written by `yavih registry export` from a results-store file
-([results](results.md#results-store)); nothing is typed by hand but `--org`.
+`REGISTRY_ENTRY_VERSION = 2`. Written by `yavih registry export` from a results-store file
+([results](results.md#results-store)); nothing is typed by hand but `--org`. A version-1 entry (written before the
+scorer names) is read, checked and shown with `readout` / `readout_version` / `probe_hash` / `probe_config` /
+`folder_source.probe` renamed to `scorer` / `scorer_version` / `scorer_hash` / `scorer_config` / `folder_source.eval`
+(`registry.upgrade_entry`; its id, path and hashes are the same).
 
 | block | fields | role |
 |---|---|---|
 | `registry_version`, `id` | `id` = `<benchmark>/<eval_hash12>/<org>/<model>/<reading>` | the file's identity; `check` refuses a file not filed under it |
-| `identity` | `benchmark` (canonical), `reading`, `readout`, `readout_version`, `protocol_version`, `protocol_hash`, `input_hash`, `scoring_hash`, `manifest_hash`, `probe_hash`, `eval_hash`, `standard` | the comparability key and its parts (`input_hash` / `scoring_hash` are null when the exporting yavih could not resolve the folder at that hash) |
+| `identity` | `benchmark` (canonical), `reading`, `scorer`, `scorer_version`, `protocol_version`, `protocol_hash`, `input_hash`, `scoring_hash`, `manifest_hash`, `scorer_hash`, `eval_hash`, `standard` | the comparability key and its parts (`input_hash` / `scoring_hash` are null when the exporting yavih could not resolve the folder at that hash) |
 | `model` | `name` = `<org>/<model>`, `org`, `model`, `bridge`, `weights_ref`, `weights_sha256`, `describe_sha256`, `source_sha256`, `describe` | who was measured; recorded, never a key |
 | `score` | `headline`, `metrics`, `ci95`, `std`, `floors` (by metric), `floor_names`, `controls`, `n_seeds`, `seeds: [{seed, metrics, floors, controls, ci95, created}]`, `higher_is_better`, `waived` | the numbers; per-seed values when the results file's `unit_results` were readable at export |
 | `population` | `coverage` per role (`present`, `nominal`, `ids_sha256`; or the results file's fraction), `features_fingerprint` | what was scored; gates comparability (`W_REGISTRY_COVERAGE`) |
 | `conformance` | `passed`, `skipped`, `protocol_version`, `compared`, `tolerance`, `expected_sha256`, `checked_with`, `reason` | the exporting yavih ran the folder's fixture at the entry's hash; `passed: true` is required for acceptance |
-| `provenance` | `yavih_version`, `commit`, `date`, `folder_source`, `external`, `probe_config`, `results_file`, `results_file_sha256`, `unit_results`, `env`, `exported_with`, `replaces` | how to diagnose a disagreement; never compared for identity |
+| `provenance` | `yavih_version`, `commit`, `date`, `folder_source`, `external`, `scorer_config`, `results_file`, `results_file_sha256`, `unit_results`, `env`, `exported_with`, `replaces` | how to diagnose a disagreement; never compared for identity |
 
 A resubmission replaces the file and records the previous file's sha256 under `provenance.replaces`.
 
@@ -62,7 +65,7 @@ that resolves the folder at that hash.
   yavih versions are comparable by construction (the fixture held both) and flagged for diagnosis
   (`W_FOLDER_SOURCE_DIFFERS` in the report).
 - **Acceptance** (`yavih registry check`, the registry repository's CI): every entry parses
-  (`E_REGISTRY_SCHEMA`), is filed under its id (`E_REGISTRY_ID`), has `eval_hash = H(protocol_hash, probe_hash)`
+  (`E_REGISTRY_SCHEMA`), is filed under its id (`E_REGISTRY_ID`), has `eval_hash = H(protocol_hash, scorer_hash)`
   (`E_REGISTRY_HASH`), a protocol payload that recomputes `protocol_hash` and records a tolerance
   (`E_REGISTRY_PROTOCOL`, `E_REGISTRY_SCHEMA`), and `conformance.passed: true` (`E_REGISTRY_CONFORMANCE`: a
   skipped or unverified conformance is refused; export from a yavih that has the folder and its pinned packages).

@@ -105,13 +105,13 @@ the deadline or SIGTERM; only a hard kill (SIGKILL, OOM) loses up to that interv
 
 ```json
 {"schema_version": 4, "status": "ok", "reason": null, "standard": true, "eval_hash": "…",
- "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2, "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"probe": "…", "reader": null}},
+ "benchmark": {"name": "ave", "protocol_version": 2, "scorer": "seq", "scorer_version": 2, "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"eval": "…", "reader": null}},
  "model": "vjepa2-l", "reading": "av",
  "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
  "features": {"fingerprint": "…", "dtype": "float16", "N": 1568, "D": 1024, "pos_mode": "per_sample", "bytes": 5.2e9,
               "backend": "ram", "canary_max_rel_l2": 3.1e-6, "batch_tolerance": 1e-05,
               "rules_checked": {"video": {"temporal": "uniform", "spatial": true}}},
- "probe": {"hash": "…", "config": {…}, "seed": 0, "selected_lr": 3e-4, "epochs_run": 23, "best_epoch": 13, "stop": "patience", "n_train": 2362, "n_val": 262},
+ "scorer": {"hash": "…", "config": {…}, "seed": 0, "selected_lr": 3e-4, "epochs_run": 23, "best_epoch": 13, "stop": "patience", "n_train": 2362, "n_val": 262},
  "metrics": {"seg_acc": 0.412, "clip_acc": 0.412, "seg_acc_boundary": 0.531, "n_eval": 316, "n_boundary": 104},
  "ci95": {"seg_acc": [0.36, 0.47], "seg_acc_boundary": [0.44, 0.63]},
  "floors": {"seg_acc_floor": 0.164, "seg_acc_boundary_floor": 0.499},
@@ -125,7 +125,7 @@ the deadline or SIGTERM; only a hard kill (SIGKILL, OOM) loses up to that interv
 where clips carry different numbers of scored segments. Equal values are not a bug.) Read in this order: `status` (`ok` | `not_applicable` → `reason`,
 `not_applicable.missing`, `decided_by ∈ {validate, plan, bridge}` | `failed`: no DONE, never
 reported) → `standard` → `eval_hash` (the comparability key: two numbers of one benchmark compare iff
-it is equal; it folds `protocol_hash` and `probe_hash`, what yavih controls, and nothing of your bridge)
+it is equal; it folds `protocol_hash` and `scorer_hash`, what yavih controls, and nothing of your bridge)
 → `coverage.eval.present/nominal` (and `ids_sha256`, which must agree across
 the models you compare) → `floors` and `controls` → the headline with its `ci95` → `external`
 (the authors' package versions that produced numbers) → `probe.stop` / `epochs_run` (`max_epochs`
@@ -156,7 +156,7 @@ the key. Keys:
   several seeds the mean, `<m>_std`, and the lowest seed's interval. A `not_applicable` entry holds
   only `status` and `reason`.
 - `configs.<benchmark>:<reading>`: `benchmark`, `reading`, `eval_hash` (the comparability key),
-  readout and its version, `protocol_version`, `protocol_hash`, `probe_hash`, `manifest_hash`, roles
+  readout and its version, `protocol_version`, `protocol_hash`, `scorer_hash`, `manifest_hash`, roles
   with counts, the metrics block, the input/output contracts, `external`, the probe config and seeds,
   the bridge (`describe()`, `describe_sha256`: provenance, per entry because one model directory holds
   several readings), `features_fingerprint`, and the `result.json` paths it was built from.

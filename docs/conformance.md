@@ -135,7 +135,7 @@ reading), booleans and lists compare exactly element-wise, NaN equals NaN.
  "tolerance": {"acc_mean": 0.001, "...": 0.001},
  "values": {"*": {"metrics": {"acc_mean": 0.0156, "...": 0.0}, "floors": {"acc_floor": 0.0156}, "controls": {}, "ci95": {"...": [0.0, 0.03]}}},
  "recorded_with": {"yavih_version": "…", "commit": "…", "protocol_hash": "…", "scoring_hash": "…",
-                   "folder_source": {"probe": null, "reader": null}, "externals": {}}
+                   "folder_source": {"eval": null, "reader": null}, "externals": {}}
 }
 ```
 

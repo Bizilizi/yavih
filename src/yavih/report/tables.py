@@ -1,5 +1,5 @@
 """Table rendering: md prints view 1 first — per model the lm-evaluation-harness table
-``benchmark | reading | version | eval_hash | readout | metric | value | ci95 | floor``
+``benchmark | reading | version | eval_hash | scorer | metric | value | ci95 | floor``
 (:func:`render_lm_eval`) — then view 2, the comparability columns ``(benchmark, eval_hash)`` with rows
 ``(model, reading)`` (``~~value~~`` for greyed rows); csv is the long format of view 2
 (``flag=below_floor``; ``eval_hash``, ``model``, ``reading``, ``describe_sha256`` and
@@ -23,13 +23,13 @@ __all__ = ["render", "render_md", "render_csv", "render_json", "render_lm_eval",
            "format_number", "format_coverage", "MISSING", "PARTIAL_MARK"]
 
 #: Columns of the per-model view, in order.
-LM_EVAL_HEADER: tuple[str, ...] = ("benchmark", "reading", "version", "eval_hash", "readout", "metric", "value", "ci95", "floor")
+LM_EVAL_HEADER: tuple[str, ...] = ("benchmark", "reading", "version", "eval_hash", "scorer", "metric", "value", "ci95", "floor")
 _DASH = "—"
 
 MISSING = "MISSING"
 
 _CSV_FIELDS = [
-    "benchmark", "eval_hash", "protocol_hash", "probe_hash", "model", "reading", "describe_sha256", "features_fingerprint",
+    "benchmark", "eval_hash", "protocol_hash", "scorer_hash", "model", "reading", "describe_sha256", "features_fingerprint",
     "bridge_name", "status", "seed", "n_seeds", "coverage_train", "coverage_eval", "metric", "kind", "value", "std", "floor",
     "ci_lo", "ci_hi", "chance", "tie", "partial", "flag", "waived",
 ]
@@ -128,8 +128,8 @@ def _grey(text: str, greyed: bool) -> str:
 
 def _column_title(col: dict[str, Any]) -> str:
     bits = [f"### {col['benchmark']}"]
-    if col.get("readout"):
-        bits.append(f"{col['readout']}")
+    if col.get("scorer"):
+        bits.append(f"{col['scorer']}")
     if col.get("protocol_version") is not None:
         bits.append(f"v{col['protocol_version']}")
     bits.append(f"eval_hash `{str(col['eval_hash'])[:12]}`")
@@ -172,7 +172,7 @@ def render_lm_eval(lm_eval: dict[str, list[dict[str, Any]]], *, show_all: bool =
             if row.get("headline"):
                 metric = f"**{metric}**"
             cells = [_md_escape(str(row.get("benchmark", ""))), _md_escape(str(row.get("reading") or "")), format_number(row.get("version")),
-                     f"`{row.get('eval_hash') or ''}`" if row.get("eval_hash") else "", str(row.get("readout") or ""), metric, value, ci, floor]
+                     f"`{row.get('eval_hash') or ''}`" if row.get("eval_hash") else "", str(row.get("scorer") or ""), metric, value, ci, floor]
             out.append("| " + " | ".join(cells) + " |")
         out.append("")
         notes = _waived_footnotes(rows, lambda r: f"{r.get('benchmark')} {r.get('reading')}")
@@ -402,7 +402,7 @@ def _csv_row(row: dict[str, Any], **extra: Any) -> dict[str, Any]:
         "benchmark": row["benchmark"],
         "eval_hash": row["eval_hash"],
         "protocol_hash": row.get("protocol_hash") or "",
-        "probe_hash": row.get("probe_hash") or "",
+        "scorer_hash": row.get("scorer_hash") or "",
         "model": row["model"],
         "reading": row["reading"],
         "describe_sha256": row.get("describe_sha256") or "",
