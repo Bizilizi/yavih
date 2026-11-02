@@ -31,6 +31,8 @@ __all__ = [
     "is_file_kind",
     "info_vocab",
     "OPAQUE_INFO",
+    "ARRAY_KIND",
+    "ARRAY_INFO",
     "KIND_RE",
     "file_fields",
     "spec_streams",
@@ -47,6 +49,11 @@ STREAM_KINDS: frozenset[str] = MEDIA_KINDS
 KIND_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 #: The facts ``input_contract.info`` may guarantee for an opaque file field.
 OPAQUE_INFO: frozenset[str] = frozenset({"container", "bytes"})
+#: The one non-media kind yavih reads: stored arrays (``.npy``, ``.npz``, ``.safetensors``, a ``npy_rows`` row), facts
+#: from the header, handed over decoded by ``RawStream.arrays()`` (``yavih.media.arrays``; pickles refused).
+ARRAY_KIND = "array"
+#: The facts ``input_contract.info`` may guarantee for an ``array`` field (``dtype`` / ``shape``: a one-array file).
+ARRAY_INFO: frozenset[str] = frozenset({"container", "bytes", "dtype", "shape", "n_arrays"})
 #: ``file``: stored bytes under a data root (``Sample.streams``); ``cell``: a typed manifest column (``Sample.cells``).
 STORAGES: frozenset[str] = frozenset({"file", "cell"})
 #: What a field is for; ``input`` (handed to the bridge) is the only role today.
@@ -92,6 +99,8 @@ def is_file_kind(kind: str) -> bool:
 
 def info_vocab(kind: str) -> frozenset[str]:
     """The facts ``input_contract.info`` may guarantee for a file field of ``kind``."""
+    if kind == ARRAY_KIND:
+        return ARRAY_INFO
     return INFO_VOCAB.get(kind, OPAQUE_INFO) if is_media_kind(kind) else OPAQUE_INFO
 
 

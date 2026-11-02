@@ -497,7 +497,7 @@ def validate_input(inp: Any, kinds: Mapping[str, str], tagged: Sequence[str], ce
     for sname, entry in inp.items():
         where = f"[{sname!r}]"
         if sname in cells or kinds.get(sname) not in STREAM_KINDS:  # a cell, or an opaque file: nothing to declare
-            what = "a cell field" if sname in cells else f"an opaque {kinds.get(sname)!r} file field"
+            what = "a cell field" if sname in cells else f"an {kinds.get(sname)!r} file field" if kinds.get(sname) == "array" else f"an opaque {kinds.get(sname)!r} file field"
             _in(where, isinstance(entry, Mapping) and set(entry) <= {"note"} and isinstance(entry.get("note", ""), str),
                 f"{what} is declared as {{}} or {{'note': str}} (how the bridge reads it), got {entry!r}")
             continue

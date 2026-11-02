@@ -287,3 +287,94 @@ def test_opaque_kind_rules():
     validate_input({"cloud": {"note": "bytes"}}, {"cloud": "pointcloud"}, [])
     with pytest.raises(DescribeError, match="opaque"):
         validate_input({"cloud": {"temporal": {"rule": "custom"}}}, {"cloud": "pointcloud"}, [])
+
+
+def _with_arrays(folder):
+    """Add an `array` file field `cloud`: an .npz per row holding `points` [5, 3] and `normals` [5, 3]."""
+    y = yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))
+    media_root = Path(y["data"]["roots"]["media_root"]["default"])
+    raw = gzip.decompress((folder / "manifest.csv.gz").read_bytes()).decode("utf-8")
+    rows = list(csv.reader(io.StringIO(raw)))
+    header, body = rows[0], rows[1:]
+    key, split = header.index(y["manifest"]["key"]), header.index("split")
+    header += ["rel_cloud"]
+    body = [r + [f"{r[split]}/{r[key]}.npz"] for r in body]
+    for r in body:
+        rng = np.random.default_rng(int.from_bytes(hashlib.sha256(r[key].encode()).digest()[:8], "big"))
+        p = media_root / r[-1]
+        p.parent.mkdir(parents=True, exist_ok=True)
+        buf = io.BytesIO()
+        np.savez(buf, points=rng.standard_normal((5, 3)).astype(np.float32), normals=np.ones((5, 3), np.float32))
+        p.write_bytes(buf.getvalue())
+    data = csv_bytes(header, body)
+    (folder / "manifest.csv.gz").write_bytes(gzip_bytes(data))
+    y["manifest"]["sha256"] = hashlib.sha256(data).hexdigest()
+    y["manifest"]["columns"]["rel_cloud"] = {"type": "str", "role": "media", "stream": "cloud"}
+    y["fields"]["cloud"] = {"storage": "file", "kind": "array", "media_column": "rel_cloud", "root": "media_root", "layout": "dir",
+                            "layout_params": {}, "required": True}
+    y["input_contract"]["handed_over"]["cloud"] = "the clip's point cloud: points and normals, an .npz as stored"
+    y["input_contract"]["info"]["cloud"] = ["container", "n_arrays"]
+    (folder / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+    return Benchmark.from_dir(folder)
+
+
+class ArrayBridge(CloudBridge):
+    """Pools the decoded point cloud."""
+
+    def describe(self) -> dict:
+        return {**super().describe(), "model": "toy-array", "input": {"cloud": {"note": "points, mean-pooled"}}}
+
+    def encode(self, samples):
+        feats = [np.repeat(s.streams["cloud"].arrays()["points"].mean(0, keepdims=True), 2, 0).astype(np.float32) for s in samples]
+        return np.stack(feats), None, [{} for _ in samples]
+
+
+def test_an_array_file_field_is_handed_over_decoded(tmp_path, yavih_home):
+    from yavih.benchmark import bench_verify
+    from yavih.extract import bridge_check, run_extract
+    from yavih.io import validate_features
+
+    folder = T.make_synthetic_benchmark(yavih_home / "benchmarks", "clf", n_train=6, n_eval=4, media="tiny")
+    b = _with_arrays(folder)
+    s = next(iter(b.reader("val", rows=range(1))))
+    st = s.streams["cloud"]
+    assert st.info["container"] == "npz" and st.info["n_arrays"] == 2 and st.info["shape"] is None and st.info["duration_s"] is None
+    arrs = st.arrays()
+    assert list(arrs) == ["points", "normals"] and arrs["points"].shape == (5, 3) and arrs["points"].dtype == np.float32
+    with pytest.raises(ValueError, match="use arrays"):
+        st.array()
+    rep = bench_verify(str(folder), decode_sample=4)
+    assert rep["decode_sample"]["failed"] == 0 and rep["decode_sample"]["ok"] > 0
+    assert bridge_check(bridge=ArrayBridge, bench=b, n=6)["invariance"]["rerun_bit_identical"] is True
+    run = tmp_path / "run"
+    assert run_extract(bench=b, bridge=ArrayBridge, split="val", shard=(0, 1), out=run, canaries=1)["status"] == "ok"
+    assert validate_features(run / "features" / "val", bench=b).ok
+
+
+def test_array_containers_and_refusals():
+    import struct
+
+    from yavih.media.arrays import ArrayError, array_facts, container_of, load_arrays
+
+    a = np.arange(12, dtype=np.float32).reshape(4, 3)
+    buf = io.BytesIO()
+    np.save(buf, a)
+    assert array_facts(buf.getvalue(), "npy") == {"dtype": "float32", "shape": [4, 3], "n_arrays": 1}
+    assert (load_arrays(buf.getvalue(), "npy")["arr_0"] == a).all()
+    head = json.dumps({"__metadata__": {"k": "v"}, "x": {"dtype": "F32", "shape": [4, 3], "data_offsets": [0, 48]}}).encode()
+    st = struct.pack("<Q", len(head)) + head + a.tobytes()
+    assert array_facts(st, "safetensors") == {"dtype": "float32", "shape": [4, 3], "n_arrays": 1}
+    assert (load_arrays(st, "safetensors")["x"] == a).all()
+    for bad in ("pt", "pkl", "ckpt"):
+        with pytest.raises(ArrayError, match="unpickle"):
+            container_of(bad)
+    with pytest.raises(ArrayError, match="extension"):
+        container_of(None)
+    obj = io.BytesIO()
+    np.save(obj, np.array([{}], dtype=object), allow_pickle=True)
+    with pytest.raises(ArrayError, match="object"):
+        load_arrays(obj.getvalue(), "npy")
+    bf16 = json.dumps({"x": {"dtype": "BF16", "shape": [2], "data_offsets": [0, 4]}}).encode()
+    with pytest.raises(ArrayError, match="numpy cannot hold"):
+        array_facts(struct.pack("<Q", len(bf16)) + bf16 + b"\0" * 4, "safetensors")
+    assert F.info_vocab("array") == F.ARRAY_INFO and "dtype" not in F.info_vocab("pointcloud")

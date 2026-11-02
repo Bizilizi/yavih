@@ -57,12 +57,13 @@ __all__ = [
 ]
 
 from yavih.fields import (  # noqa: E402 - the one vocabulary
+    ARRAY_KIND,
     INFO_VOCAB,
     LAYOUTS,
     MEDIA_INFO_KEYS,
     STREAM_KINDS,
-    is_file_kind,
     TRACK_FACTS,
+    is_file_kind,
     spec_streams,
 )
 
@@ -342,6 +343,22 @@ class RawStream:
                 return None
         return size
 
+    def arrays(self) -> dict[str, Any]:
+        """An ``array`` field's arrays, decoded (numpy, no pickle): ``{name: ndarray}`` in file order; a ``.npy`` file
+        or a ``npy_rows`` row holds one, named ``arr_0``."""
+        from yavih.media.arrays import container_of, load_arrays
+
+        if self._kind != ARRAY_KIND:
+            raise TypeError(f"{self._clip_id}[{self._name}]: arrays() reads an 'array' field, this one is {self._kind!r}")
+        return load_arrays(self.bytes(), container_of(self._ext), where=f"{self._clip_id}[{self._name}]")
+
+    def array(self) -> Any:
+        """The one array of an ``array`` field (``ValueError`` when the file holds several: use ``arrays()``)."""
+        out = self.arrays()
+        if len(out) != 1:
+            raise ValueError(f"{self._clip_id}[{self._name}]: the file holds {len(out)} arrays {list(out)}: use arrays()")
+        return next(iter(out.values()))
+
     # -- facts --------------------------------------------------------------------
     def _resolve_info(self) -> dict:
         """Census entry, else a header probe. A probe failure is a missing row only when a guaranteed key is left null. A file that
@@ -350,6 +367,19 @@ class RawStream:
         from yavih.media import DecodeError, DecoderMissing
 
         info = {k: None for k in MEDIA_INFO_KEYS}
+        if self._kind == ARRAY_KIND:  # stored arrays: the header's dtype and shape, no media probe
+            from yavih.media.arrays import ArrayError, array_facts, container_of
+
+            info.update(container=(self._ext or "").lower() or None, bytes=self.nbytes, dtype=None, shape=None, n_arrays=None)
+            try:
+                info.update(array_facts(self.bytes(), container_of(self._ext), where=f"{self._clip_id}[{self._name}]"))
+            except ArrayError as exc:
+                if self._required:
+                    raise _missing(self._clip_id, self._name, str(exc)) from exc
+            missing = [k for k in self._required if info.get(k) is None]
+            if missing:
+                raise _missing(self._clip_id, self._name, f"fact(s) {missing} are null but the input contract guarantees them")
+            return info
         if self._kind not in STREAM_KINDS:  # an opaque file: its container (the extension) and its size, nothing probed
             info.update(container=(self._ext or "").lower() or None, bytes=self.nbytes)
             missing = [k for k in self._required if info.get(k) is None]

@@ -21,12 +21,14 @@ them carries the manifest, labels, splits or data roots.
 ```python
 class RawStream:                          # read-only (__slots__; assignment raises AttributeError)
     name: str                             # stream name from benchmark.yaml `streams` (the pos tag vocabulary)
-    kind: str                             # "video" | "audio" | "image"
+    kind: str                             # "video" | "audio" | "image" (media), "array", or an opaque kind of the folder's
     path: str | None                      # OPAQUE absolute path to the stored file (layout dir); None for a tar member
     member: tuple[str, int, int] | None   # (tar path, data offset, size) for layout tar_index; None otherwise
     info: dict                            # MediaInfo (below), a fresh dict on every access
     def bytes(self) -> bytes              # the stored file byte for byte (tar member: the member's bytes); cached after the first read
     def open(self) -> BinaryIO            # read-only, seekable file object over the same bytes
+    def arrays(self) -> dict[str, ndarray]  # kind "array" only: every stored array decoded (numpy, no pickle); a .npy is {"arr_0": a}
+    def array(self) -> ndarray            # kind "array" only: the file's one array (ValueError when it holds several)
 
 @dataclass(frozen=True)
 class Sample:
@@ -302,9 +304,9 @@ other than `autocast`); a `batch_tolerance` outside `(0, 1e-3]` or without reaso
 ## Declared rules: `describe()["input"]`
 
 `input` is non-empty, its keys are a subset of the benchmark's fields and a superset of `describe()["streams"]`
-(a tagged stream is read and declared). A cell field, or a file field of an opaque kind (not video, audio or image: a
-point cloud, a mesh, a document), is declared as `{}` or `{"note": str}`: yavih hands it over as is and checks no rule;
-name a prompt template or a parser in the note. Each file-field entry
+(a tagged stream is read and declared). A cell field, an `array` field, or a file field of an opaque kind (not video,
+audio or image: a mesh, a document), is declared as `{}` or `{"note": str}`: yavih hands it over as is and checks no
+rule; name a prompt template, a parser or the arrays read in the note. Each file-field entry
 has exactly these keys, by kind:
 
 | kind | keys |

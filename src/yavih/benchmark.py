@@ -3351,6 +3351,9 @@ def _decode_sample(bench: Benchmark, picks: Sequence[tuple[str, int]]) -> dict[s
         try:
             s = bench.sample(split, r)
             for st in s.streams.values():
+                if st.kind == "array":
+                    st.arrays()  # stored arrays: they load without pickle
+                    continue
                 if st.kind not in ("video", "audio", "image"):
                     st.bytes()  # an opaque file: readable is all yavih checks
                     continue
