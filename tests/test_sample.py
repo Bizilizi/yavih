@@ -93,7 +93,7 @@ def test_raw_stream_dir_hands_over_the_stored_bytes(tmp_path: Path):
     with pytest.raises(AttributeError):
         st.path = "/elsewhere"  # type: ignore[misc]
     with pytest.raises(ValueError):
-        RawStream("video", "text", src=_Source(("file", str(p))))
+        RawStream("video", "Text!", src=_Source(("file", str(p))))  # any [a-z][a-z0-9_]* kind is valid (opaque)
 
 
 def test_raw_stream_missing_media_is_media_missing_with_a_reason(tmp_path: Path):

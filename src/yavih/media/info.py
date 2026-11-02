@@ -451,6 +451,8 @@ def write_census(
         for i in range(len(man)):
             s = build_sample(bench, split, man, i, ctx=ctx)
             for name, st in s.streams.items():
+                if st.kind not in ("video", "audio", "image"):
+                    continue  # an opaque file has no header to probe: its facts come from the file itself
                 key = (name, man.media[i][name])
                 todo.setdefault(key, st)
 

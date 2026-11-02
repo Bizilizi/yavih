@@ -302,8 +302,9 @@ other than `autocast`); a `batch_tolerance` outside `(0, 1e-3]` or without reaso
 ## Declared rules: `describe()["input"]`
 
 `input` is non-empty, its keys are a subset of the benchmark's fields and a superset of `describe()["streams"]`
-(a tagged stream is read and declared). A cell field the bridge reads is declared as `{}` or `{"note": str}` (the
-value is handed over as is: there is no rule to declare; name a prompt template in the note). Each file-field entry
+(a tagged stream is read and declared). A cell field, or a file field of an opaque kind (not video, audio or image: a
+point cloud, a mesh, a document), is declared as `{}` or `{"note": str}`: yavih hands it over as is and checks no rule;
+name a prompt template or a parser in the note. Each file-field entry
 has exactly these keys, by kind:
 
 | kind | keys |

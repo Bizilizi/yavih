@@ -9,6 +9,7 @@ folder's, the storage and its checks are yavih's. Stdlib only.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 
 __all__ = [
@@ -27,6 +28,10 @@ __all__ = [
     "TARGET_SOURCES",
     "FIELD_DEFAULTS",
     "is_media_kind",
+    "is_file_kind",
+    "info_vocab",
+    "OPAQUE_INFO",
+    "KIND_RE",
     "file_fields",
     "spec_streams",
     "cell_fields",
@@ -34,8 +39,14 @@ __all__ = [
 
 #: Stream kinds with header facts, decoders and rule checks.
 MEDIA_KINDS: frozenset[str] = frozenset({"video", "audio", "image"})
-#: The kinds a ``file`` field may declare today (the media kinds).
+#: The media kinds (header facts, decoders, rule checks). A ``file`` field may declare any kind matching ``KIND_RE``:
+#: a kind outside ``MEDIA_KINDS`` is opaque (a point cloud, a mesh, a document), handed over as bytes and a path with
+#: the facts ``OPAQUE_INFO`` only, never decoded or probed by yavih, never checked against a temporal or spatial rule.
 STREAM_KINDS: frozenset[str] = MEDIA_KINDS
+#: A field kind: what the bytes are, in the folder's words.
+KIND_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+#: The facts ``input_contract.info`` may guarantee for an opaque file field.
+OPAQUE_INFO: frozenset[str] = frozenset({"container", "bytes"})
 #: ``file``: stored bytes under a data root (``Sample.streams``); ``cell``: a typed manifest column (``Sample.cells``).
 STORAGES: frozenset[str] = frozenset({"file", "cell"})
 #: What a field is for; ``input`` (handed to the bridge) is the only role today.
@@ -72,6 +83,16 @@ TARGET_SOURCES: frozenset[str] = frozenset({"derived_file"})
 
 def is_media_kind(kind: str) -> bool:
     return kind in MEDIA_KINDS
+
+
+def is_file_kind(kind: str) -> bool:
+    """A kind a ``file`` field may declare: a media kind or an opaque one (``KIND_RE``)."""
+    return isinstance(kind, str) and KIND_RE.match(kind) is not None
+
+
+def info_vocab(kind: str) -> frozenset[str]:
+    """The facts ``input_contract.info`` may guarantee for a file field of ``kind``."""
+    return INFO_VOCAB.get(kind, OPAQUE_INFO) if is_media_kind(kind) else OPAQUE_INFO
 
 
 def file_fields(fields: Mapping[str, object] | None) -> dict[str, dict]:

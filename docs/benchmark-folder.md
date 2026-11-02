@@ -204,7 +204,7 @@ splits:                            # every manifest split value in exactly one r
 fields:                            # name ([a-z][a-z0-9_]*) -> what each row hands the bridge
   video:
     storage: file                  # file: stored bytes under a data root -> Sample.streams[name]
-    kind: video                    # video | audio | image
+    kind: video                    # video | audio | image (media: header facts, rules), or any [a-z][a-z0-9_]* (opaque: bytes + path; info only container, bytes)
     media_column: rel_media        # str or {split value | role: str}; a manifest column with {role: media, stream: <this>}
     root: media_root               # str or per split; a key of data.roots
     layout: dir                    # optional, default dir: dir | tar_index (per split allowed)

@@ -8,6 +8,7 @@ import gzip
 import hashlib
 import io
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -209,3 +210,80 @@ def test_describe_input_cell_entries():
         with pytest.raises(DescribeError):
             validate_input(bad, {}, [], {"caption": "text"})
     assert input_streams({"caption": {"note": "x"}, "video": {"norm": {}, "decoder": {}}}) == ["video"]
+
+
+def _with_pointcloud(folder):
+    """Add an opaque `cloud` file field (kind `pointcloud`, a .ply per row under the media root)."""
+    y = yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))
+    media_root = Path(y["data"]["roots"]["media_root"]["default"])
+    raw = gzip.decompress((folder / "manifest.csv.gz").read_bytes()).decode("utf-8")
+    rows = list(csv.reader(io.StringIO(raw)))
+    header, body = rows[0], rows[1:]
+    key, split = header.index(y["manifest"]["key"]), header.index("split")
+    header += ["rel_cloud"]
+    body = [r + [f"{r[split]}/{r[key]}.ply"] for r in body]
+    for r in body:
+        p = media_root / r[-1]
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"ply\nformat ascii 1.0\nelement vertex 1\nend_header\n0 0 " + r[key].encode() + b"\n")
+    data = csv_bytes(header, body)
+    (folder / "manifest.csv.gz").write_bytes(gzip_bytes(data))
+    y["manifest"]["sha256"] = hashlib.sha256(data).hexdigest()
+    y["manifest"]["columns"]["rel_cloud"] = {"type": "str", "role": "media", "stream": "cloud"}
+    y["fields"]["cloud"] = {"storage": "file", "kind": "pointcloud", "media_column": "rel_cloud", "root": "media_root", "layout": "dir",
+                            "layout_params": {}, "required": True}
+    y["input_contract"]["handed_over"]["cloud"] = "the clip's point cloud, a .ply file as stored"
+    y["input_contract"]["info"]["cloud"] = ["container", "bytes"]
+    (folder / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+    return Benchmark.from_dir(folder)
+
+
+class CloudBridge(Bridge):
+    """Reads the opaque point cloud (its bytes key the features) and nothing else."""
+
+    batch_size = 2
+    dtype = "float32"
+    pos_mode = "none"
+
+    def describe(self) -> dict:
+        return {"model": "toy-cloud", "reading": "p", "weights_sha256": None, "weights_ref": "-", "batch_size": self.batch_size, "views": 1,
+                "dtype": "float32", "pos_mode": "none", "streams": [], "layer": "last", "pooling": "none",
+                "input": {"cloud": {"note": "the .ply bytes, hashed"}},
+                "precision": {"autocast": None, "matmul_precision": "highest", "allow_tf32": False, "deterministic": True}, "args": {}}
+
+    def encode(self, samples):
+        feats = []
+        for s in samples:
+            seed = int.from_bytes(hashlib.sha256(s.streams["cloud"].bytes()).digest()[:8], "big")
+            feats.append(np.random.default_rng(seed).standard_normal((2, 8)).astype(np.float32))
+        return np.stack(feats), None, [{} for _ in samples]
+
+
+def test_an_opaque_file_field_is_handed_over_as_bytes(tmp_path, yavih_home):
+    from yavih.benchmark import bench_verify
+    from yavih.extract import bridge_check, run_extract
+    from yavih.io import validate_features
+
+    folder = T.make_synthetic_benchmark(yavih_home / "benchmarks", "clf", n_train=6, n_eval=4, media="tiny")
+    b = _with_pointcloud(folder)
+    assert b.spec.streams["cloud"].kind == "pointcloud" and b.view().streams["cloud"] == "pointcloud"
+    s = next(iter(b.reader("val", rows=range(1))))
+    info = s.streams["cloud"].info
+    assert info["container"] == "ply" and info["bytes"] == len(s.streams["cloud"].bytes()) and info["duration_s"] is None
+    rep = bench_verify(str(folder), decode_sample=4)
+    assert rep["decode_sample"]["failed"] == 0 and rep["decode_sample"]["ok"] > 0
+    assert bridge_check(bridge=CloudBridge, bench=b, n=6)["invariance"]["rerun_bit_identical"] is True
+    run = tmp_path / "run"
+    assert run_extract(bench=b, bridge=CloudBridge, split="val", shard=(0, 1), out=run, canaries=1)["status"] == "ok"
+    assert validate_features(run / "features" / "val", bench=b).ok
+
+
+def test_opaque_kind_rules():
+    from yavih.bridge import DescribeError, validate_input
+    from yavih.fields import info_vocab, is_file_kind
+
+    assert is_file_kind("pointcloud") and is_file_kind("video") and not is_file_kind("Point-Cloud") and not is_file_kind("")
+    assert info_vocab("pointcloud") == {"container", "bytes"} and "fps" in info_vocab("video")
+    validate_input({"cloud": {"note": "bytes"}}, {"cloud": "pointcloud"}, [])
+    with pytest.raises(DescribeError, match="opaque"):
+        validate_input({"cloud": {"temporal": {"rule": "custom"}}}, {"cloud": "pointcloud"}, [])

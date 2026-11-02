@@ -403,7 +403,7 @@ def _schema_cases() -> list[tuple[str, Callable[[dict], None] | None, str]]:
         ("split_train_empty", lambda s: s["splits"].__setitem__("train", []), "train"),
         ("folds_with_train", lambda s: s["splits"].__setitem__("folds", ["1", "2"]), "folds"),
         ("min_eval_coverage_range", lambda s: s["splits"].__setitem__("min_eval_coverage", 1.5), "min_eval_coverage"),
-        ("stream_kind", lambda s: s["fields"]["video"].__setitem__("kind", "text"), "kind"),
+        ("stream_kind", lambda s: s["fields"]["video"].__setitem__("kind", "Text!"), "kind"),
         ("stream_layout", lambda s: s["fields"]["video"].__setitem__("layout", "zip"), "layout"),
         ("stream_root_undeclared", lambda s: s["fields"]["video"].__setitem__("root", "other_root"), "root"),
         ("layout_params_unknown", lambda s: s["fields"]["video"].__setitem__("layout_params", {"x": 1}), "layout_params"),

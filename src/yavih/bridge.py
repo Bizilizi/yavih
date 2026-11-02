@@ -470,8 +470,9 @@ def _rule_check(where: str, fn: Any, *args: Any) -> None:
 
 
 def is_cell_entry(entry: Any) -> bool:
-    """A ``describe()["input"]`` entry that declares a cell field: ``{}`` or ``{"note": str}`` (a stream entry always
-    carries ``norm`` and ``decoder``, ``validate_input``). A cell has no ``used`` record and no rule to check."""
+    """A ``describe()["input"]`` entry with nothing to check: ``{}`` or ``{"note": str}``, the declaration of a cell
+    field or of an opaque file field (a media stream entry always carries ``norm`` and ``decoder``,
+    ``validate_input``). Such a field has no ``used`` record and no rule to check."""
     return isinstance(entry, Mapping) and set(entry) <= {"note"}
 
 
@@ -495,9 +496,10 @@ def validate_input(inp: Any, kinds: Mapping[str, str], tagged: Sequence[str], ce
     _in("", not untagged, f"lacks the tagged stream(s) {untagged}: every stream in describe()['streams'] is read and declared")
     for sname, entry in inp.items():
         where = f"[{sname!r}]"
-        if sname in cells:
+        if sname in cells or kinds.get(sname) not in STREAM_KINDS:  # a cell, or an opaque file: nothing to declare
+            what = "a cell field" if sname in cells else f"an opaque {kinds.get(sname)!r} file field"
             _in(where, isinstance(entry, Mapping) and set(entry) <= {"note"} and isinstance(entry.get("note", ""), str),
-                f"a cell field is declared as {{}} or {{'note': str}}, got {entry!r}")
+                f"{what} is declared as {{}} or {{'note': str}} (how the bridge reads it), got {entry!r}")
             continue
         kind = kinds[sname]
         _in(where, isinstance(entry, Mapping), f"must be a dict, got {type(entry).__name__}")

@@ -61,6 +61,7 @@ from yavih.fields import (  # noqa: E402 - the one vocabulary
     LAYOUTS,
     MEDIA_INFO_KEYS,
     STREAM_KINDS,
+    is_file_kind,
     TRACK_FACTS,
     spec_streams,
 )
@@ -231,8 +232,8 @@ class RawStream:
         ext: str | None = None,
         handle: str = "",
     ) -> None:
-        if kind not in STREAM_KINDS:
-            raise ValueError(f"RawStream.kind must be one of {sorted(STREAM_KINDS)}, got {kind!r}")
+        if not is_file_kind(kind):
+            raise ValueError(f"RawStream.kind must be a media kind {sorted(STREAM_KINDS)} or an opaque one matching [a-z][a-z0-9_]*, got {kind!r}")
         if src is None:
             raise ValueError("RawStream: a stream needs a byte source")
         self._name = str(name)
@@ -316,6 +317,12 @@ class RawStream:
         from yavih.media import DecodeError, DecoderMissing
 
         info = {k: None for k in MEDIA_INFO_KEYS}
+        if self._kind not in STREAM_KINDS:  # an opaque file: its container (the extension) and its size, nothing probed
+            info.update(container=(self._ext or "").lower() or None, bytes=self.nbytes)
+            missing = [k for k in self._required if info.get(k) is None]
+            if missing:
+                raise _missing(self._clip_id, self._name, f"fact(s) {missing} are null but the input contract guarantees them")
+            return info
         if self._info_entry is not None:
             info.update(self._info_entry)
         else:

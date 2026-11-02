@@ -181,6 +181,8 @@ from yavih.fields import (  # noqa: E402 - the one vocabulary
     LAYOUTS,
     STORAGES,
     STREAM_KINDS,
+    info_vocab,
+    is_file_kind,
 )
 
 CLASS_KEYS: frozenset[str] = frozenset({"name", "mid", "index"})
@@ -1087,7 +1089,9 @@ def _parse_streams(v: Any, path: str, splits: SplitsSpec, columns: Mapping[str, 
             raise SchemaError(f"{p}: stream names must match [a-z][a-z0-9_]*")
         s = _expect_mapping(s, p)
         _check_keys(s, p, ["kind", "media_column", "root"], ["layout", "layout_params", "required"])
-        kind = _enum(s["kind"], f"{p}.kind", STREAM_KINDS)
+        kind = _str(s["kind"], f"{p}.kind")
+        if not is_file_kind(kind):
+            raise SchemaError(f"{p}.kind: {kind!r} must match [a-z][a-z0-9_]* (a media kind {sorted(STREAM_KINDS)} or an opaque one: pointcloud, mesh, ...)")
         media_column = s["media_column"]
         _check_per_split_cover(media_column, f"{p}.media_column", splits, value_type=str)
         root = s["root"]
@@ -1278,9 +1282,9 @@ def _parse_input_contract(v: Any, path: str, streams: Mapping[str, StreamSpec], 
     for k, keys in info_raw.items():
         keys_t = _str_list(keys, f"{path}.info.{k}")
         kind = streams[k].kind
-        bad = sorted(set(keys_t) - INFO_VOCAB[kind])
+        bad = sorted(set(keys_t) - info_vocab(kind))
         if bad:
-            raise SchemaError(f"{path}.info.{k}: {bad} are not media facts of a {kind!r} stream (known: {sorted(INFO_VOCAB[kind])})")
+            raise SchemaError(f"{path}.info.{k}: {bad} are not facts of a {kind!r} file field (known: {sorted(info_vocab(kind))})")
         info[k] = keys_t
     facts = _str_list(d["facts"], f"{path}.facts")
     for f in facts:
@@ -3299,7 +3303,7 @@ def _decode_sample(bench: Benchmark, picks: Sequence[tuple[str, int]]) -> dict[s
     try:
         from yavih.media import decode as _decode
 
-        lib = {k: _decode.decoder_info(k) for k in sorted({s.kind for s in bench.spec.streams.values()})}
+        lib = {k: _decode.decoder_info(k) for k in sorted({s.kind for s in bench.spec.streams.values()} & {"video", "audio", "image"})}
     except DecoderMissing as e:
         return {"ok": 0, "failed": 0, "skipped": f"no decoder installed: {e}"}
     ok = failed = 0
@@ -3308,6 +3312,9 @@ def _decode_sample(bench: Benchmark, picks: Sequence[tuple[str, int]]) -> dict[s
         try:
             s = bench.sample(split, r)
             for st in s.streams.values():
+                if st.kind not in ("video", "audio", "image"):
+                    st.bytes()  # an opaque file: readable is all yavih checks
+                    continue
                 if st.kind in ("video", "audio") and st.info.get("has_track") is False:
                     continue  # a file without this track: nothing to decode, and not a failure
                 if st.kind == "video":
