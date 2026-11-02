@@ -232,6 +232,11 @@ data:                              # not hashed; resolved by yavih.config (see c
       default: "${data.root}/kinetics400"   # ${data.root}: the site root; ${datasets.<name>}: a shared dataset
       description: "{train,val}/<class>/*.mp4"   # optional
       prepare_only: false          # optional: read only by prepare/ and make_manifest.py, never by the reader
+      hf:                          # optional: the Hugging Face revision `yavih bench snapshot` downloads into this root
+        repo: owner/name           #   (and stamps: `.yavih_hf.json`); bench verify / doctor report it (`W_SNAPSHOT`).
+        revision: <40-hex commit>  #   Must equal source.revision when that is set. Provenance only: never hashed.
+        repo_type: dataset         #   optional: dataset (default) | model
+        allow_patterns: ["*.tar"]  #   optional: only these files
   tar_index: null                  # path of index.json under a root; required iff a stream uses a tar_index layout
   derived: {}                      # optional: file -> sha256 of what prepare/ produces
 

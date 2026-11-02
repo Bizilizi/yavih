@@ -66,7 +66,7 @@ def test_raw_stream_fields_are_read_only(tmp_path):
     with pytest.raises(AttributeError):
         s.extra_attribute = 1  # type: ignore[attr-defined]
     with pytest.raises(ValueError):
-        RawStream("text", "text", src=_Source(("file", str(f))))
+        RawStream("text", "Text!", src=_Source(("file", str(f))))  # any [a-z][a-z0-9_]* kind is valid (opaque)
 
 
 def test_cli_help_lists_the_full_command_tree(capsys):
@@ -81,7 +81,7 @@ def test_cli_help_lists_the_full_command_tree(capsys):
 
     assert subs("skill") == {"install", "show"}
     # files / show / prepare and bridge new: one command surface for shipped files
-    assert subs("bench") == {"list", "info", "path", "fetch", "verify", "lint", "new", "files", "show", "prepare", "trial", "conformance", "hash", "migrate"}
+    assert subs("bench") == {"list", "info", "path", "fetch", "verify", "lint", "new", "files", "show", "prepare", "trial", "conformance", "hash", "migrate", "snapshot"}
     assert subs("bridge") == {"check", "new"}
     assert subs("features") == {"validate", "inspect", "diff", "stage"}
     assert subs("eval") == {"run"}

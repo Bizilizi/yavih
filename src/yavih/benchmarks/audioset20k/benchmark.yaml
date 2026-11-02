@@ -133,6 +133,7 @@ data:
     media_root:
       default: "${data.root}/audioset20k-wds-v1"
       description: "the dataset as downloaded (hf download 11hu83/audioset20k --revision 4a0055b2… --local-dir): 62 tars audioset20k-{train,eval}-NNNNNN.tar, index.json (relative shard names), clips.csv, MISSING.csv, SHA256SUMS, README.md"
+      hf: {repo: 11hu83/audioset20k, revision: "4a0055b21c183257fd9b65ee8d1cd11f13362f0f", repo_type: dataset}   # yavih bench snapshot audioset20k; provenance, not hashed
   tar_index: index.json
   derived: {}
 

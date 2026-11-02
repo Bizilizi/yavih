@@ -246,6 +246,10 @@ def _data_roots(bench: Any) -> dict[str, dict[str, Any]]:
         out[name] = {"path": path, "exists": bool(path) and os.path.exists(path), "source": rec.get("source"),
                      "env_var": rec.get("env_var"), "config_key": rec.get("config_key"), "error": rec.get("error"),
                      "prepare_only": bool(r.get("prepare_only")) if isinstance(r, dict) else False}
+        if isinstance(r, dict) and r.get("hf") and path:
+            from yavih.hf import parse_hf, snapshot_status
+
+            out[name]["hf"] = snapshot_status(path, parse_hf(r["hf"], name))
     return out
 
 
@@ -1166,6 +1170,33 @@ def cmd_bench_fetch(ns: argparse.Namespace) -> Envelope:
     return Envelope(data=data, paths={"folder": str(bench.folder)}, text=f"{bench.name}: manifest verified at {bench.folder}\n")
 
 
+def cmd_bench_snapshot(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench snapshot <name> [--root R] [--dry-run]``: ``yavih.hf.snapshot`` for each root declaring ``hf``."""
+    from yavih.benchmark import Benchmark
+    from yavih.hf import HubMissing, snapshot
+
+    bench = Benchmark.load(ns.ref)
+    declared = {n: r.hf for n, r in bench.spec.data.roots.items() if r.hf}
+    if ns.root is not None:
+        if ns.root not in declared:
+            raise CliError("E_USAGE", f"{bench.name}: root {ns.root!r} declares no hf block (roots with one: {sorted(declared)})")
+        declared = {ns.root: declared[ns.root]}
+    if not declared:
+        raise CliError("E_USAGE", f"{bench.name}: no data root declares a Hugging Face revision (data.roots.<root>.hf)")
+    roots = bench.resolved_roots()
+    out: dict[str, Any] = {}
+    lines: list[str] = []
+    for name, hf in declared.items():
+        try:
+            rec = snapshot(roots[name], hf, dry_run=bool(ns.dry_run))
+        except HubMissing as e:
+            raise CliError("E_HUB_MISSING", str(e), exit_code=3) from e
+        out[name] = rec
+        n_files = "" if ns.dry_run else f": {len(rec.get('files') or [])} files"
+        lines.append(f"{name}: {hf['repo']}@{hf['revision'][:8]} -> {roots[name]}{' (dry run)' if ns.dry_run else n_files}")
+    return Envelope(data=out, text="\n".join(lines) + "\n")
+
+
 def cmd_bench_verify(ns: argparse.Namespace) -> Envelope:
     """``yavih bench verify <name> [--census] [--decode-sample 32] [--fingerprint-sample 256]``.
 
@@ -1189,6 +1220,9 @@ def cmd_bench_verify(ns: argparse.Namespace) -> Envelope:
     dec = dict(data.get("decode_sample") or {})
     if int(dec.get("failed", 0) or 0):
         warnings.append(_finding("W_DECODE_SAMPLE", f"{dec['failed']} of {int(dec.get('ok', 0)) + int(dec['failed'])} sampled rows failed to decode (a media-health check)"))
+    for root, snap in (data.get("snapshots") or {}).items():
+        if snap.get("state") in ("other_revision", "incomplete", "absent"):
+            warnings.append(_finding("W_SNAPSHOT", f"data root {root!r}: {snap['message']}", where=root))
     curation_ok = data.get("curation_invariants_ok")
     if curation_ok is False:
         warnings.append(_finding("W_CURATION", "upstream.curation sums do not hold against the frozen manifest"))
@@ -2133,6 +2167,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--reason", default=None, metavar="TEXT", help="with --same-version: why the numbers moved without a protocol change (stored as same_version_reason when values did move)")
     s.add_argument("--force", action="store_true", help="with --record: overwrite without comparing")
     s.set_defaults(func=cmd_bench_conformance)
+    s = bsub.add_parser("snapshot", parents=[common_r], help="download the Hugging Face revision a data root declares (data.roots.<root>.hf) into that root, and stamp it")
+    s.add_argument("ref", metavar="name|path")
+    s.add_argument("--root", default=None, help="only this root (default: every root that declares hf)")
+    s.add_argument("--dry-run", action="store_true", help="print what would be downloaded where")
+    s.set_defaults(func=cmd_bench_snapshot)
     s = bsub.add_parser("hash", parents=[common_r], help="a folder's protocol / input / scoring hashes; --explain prints every hashed component's canonical text")
     s.add_argument("ref", metavar="name|path")
     s.add_argument("--explain", action="store_true", help="the canonical JSON and digest of every component (recompute the hashes with stdlib only)")

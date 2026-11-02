@@ -486,6 +486,9 @@ class RootSpec:
     default: str
     description: str | None = None
     prepare_only: bool = False  # read only by prepare/ (doctor reports it missing as a note, not a warning)
+    #: ``{repo, revision, repo_type, allow_patterns}``: the Hugging Face revision ``yavih bench snapshot`` downloads into
+    #: this root (``yavih.hf``); provenance, never hashed
+    hf: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -1186,9 +1189,17 @@ def _parse_data(v: Any, path: str) -> DataSpec:
         if not re.match(r"^[a-z][a-z0-9_]*$", name):
             raise SchemaError(f"{p}: root names must match [a-z][a-z0-9_]* (they become env var parts)")
         r = _expect_mapping(r, p)
-        _check_keys(r, p, ["default"], ["description", "prepare_only"])
+        _check_keys(r, p, ["default"], ["description", "prepare_only", "hf"])
+        hf = None
+        if r.get("hf") is not None:
+            from yavih.hf import parse_hf
+
+            try:
+                hf = parse_hf(r["hf"], f"{p}.hf")
+            except ValueError as e:
+                raise SchemaError(str(e)) from None
         roots[name] = RootSpec(default=_str(r["default"], f"{p}.default"), description=_str(r.get("description"), f"{p}.description", nullable=True),
-                               prepare_only=_bool(r["prepare_only"], f"{p}.prepare_only") if "prepare_only" in r else False)
+                               prepare_only=_bool(r["prepare_only"], f"{p}.prepare_only") if "prepare_only" in r else False, hf=hf)
     derived = d.get("derived")
     if derived is not None:
         derived = _str_dict(derived, f"{path}.derived")
@@ -1734,6 +1745,9 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
         if splits.role_of(s) is None:
             raise SchemaError(f"budget.clips: {s!r} is not a declared split value")
     data = _parse_data(d["data"], "data")
+    hf_revs = {n: r.hf["revision"] for n, r in data.roots.items() if r.hf}
+    if source.revision and hf_revs and any(rev != source.revision for rev in hf_revs.values()):
+        raise SchemaError(f"data.roots: hf revisions {hf_revs} differ from source.revision {source.revision!r} (one release, one revision)")
     file_raw, cells = _parse_fields(d["fields"], "fields", manifest.columns)
     streams = _parse_streams(file_raw, "fields", splits, manifest.columns, data.roots)
     for cname, c in manifest.columns.items():
@@ -3369,6 +3383,13 @@ def _external_status(bench: Benchmark) -> dict[str, dict[str, Any]]:
     return {e.name: status(e.name, e.pip, e.version_pin) for e in bench.spec.external}
 
 
+def _snapshot_status(bench: Benchmark, roots: Mapping[str, str]) -> dict[str, Any]:
+    """``{root: snapshot_status}`` of every root that declares a Hugging Face revision (``yavih.hf``)."""
+    from yavih.hf import snapshot_status
+
+    return {n: snapshot_status(roots[n], r.hf) for n, r in bench.spec.data.roots.items() if r.hf and n in roots}
+
+
 def bench_verify(ref: str, *, census: bool = False, decode_sample: int = 32, fingerprint_sample: int = 256, data: dict | None = None) -> dict[str, Any]:
     """``yavih bench verify``: ``{manifest_sha_ok, per_split, read, decode_sample, labels_ok,
     targets_sha_ok, derived_sha_ok, curation_invariants_ok, media_info, external,
@@ -3447,6 +3468,7 @@ def bench_verify(ref: str, *, census: bool = False, decode_sample: int = 32, fin
         "external": _external_status(bench),
         "media_fingerprint": fingerprint,
         "data_roots": dict(roots),
+        "snapshots": _snapshot_status(bench, roots),
         "data_status_path": status.path,
         "status": status.status_word(),
     }
