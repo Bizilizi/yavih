@@ -129,8 +129,8 @@ clip (`E_CONSTANT_FEATURES`) exit 2. The text output names the run directory the
 |---|---|---|
 | `yavih extract` | extract one shard into `<out>/features/<split>/` | `--bench B --bridge P --split S --shard i/n --out RUN_DIR`, or `--rows lo:hi` instead of `--shard` (a capped run over manifest rows `[lo, hi)` as the one shard `0/1`; `plan build --sample`); `--arg k=v`; `--canaries 8`; `--decode-workers N`; `--read-ahead 2`; `--deadline …`; `--expect-profile P` (skip finished shards before loading the model; `E_CONFIG_DRIFT` on drift); `--allow-loopback` |
 | `yavih features validate` | validate feature sets and write `_meta.json` | `<features_dir or features/>`; `--verify-sha`; `--no-write-meta`; `--waive CODE=reason` (repeatable, `all=reason`) |
-| `yavih features inspect` | per-dimension statistics, near-constant dims, dead rows, position and `used` summaries | `<features_dir>` |
-| `yavih features diff` | compare two feature sets row by row | `<a> <b>`; reports `rows_compared`, `max_abs`, `max_rel_l2`, `verdict` |
+| `yavih features inspect` | per-dimension statistics, near-constant dims, dead rows, position and `used` summaries; a set with a declared output schema: each key summarized by its codec (wav: duration, sample rates, channels, level, silent and clipped clips; array: shapes, dtypes, magnitude, finiteness; json: value types) | `<features_dir>` |
+| `yavih features diff` | compare two feature sets row by row; a set with a declared output schema key by key through each codec's `distance` | `<a> <b>`; `--key K` (repeatable, schema sets); reports `rows_compared`, `max_abs`, `max_rel_l2` (per key `max_distance`, `identical_rows`), `verdict` |
 | `yavih features stage` | copy shards, sidecars and `_meta.json` to scratch and print the staged path for `eval run --scratch` | `<features/> <scratch>` |
 
 `yavih extract` is normally started by `yavih exec` from a plan ([execution](execution.md)). The

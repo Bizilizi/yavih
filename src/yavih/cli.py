@@ -1632,7 +1632,7 @@ def cmd_features_inspect(ns: argparse.Namespace) -> Envelope:
 def cmd_features_diff(ns: argparse.Namespace) -> Envelope:
     from yavih.io.diff import diff_features
 
-    data = diff_features(ns.a, ns.b)
+    data = diff_features(ns.a, ns.b, keys=getattr(ns, "key", None))
     return Envelope(data=data, text=json.dumps(_jsonable(data), indent=2, sort_keys=True) + "\n")
 
 
@@ -2253,6 +2253,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = fsub.add_parser("diff", parents=[common_r])
     s.add_argument("a")
     s.add_argument("b")
+    s.add_argument("--key", action="append", default=None, metavar="K", help="a set with a declared output schema: only these keys (repeatable)")
     s.set_defaults(func=cmd_features_diff)
     s = fsub.add_parser("stage", parents=[common_r])
     s.add_argument("features_dir", metavar="<features/>")

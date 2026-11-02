@@ -178,3 +178,29 @@ def test_a_folder_scorer_scores_a_generated_set(tmp_path, yavih_home, train_spli
     assert rec["probe"]["hash"] == hashing.scorer_config_hash("synth_clf", 1)
     assert rec["probe"]["config"] == {"scorer": "synth_clf", "version": 1, "kind": "direct"}
     assert rec["eval_hash"] == hashing.eval_hash(bench.protocol_hash, rec["probe"]["hash"])
+
+
+class Louder(ToyGenerator):
+    def encode(self, samples):
+        out = super().encode(samples)
+        out["audio"] = [C.wav_bytes(C.read_wav(b)[0][:, 0] * 2.0, 16000) for b in out["audio"]]
+        return out
+
+
+def test_inspect_and_diff_a_generated_set(bench, tmp_path):
+    from yavih.io.diff import diff_features
+    from yavih.io.inspect import inspect_features
+
+    runs = {}
+    for name, bridge in (("a", ToyGenerator), ("b", ToyGenerator), ("loud", Louder)):
+        runs[name] = tmp_path / name
+        assert run_extract(bench=bench, bridge=bridge, split="val", shard=(0, 1), out=runs[name], canaries=0)["status"] == "ok"
+        assert validate_features(runs[name] / "features" / "val", bench=bench).ok
+    info = inspect_features(runs["a"] / "features" / "val")
+    a = info["keys"]["audio"]
+    assert a["codec"] == "wav" and a["sample_rates"] == {16000: 4} and a["channels"] == {1: 4} and a["silent"] == 0
+    assert abs(a["duration_s"]["median"] - 0.1) < 1e-9 and info["n_sampled"] == 4
+    same = diff_features(runs["a"] / "features" / "val", runs["b"] / "features" / "val")
+    assert same["verdict"] == "identical" and same["keys"]["audio"]["identical_rows"] == 4 and same["rows_compared"] == 4
+    loud = diff_features(runs["a"] / "features" / "val", runs["loud"] / "features" / "val", keys=["audio"])
+    assert loud["verdict"] == "differs" and abs(loud["keys"]["audio"]["max_distance"] - 0.5) < 1e-3  # rel_l2(x, 2x) = 1/2

@@ -45,6 +45,11 @@ def inspect_features(features_dir: str | os.PathLike, *, sample_rows: int = 512)
     for _idx, sc_path, _tar in shards:
         with open(sc_path, encoding="utf-8") as fh:
             sidecars.append(json.load(fh))
+    from yavih.io.finalize import generic_outputs
+
+    outputs = generic_outputs(sidecars)
+    if outputs is not None:
+        return _inspect_generic(split_dir, sidecars, outputs, sample_rows)
     feats = features_block(sidecars)
     if feats.get("N") is None:
         raise FileNotFoundError(f"{split_dir}: no shard wrote any row (nothing to inspect)")
@@ -155,3 +160,77 @@ def _pos_summary(pos_arrays: list[np.ndarray], tag_names: list[str], pos_mode: s
         "grid_inferred": grid,
         "t_distinct": int(np.unique(np.round(t[t >= 0], 6)).size),
     }
+
+
+# ----------------------------------------------------------------------------- a declared output schema
+
+
+def _stats(x: list[float]) -> dict[str, float] | None:
+    if not x:
+        return None
+    a = np.asarray(x, dtype=np.float64)
+    return {"min": float(a.min()), "median": float(np.median(a)), "max": float(a.max())}
+
+
+def _summarize(codec_name: str, values: list[Any]) -> dict[str, Any]:
+    """Per-key diagnostics by codec: wav (duration, rate, channels, level, silent / clipped clips), array (shapes,
+    dtypes, magnitude, finiteness, constant values), json (value types), anything else (sizes)."""
+    from collections import Counter
+
+    from yavih import codecs as C
+
+    if codec_name == "wav":
+        dur, rms, peak, rates, chans, bad = [], [], [], Counter(), Counter(), 0
+        for v in values:
+            try:
+                x, sr = C.read_wav(bytes(v))
+            except ValueError:
+                bad += 1
+                continue
+            dur.append(x.shape[0] / sr)
+            rms.append(float(np.sqrt(np.mean(x * x))) if x.size else 0.0)
+            peak.append(float(np.abs(x).max()) if x.size else 0.0)
+            rates[int(sr)] += 1
+            chans[int(x.shape[1]) if x.ndim == 2 else 1] += 1
+        return {"codec": "wav", "duration_s": _stats(dur), "sample_rates": dict(rates), "channels": dict(chans), "rms": _stats(rms),
+                "peak": _stats(peak), "silent": int(sum(r < 1e-4 for r in rms)), "clipped": int(sum(p >= 0.999 for p in peak)), "unreadable": bad}
+    if codec_name == "array":
+        shapes, dtypes, mabs, finite, const = Counter(), Counter(), [], 0, 0
+        for v in values:
+            a = np.asarray(v)
+            shapes[str(tuple(a.shape))] += 1
+            dtypes[str(a.dtype)] += 1
+            f = a.astype(np.float64, copy=False) if a.dtype.kind in "fiub" else None
+            if f is not None and f.size:
+                mabs.append(float(np.abs(f).mean()))
+                finite += int(np.isfinite(f).all())
+                const += int(bool((f == f.reshape(-1)[0]).all()))
+        return {"codec": "array", "shapes_top5": dict(shapes.most_common(5)), "dtypes": dict(dtypes), "mean_abs": _stats(mabs),
+                "all_finite": finite, "constant": const}
+    if codec_name == "json":
+        kinds = Counter(type(v).__name__ for v in values)
+        first = json.dumps(values[0], default=str)[:200] if values else None
+        return {"codec": "json", "types": dict(kinds), "first": first}
+    sizes = [len(v) if isinstance(v, (bytes, bytearray, str)) else len(json.dumps(v, default=str)) for v in values]
+    return {"codec": codec_name, "size_bytes": _stats([float(n) for n in sizes])}
+
+
+def _inspect_generic(split_dir: Path, sidecars: list[dict], outputs: dict, sample_rows: int) -> dict:
+    """``features inspect`` of a set with a declared output schema: each key summarized by its codec over the seeded
+    sample (a folder codec not registered here is named, not decoded)."""
+    from yavih import codecs as C
+    from yavih.io.reader import FeatureReader
+
+    reader = FeatureReader(split_dir, require_meta=False)
+    split, rows = _sample_rows(split_dir, sidecars, sample_rows)
+    schema = outputs.get("schema") or {}
+    reg = C.registry()
+    keys: dict[str, Any] = {}
+    for key in reader.keys():
+        spec = dict(schema.get(key) or {})
+        if spec.get("type") not in reg:
+            keys[key] = {"codec": spec.get("type"), "note": "a folder codec not registered here: pass through the benchmark to decode"}
+            continue
+        keys[key] = _summarize(str(spec["type"]), reader.values(key, rows, codecs=reg))
+    return {"split": split, "schema": schema, "n_present": sum(len(s["members"]) for s in sidecars), "n_sampled": len(rows),
+            "sampled_rows_first10": rows[:10], "keys": keys}
