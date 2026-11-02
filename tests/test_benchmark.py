@@ -1625,7 +1625,7 @@ def test_spec_is_frozen_and_raw_is_the_hashed_yaml(tmp_path):
     assert spec.manifest.upstream.curation.invariant_holds()
     assert bm.READOUT_PARAM_KEYS["box"] == {"grid", "visual_stream", "conditioning_stream", "shuffled_control", "shuffle_seed"}
     assert bm.PROTOCOL_FIXED_KEYS == set(raw["protocol"]) == {"clip_seconds", "train_draw", "views"}
-    assert bm.LAYOUTS == {"dir", "tar_index"} and "window" not in bm.COLUMN_ROLES
+    assert bm.LAYOUTS == {"dir", "tar_index", "parquet"} and "window" not in bm.COLUMN_ROLES
 
 
 def test_core_import_boundary_for_benchmark_module():
@@ -1665,3 +1665,71 @@ def test_tar_index_in_a_subdirectory_resolves_shards_like_the_reader(tmp_path, y
     (media / "idx" / "index.json").unlink()
     with pytest.raises(Exception, match="tar index"):
         Benchmark.from_dir(folder).data_status(refresh=True)
+
+
+def _wav(seconds: float, sr: int = 16000) -> bytes:
+    sf = pytest.importorskip("soundfile")
+    buf = io.BytesIO()
+    sf.write(buf, np.zeros(int(seconds * sr), dtype=np.float32), sr, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
+
+def _write_hf_parquet(path: Path, clips: list[tuple[str, bytes]], row_group_size: int = 2) -> None:
+    """An HF-style file: `id` and an Audio feature `audio: struct{bytes, path}`."""
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    audio = pa.array([{"bytes": b, "path": f"{cid}.wav"} for cid, b in clips], type=pa.struct([("bytes", pa.binary()), ("path", pa.string())]))
+    pq.write_table(pa.table({"id": [cid for cid, _ in clips], "audio": audio}), path, row_group_size=row_group_size)
+
+
+def test_parquet_layout_reads_one_column_in_place(tmp_path, yavih_home, monkeypatch):
+    pq = pytest.importorskip("pyarrow.parquet")
+    from yavih.media import parquet as P
+
+    rows = [[r[0], r[1], r[2], f"data/part-0.parquet#{i}"] for i, r in enumerate(TAR_ROWS)]
+
+    def mutate(s):
+        _tar_mutate(s)
+        s["data"]["tar_index"] = None
+        s["fields"]["audio"].update(layout="parquet", layout_params={"column": "audio", "struct_field": "bytes", "ext": "wav"})
+        s["input_contract"]["info"]["audio"] = ["duration_s", "sample_rate"]
+
+    folder = make_folder(tmp_path, "pqbench", header=TAR_HEADER, rows=rows, classes=TAR_CLASSES, mutate=mutate)
+    media = tmp_path / "hf"
+    clips = [(r[0], _wav(0.5 + 0.25 * i)) for i, r in enumerate(TAR_ROWS[:5])]  # b1 (row 5) is not in the file
+    _write_hf_parquet(media / "data" / "part-0.parquet", clips)
+    P._CACHE.clear()
+    with_roots(monkeypatch, "pqbench", media_root=media)
+    b = Benchmark.from_dir(folder)
+    st = b.data_status()
+    assert st.per_split["train"]["present"] == 4 and st.per_split["eval"] == {"present": 1, "nominal": 2, "missing_first10": ["b1"]}
+    seen: list[list[str]] = []
+    orig = pq.ParquetFile.read_row_group
+    monkeypatch.setattr(pq.ParquetFile, "read_row_group", lambda self, i, columns=None, **kw: (seen.append(list(columns or [])), orig(self, i, columns=columns, **kw))[1])
+    s = next(b.reader("eval"))
+    assert s.streams["audio"].bytes() == clips[4][1] and s.streams["audio"].path is None
+    assert s.streams["audio"].info["sample_rate"] == 16000 and abs(s.streams["audio"].info["duration_s"] - 1.5) < 1e-3
+    assert seen and all(c == ["audio"] for c in seen)  # only the named column is ever read
+    rep = bench_verify(str(folder), decode_sample=3, data={"media_root": str(media)})
+    assert rep["media_fingerprint"] is not None and rep["decode_sample"]["failed"] == 0 and rep["decode_sample"]["ok"] > 0
+    _write_hf_parquet(media / "data" / "part-0.parquet", [(c, b + b"\0") for c, b in clips])
+    P._CACHE.clear()
+    rep2 = bench_verify(str(folder), decode_sample=0, data={"media_root": str(media)})
+    assert rep2["media_fingerprint"] != rep["media_fingerprint"]
+
+
+def test_parquet_cells_and_params_are_checked(tmp_path):
+    from yavih.media.parquet import parse_cell
+
+    assert parse_cell("a/b.parquet#12") == ("a/b.parquet", 12)
+    for bad in ("a/b.parquet", "a.parquet#x", "#3"):
+        with pytest.raises(ValueError):
+            parse_cell(bad)
+
+    def mutate(s):
+        _tar_mutate(s)
+        s["fields"]["audio"].update(layout="parquet", layout_params={})
+
+    with pytest.raises(SchemaError, match="layout_params"):
+        Benchmark.from_dir(make_folder(tmp_path, "pqbad", header=TAR_HEADER, rows=TAR_ROWS, classes=TAR_CLASSES, mutate=mutate))

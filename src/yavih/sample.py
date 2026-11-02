@@ -78,7 +78,8 @@ class _Source:
     """The stored bytes behind one media cell, read once and shared by every RawStream of the row that names
     the same location (AVE / avsync: ``video`` and ``audio`` are two tracks of one mp4).
 
-    ``loc``: ``("file", path)`` | ``("member", tar_path, offset, size)`` | ``("absent", reason)``.
+    ``loc``: ``("file", path)`` | ``("member", tar_path, offset, size)`` | ``("parquet", path, row, column, struct_field)``
+    | ``("absent", reason)``.
     """
 
     __slots__ = ("loc", "_data", "_lock")
@@ -119,6 +120,18 @@ class _Source:
             kind = self.loc[0]
             if kind == "absent":
                 raise _missing(clip_id, stream, str(self.loc[1]))
+            if kind == "parquet":
+                from yavih.media.parquet import read_cell
+
+                _, path, row, column, struct_field = self.loc
+                try:
+                    data, _ext_ = read_cell(path, int(row), column, struct_field)
+                except FileNotFoundError:
+                    raise _missing(clip_id, stream, f"absent parquet file {path}") from None
+                except (OSError, IndexError, KeyError, ValueError, TypeError) as exc:
+                    raise _missing(clip_id, stream, f"unreadable parquet cell {path}#{row}: {exc}") from exc
+                self._data = data
+                return data
             if kind == "file":
                 path = self.loc[1]
                 try:
@@ -570,6 +583,11 @@ class _StreamCtx:
     def source(self, cell: str) -> _Source:
         if self.layout == "dir":
             return _Source(("file", os.path.join(self.root, cell)))
+        if self.layout == "parquet":
+            from yavih.media.parquet import parse_cell
+
+            rel, row = parse_cell(cell)
+            return _Source(("parquet", os.path.join(self.root, rel), row, str(self.params["column"]), self.params.get("struct_field")))
         return self.member_source(cell)
 
     def member_source(self, key: str) -> _Source:
@@ -584,6 +602,11 @@ class _StreamCtx:
         """Cheap presence (stat / index lookup), for ``required: false`` streams only."""
         if self.layout == "dir":
             return os.path.isfile(os.path.join(self.root, cell))
+        if self.layout == "parquet":
+            from yavih.media.parquet import has_row, parse_cell
+
+            rel, row = parse_cell(cell)
+            return has_row(os.path.join(self.root, rel), row)
         return self.tar is not None and self.tar.has(cell)
 
 
@@ -635,7 +658,7 @@ def build_sample(bench: Any, split: str, manifest: Any, i: int, roots: Mapping[s
             continue
         entry = ctx.info_table.get(name, cell) if ctx.info_table is not None else None
         # one handle per row: two streams of one stored file (AVE, avsync) share one opaque path
-        streams[name] = RawStream(name, sc.kind, src=shared(sc.source(cell)), clip_id=clip_id, info_entry=entry, required_info=sc.info_keys, ext=_ext(cell),
+        streams[name] = RawStream(name, sc.kind, src=shared(sc.source(cell)), clip_id=clip_id, info_entry=entry, required_info=sc.info_keys, ext=(sc.params.get("ext") if sc.layout == "parquet" else _ext(cell)),
                                   handle=salt)
     meta = {"facts": json.loads(json.dumps(ctx.facts))}
     cell_values: dict[str, Any] = {}

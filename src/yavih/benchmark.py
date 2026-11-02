@@ -1077,6 +1077,9 @@ def _check_per_split_cover(value: Any, path: str, splits: SplitsSpec, *, value_t
 _LAYOUT_PARAM_KEYS: Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "dir": ((), ()),
     "tar_index": ((), ()),
+    # cells "<file>#<row>"; the column holding the bytes, the struct field of a {bytes, path} column (an HF Audio /
+    # Image feature), the file extension when the struct names none
+    "parquet": (("column",), ("struct_field", "ext")),
 }
 
 
@@ -2541,6 +2544,15 @@ class _Presence:
         if layout == "tar_index":
             loc = self._tar_index(root).locate(cell)
             return [(Path(loc[0]), int(loc[1]), int(loc[2]))] if loc is not None else None
+        if layout == "parquet":
+            from yavih.media.parquet import chunk_location, has_row, parse_cell
+
+            rel, row = parse_cell(cell)
+            path = str(root / rel)
+            if not has_row(path, row):
+                return None
+            p, off, size = chunk_location(path, row, str(flat["layout_params"]["column"]))
+            return [(Path(p), off, size)]
         raise SchemaError(f"unknown layout {layout!r}")  # pragma: no cover - schema refuses it
 
     def scan(self) -> tuple[dict[str, dict[str, Any]], list[tuple[Path, int, int | None]]]:
