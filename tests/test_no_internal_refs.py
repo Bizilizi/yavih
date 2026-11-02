@@ -16,12 +16,16 @@ PATTERN = "|".join([
     "av-?" + "joint", "av_" + "joint", "av" + "joint", "zver" + "ev", "atcre" + "mers", "mc" + "ml", "jupi" + "ter",
     "/stor" + "age/", "/home/" + "wiss", "dog" + "food", "review " + "round",
 ])
-#: The only allowed hits: the copyright holder, the package author, and the VGGSounder paper's author list.
+#: The only allowed hits: the copyright holder, the package author, and cited papers' author lists.
 ALLOWED: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("LICENSE", re.compile(r"^Copyright \(c\) \d{4} Daniil Zverev$")),
     ("pyproject.toml", re.compile(r'^authors = \[\{ name = "Daniil Zverev" \}\]$')),
     ("src/yavih/benchmarks/vggsounder/README.md", re.compile(r"zverev\w*2025vggsounder|Daniil Zverev and |Zverev et al\.")),
     ("src/yavih/benchmarks/vggsounder/benchmark.yaml", re.compile(r"^\s+venue: .*Zverev")),
+    # the generation benchmarks cite VGGSounder and the review whose evaluation protocol they follow
+    ("src/yavih/benchmarks/vggsounder_v2a/README.md", re.compile(r"zverev\w*2025vggsounder|Daniil Zverev and |and Daniil Zverev and ")),
+    ("src/yavih/benchmarks/vggsounder_v2a/benchmark.yaml", re.compile(r"^\s+venue: .*Zverev")),
+    ("src/yavih/benchmarks/audiocaps_t2a/README.md", re.compile(r"and Daniil Zverev and ")),
 )
 
 
