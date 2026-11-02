@@ -1642,3 +1642,26 @@ def test_core_import_boundary_for_benchmark_module():
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert proc.returncode == 0 and proc.stdout.strip() == "", proc.stderr
 
+
+
+def test_tar_index_in_a_subdirectory_resolves_shards_like_the_reader(tmp_path, yavih_home, monkeypatch):
+    """Relative shard names resolve against the index's directory for presence and the fingerprint, as the reader
+    resolves them (a regression: presence joined them to the data root and counted rows the reader cannot read)."""
+    def mutate(s):
+        _tar_mutate(s)
+        s["data"]["tar_index"] = "idx/index.json"
+
+    folder = make_folder(tmp_path, "tarsub", header=TAR_HEADER, rows=TAR_ROWS, classes=TAR_CLASSES, mutate=mutate)
+    media = tmp_path / "media"
+    members = {r[3]: f"audio-{r[0]}".encode() for r in TAR_ROWS}
+    _make_tar_index(media / "idx", members)  # shards next to the index, not at the root
+    with_roots(monkeypatch, "tarsub", media_root=media)
+    b = Benchmark.from_dir(folder)
+    assert b.data_status().per_split["train"]["present"] == 4
+    rep = bench_verify(str(folder), decode_sample=0, data={"media_root": str(media)})
+    assert rep["media_fingerprint"] is not None
+    s = next(b.reader("eval"))
+    assert s.streams["audio"].member[0] == str(media / "idx" / "shard-000000.tar") and s.streams["audio"].bytes() == b"audio-b0"
+    (media / "idx" / "index.json").unlink()
+    with pytest.raises(Exception, match="tar index"):
+        Benchmark.from_dir(folder).data_status(refresh=True)

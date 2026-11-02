@@ -2484,34 +2484,6 @@ class DataStatus:
         return p
 
 
-class _TarIndex:
-    """``index.json`` v1: ``{"version": 1, "shards": [...], "members": {key: [shard_idx, offset, size]}}``."""
-
-    def __init__(self, path: Path, root: Path) -> None:
-        if not path.is_file():
-            raise DataNotReady(f"tar index {path} is missing")
-        with open(path, encoding="utf-8") as fh:
-            d = json.load(fh)
-        if d.get("version") != 1 or not isinstance(d.get("members"), dict) or not isinstance(d.get("shards"), list):
-            raise ManifestError(f"tar index {path}: expected {{version: 1, shards: [...], members: {{...}}}}")
-        self.path = path
-        self.members: dict[str, list] = d["members"]
-        # An absolute shard path in the index is used as is (never joined to the root).
-        self.shards = [Path(s) if os.path.isabs(s) else root / s for s in d["shards"]]
-
-    def has(self, key: str) -> bool:
-        return key in self.members
-
-    def locate(self, key: str) -> tuple[Path, int, int] | None:
-        m = self.members.get(key)
-        if m is None:
-            return None
-        shard, offset, size = int(m[0]), int(m[1]), int(m[2])
-        if shard >= len(self.shards):
-            return None
-        return self.shards[shard], offset, size
-
-
 class _Presence:
     """Media presence per (stream, split) with one ``scandir`` per directory instead of a stat per
     file (fast on network filesystems with hundreds of thousands of files)."""
@@ -2520,7 +2492,7 @@ class _Presence:
         self.bench = bench
         self.roots = roots
         self._dir_cache: dict[Path, set[str]] = {}
-        self._tar_cache: dict[Path, _TarIndex] = {}
+        self._tar_cache: dict[Path, Any] = {}
 
     def _listing(self, directory: Path) -> set[str]:
         names = self._dir_cache.get(directory)
@@ -2533,13 +2505,22 @@ class _Presence:
             self._dir_cache[directory] = names
         return names
 
-    def _tar_index(self, root: Path) -> _TarIndex:
+    def _tar_index(self, root: Path) -> Any:
+        """The reader's ``media.tarindex.TarIndex`` (relative shard names resolve against the index's directory,
+        exactly where ``RawStream`` reads them): presence and the fingerprint see the bytes the bridge will get."""
+        from yavih.media.tarindex import TarIndex
+
         rel = self.bench.spec.data.tar_index
         assert rel is not None
         path = root / rel
         idx = self._tar_cache.get(path)
         if idx is None:
-            idx = _TarIndex(path, root)
+            if not path.is_file():
+                raise DataNotReady(f"tar index {path} is missing")
+            try:
+                idx = TarIndex(str(path))  # this scan's own instance: a rewritten index is never served stale
+            except (ValueError, json.JSONDecodeError) as e:
+                raise ManifestError(f"tar index {path}: {e}") from e
             self._tar_cache[path] = idx
         return idx
 
@@ -2555,7 +2536,7 @@ class _Presence:
             return None
         if layout == "tar_index":
             loc = self._tar_index(root).locate(cell)
-            return [loc] if loc is not None else None
+            return [(Path(loc[0]), int(loc[1]), int(loc[2]))] if loc is not None else None
         raise SchemaError(f"unknown layout {layout!r}")  # pragma: no cover - schema refuses it
 
     def scan(self) -> tuple[dict[str, dict[str, Any]], list[tuple[Path, int, int | None]]]:
