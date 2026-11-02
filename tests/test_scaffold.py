@@ -85,7 +85,7 @@ def test_cli_help_lists_the_full_command_tree(capsys):
     assert subs("bridge") == {"check", "new"}
     assert subs("features") == {"validate", "inspect", "diff", "stage"}
     assert subs("eval") == {"run"}
-    assert subs("report") == {"build"}
+    assert subs("report") == {"build", "paired"}
     assert subs("config") == {"show", "get"}
     assert subs("plan") == {"init", "build", "status", "calibrate", "run"}  # run --local
     assert subs("suite") == {"list", "show", "new", "missing"}
