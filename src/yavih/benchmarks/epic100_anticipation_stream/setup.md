@@ -8,11 +8,11 @@ the benchmark is; [streaming benchmarks](https://github.com/Bizilizi/yavih/blob/
 `source.kind: public_url`, no account. Annotations: the `epic-kitchens-100-annotations` repository at commit
 `ea8b40457a400c3fffa1c7f406ef3dc169cc2522` (step 01, sha256-checked). Videos: the official downloader
 (`epic-kitchens-download-scripts` @ `4f11fb2b`) from data.bris, about 740 GB for the 633 train and validation videos
-(step 02). Licence: CC BY-NC 4.0, non-commercial research.
+(step 02: the action-recognition train and validation videos, exactly the 633 the manifest names). Licence: CC BY-NC 4.0, non-commercial research.
 
 ```bash
 yavih bench prepare epic100_anticipation_stream 01     # the 8 annotation csvs, sha256-checked
-yavih bench prepare epic100_anticipation_stream 02     # the official downloader: --videos --train --val
+yavih bench prepare epic100_anticipation_stream 02     # the official downloader: --videos --action-recognition --train --val
 yavih bench prepare epic100_anticipation_stream 03     # yavih bench verify epic100_anticipation_stream --census
 ```
 

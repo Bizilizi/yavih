@@ -8,4 +8,5 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 git clone -q https://github.com/epic-kitchens/epic-kitchens-download-scripts.git "$TMP/dl"
 git -C "$TMP/dl" checkout -q 4f11fb2b579833f360c3c7bb917bf1e24a9787b5
-python "$TMP/dl/epic_downloader.py" --videos --train --val --output-path "$ROOT"
+# --action-recognition: its train + val splits are exactly the 633 manifest videos (all challenges would add 13 more)
+python "$TMP/dl/epic_downloader.py" --videos --action-recognition --train --val --output-path "$ROOT"
