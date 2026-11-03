@@ -527,6 +527,13 @@ or an inline body after `Preprocessing source: `. A body with a line starting `T
 holding only `<...>` placeholders and "e.g." / "paste" prose, is unfilled. The class docstring is searched first,
 then the module's; the first filled slot wins, and the warning names every docstring searched.
 
+## Streaming benchmarks
+
+A streaming benchmark (`output_contract.shape: sequence`) hands one recording per row and expects its whole update
+sequence back; `yavih.stream.causal` and `yavih.stream.replay` run the schedule around the bridge's own `step(cutoff,
+since)`, `describe()["stream"]` records the windows and the device, and a real-time bridge's `reading` ends with `-rt`.
+`bridge check` adds the future-invariance gate and a real-time smoke run. See [streaming benchmarks](streaming.md).
+
 ## `yavih bridge check`
 
 ```bash

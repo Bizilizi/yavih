@@ -501,3 +501,17 @@ scale 64) of their task coordinate; queries are initialized from sincos of the t
 - `K`, the temperature and the pooling are part of `knn`'s `VERSION`; numpy only, no GPU.
 - Use: a cheap first look at a bridge's features, and a check on how much of a probe's score comes from training
   the head.
+
+## stream
+
+- Kind `probe`, for streaming benchmarks only (`output_contract.shape: sequence`): the features are each recording's
+  update sequence (`emb`, `support`, `cutoff`, and `timing` in real time); the folder's `eval.py` `targets()` hook
+  returns per recording the scored times and their labels; `readout_params.groups` declares the label groups
+  `{name: {loss: ce | bce, classes: C}}`.
+- Two heads per seed, both causal: `linear` on the latest available embedding and `gru` (one GRU step per completed
+  update). A target reads the latest update available by its time (cutoff, or `ready_at` plus the head's measured
+  latency in real time); before any evidence the train prior. Every metric names its head (`_linear` / `_gru`);
+  intervals resample recordings; the held-out train recordings' predictions reach the metrics as `split_meta["val"]`
+  (operating points are chosen there, never on eval).
+- Details: [streaming benchmarks](streaming.md).
+

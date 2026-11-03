@@ -74,7 +74,7 @@ class Unav100CausalBridge(Bridge):
 
     def describe(self) -> dict:
         return {
-            "model": "TODO-model-name",
+            "model": "TODO-model",  # the name all of this model's bridges use; results are filed under it
             "reading": self.args["reading"],
             "weights_sha256": None,  # TODO: yavih.bridge.fingerprint_state_dict(self.model)
             "weights_ref": "TODO <hub id>@<revision>",

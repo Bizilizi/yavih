@@ -262,7 +262,8 @@ input_contract:                    # what the reader hands over; setup.md "## In
   #   a per-row record of a site's own files stays at that site, never shipped
 
 output_contract:                   # checked by validate (validation.md); setup.md "## Output contract" ends with a copy
-  shape: fixed                     # pinned: one (N, D) for every row of a feature set
+  shape: fixed                     # one value per key per row (a feature matrix: one (N, D) per feature set);
+                                   # `sequence` for a streaming benchmark (one recording per row; streaming.md)
   coordinates: media               # pinned: pos (t, y, x) in media coordinates
   target_frame: null               # "full_frame" iff the readout is grid or box, else null
   requires:
@@ -344,7 +345,8 @@ From the yaml (`SchemaError`, exit 1):
 - `input_contract`: `handed_over` and `info` keyed by exactly the stream names, `info` keys in the media-fact
   vocabulary of the stream's kind ([bridge](bridge.md)), `facts` are top-level protocol keys, the `materialize`
   envelope;
-- `output_contract`: `shape: fixed`, `coordinates: media`, `target_frame: full_frame` iff the readout is `grid` or
+- `output_contract`: `shape: fixed` (or `sequence` with a `stream` block and exactly `yavih.codecs.STREAM_SCHEMA`:
+  [streaming benchmarks](streaming.md)), `coordinates: media`, `target_frame: full_frame` iff the readout is `grid` or
   `box`, the `requires` rules the readout declares, `annotated_frame` cross-references;
 - `external`: four non-empty strings per entry, unique names, a non-empty list requires `eval.py`, and every metric
   computed by an external package names a declared entry;
