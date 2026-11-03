@@ -87,13 +87,13 @@ yavih bench list               # every benchmark: task, size, how to get the dat
 |---|---|---|
 | `audio` | 3 | [audiocaps_t2a](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audiocaps_t2a/README.md), [esc50](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/esc50/README.md), [fsd50k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/fsd50k/README.md) |
 | `visual` | 4 | [in1k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/in1k/README.md), [k400](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/k400/README.md), [nyuv2_depth](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/nyuv2_depth/README.md), [ssv2](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ssv2/README.md) |
-| `audio-visual` | 7 | [audioset20k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audioset20k/README.md), [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [ave_causal](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave_causal/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md) + 3 more |
-| `temporal` | 3 | [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [ave_causal](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave_causal/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md) |
+| `audio-visual` | 8 | [audioset20k](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audioset20k/README.md), [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [ave_causal](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave_causal/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md) + 4 more |
+| `temporal` | 4 | [ave](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave/README.md), [ave_causal](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave_causal/README.md), [avsync](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/avsync/README.md), [unav100_causal](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/unav100_causal/README.md) |
 | `spatial` | 2 | [nyuv2_depth](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/nyuv2_depth/README.md), [vggss_box](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/vggss_box/README.md) |
 | `generation` | 2 | [audiocaps_t2a](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/audiocaps_t2a/README.md), [vggsounder_v2a](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/vggsounder_v2a/README.md) |
-| `streaming` | 1 | [ave_causal](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave_causal/README.md) |
+| `streaming` | 2 | [ave_causal](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/ave_causal/README.md), [unav100_causal](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/unav100_causal/README.md) |
 
-[All 14 benchmarks → the index](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/README.md)
+[All 15 benchmarks → the index](https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/README.md)
 <!-- yavih:bench-table capabilities end -->
 
 Each benchmark is one self-contained folder with its own page: the paper, how to get the data, and exactly how yavih

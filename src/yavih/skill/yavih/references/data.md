@@ -38,6 +38,7 @@ the sizes of the upstream release and the layout rules are in that folder's `set
 | k400 | clf | `torrent`; 157.3 GB = `source.bytes` | 20.2 GB = `budget.media_gb` | 20 000 train / 13 492 val | video | auto | `yavih bench info k400 --setup` |
 | nyuv2_depth | grid | `manual_portal`; 145.8 GB = `source.bytes` | 8.2 GB = `budget.media_gb` | 12 000 train / 654 eval | image | manual-download | `yavih bench info nyuv2_depth --setup` |
 | ssv2 | clf | `manual_portal`; 19.5 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 20 000 train / 24 777 val | video | needs-licence | `yavih bench info ssv2 --setup` |
+| unav100_causal | stream | `public_url`; 66.1 GB = `source.bytes` | 66.1 GB = `budget.media_gb` | 6 487 train / 2 166 test | video + audio | auto | `yavih bench info unav100_causal --setup` |
 | vggsounder | clf (multi_sets) | `public_url`; 407.0 GB = `source.bytes` | 67 GB = `budget.media_gb` | 20 000 train / 12 008 test | video + audio | needs-data-owner | `yavih bench info vggsounder --setup` |
 | vggsounder_v2a | vggsounder_v2a | `public_url` | 4.5 GB = `budget.media_gb` | 3 000 test | video (materialized at prepare time) | needs-data-owner | `yavih bench info vggsounder_v2a --setup` |
 | vggss_box | box (box) | `public_url`; 10.5 GB = `source.bytes` | 9.35 GB = `budget.media_gb` | 3 700 train / 914 eval | video + audio | needs-data-owner | `yavih bench info vggss_box --setup` |
@@ -148,7 +149,7 @@ lines; "None." for most), "## Input contract", "## Output contract", "## Prepare
 expected `yavih bench verify <b>` output), "## Gotchas" (bridge mistakes that pass validation on
 this benchmark). One per folder:
 <!-- yavih:bench-table names begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `ssv2`, `vggsounder`, `vggsounder_v2a`, `vggss_box`.
+`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `ssv2`, `unav100_causal`, `vggsounder`, `vggsounder_v2a`, `vggss_box`.
 <!-- yavih:bench-table names end -->
 
 ## 6. Failure modes yavih guards against

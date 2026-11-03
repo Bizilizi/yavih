@@ -644,6 +644,7 @@ The full index with descriptions, media and sources is [src/yavih/benchmarks/REA
 | k400 | clf | single | video | `acc` |  |
 | nyuv2_depth | grid | none (targets) | image | `d1` | yes, `external` |
 | ssv2 | clf | single | video | `acc` |  |
+| unav100_causal | stream | none | video, audio | `map_gru` | yes |
 | vggsounder | clf | multi_sets | video, audio | `auc_pr` | yes, `external` |
 | vggsounder_v2a | vggsounder_v2a | none | video (materialized) | `fd_passt` | yes, `external` |
 | vggss_box | box | box | video, audio | `iou_mean` |  |

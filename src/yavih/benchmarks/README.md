@@ -28,7 +28,7 @@ capabilities is listed under each.
 | [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
 | [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
 
-### audio-visual (7)
+### audio-visual (8)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -36,17 +36,19 @@ capabilities is listed under each.
 | [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
+| [unav100_causal](unav100_causal/README.md) | UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel) | stream | video + audio | public (obtain: auto) |
 | [vggsounder](vggsounder/README.md) | VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes) | clf | video + audio | public (obtain: needs-data-owner) |
 | [vggsounder_v2a](vggsounder_v2a/README.md) | VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark) | vggsounder_v2a | video (materialized at prepare time) | public (obtain: needs-data-owner) |
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 
-### temporal (3)
+### temporal (4)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
+| [unav100_causal](unav100_causal/README.md) | UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel) | stream | video + audio | public (obtain: auto) |
 
 ### spatial (2)
 
@@ -62,11 +64,12 @@ capabilities is listed under each.
 | [audiocaps_t2a](audiocaps_t2a/README.md) | AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark) | audiocaps_t2a | text (cell) | public (obtain: auto) |
 | [vggsounder_v2a](vggsounder_v2a/README.md) | VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark) | vggsounder_v2a | video (materialized at prepare time) | public (obtain: needs-data-owner) |
 
-### streaming (1)
+### streaming (2)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
+| [unav100_causal](unav100_causal/README.md) | UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel) | stream | video + audio | public (obtain: auto) |
 <!-- yavih:bench-table index end -->
 
 `Media` names what the reader hands over; `Source` is `benchmark.yaml` `source.kind` in words.
@@ -107,6 +110,7 @@ Read the folder's `setup.md` first, before downloading anything or writing a bri
 [k400](k400/setup.md) ·
 [nyuv2_depth](nyuv2_depth/setup.md) ·
 [ssv2](ssv2/setup.md) ·
+[unav100_causal](unav100_causal/setup.md) ·
 [vggsounder](vggsounder/setup.md) ·
 [vggsounder_v2a](vggsounder_v2a/setup.md) ·
 [vggss_box](vggss_box/setup.md).

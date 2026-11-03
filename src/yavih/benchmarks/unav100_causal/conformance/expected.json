@@ -1,0 +1,79 @@
+{
+ "benchmark": "unav100_causal",
+ "generator": 1,
+ "population": {
+  "eval": 40,
+  "floor": 0,
+  "folds": 0,
+  "train": 40
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "a6997e6f591a5e4f7aae4e2b2812dbbcfc60934e+dirty",
+  "externals": {},
+  "folder_source": {
+   "eval": "25e1ef752f5c7338beb4458252c35ba5bce30961888b63a6c934b227af988b76",
+   "reader": null
+  },
+  "protocol_hash": "ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438",
+  "scorer": {
+   "kind": "probe",
+   "name": "stream",
+   "version": 1
+  },
+  "scoring_hash": "8a2213db182b1d0c043f4e79a9478f9a60c6c82990ce637be17c9a88fbd490c7",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "bin_map_floor": 0.001,
+  "false_alerts_per_h_gru": 0.001,
+  "false_alerts_per_h_linear": 0.001,
+  "map_gru": 0.001,
+  "map_linear": 0.001,
+  "map_long_gru": 0.001,
+  "map_long_linear": 0.001,
+  "map_medium_gru": 0.001,
+  "map_medium_linear": 0.001,
+  "map_short_gru": 0.001,
+  "map_short_linear": 0.001,
+  "onset_delay_s_gru": 0.001,
+  "onset_delay_s_linear": 0.001,
+  "onset_recall_gru": 0.001,
+  "onset_recall_linear": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "map_gru": [
+     0.4949170359370483,
+     0.5670914668453128
+    ],
+    "map_linear": [
+     0.4949170359370483,
+     0.5670914668453128
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "bin_map_floor": 0.018429994141769185
+   },
+   "metrics": {
+    "false_alerts_per_h_gru": 0.0,
+    "false_alerts_per_h_linear": 0.0,
+    "map_gru": 0.5183874210545831,
+    "map_linear": 0.5183874210545831,
+    "map_long_gru": 0.5569115393589232,
+    "map_long_linear": 0.5569115393589232,
+    "map_medium_gru": 0.44344674941435464,
+    "map_medium_linear": 0.44344674941435464,
+    "map_short_gru": 0.46063933860579936,
+    "map_short_linear": 0.46063933860579936,
+    "onset_delay_s_gru": 2.0,
+    "onset_delay_s_linear": 2.0,
+    "onset_recall_gru": 0.6982758620689655,
+    "onset_recall_linear": 0.6982758620689655
+   }
+  }
+ }
+}

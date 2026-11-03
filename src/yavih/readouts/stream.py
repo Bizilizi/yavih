@@ -23,8 +23,10 @@ validation loss over the pinned lr grid with patience):
 
 Outputs are probabilities (softmax for ``ce`` groups, sigmoid for ``bce``). Metrics are the folder's, named
 ``<metric>_linear`` / ``<metric>_gru``: each sees ``{group: scores [M, C]}``, ``{group: labels}`` and ``split_meta``
-with the per-target ``recording`` (for intervals resampled by recording), ``time``, ``meta`` and ``groups``. Floors see
-the prior on every target. torch is imported on first use.
+with the per-target ``recording`` (for intervals resampled by recording), ``time``, ``meta`` and ``groups``, and under
+``val`` the same for the held-out train recordings (``outputs``, ``targets``, ``recording``, ``time``, ``meta``): a
+metric that needs an operating point (a detection threshold) chooses it there, never on eval. Floors see the prior on
+every target. torch is imported on first use.
 """
 
 from __future__ import annotations
@@ -438,6 +440,10 @@ def run_stream(ctx: ReadoutContext) -> dict:
     eval_rec: list[_Rec] = []
     labels: dict[str, np.ndarray] = {}
     smeta: dict[str, Any] = {}
+    val_lat = {kind: [_Rec(**{**r.__dict__}) for r in va] for kind in HEADS}
+    for kind in HEADS:  # the validation recordings at the head's real-time availability (as the eval ones)
+        for r in val_lat[kind]:
+            r.avail = r.avail + latency[kind]
     for i, kind in enumerate(HEADS):
         recs = _load(ctx, ctx.roles["eval"], groups, latency[kind])  # the head's latency shifts the real-time availability
         if not recs:
@@ -450,6 +456,9 @@ def run_stream(ctx: ReadoutContext) -> dict:
         specs["floors"] = dict(ctx.metric_specs.get("floors", {})) if i == 0 else {}
         split_meta = {**smeta, "groups": groups, "head": kind, "mode": mode, "bootstrap": dict(ctx.bootstrap or {}),
                       "n_train": len(train_all), "n_eval": len(recs)}
+        if va:  # the held-out train recordings: thresholds and operating points are chosen here, never on eval
+            vlab, vmeta = _flatten(val_lat[kind], groups)
+            split_meta["val"] = {"outputs": _scores(kind, fits[kind], val_lat[kind], groups, prior, device), "targets": vlab, **vmeta}
         ci = {n: k for n, k in dict(ctx.ci or {}).items() if n in specs["metrics"] or n in specs["controls"]}
         got = evaluate_metrics(specs, outputs=scores, targets=labels, protocol=ctx.protocol, split_meta=split_meta, floor_outputs=floor, ci=ci)
         for b in blocks:
@@ -488,7 +497,7 @@ def _floor_outputs(train_targets: Any, n_eval: int, *, protocol: dict, label_kin
 
 
 #: recordings per role in the conformance population
-POPULATION: dict[str, int] = {"train": 40, "eval": 40}
+POPULATION: dict[str, int] = {"train": 40, "val": 20, "eval": 40}
 
 
 def _population(ctx: Any, tag: str) -> dict[str, Any]:
@@ -512,25 +521,32 @@ def _population(ctx: Any, tag: str) -> dict[str, Any]:
         return out
 
     train = role(list(ctx.roles["train"]), POPULATION["train"], "train")
+    val = role(list(ctx.roles["train"]), POPULATION["val"], "val")
     ev = role(list(ctx.roles["eval"]), POPULATION["eval"], "eval")
-    labels = {g: np.concatenate([np.asarray(t["labels"][g]) for t in ev], axis=0) for g in groups}
-    rec = np.concatenate([np.full(len(np.asarray(t["times"])), k) for k, t in enumerate(ev)])
-    times = np.concatenate([np.asarray(t["times"], dtype=np.float64) for t in ev])
-    names = sorted({n for t in ev for n in dict(t.get("meta") or {})})
-    meta = {n: np.concatenate([np.asarray(t["meta"][n]) for t in ev]) for n in names}
-    outputs = {}
-    for g, spec in groups.items():
-        c, y = spec["classes"], labels[g]
-        noise = (_values(f"{tag}:stream:{g}", (len(rec), c)) - 0.5) * 6.0
-        if spec["loss"] == "ce":
-            onehot = np.zeros((len(rec), c), np.float64)
-            ok = y >= 0
-            onehot[np.flatnonzero(ok), y[ok].astype(np.int64)] = 2.0
-            z = onehot + noise
-            z = np.exp(z - z.max(axis=1, keepdims=True))
-            outputs[g] = (z / z.sum(axis=1, keepdims=True)).astype(np.float32)
-        else:
-            outputs[g] = (1.0 / (1.0 + np.exp(-(3.0 * (np.nan_to_num(y) - 0.5) + noise)))).astype(np.float32)
+    def part(tg: list[dict[str, Any]], salt: str) -> dict[str, Any]:
+        labels = {g: np.concatenate([np.asarray(t["labels"][g]) for t in tg], axis=0) for g in groups}
+        rec = np.concatenate([np.full(len(np.asarray(t["times"])), k) for k, t in enumerate(tg)])
+        times = np.concatenate([np.asarray(t["times"], dtype=np.float64) for t in tg])
+        names = sorted({n for t in tg for n in dict(t.get("meta") or {})})
+        meta = {n: np.concatenate([np.asarray(t["meta"][n]) for t in tg]) for n in names}
+        outputs = {}
+        for g, spec in groups.items():
+            c, y = spec["classes"], labels[g]
+            noise = (_values(f"{tag}:stream:{g}" if salt == "eval" else f"{tag}:stream:{salt}:{g}", (len(rec), c)) - 0.5) * 6.0
+            if spec["loss"] == "ce":
+                onehot = np.zeros((len(rec), c), np.float64)
+                ok = y >= 0
+                onehot[np.flatnonzero(ok), y[ok].astype(np.int64)] = 2.0
+                z = onehot + noise
+                z = np.exp(z - z.max(axis=1, keepdims=True))
+                outputs[g] = (z / z.sum(axis=1, keepdims=True)).astype(np.float32)
+            else:
+                outputs[g] = (1.0 / (1.0 + np.exp(-(3.0 * (np.nan_to_num(y) - 0.5) + noise)))).astype(np.float32)
+        return {"outputs": outputs, "targets": labels, "recording": rec, "time": times, "meta": meta,
+                "has_evidence": np.ones(len(rec), bool)}
+
+    e = part(ev, "eval")
+    outputs, labels, rec, times, meta = e["outputs"], e["targets"], e["recording"], e["time"], e["meta"]
     floor = _floor_outputs(train, len(rec), protocol=ctx.protocol, label_kind="none")
     for g, spec in groups.items():
         if floor[g].shape[1] != spec["classes"]:  # a class absent from the drawn train targets
@@ -538,7 +554,8 @@ def _population(ctx: Any, tag: str) -> dict[str, Any]:
             p[: floor[g].shape[1]] = floor[g][0]
             floor[g] = np.broadcast_to(p, (len(rec), spec["classes"])).copy()
     split_meta = {"recording": rec, "time": times, "meta": meta, "has_evidence": np.ones(len(rec), bool), "groups": groups, "head": "gru",
-                  "mode": "causal", "bootstrap": dict(ctx.bootstrap or {}), "n_train": len(train), "n_eval": len(ev)}
+                  "mode": "causal", "bootstrap": dict(ctx.bootstrap or {}), "n_train": len(train), "n_eval": len(ev),
+                  "val": part(val, "val") if val else None}
     return {"outputs": outputs, "targets": labels, "split_meta": split_meta, "floor_outputs": floor,
             "eval_splits": list(ctx.roles["eval"]), "eval_rows": np.arange(len(ev), dtype=np.int64)}
 
