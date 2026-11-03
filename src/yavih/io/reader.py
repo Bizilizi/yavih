@@ -16,7 +16,7 @@ import io
 import mmap
 import os
 import tarfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,7 @@ from yavih.io.format import (
     FEATURE_DTYPES,
     FEATURE_FORMAT_VERSION,
     META_FILE,
+    READABLE_FEATURE_FORMATS,
     FormatError,
     parse_member_name,
     parse_shard_name,
@@ -161,6 +162,55 @@ class FeatureReader:
     n_rows: int
     present_rows: np.ndarray  # int64, present manifest rows, ascending
 
+    #: A generic set's sidecar ``outputs`` block (a declared schema), else ``None`` (the default feature matrix).
+    _outputs: dict | None = None
+
+    @property
+    def generic(self) -> bool:
+        """Whether the set carries a declared output schema (per-key members) rather than the feature matrix."""
+        return bool(self._outputs)
+
+    @property
+    def outputs(self) -> dict | None:
+        """The ``outputs`` block of a generic set: ``{schema, schema_sha256, bound, keys}``; ``None`` otherwise."""
+        return dict(self._outputs) if self._outputs else None
+
+    def keys(self) -> list[str]:
+        """The schema keys the set carries (``["feat"]`` or ``["feat", "pos"]`` for the feature matrix)."""
+        if self._outputs:
+            return list(self._outputs.get("keys") or {})
+        return ["feat"] + (["pos"] if self.pos_mode != "none" else [])
+
+    def values(self, key: str, idx: Sequence[int] | np.ndarray, *, codecs: Mapping[str, Any] | None = None) -> list[Any]:
+        """The decoded values of schema key ``key`` for manifest rows ``idx`` (one per row, in ``idx`` order), through
+        the key's codec (``codecs``: the benchmark's registry, ``Benchmark.codecs``, for a folder codec; default: the
+        built-ins and entry points). The feature matrix's ``feat`` / ``pos`` read as arrays."""
+        if not self._outputs:
+            if key == "feat":
+                return list(self.rows(idx))
+            if key == "pos":
+                return [self.pos(int(r)) for r in np.asarray(idx).reshape(-1)]
+            raise KeyError(f"{self.features_dir}: the feature matrix has no key {key!r}")
+        from yavih import codecs as _codecs
+
+        schema = self._outputs.get("schema") or {}
+        if key not in (self._outputs.get("keys") or {}):
+            raise KeyError(f"{self.features_dir}: the feature set carries no key {key!r} (it carries {self.keys()})")
+        spec = dict(schema[key])
+        codec = (dict(codecs) if codecs is not None else _codecs.registry()).get(spec["type"])
+        if codec is None:
+            raise FormatError(f"{self.features_dir}: codec {spec['type']!r} of key {key!r} is not registered here "
+                              "(a folder codec: pass codecs=Benchmark.codecs)")
+        out: list[Any] = []
+        for pos in self._positions(idx):
+            e = self._members[int(pos)]
+            part = e["parts"][key]
+            start = int(part["offset_data"])
+            size = int(part["nbytes"]) + int(part.get("header_len", 0))
+            data = bytes(self._map(int(self._shard_idx[pos]))._mm[start:start + size])
+            out.append(codec.decode(data, spec))
+        return out
+
     def __init__(self, features_dir: str | os.PathLike, *, require_meta: bool = True) -> None:
         self.features_dir = Path(features_dir)
         if not self.features_dir.is_dir():
@@ -170,8 +220,8 @@ class FeatureReader:
         if meta_path.exists():
             self.meta = read_json(meta_path)
             fv = self.meta.get("format_version")
-            if isinstance(fv, bool) or fv != FEATURE_FORMAT_VERSION:
-                raise FormatError(f"{meta_path}: unsupported format_version {fv!r} (this yavih reads {FEATURE_FORMAT_VERSION}); re-extract")
+            if isinstance(fv, bool) or fv not in READABLE_FEATURE_FORMATS:
+                raise FormatError(f"{meta_path}: unsupported format_version {fv!r} (this yavih reads {list(READABLE_FEATURE_FORMATS)}); re-extract")
         elif require_meta:
             raise FormatError(
                 f"{self.features_dir}: no {META_FILE}; the split is not finalized — run `yavih features validate` "
@@ -263,6 +313,8 @@ class FeatureReader:
                     N, D = int(f["N"]), int(f["D"])
                 elif (int(f["N"]), int(f["D"])) != (N, D):
                     raise FormatError(f"{self.features_dir}: sidecars disagree on (N, D) (E_DESCRIBE_MISMATCH)")
+            if sc.get("outputs") and (sc["outputs"] or {}).get("schema") is not None:
+                self._outputs = sc["outputs"] if not getattr(self, "_outputs", None) else self._outputs
             if dtype_name is None:
                 dtype_name, pos_mode = str(f["dtype"]), str(f["pos_mode"])
             elif (str(f["dtype"]), str(f["pos_mode"])) != (dtype_name, pos_mode):
@@ -272,7 +324,7 @@ class FeatureReader:
                 r = np.array([int(m["row"]) for m in members], dtype=np.int64)
                 rows_parts.append(r)
                 shard_of.append(np.full(len(members), si, dtype=np.int64))
-                off.append(np.array([int(m["offset_data"]) + int(m["header_len"]) for m in members], dtype=np.int64))
+                off.append(np.array([int(m["offset_data"]) + int(m["header_len"]) if "parts" not in m else -1 for m in members], dtype=np.int64))
                 self._members.extend(members)
             self._canary_entries.extend((si, e) for e in sc.get("canary_members", []))
             self.missing.extend(sc.get("missing", []))
@@ -284,8 +336,8 @@ class FeatureReader:
             D = int(feats_meta["D"]) if feats_meta.get("D") is not None else D
             pos_mode = str(feats_meta.get("pos_mode", pos_mode))
 
-        if dtype_name is None:
-            dtype_name = "float32"
+        if dtype_name in (None, "None") or self.generic:
+            dtype_name = "float32"  # a generic set has no feature matrix: rows()/matrix() refuse, values() reads it
         if dtype_name not in FEATURE_DTYPES:
             raise FormatError(f"{self.features_dir}: dtype {dtype_name!r} not in {sorted(FEATURE_DTYPES)}")
         self.dtype = np.dtype(dtype_name)
@@ -341,6 +393,8 @@ class FeatureReader:
         return pos
 
     def _feat_at(self, pos: int) -> np.ndarray:
+        if self._outputs:
+            raise FormatError(f"{self.features_dir}: a generic feature set (declared output schema) has no feature matrix; use values(key, rows)")
         return self._map(int(self._shard_idx[pos])).view(int(self._offsets[pos]), self.dtype, (self.N, self.D))
 
     # ------------------------------------------------------------------ public API
@@ -491,8 +545,13 @@ class FeatureReader:
             if sc["features"].get("pos_sha256") is not None:
                 pos_sha = sc["features"]["pos_sha256"]
                 break
+        fv = next((int(sc["format_version"]) for sc in self.sidecars if isinstance(sc.get("format_version"), int)), FEATURE_FORMAT_VERSION)
+        if self._outputs:
+            from yavih.io.finalize import meta_fingerprint
+
+            return meta_fingerprint(self.sidecars, n_present=self.n_present)
         return hashing.features_fingerprint(
-            format_version=FEATURE_FORMAT_VERSION,
+            format_version=fv,  # the set's own format: a format-4 set keeps its fingerprint (and its probe DONE markers)
             dtype=self.dtype.name,
             N=self.N,
             D=self.D,

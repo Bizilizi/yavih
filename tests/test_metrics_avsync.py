@@ -1,4 +1,4 @@
-"""avsync's metrics and the floor-role controls, which live in the folder's ``probe.py`` ``METRICS`` overlay.
+"""avsync's metrics and the floor-role controls, which live in the folder's ``eval.py`` ``METRICS`` overlay.
 ``test_values_match_the_golden_file`` pins every metric, control, floor and interval against
 ``tests/data/avsync_metrics_golden.json`` (seeded synthetic inputs)."""
 
@@ -11,10 +11,10 @@ import numpy as np
 import pytest
 
 from yavih.benchmark import Benchmark
-from yavih.readouts.base import evaluate_metrics, folder_probe, resolve_metric_specs
+from yavih.readouts.base import evaluate_metrics, folder_eval, resolve_metric_specs
 
 BENCH = Benchmark.load("avsync")
-A = folder_probe(BENCH)
+A = folder_eval(BENCH)
 GOLDEN = Path(__file__).parent / "data" / "avsync_metrics_golden.json"
 
 OFFSETS = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
@@ -138,7 +138,7 @@ def _fixtures():
 
 
 def test_values_match_the_golden_file():
-    """Exact equality (not approx): metrics resolved through the probe.py overlay and computed by the driver
+    """Exact equality (not approx): metrics resolved through the eval.py overlay and computed by the driver
     (``evaluate_metrics``, ``intervals.interval``)."""
     from yavih.metrics import intervals as I
 

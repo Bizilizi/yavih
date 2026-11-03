@@ -61,19 +61,19 @@ def test_folder_lint_clean():
 def test_folder_specific_files():
     """The folder layout is ``yavih bench lint``'s; these are this folder's own choices."""
     assert (HERE / "curation.json").is_file()
-    assert not (HERE / "probe.py").exists()  # external: [] and no folder metric → no probe.py
+    assert not (HERE / "eval.py").exists()  # external: [] and no folder metric → no eval.py
     scripts = sorted(p.name for p in (HERE / "prepare").glob("*.sh"))
     assert scripts and all(re.match(r"^\d{2}_", s) for s in scripts), scripts
 
 
 def test_yaml_is_schema_2_without_retired_keys(spec):
-    assert spec["schema_version"] == 2 and spec["name"] == HERE.name == "ssv2"
-    assert spec["readout"] == "clf" and spec["manifest"]["label"]["kind"] == "single"
+    assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "ssv2"
+    assert spec["scorer"] == "clf" and spec["manifest"]["label"]["kind"] == "single"
     assert "requires" not in spec  # moved into output_contract
     stale = F.walk_keys({k: v for k, v in spec.items() if k != "changelog"}) & RETIRED_KEYS
     assert not stale, stale
-    assert list(spec["streams"]) == ["video"]
-    assert spec["streams"]["video"] == {"kind": "video", "media_column": "rel_media", "root": "media_root", "layout": "dir", "layout_params": {}, "required": True}
+    assert list(F.file_fields(spec)) == ["video"]
+    assert F.file_fields(spec)["video"] == {"kind": "video", "media_column": "rel_media", "root": "media_root", "layout": "dir", "layout_params": {}, "required": True}
     assert set(spec["protocol"]) == {"clip_seconds", "train_draw", "views"}  # label facts only (none constrain the bridge)
     assert spec["protocol"]["clip_seconds"] is None and spec["protocol"]["views"] == "none"
     assert spec["source"]["kind"] == "manual_portal"
@@ -108,7 +108,7 @@ def test_train_draw_names_the_public_source(spec):
 def test_input_contract(spec):
     ic = spec["input_contract"]
     assert set(ic) == {"handed_over", "info", "facts", "materialize"}
-    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["streams"])
+    assert set(ic["handed_over"]) == set(ic["info"]) == set(F.file_fields(spec))
     assert "exactly as stored" in ic["handed_over"]["video"] and "nothing" in ic["handed_over"]["video"]
     assert ic["info"]["video"] == ["duration_s", "fps", "n_frames", "width", "height", "container", "bytes"]
     assert set(ic["info"]["video"]) <= VIDEO_INFO_VOCAB

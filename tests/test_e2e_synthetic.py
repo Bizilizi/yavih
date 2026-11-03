@@ -71,7 +71,11 @@ def _extract_all(bench_name: str, bridge_file: Path, run_dir: Path, splits: list
             )
 
 
-@pytest.mark.parametrize("readout", T.READOUTS)
+#: the probe scorers (this test trains under ProbeConfig.fast(); knn, stateless, has its own tests/test_knn.py)
+PROBE_READOUTS = tuple(r for r in T.READOUTS if r in HEADLINE)
+
+
+@pytest.mark.parametrize("readout", PROBE_READOUTS)
 def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tmp_path, monkeypatch):
     from yavih.benchmark import Benchmark
     from yavih.probes.config import ProbeConfig
@@ -104,7 +108,7 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
     assert env["data"]["setup"].startswith(f"# {name} — setup")
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "bench", "list"]), "bench list"))
     row = next(r for r in env["data"] if r["name"] == name)
-    assert row["readout"] == readout and row["clips"] == {"train": N_TRAIN, "val": N_EVAL}
+    assert row["scorer"] == readout and row["clips"] == {"train": N_TRAIN, "val": N_EVAL}
 
     # 2. bridges as files (what --bridge loads)
     bridges = {kind: T.write_bridge_file(tmp_path / f"{kind}_bridge.py", kind, D=D) for kind in ("random", "oracle")}
@@ -185,11 +189,11 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
         assert len(res) == 1 and res[0].status == "ok", (kind, res[0].status, res[0].reason)
         results[kind] = res[0]
         rj = res[0].result
-        assert rj["standard"] is False and rj["schema_version"] == 4 and rj["benchmark"]["readout"] == readout and rj["external"] == {}
+        assert rj["standard"] is False and rj["schema_version"] == 5 and rj["benchmark"]["scorer"] == readout and rj["external"] == {}
         assert rj["features"]["rules_checked"] and rj["features"]["batch_tolerance"] == 1e-5
         # model and reading recorded; eval_hash = sha256(canon({protocol_hash, probe_hash}))
         assert (rj["model"], rj["reading"]) == (profiles[kind]["model"], profiles[kind]["reading"])
-        assert rj["eval_hash"] == eval_hash(rj["benchmark"]["protocol_hash"], rj["probe"]["hash"])
+        assert rj["eval_hash"] == eval_hash(rj["benchmark"]["protocol_hash"], rj["scorer"]["hash"])
         assert res[0].path.parent.name == "seed0" and res[0].path.parent.parent.name == rj["eval_hash"][:12]
         assert res[0].path.parent.parent.parent == run_dirs[kind] / "probe"
         assert rj["bridge"]["describe_sha256"] == profiles[kind]["describe_sha256"]
@@ -205,7 +209,7 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
         doc = json.loads(res[0].results_file.read_text())
         key = f"{name}:{rj['reading']}"
         assert res[0].results_file.parent.name == rj["model"] and res[0].results_file.parent.parent == runs_dir.parent / "results"
-        assert doc["results_version"] == 2 and doc["versions"] == {key: 1}
+        assert doc["results_version"] == 3 and doc["versions"] == {key: 1}
         assert doc["results"][key][headline] == rj["metrics"][headline] and doc["config"]["model"] == rj["model"]
         c = doc["configs"][key]
         assert (c["benchmark"], c["reading"], c["eval_hash"]) == (name, rj["reading"], rj["eval_hash"])
@@ -229,7 +233,7 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
 
     # the CLI probe path with the PINNED config (standard result) on the oracle, clf only (dense lr grids are slow)
     if readout == "clf":
-        env = _json(_ok(_run(["-m", "yavih.cli", "--json", "probe", "run", str(run_dirs["oracle"]), "--seeds", "1"]), "probe run"))
+        env = _json(_ok(_run(["-m", "yavih.cli", "--json", "eval", "run", str(run_dirs["oracle"]), "--seeds", "1"]), "probe run"))
         assert env["status"] == "ok" and env["data"][0]["status"] == "ok" and env["data"][0]["seed"] == 1
         assert env["data"][0]["metrics"][headline] > env["data"][0]["floors"][floor_name]
 
@@ -258,7 +262,7 @@ def test_features_stage_roundtrip(integration_env, yavih_home, runs_dir, tmp_pat
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "features", "stage", str(run_dir / "features"), str(tmp_path / "scratch")]), "stage"))
     staged = Path(env["data"]["staged"])
     assert staged.parent == tmp_path / "scratch" and set(env["data"]["splits"]) == {"train", "val"}
-    # <scratch>/<unit|run>.<host>.<pid>/features/<split>: the layout `probe run --scratch <staged>` consumes
+    # <scratch>/<unit|run>.<host>.<pid>/features/<split>: the layout `eval run --scratch <staged>` consumes
     assert (staged / "features" / "val" / "_meta.json").is_file() and len(list((staged / "features" / "val").glob("shard-*.tar"))) == N_SHARDS
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "features", "validate", str(staged / "features"), "--no-write-meta"]), "validate staged"))
     assert env["status"] == "ok" and all(r["ok"] for r in (env["data"] if isinstance(env["data"], list) else [env["data"]]))
@@ -403,7 +407,7 @@ def test_plan_build_sample_chain(integration_env, yavih_home, runs_dir, tmp_path
 
 def test_features_validate_ineligible_is_ok_and_probe_records_not_applicable(integration_env, yavih_home, runs_dir, tmp_path):
     """A pooled bridge (``pos_mode: none``) on a dense readout validates ``ok`` with
-    ``eligibility.eligible == false`` (exit 0, real benchmark through the CLI), and ``yavih probe run``
+    ``eligibility.eligible == false`` (exit 0, real benchmark through the CLI), and ``yavih eval run``
     then records ``not_applicable`` decided by validate, with a DONE marker."""
     folder = T.make_synthetic_benchmark(yavih_home / "benchmarks", "seq", n_train=8, n_eval=4, media="tiny")
     bfile = T.write_bridge_file(tmp_path / "pooled_bridge.py", "random", N=1, D=16, pos_mode="none", model="pooled")
@@ -416,7 +420,7 @@ def test_features_validate_ineligible_is_ok_and_probe_records_not_applicable(int
     for r in reports:
         assert r["ok"] is True and r["eligibility"]["eligible"] is False, r["eligibility"]
         assert any(m.startswith("pos.") for m in r["eligibility"]["missing"]), r["eligibility"]
-    env = _json(_ok(_run(["-m", "yavih.cli", "--json", "probe", "run", str(run_dir)]), "probe run ineligible"))
+    env = _json(_ok(_run(["-m", "yavih.cli", "--json", "eval", "run", str(run_dir)]), "probe run ineligible"))
     assert env["status"] == "not_applicable" and env["data"][0]["status"] == "not_applicable"
     result_path = Path(env["data"][0]["path"])
     rj = json.loads(result_path.read_text())
@@ -475,10 +479,10 @@ def test_one_model_two_readings_two_configurations(integration_env, yavih_home, 
         time.sleep(1.1)  # distinct `created` seconds
     rj = {k: r.result for k, r in res.items()}
     eh = rj["a1"]["eval_hash"]
-    assert eh == eval_hash(rj["a1"]["benchmark"]["protocol_hash"], rj["a1"]["probe"]["hash"])
+    assert eh == eval_hash(rj["a1"]["benchmark"]["protocol_hash"], rj["a1"]["scorer"]["hash"])
     assert {r["eval_hash"] for r in rj.values()} == {eh}, "bridge decisions (D, reading, file label) must not enter eval_hash"
     assert {r["benchmark"]["protocol_hash"] for r in rj.values()} == {bench.protocol_hash}
-    assert len({r["probe"]["hash"] for r in rj.values()}) == 1
+    assert len({r["scorer"]["hash"] for r in rj.values()}) == 1
     for k, r in res.items():
         assert r.path == run_dirs[k] / "probe" / eh[:12] / "seed0" / "result.json", (k, r.path)
         assert (rj[k]["model"], rj[k]["reading"]) == ("m1", profiles[k]["reading"])
@@ -494,7 +498,7 @@ def test_one_model_two_readings_two_configurations(integration_env, yavih_home, 
     docs = {k: json.loads(res[k].results_file.read_text()) for k in res}
     for k, doc in docs.items():
         key = f"{name}:{profiles[k]['reading']}"
-        assert doc["results_version"] == 2 and set(doc["results"]) == {key} and doc["config"]["model"] == "m1"
+        assert doc["results_version"] == 3 and set(doc["results"]) == {key} and doc["config"]["model"] == "m1"
         c = doc["configs"][key]
         assert (c["benchmark"], c["reading"], c["eval_hash"]) == (name, profiles[k]["reading"], eh)
         assert c["bridge"]["describe_sha256"] == profiles[k]["describe_sha256"]

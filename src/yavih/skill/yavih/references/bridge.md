@@ -30,12 +30,14 @@ class RawStream:                     # read-only
 class Sample:
     row: int; clip_id: str; split: str         # bookkeeping: MUST NOT change what you compute (bridge check scrambles them)
     streams: dict[str, RawStream]              # every present stream under its declared name
+    cells: dict[str, Any]                 # the cell fields: a typed manifest value per field (a caption, an option list), a private copy
     meta: dict                                 # {"facts": {...}}: label facts only, e.g. {"annotated_second": 5.0}
 
 @dataclass(frozen=True)
 class BenchmarkView:                           # what Bridge.__init__ receives: no manifest, labels, splits or roots
     name: str; aliases: list[str]; readout: str; protocol_version: int; protocol_hash: str
     streams: dict[str, str]                    # {name: kind}
+    fields: dict[str, dict]               # every field: {name: {storage: file | cell, kind}}
     input_contract: dict; output_contract: dict
     facts: dict                                # = Sample.meta["facts"] of every row
 ```
@@ -134,7 +136,7 @@ tells configurations of one model name apart in the report (`W_BRIDGE_CHANGED`).
 | `weights_ref` | **no** | path or hub id; provenance only |
 | `dtype`, `pos_mode`, `streams` | yes | equal to the class attributes |
 | `batch_size` | **no** | equal to the class attribute; provenance (the canaries check batch invariance), so another batch size on another GPU is the same configuration |
-| `reading` | yes | `"a"`, `"v"` or `"av"`: what the model sees, one vocabulary across benchmarks (`[A-Za-z0-9_-]{1,32}`, first character a letter or digit; another declared tag is legal). It names the run subdirectory and the results key `<benchmark>:<reading>`, so a different spelling, e.g. `"audio"`, is a different row; the report marks a reading `MISSING` only where the benchmark has its modalities, and `report --join` routes `a`/`v`/`av` |
+| `reading` | yes | `"a"`, `"v"` or `"av"`: what the model sees, one vocabulary across benchmarks (`[A-Za-z0-9_-]{1,32}`, first character a letter or digit; another declared tag is legal; a streaming benchmark's real-time replay adds `-rt`, e.g. `av-rt`). It names the run subdirectory and the results key `<benchmark>:<reading>`, so a different spelling, e.g. `"audio"`, is a different row; the report marks a reading `MISSING` only where the benchmark has its modalities, and `report --join` routes `a`/`v`/`av` |
 | `layer`, `pooling` | yes | the tap; `"none"`, `"mean"`, `"cls"`, … |
 | `views` | yes | MUST be `1`: one deterministic view, no multi-crop/multi-clip/TTA averaging |
 | `input` | yes, except each stream's `decoder` block | per stream you READ: the declared rules of §3 below; `decoder` (`{lib, version, …}`) is recorded as provenance, like the torch or CUDA version |
@@ -342,7 +344,7 @@ def describe(self):
 
 For features already extracted, the operator does the same without touching the bridge (no hash changes;
 recorded with `source: cli`): `yavih features validate <runs root>/vggsounder/<model>/a/features --waive
-E_DUPLICATE_CLIPS="digitally silent audio"` (repeatable; `all=<reason>`), `yavih probe run … --waive …`, or the matrix
+E_DUPLICATE_CLIPS="digitally silent audio"` (repeatable; `all=<reason>`), `yavih eval run … --waive …`, or the matrix
 entry key `waive: {E_DUPLICATE_CLIPS: "digitally silent audio"}` for the plan's probe units.
 
 ## 7. Many benchmarks, one model: `<model>_common.py`
@@ -447,7 +449,7 @@ python -m yavih.extract --bench <b> --bridge bridges/x.py --split <split> --shar
 `.json` holds `{row, clip_id, media_key, media, used}`. A matching sidecar → skipped (exit 0); one
 written under another configuration (`describe_sha256`, `model`, `reading`) or for another benchmark
 input side (`benchmark.input_hash`: manifest, splits, streams, contracts) is moved to `_stale/<utc>/`
-and re-extracted. A benchmark change on the scoring side only (a `protocol_version` bump — how a `probe.py` or
+and re-extracted. A benchmark change on the scoring side only (a `protocol_version` bump — how a `eval.py` or
 metric fix lands once its conformance fixture is re-recorded — a pinned package, a readout version) never touches
 finished shards: it re-probes. The first unit of a reconfigured split moves EVERY shard of the old configuration or
 shard count (also the ones the new plan no longer writes) and the old `_meta.json` there in one step;

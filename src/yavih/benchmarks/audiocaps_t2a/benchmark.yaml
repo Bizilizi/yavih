@@ -1,0 +1,158 @@
+# yavih benchmark folder — AudioCaps text-to-audio generation (schema 3).
+# Values under `manifest` and `budget.clips` are printed by make_manifest.py (`make_manifest.py --check` confirms them).
+schema_version: 3
+name: audiocaps_t2a
+aliases: []
+title: AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark)
+capability: [audio, generation]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+scorer: audiocaps_t2a
+protocol_version: 1
+header:
+  name: AudioCaps T2A
+  title: "Text-to-audio generation on the AudioCaps test captions"
+  venue: "Kim et al. · NAACL 2019; av-benchmark (Cheng et al. · CVPR 2025)"
+  abstract: >-
+    A model reads one human caption of an AudioCaps test clip and generates 10 s of audio. The 776 clips whose full
+    10 s recording survives in a pinned mirror are frozen with the sha256 of their recordings. Quality and caption alignment are
+    reported separately with the MMAudio authors' evaluation code, next to the same alignment on re-paired real audio.
+changelog:
+  - version: 1
+    date: "2026-10-30"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552
+    input_hash: 6f4dd3c852142ebb113ca7eab8bd982a7c2d909b564619cddd817ccd5ea48ab2
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://audiocaps.github.io/
+    - https://github.com/cdjkim/audiocaps
+    - https://huggingface.co/datasets/OpenSound/AudioCaps
+    - https://github.com/hkchengrex/av-benchmark
+  revision: b29b3243d6ce49c2cd0d48d4b5f0701ae7969ded
+  licence: >-
+    AudioCaps captions: MIT (github.com/cdjkim/audiocaps). The audio is AudioSet / YouTube material; the OpenSound
+    mirror is published under CC BY-NC 4.0. av-benchmark: MIT.
+  notes: >-
+    Captions = the official test.csv at commit 80fb3ade6d400d4311354a360db25da051a48cc1 (sha256-pinned). Audio = the
+    OpenSound/AudioCaps Hugging Face dataset at the pinned revision (24 kHz wav bytes per caption row); prepare/02
+    writes one reference wav per frozen clip under derived_root and checks its frozen sha256.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "curl of the official test.csv at the pinned commit + hf download of the OpenSound/AudioCaps test parquet at the pinned revision (3.4 GB, public, no account)"
+budget:
+  clips: {test: 776}
+  media_gb: 0.9
+  extract_min_per_1k_clips_ref: 30.0
+  probe_minutes_ref: {audiocaps_t2a: 20}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 321e2842a6986366c36f9831e873966e5672d4ba812716725e48c0d346494a17
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+  columns:
+    caption: {type: str, role: cell, field: caption}
+    audiocap_id: {type: str, role: extra}
+    rel_audio: {type: str, role: extra}
+    audio_sha256: {type: str, role: extra}
+  upstream:
+    source: "AudioCaps test.csv (cdjkim/audiocaps@80fb3ade) and the OpenSound/AudioCaps mirror (revision b29b324)"
+    sha256: b91c4b7ded2f4f6e7db5b9c4983dc1e1dca3d556f505b61e3fd65cac7e1c638a
+    rows: 975
+    draw: "every official test clip the mirror holds one recording of at least 10 s for, in the order of its first caption in test.csv; the clip's first caption in test.csv order"
+    note: >-
+      test.csv lists 4 875 captions, five per clip, for 975 clips. The mirror keeps 883 of them (YouTube decay; other
+      published copies hold 886 to 975). One clip's caption rows carry two
+      different recordings and is excluded, and 106 recordings shorter than the scored 10 s
+      are excluded (read from the wav header). clip_id is <youtube_id>_<start_time:06d>; audiocap_id is the caption's id.
+    curation:
+      total_upstream: 975
+      per_split:
+        test: {listed: 776, staged: 776, missing: 0}
+      excluded:
+        not_in_mirror: 92
+        mirror_audio_ambiguous: 1
+        shorter_than_audio_length: 106
+
+splits:
+  train: []
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  caption:
+    storage: cell
+    kind: text
+    column: caption
+
+targets: null
+
+data:
+  roots:
+    source_root:
+      default: "${datasets.audiocaps}"
+      prepare_only: true
+      description: "upstream/test.csv (the official captions) and opensound-b29b324/data/test-*.parquet (the audio mirror); prepare/01 downloads both"
+    derived_root:
+      default: "${data.root}/audiocaps_t2a"
+      description: "audio/<clip_id>.wav (prepare/02: the reference recordings, sha256-checked) and av_bench/ (the reference feature caches eval.py builds on first use)"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    caption: >-
+      one human caption of the clip, verbatim (the first of its five in the official test.csv); the recording is the
+      reference and never reaches the bridge
+  info: {}
+  facts: [audio_length]
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires: {pos: [], streams: [], grid: null, t_bins: null}
+  sampling: required
+  schema:
+    audio: {type: wav, channels: 1, duration_s: [10.0, 10.05]}
+
+external:
+  - name: av_bench
+    pip: "pip install -e git+https://github.com/hkchengrex/av-benchmark.git@f351b9a6fc6abde746d5f8e1d4c47c883319cb41#egg=av_bench"
+    version_pin: "1.0.0"
+    used_for: >-
+      every reported number: av-benchmark (the MMAudio authors' evaluation code) extracts PaSST, PANNs, VGGish and
+      LAION-CLAP / MS-CLAP features and computes FD, KL, IS and the CLAP scores (av_bench.evaluate, extract_text.py);
+      needs the two weight files its README names in <checkout>/weights and a CUDA GPU
+
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+  audio_length: 10.0     # seconds of audio generated and scored per caption: av_bench's audio_length
+  floor_seed: 0          # the seeded derangement that re-pairs the reference audio for the floors
+  clap_crop_seed: 0      # MS-CLAP scores a random 7 s window of each clip: its offset is drawn per clip from this seed and the clip id
+
+metrics:   # every value is av_bench's own (eval.py); `_floor` = the same metric on reference audio re-paired by a derangement
+  headline: fd_passt
+  list: [fd_passt, fd_panns, fd_vgg, kad_passt, kad_panns, kl_passt, kl_panns, is_passt, is_panns, clap_laion, clap_ms, clap_laion_ref, clap_ms_ref, n_eval]
+  table: [fd_passt, kl_passt, is_passt, clap_laion]
+  floors: [clap_laion_floor, clap_ms_floor, kl_passt_floor]
+  controls: []
+  chance: {}
+  ci: {kad_passt: bootstrap_clip, kad_panns: bootstrap_clip, kl_passt: bootstrap_clip, kl_panns: bootstrap_clip, clap_laion: bootstrap_clip, clap_ms: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}   # clip-level percentile bootstrap: every interval resamples the same clips
+
+readout_params: {}

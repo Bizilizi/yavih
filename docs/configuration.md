@@ -36,7 +36,7 @@ children it starts (`yavih exec` → `python -m yavih.extract`) resolve the same
 |---|---|
 | `--config FILE` | the project file (beats `$YAVIH_CONFIG` and `yavih.toml` discovery); a missing file is an error |
 | `--runs-root DIR` | `[runs] root` |
-| `--results DIR` | `[results] root` (`probe run --results` and `report build --results` mean the same root) |
+| `--results DIR` | `[results] root` (`eval run --results` and `report build --results` mean the same root) |
 | `--data BENCH.ROOT=PATH` | one data root of one benchmark (name or alias); repeatable |
 | `--data root=PATH` | `[data] root` |
 | `--data datasets.NAME=PATH` | `[datasets] NAME` |

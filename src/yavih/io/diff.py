@@ -75,11 +75,64 @@ class RowIndex:
         self.close()
 
 
-def diff_features(a: str | os.PathLike, b: str | os.PathLike, *, rel_tol: float = 1e-3) -> dict:
+def _diff_generic(a_dir: Path, b_dir: Path, *, rel_tol: float, keys: list[str] | None, chunk: int = 256) -> dict:
+    """Sets with a declared output schema: every key compared row by row through its codec's ``distance`` (0 =
+    identical). Schemas that differ are ``incompatible``."""
+    from yavih import codecs as C
+    from yavih.io.reader import FeatureReader
+
+    ra, rb = FeatureReader(a_dir, require_meta=False), FeatureReader(b_dir, require_meta=False)
+    oa, ob = ra.outputs or {}, rb.outputs or {}
+    rows_a, rows_b = set(int(r) for r in ra.present_rows), set(int(r) for r in rb.present_rows)
+    out: dict[str, Any] = {"a": str(a_dir), "b": str(b_dir), "rows_compared": 0, "verdict": "empty", "rel_tol": rel_tol,
+                           "only_in_a": len(rows_a - rows_b), "only_in_b": len(rows_b - rows_a), "keys": {}}
+    if (oa.get("schema") or {}) != (ob.get("schema") or {}):
+        out["verdict"] = "incompatible"
+        out["schema_a"], out["schema_b"] = oa.get("schema"), ob.get("schema")
+        return out
+    common = sorted(rows_a & rows_b)
+    if not common:
+        return out
+    schema, reg = oa.get("schema") or {}, C.registry()
+    worst = 0.0
+    for key in keys or ra.keys():
+        spec = dict(schema[key])
+        codec = reg.get(spec["type"])
+        if codec is None:
+            out["keys"][key] = {"codec": spec["type"], "note": "a folder codec not registered here"}
+            continue
+        dmax, n_equal, worst_row = 0.0, 0, None
+        for s in range(0, len(common), chunk):
+            idx = common[s:s + chunk]
+            for r, va, vb in zip(idx, ra.values(key, idx, codecs=reg), rb.values(key, idx, codecs=reg), strict=True):
+                d = float(codec.distance(va, vb, spec))
+                n_equal += int(d == 0.0)
+                if d > dmax:
+                    dmax, worst_row = d, r
+        out["keys"][key] = {"codec": spec["type"], "max_distance": dmax, "identical_rows": n_equal, "worst_row": worst_row}
+        worst = max(worst, dmax)
+    out["rows_compared"] = len(common)
+    out["verdict"] = "identical" if worst == 0.0 else ("within_tol" if worst <= rel_tol else "differs")
+    return out
+
+
+def diff_features(a: str | os.PathLike, b: str | os.PathLike, *, rel_tol: float = 1e-3, keys: list[str] | None = None) -> dict:
     """Compare the rows present in both split directories. ``verdict``: ``identical`` (bit-equal),
     ``within_tol`` (``max_rel_l2 ≤ rel_tol``), ``differs``, ``incompatible`` (N/D/dtype differ) or
-    ``empty`` (no common rows)."""
+    ``empty`` (no common rows). A set with a declared output schema is compared key by key through its codecs
+    (``keys`` restricts them)."""
     a_dir, b_dir = Path(a), Path(b)
+    from yavih.io.finalize import generic_outputs
+
+    def _generic(d: Path) -> bool:
+        scs = []
+        for _i, sc_path, _t in list_shards(d):
+            with open(sc_path, encoding="utf-8") as fh:
+                scs.append(json.load(fh))
+        return generic_outputs(scs) is not None
+
+    if _generic(a_dir) or _generic(b_dir):
+        return _diff_generic(a_dir, b_dir, rel_tol=rel_tol, keys=keys)
     with RowIndex(b_dir) as ib:
         fa = RowIndex(a_dir)
         fa.close()

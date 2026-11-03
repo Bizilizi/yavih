@@ -89,6 +89,13 @@ def load_module(path: str | Path, name: str | None = None) -> ModuleType:
     return mod
 
 
+def file_fields(spec: dict) -> dict:
+    """The raw yaml's file fields in the schema-2 ``streams`` shape (``yavih.fields.file_fields``)."""
+    from yavih.fields import file_fields as _ff
+
+    return _ff(spec.get("fields"))
+
+
 def load_yaml(folder: Path) -> dict:
     """``benchmark.yaml`` read with pyyaml only (no loader, no validation)."""
     return yaml.safe_load((Path(folder) / "benchmark.yaml").read_text(encoding="utf-8"))
@@ -201,13 +208,13 @@ def assert_splits_assigned_once(spec: dict, rows: list[dict[str, str]]) -> Count
 
 def assert_metric_names_resolve(folder: Path, spec: dict | None = None) -> None:
     """Every listed / floor / control metric is a registry metric for the folder's readout or one the folder's
-    ``probe.py`` declares in ``METRICS``; ``chance`` and ``ci`` keys are listed metrics."""
+    ``eval.py`` declares in ``METRICS``; ``chance`` and ``ci`` keys are listed metrics."""
     from yavih.metrics.registry import REGISTRY, allows
 
     folder = Path(folder)
     spec = spec or load_yaml(folder)
-    m, readout = spec["metrics"], spec["readout"]
-    own = set(getattr(load_module(folder / "probe.py"), "METRICS", {})) if (folder / "probe.py").is_file() else set()
+    m, readout = spec["metrics"], spec["scorer"]
+    own = set(getattr(load_module(folder / "eval.py"), "METRICS", {})) if (folder / "eval.py").is_file() else set()
     for name in [*m["list"], *m["floors"], *m["controls"]]:
         assert name in own or (name in REGISTRY and allows(REGISTRY[name], readout)), name
     assert m["headline"] in m["list"]

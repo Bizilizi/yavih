@@ -1,5 +1,5 @@
 """Readout driver: roles, eligibility (READ from ``_meta.json``, never
-computed here), refusals, the folder ``probe.py`` hooks (targets, metrics, external scorer), the
+computed here), refusals, the folder ``eval.py`` hooks (targets, metrics, external scorer), the
 external-package checks (``yavih.external.require``, before training), scratch staging, signals, the
 per-seed loop, ``result.json`` + ``DONE`` + ``eval_logits.npy`` + ``eval_rows.npy`` + ``probe_fit.json``,
 then the invocation's results-store file and, with ``log_samples``, its samples file.
@@ -36,7 +36,7 @@ import numpy as np
 
 from yavih import hashing
 from yavih.versions import (
-    FEATURE_FORMAT_VERSION,
+    READABLE_FEATURE_FORMATS,
     READOUT_VERSION,
     RESULT_SCHEMA_VERSION,
     __version__,
@@ -76,7 +76,7 @@ __all__ = [
     "probe_not_applicable",
     "request_stop",
     "check_meta_fresh",
-    "folder_probe",
+    "folder_eval",
     "check_externals",
     "output_requires",
 ]
@@ -89,12 +89,12 @@ RESULT_STATUSES: frozenset[str] = frozenset({"ok", "not_applicable", "failed"})
 RESULT_KEYS: frozenset[str] = frozenset(
     {
         "schema_version", "status", "reason", "standard", "eval_hash", "benchmark", "model", "reading", "bridge", "features",
-        "probe", "metrics", "ci95", "floors", "controls", "chance", "coverage", "not_applicable",
+        "scorer", "metrics", "ci95", "floors", "controls", "chance", "coverage", "not_applicable",
         "timing", "env", "created", "warnings", "external", "waived", "sample",
     }
 )
 _METRIC_BLOCKS: tuple[str, ...] = ("metrics", "floors", "controls", "ci95")
-_BENCHMARK_KEYS = frozenset({"name", "protocol_version", "readout", "readout_version", "manifest_hash", "protocol_hash", "folder_source"})
+_BENCHMARK_KEYS = frozenset({"name", "protocol_version", "scorer", "scorer_version", "manifest_hash", "protocol_hash", "folder_source"})
 #: The result's ``bridge`` block: recorded, never a key.
 _BRIDGE_KEYS = frozenset({"name", "describe", "describe_sha256", "source_sha256"})
 #: Charsets of ``describe()["model"]`` / ``["reading"]`` (they key paths, results files and report rows).
@@ -108,7 +108,7 @@ W_WEIGHTS_UNFINGERPRINTED = "W_WEIGHTS_UNFINGERPRINTED"
 #: rules validate re-checked.
 _FEATURES_KEYS = frozenset({"fingerprint", "dtype", "N", "D", "pos_mode", "bytes", "backend", "canary_max_rel_l2",
                             "batch_tolerance", "rules_checked"})
-_PROBE_KEYS = frozenset({"hash", "config", "seed", "selected_lr", "epochs_run", "best_epoch", "stop", "n_train", "n_val"})
+_SCORER_KEYS = frozenset({"hash", "config", "seed", "selected_lr", "epochs_run", "best_epoch", "stop", "n_train", "n_val"})
 _COVERAGE_ROLE_KEYS = frozenset({"present", "nominal", "ids_sha256"})
 _TIMING_KEYS = frozenset({"validate_s", "materialize_s", "fit_s", "score_s", "wall_s", "s_per_epoch"})
 _ENV_KEYS = frozenset({"host", "gpu", "torch", "python", "yavih", "slurm_job_id"})
@@ -294,6 +294,9 @@ def _json_native(x: Any) -> Any:
 def _cfg_dict(cfg: Any) -> dict:
     from dataclasses import asdict, is_dataclass
 
+    to_json = getattr(cfg, "to_json", None)
+    if callable(to_json):
+        return _json_native(to_json())
     if is_dataclass(cfg) and not isinstance(cfg, type):
         return _json_native(asdict(cfg))
     if isinstance(cfg, Mapping):
@@ -363,20 +366,20 @@ def check_result(result: Mapping[str, Any], *, expect: Mapping[str, Any] | None 
     if not isinstance(result["standard"], bool):
         raise ResultSchemaError("standard must be a bool")
     _expect_keys(result["benchmark"], _BENCHMARK_KEYS, "benchmark")
-    if result["benchmark"]["readout"] not in READOUT_VERSION:
-        raise ResultSchemaError(f"benchmark.readout {result['benchmark']['readout']!r} unknown")
-    if result["benchmark"]["readout_version"] != READOUT_VERSION[result["benchmark"]["readout"]]:
-        raise ResultSchemaError("benchmark.readout_version differs from yavih.versions.READOUT_VERSION")
+    if result["benchmark"]["scorer"] not in READOUT_VERSION:
+        raise ResultSchemaError(f"benchmark.scorer {result['benchmark']['scorer']!r} unknown")
+    if result["benchmark"]["scorer_version"] != READOUT_VERSION[result["benchmark"]["scorer"]]:
+        raise ResultSchemaError("benchmark.scorer_version differs from the scorer's VERSION (yavih.versions.READOUT_VERSION)")
     for key, pattern in (("model", _MODEL_RE), ("reading", _READING_RE)):
         v = result[key]
         if not isinstance(v, str) or not pattern.match(v) or v in (".", ".."):
             raise ResultSchemaError(f"{key} {v!r} must match {pattern.pattern} (describe()[{key!r}])")
     eh = result["eval_hash"]
-    want = hashing.eval_hash(str(result["benchmark"]["protocol_hash"]), str(result["probe"]["hash"])) if isinstance(result.get("probe"), Mapping) else None
+    want = hashing.eval_hash(str(result["benchmark"]["protocol_hash"]), str(result["scorer"]["hash"])) if isinstance(result.get("scorer"), Mapping) else None
     if not isinstance(eh, str) or not _HEX64_RE.match(eh) or eh != want:
-        raise ResultSchemaError("eval_hash must equal sha256(canon({protocol_hash, probe_hash}))")
+        raise ResultSchemaError("eval_hash must equal sha256(canon({protocol_hash, probe_hash: scorer.hash}))")
     _expect_keys(result["bridge"], _BRIDGE_KEYS, "bridge")
-    _expect_keys(result["probe"], _PROBE_KEYS, "probe")
+    _expect_keys(result["scorer"], _SCORER_KEYS, "scorer")
     _expect_keys(result["timing"], _TIMING_KEYS, "timing")
     _expect_keys(result["env"], _ENV_KEYS, "env")
     if not isinstance(result["created"], str):
@@ -471,7 +474,7 @@ def write_result(
         marker = {
             "result_sha256": hashlib.sha256(data).hexdigest(),
             "protocol_hash": result["benchmark"]["protocol_hash"],
-            "probe_hash": result["probe"]["hash"],
+            "probe_hash": result["scorer"]["hash"],  # DONE keeps the hash payloads' name (plan --pending reads it)
             "eval_hash": result["eval_hash"],
             "model": result["model"],
             "reading": result["reading"],
@@ -501,10 +504,22 @@ def load_benchmark(ref: str) -> Any:
     return _bm.Benchmark.load(ref)
 
 
-def pinned_config(readout: str, bench: Any) -> Any:
-    from yavih.probes.config import ProbeConfig
+def scorer_of(readout: str) -> Any:
+    """The registered scorer named ``readout`` (``yavih.readouts.registry``)."""
+    from yavih.readouts import registry
 
-    return ProbeConfig.pinned(readout, bench)
+    return registry.get(readout)
+
+
+def pinned_config(readout: str, bench: Any) -> Any:
+    """The scorer's standard configuration: the pinned ``ProbeConfig`` of a probe, the constant ``ScorerConfig``
+    of a stateless or direct scorer."""
+    return scorer_of(readout).pinned_config(bench)
+
+
+def config_hash(readout: str, cfg: Any) -> str:
+    """The configuration hash that fills the second slot of ``eval_hash`` (``Scorer.hash_config``)."""
+    return scorer_of(readout).hash_config(cfg)
 
 
 class _LazyModule:
@@ -529,15 +544,15 @@ def lazy_module(name: str) -> Any:
     return _LazyModule(name)
 
 
-_FOLDER_PROBES: dict[str, Any] = {}
+_FOLDER_EVALS: dict[str, Any] = {}
 
 
-def folder_probe(bench: Any) -> Any | None:
-    """The benchmark folder's optional ``probe.py`` (hooks ``METRICS``, ``PROTOCOL_KEYS``,
+def folder_eval(bench: Any) -> Any | None:
+    """The benchmark folder's optional ``eval.py`` (hooks ``SCORER``, ``METRICS``, ``PROTOCOL_KEYS``,
     ``targets``, ``score``, ``join``), or ``None``. A ``Benchmark`` that already loaded
-    it (``bench.probe_module``) is used as is; otherwise the file is loaded by path (a folder is not a
+    it (``bench.eval_module``) is used as is; otherwise the file is loaded by path (a folder is not a
     package) under a name keyed by its sha256, so an edited file is a new module."""
-    mod = getattr(bench, "probe_module", None)
+    mod = getattr(bench, "eval_module", None)
     if callable(mod) and not hasattr(mod, "__file__"):
         mod = mod()
     if mod is not None:
@@ -545,38 +560,42 @@ def folder_probe(bench: Any) -> Any | None:
     folder = getattr(bench, "folder", None)
     if folder is None:
         return None
-    path = Path(folder) / "probe.py"
+    path = Path(folder) / "eval.py"
     if not path.is_file():
         return None
     data = path.read_bytes()
     key = hashlib.sha256(data).hexdigest()
-    if key not in _FOLDER_PROBES:
+    if key not in _FOLDER_EVALS:
         import importlib.util
 
-        name = f"yavih_folder_probe_{getattr(bench, 'name', 'bench')}_{key[:12]}"
+        name = f"yavih_folder_eval_{getattr(bench, 'name', 'bench')}_{key[:12]}"
         spec = importlib.util.spec_from_file_location(name, path)
         if spec is None or spec.loader is None:  # pragma: no cover - a file that exists always has a loader
-            raise ProbeRefused("E_PROBE_PY", f"cannot load {path}", exit_code=1)
+            raise ProbeRefused("E_EVAL_PY", f"cannot load {path}", exit_code=1)
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
         try:
             spec.loader.exec_module(module)
         except Exception as e:
             sys.modules.pop(name, None)
-            raise ProbeRefused("E_PROBE_PY", f"{path} failed to import ({type(e).__name__}: {e}); probe.py imports only stdlib, numpy and yavih core at module scope", exit_code=1) from e
-        _FOLDER_PROBES[key] = module
-    return _FOLDER_PROBES[key]
+            raise ProbeRefused("E_EVAL_PY", f"{path} failed to import ({type(e).__name__}: {e}); eval.py imports only stdlib, numpy and yavih core at module scope", exit_code=1) from e
+        _FOLDER_EVALS[key] = module
+    return _FOLDER_EVALS[key]
 
 
-def resolve_metric_specs(spec: Any, probe_mod: Any | None = None) -> dict[str, dict[str, Any]]:
+def resolve_metric_specs(spec: Any, eval_mod: Any | None = None) -> dict[str, dict[str, Any]]:
     """``{"metrics": {name: MetricSpec}, "floors": ..., "controls": ...}`` resolved through the registry
-    overlaid by the folder ``probe.py``'s ``METRICS``: the driver calls every listed fn (or
+    overlaid by the folder ``eval.py``'s ``METRICS``: the driver calls every listed fn (or
     the folder's external scorer for a spec naming ``external``) and never hard-codes a metric name."""
     from yavih.metrics import registry
+    from yavih.readouts import registry as scorers
 
     sets = list(spec.manifest.label.sets) if getattr(spec.manifest.label, "sets", None) else None
-    readout = spec.readout
-    folder_metrics: Mapping[str, Any] = dict(getattr(probe_mod, "METRICS", None) or {})
+    try:
+        readout: Any = scorers.get(spec.readout).families()
+    except scorers.UnknownScorer:
+        readout = spec.readout
+    folder_metrics: Mapping[str, Any] = dict(getattr(eval_mod, "METRICS", None) or {})
 
     def resolve(names: Iterable[str]) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -684,7 +703,7 @@ def evaluate_metrics(
     metrics and controls see the head's raw eval outputs; floors see the label-only constant
     ``floor_outputs`` (scored through the same metric function on the eval rows).
     A spec naming ``external`` is computed by the folder's scorer instead (``scorer(outputs) ->
-    {name: value}``, the ``probe.py`` ``score`` hook bound to the eval rows and targets): once on
+    {name: value}``, the ``eval.py`` ``score`` hook bound to the eval rows and targets): once on
     the head's outputs, once on the floor outputs; a floor takes its own name from the second call, or
     the value of the metric its ``floor_of`` names. An external scorer that returns ``None`` for a
     metric it names declares that metric not applicable to this configuration (vggsounder's ``*_only``
@@ -694,13 +713,20 @@ def evaluate_metrics(
     out: dict[str, dict[str, Any]] = {"metrics": {}, "floors": {}, "controls": {}, "ci95": {}}
     failures: list[str] = []
     scored: dict[str, Mapping[str, Any]] = {}
+    failed: dict[str, Exception] = {}
 
     def external_value(name: str, spec: Any, block: str, inputs: Any) -> Any:
         if scorer is None:
-            raise ProbeRefused("E_METRICS_INCOMPLETE", f"metric {name!r} names external {spec.external!r} but the folder probe.py has no score() hook")
+            raise ProbeRefused("E_METRICS_INCOMPLETE", f"metric {name!r} names external {spec.external!r} but the folder eval.py has no score() hook")
         which = "floor" if block == "floors" else "model"
+        if which in failed:  # the scorer already failed on these inputs: report it for every metric, never re-run it
+            raise failed[which]
         if which not in scored:
-            scored[which] = dict(scorer(inputs) or {})
+            try:
+                scored[which] = dict(scorer(inputs) or {})
+            except Exception as e:  # noqa: BLE001 - recorded, re-raised for every metric it computes
+                failed[which] = e
+                raise
         vals = scored[which]
         if name in vals:
             return vals[name]
@@ -909,7 +935,7 @@ class ReadoutContext:
     readers: dict[str, Any] = field(default_factory=dict)
     manifests: dict[str, Any] = field(default_factory=dict)
     fit_json: dict = field(default_factory=dict)
-    probe_mod: Any = None  # the folder probe.py, or None
+    eval_mod: Any = None  # the folder eval.py, or None
     log_samples: bool = False  # the readout returns its scored rows for the samples file
     external: dict = field(default_factory=dict)  # {package: version} checked before training
     reading: str | None = None  # the run's describe()["reading"], handed to a score hook that declares it
@@ -947,9 +973,9 @@ class ReadoutContext:
         return self.spec.manifest.label.kind
 
     def hook_targets(self, split: str, rows: np.ndarray) -> Any | None:
-        """The folder ``probe.py`` ``targets(bench, split, rows)`` hook: replaces the readout's
+        """The folder ``eval.py`` ``targets(bench, split, rows)`` hook: replaces the readout's
         target construction (same shape/dtype); ``None`` when the folder defines none."""
-        fn = getattr(self.probe_mod, "targets", None)
+        fn = getattr(self.eval_mod, "targets", None)
         if fn is None:
             return None
         return fn(self.bench, split, np.asarray(rows, dtype=np.int64))
@@ -959,7 +985,7 @@ class ReadoutContext:
         metric specs that name ``external``; ``None`` when the folder defines none.
         Several eval splits are passed joined with ``+``. A hook that declares a ``reading`` parameter also
         receives ``reading=`` the run's ``describe()["reading"]`` (a scorer that routes by reading)."""
-        fn = getattr(self.probe_mod, "score", None)
+        fn = getattr(self.eval_mod, "score", None)
         if fn is None:
             return None
         split = "+".join(splits)
@@ -1120,12 +1146,12 @@ def _benchmark_block(bench: Any) -> dict:
     return {
         "name": bench.name,
         "protocol_version": int(bench.spec.protocol_version),
-        "readout": bench.spec.readout,
-        "readout_version": READOUT_VERSION[bench.spec.readout],
+        "scorer": bench.spec.readout,
+        "scorer_version": READOUT_VERSION[bench.spec.readout],
         "manifest_hash": bench.manifest_hash,
         "protocol_hash": bench.protocol_hash,
-        # provenance: the folder's probe.py / reader.py normalized-source digests (never identity)
-        "folder_source": dict(getattr(bench, "folder_source", None) or {"probe": None, "reader": None}),
+        # provenance: the folder's eval.py / reader.py normalized-source digests (never identity)
+        "folder_source": dict(getattr(bench, "folder_source", None) or {"eval": None, "reader": None}),
     }
 
 
@@ -1260,7 +1286,7 @@ def _coverage_union(metas: Mapping[str, dict], splits: Sequence[str], ctx: Reado
     return {"present": present, "nominal": nominal, "ids_sha256": sha}
 
 
-def _probe_block(cfg: Any, qh: str, seed: int, fit: Mapping[str, Any] | None) -> dict:
+def _scorer_block(cfg: Any, qh: str, seed: int, fit: Mapping[str, Any] | None) -> dict:
     fit = fit or {}
     return {
         "hash": qh,
@@ -1291,19 +1317,20 @@ def _expect_blocks(spec: Any) -> dict:
 
 
 def _standard(cfg: Any, readout: str, bench: Any) -> tuple[Any, bool]:
-    """``cfg=None`` → pinned (standard); any other cfg requires ``YAVIH_TESTING=1`` and is standard only
-    when its ``probe_hash`` equals the pinned one."""
+    """``cfg=None`` → the scorer's pinned configuration (standard); any other cfg requires ``YAVIH_TESTING=1`` and
+    is standard only when its configuration hash equals the pinned one (``Scorer.hash_config``)."""
     from yavih.probes.config import testing_enabled
 
     if cfg is None:
         return pinned_config(readout, bench), True
     if not testing_enabled():
-        raise ProbeRefused("E_NONSTANDARD_CONFIG", "a non-pinned ProbeConfig requires YAVIH_TESTING=1", exit_code=1)
-    if getattr(cfg, "readout", readout) != readout:
-        raise ProbeRefused("E_NONSTANDARD_CONFIG", f"cfg.readout {cfg.readout!r} != benchmark readout {readout!r}", exit_code=1)
+        raise ProbeRefused("E_NONSTANDARD_CONFIG", "a non-pinned configuration requires YAVIH_TESTING=1", exit_code=1)
+    named = getattr(cfg, "scorer", getattr(cfg, "readout", readout))
+    if named != readout:
+        raise ProbeRefused("E_NONSTANDARD_CONFIG", f"the configuration names scorer {named!r} != benchmark scorer {readout!r}", exit_code=1)
     try:
         pinned = pinned_config(readout, bench)
-        return cfg, hashing.probe_hash(cfg) == hashing.probe_hash(pinned)
+        return cfg, config_hash(readout, cfg) == config_hash(readout, pinned)
     except NotImplementedError:
         return cfg, False
 
@@ -1390,7 +1417,7 @@ def _not_applicable_result(
         "reading": reading,
         "bridge": bridge,
         "features": features,
-        "probe": _probe_block(cfg, qh, seed, None),
+        "scorer": _scorer_block(cfg, qh, seed, None),
         "chance": _json_native(dict(bench.spec.metrics.chance)),
         "coverage": coverage,
         "not_applicable": {"missing": list(missing), "reason": reason, "decided_by": decided_by},
@@ -1425,7 +1452,7 @@ def _plan_time_probe(
     if unit.get("protocol_hash") not in (None, bench.protocol_hash):
         raise ProbeRefused("E_HASH_PROTOCOL", f"unit protocol_hash {unit.get('protocol_hash')} != loaded benchmark {bench.protocol_hash}")
     cfg, standard = _standard(cfg, readout, bench)
-    qh = hashing.probe_hash(cfg)
+    qh = config_hash(readout, cfg)
     if unit.get("probe_hash") not in (None, qh):
         raise ProbeRefused("E_HASH_PROBE", f"unit probe_hash {unit.get('probe_hash')} != {qh}")
     if unit.get("eval_hash") not in (None, hashing.eval_hash(bench.protocol_hash, qh)):
@@ -1504,10 +1531,10 @@ def probe(
     ``unit``/``profile`` = the plan unit record and its ``profile.json`` for a plan-time
     ``not_applicable``; ``validate_first`` runs ``validate_features`` per split as the prologue
     before reading ``_meta.json``; ``device`` overrides cuda/cpu auto-detection; ``waive`` = an operator's
-    validation waivers ``{CODE: reason}`` the prologue passes to ``validate_features`` (``probe run --waive``, the matrix
+    validation waivers ``{CODE: reason}`` the prologue passes to ``validate_features`` (``eval run --waive``, the matrix
     entry key ``waive``; recorded with source ``cli``).
 
-    ``out`` (``probe run --out``): probe a feature set that cannot be written (a read-only group store, a
+    ``out`` (``eval run --out``): probe a feature set that cannot be written (a read-only group store, a
     read-only bind, an archive). The source's shards and sidecars are mirrored into ``<out>/features/<split>/``
     as symlinks (:func:`mirror_features`), and ``<out>`` is the run directory for everything the probe writes:
     the validate prologue's ``_meta.json``, ``probe/<eval_hash12>/seed<k>/``. The source tree is never written;
@@ -1535,7 +1562,7 @@ _MIRRORED = re.compile(r"^(shard-\d+\.(tar|json)|NOT_APPLICABLE\.json)$")
 
 
 def mirror_features(src_run: str | Path, out: str | Path) -> Path:
-    """``probe run --out``: mirror ``<src_run>/features/<split>/`` into ``<out>/features/<split>/``.
+    """``eval run --out``: mirror ``<src_run>/features/<split>/`` into ``<out>/features/<split>/``.
 
     Shards, sidecars and ``NOT_APPLICABLE.json`` become symlinks to the source files (absolute targets); a link
     whose source file is gone, or that points elsewhere, is replaced or dropped, so a re-run after more shards were
@@ -1734,8 +1761,8 @@ def _probe(
         if meta is None:
             raise ProbeRefused("E_META_MISSING", f"{d / META_FILE} absent: run `yavih features validate` first")
         fv = meta.get("format_version")
-        if isinstance(fv, bool) or fv != FEATURE_FORMAT_VERSION:
-            raise ProbeRefused("E_FORMAT", f"{s}: unsupported format_version {fv!r} (this yavih reads {FEATURE_FORMAT_VERSION}); re-extract")
+        if isinstance(fv, bool) or fv not in READABLE_FEATURE_FORMATS:
+            raise ProbeRefused("E_FORMAT", f"{s}: unsupported format_version {fv!r} (this yavih reads {list(READABLE_FEATURE_FORMATS)}); re-extract")
         if not (meta.get("validation") or {}).get("ok", False):
             raise ProbeRefused("E_VALIDATION", f"{s}: _meta.json.validation.ok is false; fix the findings first")
         check_meta_fresh(d, meta)
@@ -1799,7 +1826,7 @@ def _probe(
         state["results_root"] = state["resolve_results"](bench, model, reading)
 
     cfg, standard = _standard(cfg, readout, bench)
-    qh = hashing.probe_hash(cfg)
+    qh = config_hash(readout, cfg)
     fingerprint = _fingerprint_of(metas)
     expect = _expect_blocks(spec)
     results: list[ProbeResult] = []
@@ -1888,10 +1915,10 @@ def _probe(
         if n_folds != len(spec.splits.folds or ()):
             raise ProbeRefused("E_FOLDS", f"n_folds {n_folds} != len(splits.folds) {len(spec.splits.folds or ())}")
 
-    # -- the folder probe.py hooks and the authors' packages: every external entry
+    # -- the folder eval.py hooks and the authors' packages: every external entry
     # is checked BEFORE staging and training, so a missing package costs nothing (exit 3, the pip line).
-    probe_mod = folder_probe(bench)
-    metric_specs = resolve_metric_specs(spec, probe_mod)
+    eval_mod = folder_eval(bench)
+    metric_specs = resolve_metric_specs(spec, eval_mod)
     external = check_externals(spec)
 
     # -- signals (a stop requested before this unit started belongs to the previous unit). Installed BEFORE
@@ -1935,7 +1962,7 @@ def _probe(
     try:
         from yavih.readouts import registry
 
-        run = registry.get(readout).driver()  # run_<readout> of the module that declares it (may import torch)
+        run = registry.get(readout).driver()  # the scorer's ``score``, else run_<name> of its module (may import torch)
         for seed in seeds:
             skipped = _skip_or_stale(seed)
             if skipped is not None:
@@ -1950,7 +1977,7 @@ def _probe(
                 describe=bridge["describe"], pos_mode=str(feats.get("pos_mode")), N=int(feats.get("N") or 0), D=int(feats.get("D") or 0),
                 dtype=str(feats.get("dtype")), deadline=deadline_ts, stop_flag=stop_flag, device=device, loader_workers=loader_workers,
                 timing=dict(timing), warnings=list(warnings), readers=readers, manifests=manifests,
-                probe_mod=probe_mod, log_samples=log_samples, external=dict(external), reading=reading,
+                eval_mod=eval_mod, log_samples=log_samples, external=dict(external), reading=reading,
             )
             seed_started = time.time()
             from yavih.probes.trainer import reset_determinism
@@ -1987,7 +2014,8 @@ def _probe(
             if log_samples:
                 from yavih.readouts.samples import sample_lines
 
-                samples = sample_lines(blocks.get("samples") or [], readout=readout, seed=seed, protocol=ctx.protocol)
+                family = scorer_of(readout).family or readout  # a scorer in another's family writes that family's lines
+                samples = sample_lines(blocks.get("samples") or [], readout=family, seed=seed, protocol=ctx.protocol)
             results.append(ProbeResult("ok", seed, path, rec, None, samples=samples))
     except ProbeInterrupted:
         if staged is not None:
@@ -2075,7 +2103,7 @@ def _ok_result(ctx: ReadoutContext, blocks: Mapping[str, Any], *, bridge: dict, 
         "reading": reading,
         "bridge": bridge,
         "features": _features_block(ctx.metas, backend=backend),
-        "probe": _probe_block(ctx.cfg, qh, ctx.seed, fit),
+        "scorer": _scorer_block(ctx.cfg, qh, ctx.seed, fit),
         "metrics": _json_native(blocks["metrics"]),
         "ci95": _json_native(blocks.get("ci95") or {}),
         "floors": _json_native(blocks.get("floors") or {}),
@@ -2123,7 +2151,7 @@ def _failed_result(ctx: ReadoutContext, *, bridge: dict, model: str, reading: st
         "reading": reading,
         "bridge": bridge,
         "features": _features_block(ctx.metas),
-        "probe": _probe_block(ctx.cfg, qh, ctx.seed, None),
+        "scorer": _scorer_block(ctx.cfg, qh, ctx.seed, None),
         "chance": ctx.chance,
         "coverage": {
             "train": _coverage_union(ctx.metas, ctx.roles["train"], None),

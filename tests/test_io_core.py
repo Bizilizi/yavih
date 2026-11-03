@@ -377,7 +377,7 @@ def test_sidecar_fields_present_and_offsets_memmappable(tmp_path):
         "input_components": None,  # this fake has no ProtocolHashes
         "protocol_hash": "p" * 64,
         "scoring_hash": None,
-        "folder_source": None,  # this fake has no probe.py / reader.py digests
+        "folder_source": None,  # this fake has no eval.py / reader.py digests
         "media_fingerprint": "f" * 64,
         "media_info_sha256": None,  # copied from data_status.json (this fake has no census)
         "data_roots": {"media_root": "/data/synth"},

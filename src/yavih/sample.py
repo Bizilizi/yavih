@@ -56,23 +56,16 @@ __all__ = [
     "MAX_DECODE_WORKERS",
 ]
 
-STREAM_KINDS: frozenset[str] = frozenset({"video", "audio", "image"})
-LAYOUTS: frozenset[str] = frozenset({"dir", "tar_index"})
-#: Every ``RawStream.info`` carries these keys (null where unknown or not applicable).
-#: ``has_track`` (video, audio): ``True`` when the stored file holds the track the stream names, ``False`` when it
-#: holds none (the row is still handed over; the track's facts are then null), null for image streams.
-MEDIA_INFO_KEYS: tuple[str, ...] = ("duration_s", "fps", "n_frames", "sample_rate", "n_samples", "channels", "width", "height", "container", "bytes",
-                                    "has_track")
-#: Keys ``input_contract.info[stream]`` may guarantee, per stream kind. ``rotation`` is
-#: recorded for video when tagged but can never be guaranteed.
-INFO_VOCAB: Mapping[str, frozenset[str]] = {
-    "video": frozenset({"duration_s", "fps", "n_frames", "width", "height", "container", "bytes"}),
-    "audio": frozenset({"duration_s", "sample_rate", "n_samples", "channels", "container", "bytes"}),
-    "image": frozenset({"width", "height", "container", "bytes"}),
-}
-#: Facts of a stream's TRACK (null when ``has_track`` is false: a file without that track); ``container``
-#: and ``bytes`` describe the file and stay set.
-TRACK_FACTS: Mapping[str, frozenset[str]] = {k: v - {"container", "bytes"} for k, v in INFO_VOCAB.items() if k in ("video", "audio")}
+from yavih.fields import (  # noqa: E402 - the one vocabulary
+    ARRAY_KIND,
+    INFO_VOCAB,
+    LAYOUTS,
+    MEDIA_INFO_KEYS,
+    STREAM_KINDS,
+    TRACK_FACTS,
+    is_file_kind,
+    spec_streams,
+)
 
 
 def _missing(clip_id: str, stream: str, reason: str) -> Exception:
@@ -86,7 +79,9 @@ class _Source:
     """The stored bytes behind one media cell, read once and shared by every RawStream of the row that names
     the same location (AVE / avsync: ``video`` and ``audio`` are two tracks of one mp4).
 
-    ``loc``: ``("file", path)`` | ``("member", tar_path, offset, size)`` | ``("absent", reason)``.
+    ``loc``: ``("file", path)`` | ``("member", tar_path, offset, size)`` | ``("parquet", path, row, column, struct_field)``
+    | ``("npy_row", path, row)``
+    | ``("absent", reason)``.
     """
 
     __slots__ = ("loc", "_data", "_lock")
@@ -127,6 +122,30 @@ class _Source:
             kind = self.loc[0]
             if kind == "absent":
                 raise _missing(clip_id, stream, str(self.loc[1]))
+            if kind == "npy_row":
+                from yavih.media.npyrows import read_row
+
+                _, path, row = self.loc
+                try:
+                    data = read_row(path, int(row))
+                except FileNotFoundError:
+                    raise _missing(clip_id, stream, f"absent array file {path}") from None
+                except (OSError, IndexError, ValueError) as exc:
+                    raise _missing(clip_id, stream, f"unreadable array row {path}#{row}: {exc}") from exc
+                self._data = data
+                return data
+            if kind == "parquet":
+                from yavih.media.parquet import read_cell
+
+                _, path, row, column, struct_field = self.loc
+                try:
+                    data, _ext_ = read_cell(path, int(row), column, struct_field)
+                except FileNotFoundError:
+                    raise _missing(clip_id, stream, f"absent parquet file {path}") from None
+                except (OSError, IndexError, KeyError, ValueError, TypeError) as exc:
+                    raise _missing(clip_id, stream, f"unreadable parquet cell {path}#{row}: {exc}") from exc
+                self._data = data
+                return data
             if kind == "file":
                 path = self.loc[1]
                 try:
@@ -240,8 +259,8 @@ class RawStream:
         ext: str | None = None,
         handle: str = "",
     ) -> None:
-        if kind not in STREAM_KINDS:
-            raise ValueError(f"RawStream.kind must be one of {sorted(STREAM_KINDS)}, got {kind!r}")
+        if not is_file_kind(kind):
+            raise ValueError(f"RawStream.kind must be a media kind {sorted(STREAM_KINDS)} or an opaque one matching [a-z][a-z0-9_]*, got {kind!r}")
         if src is None:
             raise ValueError("RawStream: a stream needs a byte source")
         self._name = str(name)
@@ -314,8 +333,31 @@ class RawStream:
 
     @property
     def nbytes(self) -> int | None:
-        """Stored size without reading."""
-        return self._src.size
+        """Stored size: without reading for a file or a tar member; a parquet cell or an array row is read (its size is
+        that of the bytes handed over)."""
+        size = self._src.size
+        if size is None and self._src.loc[0] in ("parquet", "npy_row"):
+            try:
+                return len(self.bytes())
+            except Exception:  # noqa: BLE001 - a missing cell: the size stays unknown, the row is reported missing on read
+                return None
+        return size
+
+    def arrays(self) -> dict[str, Any]:
+        """An ``array`` field's arrays, decoded (numpy, no pickle): ``{name: ndarray}`` in file order; a ``.npy`` file
+        or a ``npy_rows`` row holds one, named ``arr_0``."""
+        from yavih.media.arrays import container_of, load_arrays
+
+        if self._kind != ARRAY_KIND:
+            raise TypeError(f"{self._clip_id}[{self._name}]: arrays() reads an 'array' field, this one is {self._kind!r}")
+        return load_arrays(self.bytes(), container_of(self._ext), where=f"{self._clip_id}[{self._name}]")
+
+    def array(self) -> Any:
+        """The one array of an ``array`` field (``ValueError`` when the file holds several: use ``arrays()``)."""
+        out = self.arrays()
+        if len(out) != 1:
+            raise ValueError(f"{self._clip_id}[{self._name}]: the file holds {len(out)} arrays {list(out)}: use arrays()")
+        return next(iter(out.values()))
 
     # -- facts --------------------------------------------------------------------
     def _resolve_info(self) -> dict:
@@ -325,6 +367,25 @@ class RawStream:
         from yavih.media import DecodeError, DecoderMissing
 
         info = {k: None for k in MEDIA_INFO_KEYS}
+        if self._kind == ARRAY_KIND:  # stored arrays: the header's dtype and shape, no media probe
+            from yavih.media.arrays import ArrayError, array_facts, container_of
+
+            info.update(container=(self._ext or "").lower() or None, bytes=self.nbytes, dtype=None, shape=None, n_arrays=None)
+            try:
+                info.update(array_facts(self.bytes(), container_of(self._ext), where=f"{self._clip_id}[{self._name}]"))
+            except ArrayError as exc:
+                if self._required:
+                    raise _missing(self._clip_id, self._name, str(exc)) from exc
+            missing = [k for k in self._required if info.get(k) is None]
+            if missing:
+                raise _missing(self._clip_id, self._name, f"fact(s) {missing} are null but the input contract guarantees them")
+            return info
+        if self._kind not in STREAM_KINDS:  # an opaque file: its container (the extension) and its size, nothing probed
+            info.update(container=(self._ext or "").lower() or None, bytes=self.nbytes)
+            missing = [k for k in self._required if info.get(k) is None]
+            if missing:
+                raise _missing(self._clip_id, self._name, f"fact(s) {missing} are null but the input contract guarantees them")
+            return info
         if self._info_entry is not None:
             info.update(self._info_entry)
         else:
@@ -408,6 +469,8 @@ class Sample:
     streams: dict[str, RawStream]
     meta: dict = field(default_factory=dict)
     _canary_of: int | None = field(default=None, repr=False, compare=False)
+    #: the cell fields: a typed manifest value per field (a caption, an option list), a private deep copy
+    cells: dict = field(default_factory=dict)
     prepared: Any = field(default=None, init=False, repr=False, compare=False)
 
 
@@ -570,6 +633,16 @@ class _StreamCtx:
     def source(self, cell: str) -> _Source:
         if self.layout == "dir":
             return _Source(("file", os.path.join(self.root, cell)))
+        if self.layout == "npy_rows":
+            from yavih.media.parquet import parse_cell
+
+            rel, row = parse_cell(cell)
+            return _Source(("npy_row", os.path.join(self.root, rel), row))
+        if self.layout == "parquet":
+            from yavih.media.parquet import parse_cell
+
+            rel, row = parse_cell(cell)
+            return _Source(("parquet", os.path.join(self.root, rel), row, str(self.params["column"]), self.params.get("struct_field")))
         return self.member_source(cell)
 
     def member_source(self, key: str) -> _Source:
@@ -584,6 +657,17 @@ class _StreamCtx:
         """Cheap presence (stat / index lookup), for ``required: false`` streams only."""
         if self.layout == "dir":
             return os.path.isfile(os.path.join(self.root, cell))
+        if self.layout in ("parquet", "npy_rows"):
+            from yavih.media.parquet import parse_cell
+
+            rel, row = parse_cell(cell)
+            if self.layout == "npy_rows":
+                from yavih.media.npyrows import has_row as npy_has_row
+
+                return npy_has_row(os.path.join(self.root, rel), row)
+            from yavih.media.parquet import has_row
+
+            return has_row(os.path.join(self.root, rel), row)
         return self.tar is not None and self.tar.has(cell)
 
 
@@ -601,8 +685,10 @@ class _SplitCtx:
         self.facts = json.loads(json.dumps({k: protocol[k] for k in facts_keys}))  # a private deep copy
         self.streams = {
             name: _StreamCtx(bench, split, name, sspec, roots, roles, info_req.get(name, ()))
-            for name, sspec in _spec_get(spec, "streams").items()
+            for name, sspec in spec_streams(spec).items()
         }
+        #: cell field -> its manifest column (``Sample.cells``)
+        self.cells: dict[str, str] = {name: str(_spec_get(c, "column")) for name, c in dict(_spec_get(spec, "cells") or {}).items()}
         self.info_table = info_table
 
 
@@ -633,10 +719,14 @@ def build_sample(bench: Any, split: str, manifest: Any, i: int, roots: Mapping[s
             continue
         entry = ctx.info_table.get(name, cell) if ctx.info_table is not None else None
         # one handle per row: two streams of one stored file (AVE, avsync) share one opaque path
-        streams[name] = RawStream(name, sc.kind, src=shared(sc.source(cell)), clip_id=clip_id, info_entry=entry, required_info=sc.info_keys, ext=_ext(cell),
+        streams[name] = RawStream(name, sc.kind, src=shared(sc.source(cell)), clip_id=clip_id, info_entry=entry, required_info=sc.info_keys, ext=(sc.params.get("ext") if sc.layout == "parquet" else "npy" if sc.layout == "npy_rows" else _ext(cell)),
                                   handle=salt)
     meta = {"facts": json.loads(json.dumps(ctx.facts))}
-    return Sample(row=int(manifest.row[i]), clip_id=clip_id, split=split, streams=streams, meta=meta, _canary_of=canary_of)
+    cell_values: dict[str, Any] = {}
+    if ctx.cells:
+        extra = manifest.extra[i]
+        cell_values = {name: json.loads(json.dumps(extra.get(col))) for name, col in ctx.cells.items()}
+    return Sample(row=int(manifest.row[i]), clip_id=clip_id, split=split, streams=streams, meta=meta, _canary_of=canary_of, cells=cell_values)
 
 
 def rehandle(sample: Sample, salt: str, **identity: Any) -> Sample:
@@ -648,11 +738,31 @@ def rehandle(sample: Sample, salt: str, **identity: Any) -> Sample:
 
     streams = {n: (st.with_handle(f"{salt}:{st._handle}") if isinstance(st, RawStream) else copy.copy(st)) for n, st in sample.streams.items()}
     if dataclasses.is_dataclass(sample):
+        if "cells" in {f.name for f in dataclasses.fields(sample)}:  # a private copy of the cell values
+            identity = {"cells": json.loads(json.dumps(getattr(sample, "cells", {}) or {})), **identity}
         return dataclasses.replace(sample, streams=streams, **identity)
     clone = copy.copy(sample)
     for key, v in {"streams": streams, **identity}.items():
         object.__setattr__(clone, key, v)
     return clone
+
+
+def with_files(sample: Sample, salt: str, files: Mapping[tuple, str], ext: str) -> Sample:
+    """A copy of ``sample`` whose streams read replacement files: ``files`` maps a stream's original byte location
+    (``RawStream._src.loc``) to a path; streams that shared a stored file share its replacement. Facts are probed
+    from the new file. ``bridge check``'s future-invariance gate hands a bridge lossless copies this way."""
+    import dataclasses
+
+    sources: dict[str, _Source] = {}
+    streams: dict[str, Any] = {}
+    for name, st in sample.streams.items():
+        path = files[st._src.loc]
+        src = sources.setdefault(path, _Source(("file", path)))
+        # the copy's facts are probed as available, never required: a lossless re-encode may not carry every header
+        # fact the stored file does (Matroska FLAC has no sample count)
+        streams[name] = RawStream(name, st.kind, src=src, clip_id=sample.clip_id, required_info=(), ext=ext,
+                                  handle=f"{salt}:{st._handle}")
+    return dataclasses.replace(sample, streams=streams)
 
 
 def _media_info_of(bench: Any) -> MediaInfoTable | None:

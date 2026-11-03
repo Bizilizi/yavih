@@ -6,7 +6,7 @@ Invariants:
 - A ``result.json`` without a sibling ``DONE`` is ignored: a ``failed`` status never
   writes DONE, and a probe that died mid-write leaves no marker.
 - A DONE marker must be a JSON object carrying ``result_sha256`` equal to the sha256 of the
-  ``result.json`` next to it (and ``protocol_hash`` / ``probe_hash`` / ``eval_hash`` / ``model`` / ``reading``
+  ``result.json`` next to it (and ``protocol_hash`` / ``scorer_hash`` / ``eval_hash`` / ``model`` / ``reading``
   equal to the result's when both carry them); anything else — including an empty or non-JSON DONE — is treated as absent (the
   harness never writes a bare marker).
 - The cache key is ``(path, mtime_ns, size)`` of ``result.json``; a cached line is reused verbatim
@@ -91,7 +91,7 @@ def _has_valid_done(result_path: Path) -> bool:
         return False
     recorded = {
         "protocol_hash": (result.get("benchmark") or {}).get("protocol_hash") if isinstance(result.get("benchmark"), dict) else None,
-        "probe_hash": (result.get("probe") or {}).get("hash") if isinstance(result.get("probe"), dict) else None,
+        "scorer_hash": (result.get("scorer") or {}).get("hash") if isinstance(result.get("scorer"), dict) else None,
         "eval_hash": result.get("eval_hash"),
         "model": result.get("model"),
         "reading": result.get("reading"),

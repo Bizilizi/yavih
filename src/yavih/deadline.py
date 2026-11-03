@@ -1,4 +1,4 @@
-"""The one ``--deadline`` parser shared by ``yavih exec``, ``yavih extract`` and ``yavih probe run``.
+"""The one ``--deadline`` parser shared by ``yavih exec``, ``yavih extract`` and ``yavih eval run``.
 
 Accepted forms (case-insensitive):
 

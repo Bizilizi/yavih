@@ -42,6 +42,14 @@ def test_every_default_like_readout_is_covered():
     assert set(DEFAULT_LIKE.values()) <= set(PACKAGED) and set(DEFAULT_LIKE) == set(T.READOUTS)
 
 
+def _yaml_scorer(name: str) -> str:
+    import yaml
+
+    from yavih.benchmarks import packaged_folder
+
+    return str(yaml.safe_load((packaged_folder(name) / "benchmark.yaml").read_text(encoding="utf-8"))["scorer"])
+
+
 @pytest.mark.parametrize("name", PACKAGED)
 def test_bench_trial_synthetic(name, capsys, yavih_home, runs_dir, monkeypatch):
     """Every stage ``ok`` and the oracle clears the headline floor under ``--readout-fast``; the user's home and runs
@@ -49,6 +57,10 @@ def test_bench_trial_synthetic(name, capsys, yavih_home, runs_dir, monkeypatch):
     monkeypatch.setenv("YAVIH_RESULTS", str(runs_dir.parent / "results"))
     home_before, env_before, cli_before = _tree(yavih_home), _yavih_env(), config.cli_overrides()
     rc, env = _json(capsys, ["bench", "trial", name, "--synthetic", "--readout-fast"])
+    if _yaml_scorer(name) not in T.READOUTS:  # a folder-owned scorer (the generation beacons): no synthetic stand-in
+        assert rc == 3 and env["errors"][0]["code"] == "E_TRIAL_NOT_READY" and "trial it on real data" in env["errors"][0]["message"]
+        assert _tree(yavih_home) == home_before and _tree(runs_dir) == []
+        return
     rec = env["data"]
     assert rc == 0 and env["status"] == "ok" and env["errors"] == [], (rec.get("failed"), rec.get("stages"))
     assert [s["stage"] for s in rec["stages"]] == list(STAGES) and all(s["status"] == "ok" for s in rec["stages"])

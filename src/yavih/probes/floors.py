@@ -99,7 +99,7 @@ def floor_outputs(readout: str, train_targets: Any, n_eval: int, *, protocol: di
 
     try:
         r = registry.get(readout)
-    except registry.UnknownReadout as e:
+    except registry.UnknownScorer as e:
         raise ValueError(f"floor_outputs: unknown readout {readout!r}") from e
     if r.floor_outputs is None:
         raise ValueError(f"floor_outputs: readout {readout!r} declares no floor_outputs")

@@ -1,0 +1,166 @@
+# yavih benchmark folder — VGGSounder video-to-audio generation (schema 3).
+# Values under `manifest` and `budget.clips` are printed by make_manifest.py (`make_manifest.py --check` confirms them).
+schema_version: 3
+name: vggsounder_v2a
+aliases: []
+title: VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark)
+capability: [audio-visual, generation]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+scorer: vggsounder_v2a
+protocol_version: 1
+header:
+  name: VGGSounder V2A
+  title: "Video-to-audio generation on VGGSounder's audible clips"
+  venue: "Zverev et al. · ICCV 2025; av-benchmark (Cheng et al. · CVPR 2025)"
+  abstract: >-
+    A model sees a muted VGGSound clip and generates its soundtrack. The 3 000 clips carry at least one label the
+    VGGSounder annotators marked audible. Quality, semantic alignment and synchrony are reported separately with
+    the MMAudio authors' evaluation code, next to the same metrics on re-paired reference audio.
+changelog:
+  - version: 1
+    date: "2026-10-30"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0
+    input_hash: f9b97023716899aceea730227050888f584172a48aa6a8ed310c38013d2d807a
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://www.robots.ox.ac.uk/~vgg/data/vggsound/
+    - https://github.com/Bizilizi/VGGSounder
+    - https://github.com/hkchengrex/av-benchmark
+  licence: >-
+    VGGSound: CC BY 4.0 (annotations; the media are YouTube clips fetched by the user, subject to YouTube's terms).
+    VGGSounder annotations: Apache-2.0. av-benchmark: MIT.
+  notes: >-
+    Rows come from the packaged vggsounder folder's frozen eval rows (no download). Media = the VGGSound corpus as
+    staged for vggsounder (video/<clip_id>.mp4, audio/<clip_id>.wav); prepare/01 writes a muted copy of each frozen
+    video under derived_root. The reference audio is the corpus wav.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-data-owner
+  how: "the VGGSound corpus as staged for vggsounder (YouTube clips decay: prefer an existing copy); prepare/01 mutes the 3 000 videos with ffmpeg"
+budget:
+  clips: {test: 3000}
+  media_gb: 4.5
+  extract_min_per_1k_clips_ref: 30.0
+  probe_minutes_ref: {vggsounder_v2a: 30}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 866158ae59cf7d2b46958b79e06a2d2625b8a3c3f6d8098ba43e2fdd57d9b0cd
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+  columns:
+    rel_media: {type: str, role: media, stream: video}
+    rel_video: {type: str, role: extra}
+    rel_audio: {type: str, role: extra}
+    labels_audible: {type: str, role: extra}
+  upstream:
+    source: "the packaged vggsounder folder's manifest.csv.gz (VGGSounder 1.0 eval rows)"
+    sha256: 998c246d2c37bab4ca7d6285b2039f49e8793deb61b5e21bce7fc4082382438d
+    rows: 12008
+    draw: "class_balanced_subsample over the first audible label of the 11798 eval rows with an audible label that av-benchmark can score over 8 s, cap 3000, seed 0"
+    note: >-
+      Audible labels = labels_a then labels_av of the vggsounder row (the package's audible-only and audible-and-visible
+      labels), in file order. Rows av-benchmark cannot score over 8 s are excluded before the draw (short_clips.csv,
+      sha256-pinned in make_manifest.py): 105 whose recorded audio is shorter, 8 whose video stream yields fewer than
+      200 frames at 25 fps; its synchrony model refuses them and its loaders would silently drop or substitute them. The draw covers 305 of the 309 classes. rel_video / rel_audio
+      are paths in the VGGSound tree.
+    curation:
+      total_upstream: 12008
+      per_split:
+        test: {listed: 3000, staged: 3000, missing: 0}
+      excluded:
+        no_audible_label: 97
+        shorter_than_audio_length: 113
+        draw_remainder: 8798
+
+splits:
+  train: []
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: derived_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${datasets.vggsound}"
+      description: "VGGSound root: video/<clip_id>.mp4 (source of the muted copies), audio/<clip_id>.wav (the reference audio the scorer reads)"
+    derived_root:
+      default: "${data.root}/vggsounder_v2a"
+      description: "muted/<clip_id>.mp4 (prepare/01) and av_bench/ (the reference feature caches eval.py builds on first use)"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the VGGSound mp4 of the clip with its audio track removed (stream copy: the video bytes are the stored ones, nothing
+      re-encoded, cut or resized); the soundtrack is the label and never reaches the bridge
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+  facts: [audio_length]
+  materialize:
+    kind: strip_audio
+    source_columns: {video: rel_video}
+    tool:
+      name: ffmpeg
+      version_pin: "4.4.2-0ubuntu0.22.04.1"
+      args: ["-an", "-c:v", "copy", "-map_metadata", "-1"]
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires: {pos: [], streams: [], grid: null, t_bins: null}
+  sampling: required
+  schema:
+    audio: {type: wav, channels: 1, duration_s: [8.0, 8.05]}
+
+external:
+  - name: av_bench
+    pip: "pip install -e git+https://github.com/hkchengrex/av-benchmark.git@f351b9a6fc6abde746d5f8e1d4c47c883319cb41#egg=av_bench"
+    version_pin: "1.0.0"
+    used_for: >-
+      every reported number: av-benchmark (the MMAudio authors' evaluation code) extracts PaSST, PANNs, VGGish,
+      ImageBind and Synchformer features and computes FD, KL, IS, the ImageBind score and DeSync (av_bench.evaluate);
+      needs the two weight files its README names in <checkout>/weights and a CUDA GPU
+
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+  audio_length: 8.0      # seconds of audio scored per clip: av_bench's audio_length (every frozen clip lasts at least this long)
+  floor_seed: 0          # the seeded derangement that re-pairs the reference audio for the floors
+
+metrics:   # every value is av_bench's own (eval.py); `_floor` = the same metric on reference audio re-paired by a derangement
+  headline: fd_passt
+  list: [fd_passt, fd_panns, fd_vgg, kad_passt, kad_panns, kl_passt, kl_panns, is_passt, is_panns, ib_score, desync, ib_score_ref, desync_ref, n_eval]
+  table: [fd_passt, kl_passt, ib_score, desync]
+  floors: [ib_score_floor, desync_floor, kl_passt_floor]
+  controls: []
+  chance: {}
+  ci: {kad_passt: bootstrap_clip, kad_panns: bootstrap_clip, kl_passt: bootstrap_clip, kl_panns: bootstrap_clip, ib_score: bootstrap_clip, desync: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}   # clip-level percentile bootstrap: every interval resamples the same clips
+
+readout_params: {}

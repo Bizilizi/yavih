@@ -5,7 +5,7 @@ fresh agent sets the new benchmark up from the built wheel and the shipped skill
 it and runs the whole chain on a small sample of the real data. It is the check nothing else makes: `bench lint`
 and the folder tests read the files, `yavih bench trial --synthetic` runs a generated stand-in, and only an agent
 that has never seen the folder finds where `setup.md`, the bridge template or the skill make it guess. It also
-exercises the folder's own `probe.py` hooks and `external` packages, and measures the budgets.
+exercises the folder's own `eval.py` hooks and `external` packages, and measures the budgets.
 
 It costs one sub-agent session and a few minutes of CPU on a sample of a few dozen rows per split, plus whatever
 obtaining the data costs (point the worker at data that is already staged to skip that).
@@ -74,7 +74,7 @@ edit anything yavih ships; when something does not work, work around it if you c
    then `yavih bench verify <BENCH> --census`.
 5. A project suite with just this benchmark: `yavih suite new trial --from minimal`, edit the new suites/trial.yaml
    to one group with one entry, <BENCH> with every reading its bridge template declares (`join: true` when the
-   folder's probe.py defines a join), and check it with `yavih suite show trial`.
+   folder's eval.py defines a join), and check it with `yavih suite show trial`.
 6. Bridge and matrix: `yavih plan init --suite trial --model toy --launcher <WORK>/venv/bin/python`. Fill the
    bridge stub(s) it wrote with the toy model: the preprocessing source pasted into the docstring, every TODO,
    decoding in prepare() and the forward pass in encode(). Then `yavih bridge check ... --synthetic` and the
@@ -83,7 +83,7 @@ edit anything yavih ships; when something does not work, work around it if you c
    `yavih plan build yavih-bench/matrices/toy.yaml --sample <N> --out $P/toy-trial.jsonl`,
    `yavih plan run $P/toy-trial.jsonl --local`, `yavih plan status $P/toy-trial.jsonl`.
 8. Read the outputs by hand, under the capped runs root (`<runs root>-sample<N>`): `yavih features validate` on each
-   run's features directory, `yavih probe run <run dir> --no-results` (a probe the plan already finished is
+   run's features directory, `yavih eval run <run dir> --no-results` (a probe the plan already finished is
    skipped, which is fine), and `yavih report build '<runs root>-sample<N>/*' --suite trial`.
 9. Write <WORK>/TRIAL_REPORT.md from the template below. Time every stage (wall clock). Report what happened: a
    stage that failed is reported as failed, never as a number you did not see.

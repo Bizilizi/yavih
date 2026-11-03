@@ -67,13 +67,13 @@ def test_bench_show_prints_one_file(capsys, what, rel):
 
 
 def test_bench_show_probe_of_a_folder_with_probe_py(capsys):
-    rc, env = _json(capsys, ["bench", "show", "avsync", "probe"])
-    assert rc == 0 and env["data"]["path"].endswith("avsync/probe.py")
+    rc, env = _json(capsys, ["bench", "show", "avsync", "eval"])
+    assert rc == 0 and env["data"]["path"].endswith("avsync/eval.py")
 
 
 @pytest.mark.parametrize("what, code", [("../../cli.py", "E_PATH"), ("/etc/passwd", "E_PATH"), ("prepare/../../shipped.py", "E_PATH"),
                                         ("notes/anything.md", "E_PATH"), ("nope.md", "E_NOT_FOUND"), ("manifest", "E_BINARY"),
-                                        ("probe", "E_NOT_FOUND")])
+                                        ("eval", "E_NOT_FOUND")])
 def test_bench_show_refuses_paths_outside_and_binaries(capsys, what, code):
     rc, env = _json(capsys, ["bench", "show", "esc50", what])
     assert rc == 1 and env["status"] == "error" and env["errors"][0]["code"] == code, env

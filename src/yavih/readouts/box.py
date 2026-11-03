@@ -21,11 +21,11 @@ import numpy as np
 from yavih.readouts._targets import box_targets
 from yavih.readouts.base import ProbeRefused, ReadoutContext, evaluate_metrics, lazy_module
 from yavih.readouts.coords import region_task_pos, target_region, task_pos
-from yavih.readouts.registry import Readout
+from yavih.readouts.registry import Scorer
 
 _fit = lazy_module("yavih.readouts._fit")  # torch: imported on first use, never by the descriptor
 
-__all__ = ["READOUT", "VERSION", "run_box", "ShuffledRows"]
+__all__ = ["SCORER", "VERSION", "run_box", "ShuffledRows"]
 
 #: The readout version: enters ``protocol_hash``; ``yavih.versions.READOUT_VERSION`` reads it here.
 #: The readout's conformance band on the synthetic end-to-end run (``tests/test_e2e_synthetic.py``): the oracle bridge's
@@ -224,8 +224,8 @@ def _floor_outputs(train_targets: Any, n_eval: int, *, protocol: dict, label_kin
     return np.broadcast_to(box, (n_eval, 4)).astype(np.float32).copy()
 
 
-READOUT = Readout(
-    name="box", version=VERSION, module=__name__, label_kinds=frozenset({"box"}),
+SCORER = Scorer(
+    name="box", version=VERSION, module=__name__, kind="probe", label_kinds=frozenset({"box"}),
     protocol_keys=frozenset({"box_population", "gt_geometry", "heatmap_grid", "annotated_second", "target_region"}),
     param_keys=frozenset({"grid", "visual_stream", "conditioning_stream", "shuffled_control", "shuffle_seed"}),
     full_frame=True, requires_grid=True, validate_spec=_validate_spec, dense=True,

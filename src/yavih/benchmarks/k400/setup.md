@@ -53,7 +53,7 @@ inode-capped filesystem, use the tar shards of step 4 instead of loose files. No
 ## Dependencies
 
 None. `external: []`: the Kinetics authors ship no scorer package, so top-1 is yavih's registry metric `acc`, there
-is no `probe.py`, and `yavih doctor --bench k400` lists no external package.
+is no `eval.py`, and `yavih doctor --bench k400` lists no external package.
 
 Tools outside yavih:
 - download and staging: aria2 ≥ 1.37 (e.g. `conda install -c conda-forge aria2`), `unzip`, `sha256sum`, `curl`;

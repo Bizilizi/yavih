@@ -29,7 +29,12 @@ from yavih.readouts.base import (
     result_dir,
     write_result,
 )
-from yavih.versions import FEATURE_FORMAT_VERSION, READOUT_VERSION, RESULT_SCHEMA_VERSION
+from yavih.versions import (
+    FEATURE_FORMAT_VERSION,
+    READABLE_FEATURE_FORMATS,
+    READOUT_VERSION,
+    RESULT_SCHEMA_VERSION,
+)
 
 N_TOK, D_FEAT = 4, 8
 #: The user's model name and the reading tag; they key run dirs, results dirs and report rows.
@@ -46,7 +51,7 @@ def make_spec(d: dict) -> NS:
     requires = NS(pos=tuple(rq.get("pos") or ()), streams=tuple(rq.get("streams") or ()), grid=rq.get("grid"), t_bins=rq.get("t_bins"))
     oc = d["output_contract"]
     return NS(
-        schema_version=2, name=d["name"], readout=d["readout"], protocol_version=d["protocol_version"],
+        schema_version=2, name=d["name"], readout=d["scorer"], protocol_version=d["protocol_version"],
         manifest=NS(
             classes=m.get("classes"), key=m.get("key", "clip_id"),
             label=NS(column=lab.get("column"), kind=lab["kind"], sep=lab.get("sep", ";"), class_key=lab.get("class_key", "name"),
@@ -94,17 +99,17 @@ class FakeTargetReader:
 
 
 def avsync_probe():
-    """avsync's probe.py module: its METRICS overlay holds the offset metrics and floor-arm controls."""
+    """avsync's eval.py module: its METRICS overlay holds the offset metrics and floor-arm controls."""
     from yavih.benchmark import Benchmark
 
-    return base.folder_probe(Benchmark.load("avsync"))
+    return base.folder_eval(Benchmark.load("avsync"))
 
 
 class FakeBench:
     def __init__(self, d: dict, rows: list[dict], classes: list[dict] | None, *, manifest_hash: str = "m" * 64, targets: dict | None = None,
-                 probe_module=None) -> None:
+                 eval_module=None) -> None:
         self.spec = make_spec(d)
-        self.probe_module = probe_module  # the folder probe.py hooks (base.folder_probe reads this attribute)
+        self.eval_module = eval_module  # the folder eval.py hooks (base.folder_eval reads this attribute)
         self.name = d["name"]
         self.folder = Path("/nonexistent")
         self.manifest_hash = manifest_hash
@@ -134,7 +139,7 @@ class FakeBench:
 def clf_yaml(name: str, *, n_classes: int, train=("train",), eval=("val",), floor=(), folds=None, metrics=None, floors=None,
              controls=None, chance=None, ci=None, protocol_extra=None, label=None, aggregation=None, min_eval_coverage=0.95) -> dict:
     return {
-        "schema_version": 2, "name": name, "aliases": [], "title": name, "readout": "clf", "protocol_version": 2,
+        "schema_version": 2, "name": name, "aliases": [], "title": name, "scorer": "clf", "protocol_version": 2,
         "manifest": {"file": "manifest.csv.gz", "sha256": "0" * 64, "classes": "classes.csv", "classes_sha256": "0" * 64, "key": "clip_id",
                      "label": label or {"column": "label", "kind": "single", "sep": ";", "class_key": "name", "sets": None, "train_set": None,
                                         "allow_unknown": False, "empty_ok": False},
@@ -411,13 +416,13 @@ def _ok_record(**over) -> dict:
     rec = {
         "schema_version": RESULT_SCHEMA_VERSION, "status": "ok", "reason": None, "standard": True,
         "eval_hash": hashing.eval_hash("p" * 64, "q" * 64),
-        "benchmark": {"name": "x", "protocol_version": 1, "readout": "clf", "readout_version": READOUT_VERSION["clf"], "manifest_hash": "m" * 64, "protocol_hash": "p" * 64,
-                      "folder_source": {"probe": None, "reader": None}},
+        "benchmark": {"name": "x", "protocol_version": 1, "scorer": "clf", "scorer_version": READOUT_VERSION["clf"], "manifest_hash": "m" * 64, "protocol_hash": "p" * 64,
+                      "folder_source": {"eval": None, "reader": None}},
         "model": MODEL, "reading": READING,
         "bridge": {"name": "b", "describe": {}, "describe_sha256": "d" * 64, "source_sha256": None},
         "features": {"fingerprint": "f" * 64, "dtype": "float32", "N": 4, "D": 8, "pos_mode": "none", "bytes": 10, "backend": "ram", "canary_max_rel_l2": 0.0,
                      "batch_tolerance": 1e-05, "rules_checked": None},
-        "probe": {"hash": "q" * 64, "config": {}, "seed": 0, "selected_lr": 1e-4, "epochs_run": 3, "best_epoch": 1, "stop": "patience", "n_train": 10, "n_val": 2},
+        "scorer": {"hash": "q" * 64, "config": {}, "seed": 0, "selected_lr": 1e-4, "epochs_run": 3, "best_epoch": 1, "stop": "patience", "n_train": 10, "n_val": 2},
         "metrics": {"acc": 1.0, "n_eval": 6}, "ci95": {"acc": [0.6, 1.0]}, "floors": {"acc_floor": 0.33}, "controls": {}, "chance": {"acc": 0.33},
         "coverage": {"train": {"present": 12, "nominal": 12, "ids_sha256": "i" * 64}, "eval": {"present": 6, "nominal": 6, "ids_sha256": "j" * 64}, "floor": None},
         "not_applicable": None,
@@ -445,13 +450,13 @@ def test_check_result_accepts_ok_and_pins_metric_key_sets():
         (lambda r: r.update(status="weird"), "status"),
         (lambda r: r.update(extra_key=1), "unknown result keys"),
         (lambda r: r.pop("timing"), "missing result keys"),
-        (lambda r: r["benchmark"].update(readout_version=99), "readout_version"),
+        (lambda r: r["benchmark"].update(scorer_version=99), "scorer_version"),
         (lambda r: r.update(status="failed", reason="x"), "must be ABSENT"),
         (lambda r: r.update(not_applicable={"missing": [], "reason": "r", "decided_by": "plan"}), "must be null"),
         (lambda r: r["ci95"].update(acc=[1.0]), r"\[lo, hi\]"),
         # the comparability key must be the one over the two hashes; names keep their charsets
         (lambda r: r.update(eval_hash="e" * 64), "eval_hash"),
-        (lambda r: r["probe"].update(hash="r" * 64), "eval_hash"),
+        (lambda r: r["scorer"].update(hash="r" * 64), "eval_hash"),
         (lambda r: r.update(model="vjepa@0123456789ab"), "model"),
         (lambda r: r.update(model=".."), "model"),
         (lambda r: r.update(model="_stale"), "model"),  # a leading _ is invisible to the report index
@@ -518,13 +523,13 @@ def test_probe_clf_ok_end_to_end(tmp_path, fakes):
     assert rec["floors"]["acc_floor"] == pytest.approx(1 / 3)
     assert rec["ci95"]["acc"][0] < 1.0 <= rec["ci95"]["acc"][1]
     assert rec["standard"] is False  # a non-pinned cfg under YAVIH_TESTING=1
-    assert rec["probe"]["hash"] == hashing.probe_hash(clf_cfg(3)) and rec["probe"]["seed"] == 0
-    assert rec["probe"]["n_train"] == 11 and rec["probe"]["n_val"] == 1 and rec["probe"]["stop"] == "patience"
-    assert rec["benchmark"] == {"name": "synth_clf", "protocol_version": 2, "readout": "clf", "readout_version": READOUT_VERSION["clf"],
+    assert rec["scorer"]["hash"] == hashing.probe_hash(clf_cfg(3)) and rec["scorer"]["seed"] == 0
+    assert rec["scorer"]["n_train"] == 11 and rec["scorer"]["n_val"] == 1 and rec["scorer"]["stop"] == "patience"
+    assert rec["benchmark"] == {"name": "synth_clf", "protocol_version": 2, "scorer": "clf", "scorer_version": READOUT_VERSION["clf"],
                                 "manifest_hash": bench.manifest_hash, "protocol_hash": bench.protocol_hash,
-                                "folder_source": {"probe": None, "reader": None}}
+                                "folder_source": {"eval": None, "reader": None}}
     assert (rec["model"], rec["reading"]) == (MODEL, READING) and rec["bridge"]["describe"] == DESCRIBE and rec["features"]["backend"] == "ram"
-    assert rec["eval_hash"] == hashing.eval_hash(bench.protocol_hash, rec["probe"]["hash"])
+    assert rec["eval_hash"] == hashing.eval_hash(bench.protocol_hash, rec["scorer"]["hash"])
     assert res[0].path.parent.parent.name == rec["eval_hash"][:12]
     # no decoders block; the batch tolerance and the rules validate checked; no external code
     assert rec["features"]["batch_tolerance"] == 1e-05 and rec["features"]["rules_checked"] == {"video": {"temporal": "uniform", "spatial": True}}
@@ -551,8 +556,8 @@ def test_probe_pinned_config_is_standard_and_defaults_from_bench(tmp_path, fakes
     res = probe(run, bench=bench)
     rec = res[0].result
     assert rec["standard"] is True
-    assert rec["probe"]["config"]["head"]["out"] == 3 and rec["probe"]["config"]["loss"] == "ce"
-    assert rec["probe"]["hash"] == hashing.probe_hash(ProbeConfig.pinned("clf", num_classes=3, label_kind="single"))
+    assert rec["scorer"]["config"]["head"]["out"] == 3 and rec["scorer"]["config"]["loss"] == "ce"
+    assert rec["scorer"]["hash"] == hashing.probe_hash(ProbeConfig.pinned("clf", num_classes=3, label_kind="single"))
 
 
 def test_nonstandard_config_requires_testing_env(tmp_path, fakes, monkeypatch):
@@ -652,7 +657,7 @@ def test_probe_refusals(tmp_path, fakes, case, code, exit_code):
     elif case == "mixed_reading":
         kw["val"] = {"reading": "v"}
     elif case == "old_format":  # an older feature format must be re-extracted
-        kw["train"] = kw["val"] = {"format_version": FEATURE_FORMAT_VERSION - 1}
+        kw["train"] = kw["val"] = {"format_version": min(READABLE_FEATURE_FORMATS) - 1}
     elif case == "validation_failed":
         kw["val"] = {"validation_ok": False}
     elif case == "format_version":
@@ -709,8 +714,8 @@ def test_probe_metrics_incomplete_is_a_refusal(tmp_path, fakes, monkeypatch):
     bench, run = simple_clf_world(tmp_path)
     real = base.resolve_metric_specs
 
-    def broken(spec, probe_mod=None):
-        specs = real(spec, probe_mod)
+    def broken(spec, eval_mod=None):
+        specs = real(spec, eval_mod)
         specs["metrics"] = dict(specs["metrics"])
         specs["metrics"]["acc"] = NS(name="acc", fn=lambda *a: (_ for _ in ()).throw(ValueError("no")), shape="scalar", kind="metric")
         return specs
@@ -769,7 +774,7 @@ def test_not_applicable_from_meta_eligibility(tmp_path, fakes):
     assert rec["reason"] == "N == 1" and "metrics" not in rec and "floors" not in rec
     assert rec["features"]["N"] == N_TOK and rec["features"]["D"] == D_FEAT and rec["features"]["dtype"] == "float32"
     assert rec["coverage"]["train"]["present"] == 12 and rec["coverage"]["eval"]["present"] == 6
-    assert rec["probe"]["epochs_run"] is None and rec["probe"]["hash"] == hashing.probe_hash(clf_cfg(3))
+    assert rec["scorer"]["epochs_run"] is None and rec["scorer"]["hash"] == hashing.probe_hash(clf_cfg(3))
     assert (res[0].path.parent / "DONE").exists() and fakes == []  # exit 0 path, no fit
 
 
@@ -827,7 +832,7 @@ def test_plan_time_missing_rules():
     spec_clf = make_spec(clf_yaml("x", n_classes=2))
     assert base.plan_time_missing(spec_clf, {"N": 1, "pos_mode": "none", "streams": ["video"]}) == []
     d = clf_yaml("x", n_classes=2)
-    d["readout"] = "grid"
+    d["scorer"] = "grid"
     d["output_contract"]["requires"] = {"pos": ["y", "x"], "streams": ["image"], "grid": {"h": 14, "w": 14, "min_cell_coverage": 0.5}, "t_bins": None}
     spec = make_spec(d)
     assert base.plan_time_missing(spec, {"N": 1, "pos_mode": "none", "streams": ["image"]}) == ["pos.y", "pos.x"]
@@ -845,7 +850,7 @@ def test_clf_floor_role_controls(tmp_path, fakes):
                  controls=["acc_floor_arm", "floor_violated"], chance={"acc": 0.111111},
                  protocol_extra={"offsets_seconds": offsets, "nominal_window_start": 1.0, "floor_sigmas": 3.0, "coarse_grid_seconds": 1.0})
     rows = clf_rows("train", 27, 9) + clf_rows("val", 9, 9) + clf_rows("floor", 18, 9)
-    bench = FakeBench(d, rows, classes_list(9), probe_module=avsync_probe())
+    bench = FakeBench(d, rows, classes_list(9), eval_module=avsync_probe())
     run = tmp_path / "run"
     for split, n in (("train", 27), ("val", 9)):
         write_fake_features(run, split, bench=bench, feats=clf_features(np.arange(n) % 9, 9, seed=1))
@@ -937,7 +942,7 @@ def test_clf_multi_sets(tmp_path, fakes):
 def dense_yaml(name: str, readout: str, *, protocol: dict, requires: dict, readout_params: dict, metrics: list, floors: list, controls: list,
                ci: dict, chance: dict, label: dict, classes: str | None, targets=None, streams=("video", "audio")) -> dict:
     d = clf_yaml(name, n_classes=2, metrics=metrics, floors=floors, controls=controls, ci=ci, chance=chance, label=label)
-    d["readout"] = readout
+    d["scorer"] = readout
     d["protocol"].update(protocol)
     d["output_contract"]["requires"] = requires
     d["output_contract"]["target_frame"] = "full_frame" if readout in ("grid", "box") else None

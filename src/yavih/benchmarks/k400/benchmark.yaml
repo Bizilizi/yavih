@@ -1,7 +1,7 @@
 # k400 — schema 2. README.md describes the benchmark, setup.md sets it up.
 # Values under `manifest`, `budget` and `upstream` are produced by make_manifest.py;
 # `make_manifest.py --check` confirms them.
-schema_version: 2
+schema_version: 3
 name: k400
 aliases: []
 title: Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe)
@@ -14,7 +14,7 @@ header:
     About 300 000 ten-second YouTube clips, each labelled with one of 400 human action classes, from
     person-object and person-person interactions to sports and playing instruments. The task is single-label
     action classification of a clip from its video.
-readout: clf
+scorer: clf
 protocol_version: 1
 changelog:
   - version: 1
@@ -109,8 +109,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:
+fields:
   video:
+    storage: file
     kind: video
     media_column: rel_media
     root: media_root

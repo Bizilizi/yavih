@@ -118,7 +118,7 @@ def test_index_table_lists_every_packaged_folder():
             assert packaged_folder(name) is not None, f"index lists {name!r}, which is not a packaged folder"
             y = _yaml(name)
             assert cap in y["capability"], f"index lists {name} under {cap!r}; it declares {y['capability']}"
-            assert cells[2] == y["readout"], f"index: {name} readout {cells[2]!r} != {y['readout']!r}"
+            assert cells[2] == y["scorer"], f"index: {name} scorer {cells[2]!r} != {y['scorer']!r}"
             assert SOURCE_WORDS[y["source"]["kind"]] in cells[4].lower(), f"index: {name} source {cells[4]!r} vs {y['source']['kind']}"
             assert cells[1] and cells[3], f"index: {name} needs a description and the media handed over"
             for alias in y.get("aliases") or []:
@@ -176,7 +176,7 @@ def test_doctables_lists_are_derived_from_the_folders():
 
     pick = {n: packaged_folder(n) for n in ("avsync", "esc50", "in1k", "nyuv2_depth", "vggss_box")}
     folder = doctables.render("folder", pick).splitlines()
-    assert folder[0] == "| benchmark | readout | label kind | streams | headline | probe.py |" and len(folder) == 2 + len(pick)
+    assert folder[0] == "| benchmark | scorer | label kind | streams | headline | eval.py |" and len(folder) == 2 + len(pick)
     rows = {r.split(" | ")[0].strip("| "): r for r in folder[2:]}
     assert "| clf (5 folds) | single | audio | `acc_mean` |" in rows["esc50"]
     assert rows["in1k (aliases `imagenet1k`, `imagenet`)"].startswith("| in1k (aliases")
@@ -324,7 +324,7 @@ def test_lint_yaml_obtain_budget_and_name(esc50_copy, tmp_path):
     assert "E_HEADER" in _codes(esc50_copy, checks=["header"])
     _edit_yaml(esc50_copy, lambda y: y["budget"]["clips"].update({"1": 399}))
     assert "E_BUDGET" in _codes(esc50_copy, checks=["budget"])
-    _edit_yaml(esc50_copy, lambda y: y.update({"readout": "nope"}))
+    _edit_yaml(esc50_copy, lambda y: y.update({"scorer": "nope"}))
     assert "E_SCHEMA" in _codes(esc50_copy, checks=["yaml"])
     other = tmp_path / "renamed"
     shutil.copytree(packaged_folder("esc50"), other, ignore=shutil.ignore_patterns("__pycache__"))

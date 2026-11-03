@@ -19,7 +19,7 @@ shape, the shard table (`shards 31/32 done, 0 in progress, 1 missing: --shard 7/
 `N_RULE_CUSTOM` note, the eligibility line, and one line per waiver in force
 (`waived E_DUPLICATE_CLIPS (describe, 3 finding(s)): <reason>`). The eligibility line reads, for example,
 `eligible for box: no (grid coverage median 0.18 < 0.25 over the full frame) → probe will record not_applicable`.
-`yavih probe run` runs the same validation as its prologue and accepts `--waive` too.
+`yavih eval run` runs the same validation as its prologue and accepts `--waive` too.
 
 The library entry point:
 
@@ -114,12 +114,26 @@ Validating a finalized split again is cheap. When the shard set is complete, ste
 then the earlier verdict is reused: no tar is read and `_meta.json` is left untouched. The earlier warnings and
 notes are carried over with the level the code table gives them now; a code the table no longer has is dropped.
 
+## Declared output schemas
+
+For a benchmark that declares `output_contract.schema` ([codecs](codecs.md)), the shard scan decodes every
+`{row}.{key}.{ext}` member through its key's codec: the codec's check runs with the symbols the sidecar bound
+(`E_MEMBERS`, `E_FINITE`, `E_FEATURES`, `W_FP16_RANGE`), the codec's statistics run on keys with `stats: true`
+(`E_DEAD_ROWS`, `E_DUPLICATE_CLIPS`, `W_FP16_RANGE`, `W_CONSTANT_CLIP`), and canary pairs are compared per key
+through the codec's distance (an exact key must be equal, the rest within the tolerance: `E_BATCH_INVARIANCE`).
+The sidecars must agree on the schema's sha256, the carried keys and every bound symbol (`E_DESCRIBE_MISMATCH`),
+and the schema must be the loaded benchmark's (`E_FORMAT`). The position checks (`E_POS_*`) and the media-position
+part of eligibility do not apply; the temporal checks of `used` do.
+
 ## Eligibility
 
-The readout's `output_contract.requires` (see [readouts](readouts.md) and
-[benchmark-folder](benchmark-folder.md)) is evaluated on the features, over the seeded sample. The verdict is the
-`N_ELIGIBILITY` note and the `eligibility` block of `_meta.json`. It never affects `ok`: the probe turns
-`eligible: false` into a `not_applicable` result (exit 0), and refuses a split whose verdict is undecided.
+The verdict is the scorer's. Validation measures the facts below over the seeded sample and hands them to the
+scorer as a `yavih.readouts.eligibility.EligibilityView`: a scorer that declares `eligibility(view)` decides
+([adding a scorer](adding-a-scorer.md)); otherwise the `output_contract.requires` rules of the table apply
+(`requires_missing`). A key the scorer lists under `output_keys` that the feature set lacks is `schema:<key>`
+whatever the hook says. The verdict is the `N_ELIGIBILITY` note and the `eligibility` block of `_meta.json`. It
+never affects `ok`: the probe turns `eligible: false` into a `not_applicable` result (exit 0), and refuses a split
+whose verdict is undecided.
 
 | requirement | how it is measured | missing entry |
 |---|---|---|
@@ -144,7 +158,7 @@ Every code `validate_features` can report. "waivable" says whether a [waiver](#w
 
 | code | level | waivable | meaning |
 |---|---|---|---|
-| `E_FORMAT` | error | no | a sidecar is unreadable, not an object, lacks required keys, has a malformed `shard` or `features` block, a `shard.index` other than its file name, or a `format_version` other than 4 (`unsupported format_version N (this yavih reads 4); re-extract`); `NOT_APPLICABLE.json` is unreadable; `N` or `D` is not an integer of at least 1 |
+| `E_FORMAT` | error | no | a sidecar is unreadable, not an object, lacks required keys, has a malformed `shard` or `features` block, a `shard.index` other than its file name, or a `format_version` it cannot read (`unsupported format_version N (this yavih reads [4, 5]); re-extract`); a malformed `outputs` block; a declared output schema that is not the benchmark's or does not resolve; `NOT_APPLICABLE.json` is unreadable; `N` or `D` is not an integer of at least 1 for the feature matrix |
 | `E_NA_AND_SHARDS` | error | no | `NOT_APPLICABLE.json` exists together with shards |
 | `E_SHARD_SET` | error | no | sidecars disagree on `n`; a shard index is missing or not below `n`; a sidecar without its tar or a tar without its sidecar; no sidecar at all |
 | `W_STALE_TMP` | warning | no | a tmp file older than 36 h: a killed task's leftover; delete it or run its shard again |
@@ -154,7 +168,7 @@ Every code `validate_features` can report. "waivable" says whether a [waiver](#w
 | `E_DESCRIBE_MISMATCH` | error | no | the shards are not one feature set: `describe_subset(describe)`, `describe_sha256`, `model`, `reading`, `shard.batch_size`, `dtype`, `pos_mode`, `N`, `D` or `pos_sha256` differ across sidecars, or the sidecars name several splits; the stored `describe_sha256` is not the digest of the stored `describe`; `model` or `reading` differ from the `describe()` values. The message names which shards carry which digest; running `yavih extract` for the split moves the other configuration's shards to `_stale/`. |
 | `E_ARGS_UNCONSUMED` | error | yes | a `bridge.args` key is not echoed in `describe()["args"]` |
 | `E_TAR_SHA` | error | no | with `verify_sha` only: a tar's sha256 differs from its sidecar's |
-| `E_MEMBERS` | error | no | the tar's size differs from the sidecar's `tar.bytes`; the tar is unreadable or truncated; a member name or type is unexpected; a `.json` is unparsable, lacks `clip_id`, `media` or a `used` entry for a stream in `describe()["input"]`, has an ill-formed `used` entry, or a `row` or `clip_id` that disagrees; a `.npy` header is not version 1.0, is Fortran-ordered, has an object dtype or the wrong payload size; a feature is not `(N, D)` in the declared dtype; sidecar offsets, `header_len` or `nbytes` disagree with the tar; members are not ascending; the member set differs from the sidecar's `members`; `rows.n_written` or `rows.n_missing` disagree; a canary lacks its original, its `.json` or its `.feat.npy` |
+| `E_MEMBERS` | error | no | the tar's size differs from the sidecar's `tar.bytes`; the tar is unreadable or truncated; a member name or type is unexpected; a `.json` is unparsable, lacks `clip_id`, `media` or a `used` entry for a stream in `describe()["input"]`, has an ill-formed `used` entry, or a `row` or `clip_id` that disagrees; a `.npy` header is not version 1.0, is Fortran-ordered, has an object dtype or the wrong payload size; a feature is not `(N, D)` in the declared dtype; sidecar offsets, `header_len` or `nbytes` disagree with the tar; members are not ascending; the member set differs from the sidecar's `members`; `rows.n_written` or `rows.n_missing` disagree; a canary lacks its original, its `.json` or its `.feat.npy`. For a declared output schema ([codecs](codecs.md)): a member's key is not a carried schema key or has the wrong extension, a value does not decode or fails its codec's check (shape, dtype, bound symbol, the codec's constraints), a row lacks a carried key, a sidecar `parts` offset disagrees with the tar |
 | `E_ROWS` | error | no | a row of a shard's range is neither written nor listed missing; a row is written twice (within or across shards), both written and missing, or outside its shard's range; a `missing` entry lies outside the range |
 | `E_TIMES_OUT_OF_MEDIA` | error | yes | a reported video time outside `[0, media.duration_s]` (1 ms slack); an audio sample range outside `[0, media.n_samples]` or with `lo > hi`; the declared rule does not fit the clip's media; any reported time or sample range on a stream whose `media.has_track` is false (the valid report is `times: []` or `samples: []`) |
 | `E_RULE_MISMATCH` | error | yes | the reported `used` differs from the declared temporal rule re-evaluated on the member's `media`, or a token's position lies outside what the bridge reported consuming (see [Rule checks](#rule-checks)) |
@@ -218,7 +232,7 @@ the checks below; `yavih extract` raises the run-time ones. Errors end the comma
 | `E_PRECISION_DRIFT` | error | no | extract: torch precision flags changed during `encode` from the enforced declaration; exit 2 |
 | `E_PROFILE` | error | no | extract: the `--expect-profile` file is unreadable or lacks `model`, `reading` or `describe_sha256`; exit 1 |
 | `E_USED` | error | no | `encode()` returned a missing or ill-formed `used`; exit 2 |
-| `E_FEATURES` | error | no | `encode()` returned features or positions of the wrong shape for the declared `pos_mode`, or float16 values the writer would refuse; exit 2 |
+| `E_FEATURES` | error | no | `encode()` returned features or positions of the wrong shape for the declared `pos_mode`, or float16 values the writer would refuse; for a declared output schema, other keys than `describe()["outputs"]`, a key with the wrong number of values, or a value its codec refuses; exit 2 |
 | `E_NETWORK` | error | no | the bridge opened a network connection during `encode` or `prepare` (loopback only with `--allow-loopback`); exit 2 |
 | `E_ORACLE` | error | no | bridge check refuses `yavih.testing`'s oracle bridge unless `YAVIH_TESTING=1`; exit 2 |
 | `E_SMOKE` | error | no | bridge check: no present row to encode in the smoke set (data not ready); exit 3 |
@@ -254,7 +268,7 @@ the profile's `waived`.
 **An operator** waives checks on features already extracted, without changing any hash:
 
 - `yavih features validate <dir> --waive CODE=reason` (repeatable; `all=reason` waives every waivable check),
-- `yavih probe run ... --waive CODE=reason` (the validate prologue),
+- `yavih eval run ... --waive CODE=reason` (the validate prologue),
 - the matrix entry key `waive: {CODE: reason}`, passed to the entry's probe units (see [execution](execution.md)).
 
 These are recorded with `source: cli`. Later validations of the same configuration (same `describe_sha256`) carry

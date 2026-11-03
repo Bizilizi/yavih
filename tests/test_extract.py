@@ -204,7 +204,7 @@ def test_run_extract_writes_shard_sidecar_and_canaries(tmp_path: Path):
     assert sc["benchmark"]["manifest_hash"] == MANIFEST_HASH and sc["benchmark"]["protocol_hash"] == PROTOCOL_HASH
     assert sc["benchmark"]["input_hash"] == INPUT_HASH and sc["yavih"]["version"] == sc["yavih_version"]
     # the declared names; describe_sha256 is the consistency digest
-    assert sc["format_version"] == 4 and sc["model"] == "np-test" and sc["reading"] == "v"
+    assert sc["format_version"] == 5 and sc["model"] == "np-test" and sc["reading"] == "v"
     assert list(sc)[:6] == ["format_version", "yavih_version", "benchmark", "split", "model", "reading"]
     assert sc["bridge"]["describe_sha256"] == hashing.describe_sha256(sc["bridge"]["describe"])
     assert sc["bridge"]["name"] == "np-test"  # a recorded label

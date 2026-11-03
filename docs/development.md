@@ -3,7 +3,7 @@
 A guide for people who continue to develop yavih itself: where things live, which invariants the code
 keeps, how to test, and the conventions every module follows. The rationale behind the invariants is in
 [design](design.md); task-specific guides are [contributing a benchmark](contributing-a-benchmark.md),
-[adding a readout](adding-a-readout.md) and [releasing](releasing.md).
+[adding a scorer](adding-a-scorer.md) and [releasing](releasing.md).
 
 ## Setting up
 
@@ -43,7 +43,7 @@ pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and
 | `project.py` | the project folder `yavih-bench/`: `yavih init`, the layout scan and version check behind `doctor` (`W_PROJECT_*`) |
 | `_toml.py` | a minimal TOML reader for Python 3.10 without `tomli` |
 | `resources.py` | CPU, memory, RAM budget and decode-worker defaults from env, SLURM, PBS, cgroups |
-| `deadline.py` | the one `--deadline` parser shared by `exec`, `extract` and `probe run` |
+| `deadline.py` | the one `--deadline` parser shared by `exec`, `extract` and `eval run` |
 | `hashing.py` | canonical JSON, normalized source, manifest/input/scoring/protocol/describe/probe/eval/unit hashes |
 | `hash_history.py` | the folders' changelog hashes merged (`supersedes`), used by validation, migration and lint |
 | `benchmark.py` | `Benchmark`: `benchmark.yaml` schema, manifest and classes, roles, targets, contracts, metric resolution, data status, folder resolution |
@@ -86,7 +86,7 @@ torch. Module-scope imports are restricted:
 | numpy + pyyaml + stdlib | the rest of the core: `benchmark.py`, `sample.py`, `bridge.py`, `extract.py`, `io/`, `media/` (decoders inside functions), `metrics/` (scikit-learn inside functions), `cli.py` |
 | torch | `probes/` (not `probes/config.py`), `readouts/` drivers (their `READOUT` descriptors must import without torch), `bridges/examples/`, `testing/__init__.py` |
 
-A folder's `probe.py` and `reader.py` import only stdlib, numpy and yavih core at module scope; torch and
+A folder's `eval.py` and `reader.py` import only stdlib, numpy and yavih core at module scope; torch and
 authors' packages are imported inside functions, the latter only through `yavih.external.require`.
 `tests/test_import_boundary.py` imports every core module (discovered from the tree, so new files are
 covered) in a subprocess where `import torch` fails; `tests/test_extensibility.py` checks that the readout
@@ -106,7 +106,7 @@ Any change that can change a number must move a hash, and nothing else may. In p
 - Editing a hashed part of a folder (see [hashing](hashing.md)) moves its `input_hash` or `scoring_hash`,
   and the folder's `changelog` must record it: [hashing: migration](hashing.md#migration) says when to bump
   `protocol_version` and when to list the old hash under `supersedes`.
-- `probe.py`, `reader.py`, the readouts and `yavih.metrics` are never hashed: their behaviour is held by every
+- `eval.py`, `reader.py`, the readouts and `yavih.metrics` are never hashed: their behaviour is held by every
   folder's conformance fixture (`yavih bench conformance --all`, [conformance](conformance.md)). A change that
   moves a fixture's numbers beyond tolerance fails until `protocol_version` (a folder's code) or the readout's
   `VERSION` (yavih's code) is bumped and the fixtures re-recorded.

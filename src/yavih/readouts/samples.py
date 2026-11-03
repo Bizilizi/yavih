@@ -1,4 +1,4 @@
-"""Samples-file lines (``probe run --log-samples``). numpy only, torch-free.
+"""Samples-file lines (``eval run --log-samples``). numpy only, torch-free.
 
 One JSON line per scored row, seed and fold: ``{"clip_id", "row", "seed", "role", "fold"?, "prediction",
 "target"}`` with ``role`` ∈ ``eval``, ``floor``:
@@ -12,6 +12,10 @@ One JSON line per scored row, seed and fold: ``{"clip_id", "row", "seed", "role"
 
 A readout hands :func:`sample_lines` a list of parts ``{"role", "outputs", "targets", "rows",
 "clip_ids", "folds"?}`` (``folds`` = the fold value per row under ``splits.folds``).
+
+A folder scorer (``eval.py`` ``SCORER``) hands parts ``{"role", "rows", "clip_ids", "values"}`` instead, ``values`` =
+``{metric: [n] per-clip values}``: each line's ``prediction`` is that row's ``{metric: value}`` (``null`` where not
+finite) and ``target`` is ``null``. Two systems' lines on the same rows give paired per-clip differences.
 """
 
 from __future__ import annotations
@@ -44,7 +48,22 @@ def _top_k(scores: np.ndarray) -> list[list[float]]:
     return [[int(i), float(s[i])] for i in order]
 
 
+def _value_lines(part: Mapping[str, Any], *, seed: int) -> list[dict]:
+    """A folder scorer's part: per-clip metric values per row."""
+    rows = np.asarray(part["rows"], dtype=np.int64)
+    ids: Sequence[str] = list(part["clip_ids"])
+    values = {str(k): np.asarray(v, dtype=np.float64).reshape(-1) for k, v in dict(part["values"]).items()}
+    n = rows.shape[0]
+    bad = {k: v.shape[0] for k, v in values.items() if v.shape[0] != n}
+    if len(ids) != n or bad:
+        raise ValueError(f"samples: rows {n}, clip_ids {len(ids)} and values {bad} disagree")
+    return [{"clip_id": str(ids[i]), "row": int(rows[i]), "seed": int(seed), "role": str(part.get("role", "eval")),
+             "prediction": {k: _num(v[i]) for k, v in values.items()}, "target": None} for i in range(n)]
+
+
 def _part_lines(part: Mapping[str, Any], *, readout: str, seed: int, protocol: Mapping[str, Any]) -> list[dict]:
+    if "values" in part:
+        return _value_lines(part, seed=seed)
     outputs = np.asarray(part["outputs"])
     targets = part["targets"]
     rows = np.asarray(part["rows"], dtype=np.int64)

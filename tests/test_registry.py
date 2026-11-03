@@ -44,7 +44,7 @@ TABLE = {
     "iou_shuffled": ({"box"}, "control", "scalar", set()),
     "audio_blind": ({"box"}, "control", "scalar", set()),
 }
-#: avsync's metrics are its probe.py METRICS overlay, with the same readouts/kind/shape/keys.
+#: avsync's metrics are its eval.py METRICS overlay, with the same readouts/kind/shape/keys.
 AVSYNC_TABLE = {
     "acc_tol1": ({"clf"}, "metric", "scalar", {"offsets_seconds"}),
     "mae_seconds": ({"clf"}, "metric", "scalar", {"offsets_seconds"}),
@@ -115,9 +115,9 @@ def test_resolve_and_resolve_names():
 
 def _avsync_metrics():
     from yavih.benchmark import Benchmark
-    from yavih.readouts.base import folder_probe
+    from yavih.readouts.base import folder_eval
 
-    return folder_probe(Benchmark.load("avsync")).METRICS
+    return folder_eval(Benchmark.load("avsync")).METRICS
 
 
 def test_avsync_folder_metrics_match_their_table():

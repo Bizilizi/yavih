@@ -28,7 +28,7 @@ The version comes from git tags, so clone with history (no `--depth`). The `dev`
 ## 1. Scaffold
 
 ```bash
-yavih bench new <name> --readout clf --dir src/yavih/benchmarks                # copies the readout's default folder
+yavih bench new <name> --scorer clf --dir src/yavih/benchmarks                # copies the scorer's default folder
 yavih bench new <name> --like vggsounder --dir src/yavih/benchmarks            # or the folder closest to yours
 ```
 
@@ -43,7 +43,7 @@ What the scaffold holds, and what has to be replaced:
 |---|---|---|
 | `manifest.csv.gz`, `classes.csv` | copied from `--like` (a loadable folder needs them) | your frozen manifest (step 3) |
 | `bridge_template.py` | copied from `--like` | your benchmark's template (step 6) |
-| `reader.py`, `probe.py` | copied from `--like` when it has them, with a `# TODO: copied verbatim from <like> by yavih bench new` banner as the first lines | your own, or delete them (steps 3 and 7) |
+| `reader.py`, `eval.py` | copied from `--like` when it has them, with a `# TODO: copied verbatim from <like> by yavih bench new` banner as the first lines | your own, or delete them (steps 3 and 7) |
 | `benchmark.yaml` | `--like`'s yaml renamed: `protocol_version: 1`, one `changelog` entry with the hashes the scaffold computes, `aliases: []`, a `header:` block and `obtain.how` with `TODO`, `--like`'s `capability` under a `TODO` comment | your protocol (step 2) |
 | `README.md`, `setup.md` | written from the folder contract, `TODO` in every section | your docs (step 5) |
 | `make_manifest.py`, `prepare/01_obtain.sh` | stubs that exit 2 | your freeze and prepare steps (steps 3 and 4) |
@@ -52,7 +52,7 @@ What the scaffold holds, and what has to be replaced:
 
 Never copied: `--like`'s `curation.json`, `notes/`, `tests/`, `prepare/` and `assets/`. Until step 3, every number
 in the folder is `--like`'s. The command's last lines say how the fixture was made; a copied one is correct for the
-copied scoring path (its manifest, classes, `probe.py` and metrics are `--like`'s unchanged) and is re-recorded here
+copied scoring path (its manifest, classes, `eval.py` and metrics are `--like`'s unchanged) and is re-recorded here
 once the package is installed (step 8).
 
 **Done when:** `yavih bench lint <name>` exits 0 with only `W_TODO` warnings (plus `W_CONFORMANCE_SKIPPED` while the
@@ -79,16 +79,16 @@ Every key is described in the [schema](benchmark-folder.md#benchmarkyaml). Decid
 5. **The output contract.** `requires` (position axes, stream tags, grid coverage or scored seconds) and
    `target_frame`.
 6. **Metrics.** Headline, list, floors, controls, chance, intervals. Every name resolves in the metric registry or
-   the folder's `probe.py` `METRICS`; every `protocol` key is consumed by a metric, the readout, `probe.py`
+   the folder's `eval.py` `METRICS`; every `protocol` key is consumed by a metric, the readout, `eval.py`
    (`PROTOCOL_KEYS`) or `input_contract.facts`.
 7. **Authors' code.** A scorer the authors ship is listed under `external` (import name, the exact
-   `pip install …` line, version pin, what it is used for) and called from `probe.py` (step 7). It is never added
+   `pip install …` line, version pin, what it is used for) and called from `eval.py` (step 7). It is never added
    to `pyproject.toml`.
 8. **The header.** `header: {name, title, venue, abstract}`: the display name, the paper title,
    `"<authors> · <venue> <year>"` and a neutral abstract of at most 60 words. The README header image is rendered
    from it (step 11).
 9. **Capability.** `capability: [...]`: what the benchmark measures, one or more of `audio`, `visual`,
-   `audio-visual`, `temporal`, `spatial`, `retrieval` (`yavih.suites.CAPABILITIES`, the vocabulary suites group
+   `audio-visual`, `temporal`, `spatial`, `retrieval`, `generation` (`yavih.suites.CAPABILITIES`, the vocabulary suites group
    by). The benchmarks index and `yavih bench list` group by it; tag every capability a suite might list the
    benchmark under (a synchronisation task is `[audio-visual, temporal]`). The scaffold keeps the `--like`
    folder's tags under a `TODO` comment. Not hashed.
@@ -195,13 +195,13 @@ coordinates ([bridge](bridge.md)). These parts are read by code, so write them e
 /tmp/b/` writes a copy whose `filled` lists `describe()['model']`; `yavih bridge check /tmp/b/toy_<name>.py --bench
 <name> --synthetic` refuses it with `E_TEMPLATE_UNFILLED` and nothing else.
 
-## 7. `probe.py` (only when needed)
+## 7. `eval.py` (only when needed)
 
-Write a `probe.py` only when the registry lacks what the protocol needs: a metric (`METRICS`), protocol keys it
+Write a `eval.py` only when the registry lacks what the protocol needs: a metric (`METRICS`), protocol keys it
 consumes (`PROTOCOL_KEYS`), target construction (`targets`), the authors' scorer (`score`) or a cross-reading join
-(`join`) ([probe.py hooks](benchmark-folder.md#probepy-hooks); new readouts: [adding a readout](adding-a-readout.md)).
+(`join`) ([eval.py hooks](benchmark-folder.md#evalpy-hooks); new readouts: [adding a scorer](adding-a-scorer.md)).
 Module scope imports only the standard library, numpy and yavih core; the authors' package is imported at call time
-through `yavih.external.require(name, pip, version_pin)` with the matching `external` entry. A `probe.py` copied by
+through `yavih.external.require(name, pip, version_pin)` with the matching `external` entry. A `eval.py` copied by
 the scaffold is deleted when the folder needs none.
 
 **Done when:** `yavih bench lint <name>` reports no `E_IMPORT`, and `test_metric_names_resolve` passes.
@@ -214,9 +214,9 @@ lines to write. Until the pull request is merged, keep that one entry and update
 that moves them; nothing goes under `supersedes`, since no result was ever filed under the earlier digests. Every
 later change to a merged folder follows [hashing: migration](hashing.md#migration).
 
-The hashes cover the declaration, never the code: what pins the folder's scoring behaviour (its `probe.py`, the
+The hashes cover the declaration, never the code: what pins the folder's scoring behaviour (its `eval.py`, the
 metrics and readout it uses) to `protocol_version: 1` is the conformance fixture
-([conformance](conformance.md)). Record it once the protocol, `probe.py` and `external` entries are final:
+([conformance](conformance.md)). Record it once the protocol, `eval.py` and `external` entries are final:
 
 ```bash
 yavih bench conformance <name> --record
@@ -292,7 +292,7 @@ yavih bench trial <name> --synthetic --readout-fast
 
 runs the whole chain (conformance fixture, stand-in, oracle bridge, `bridge check`, extract, validate, probe, report)
 in process on a generated stand-in of the folder ([CLI](cli.md#bench-trial---synthetic)). Beyond the conformance
-stage (which runs the real folder's scoring path, `probe.py` and `external` included), it does not exercise the
+stage (which runs the real folder's scoring path, `eval.py` and `external` included), it does not exercise the
 real data; step 13 does.
 
 **Done when:** it exits 0, every stage in `data.stages` is `ok`, and the headline clears its floor.

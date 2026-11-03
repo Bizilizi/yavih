@@ -68,7 +68,7 @@ def upgrade_protocol_hash(protocol_hash: Any) -> Any:
 
 
 def _v3_to_v4(record: dict[str, Any]) -> dict[str, Any]:
-    """Schema 4 added ``benchmark.folder_source`` (the folder's ``probe.py`` / ``reader.py`` digests at scoring,
+    """Schema 4 added ``benchmark.folder_source`` (the folder's ``eval.py`` / ``reader.py`` digests at scoring,
     provenance only). A schema-3 record did not record them: ``null``, which the report reads as unknown (never as a
     differing source). Its ``protocol_hash`` (computed under an earlier protocol schema) is moved to the current
     column by :func:`_current_hashes` through the folders' ``supersedes`` lists."""
@@ -78,8 +78,26 @@ def _v3_to_v4(record: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+def _v4_to_v5(record: dict[str, Any]) -> dict[str, Any]:
+    """Schema 5 names what scored the result for any scorer kind: the ``probe`` block is ``scorer`` (same keys; the
+    fit keys are null for a scorer that trains nothing), ``benchmark.readout`` / ``readout_version`` are ``scorer`` /
+    ``scorer_version`` and ``benchmark.folder_source.probe`` (the ``eval.py`` digest) is ``folder_source.eval``. Every
+    hash is unchanged."""
+    if "probe" in record:
+        record["scorer"] = record.pop("probe")
+    bench = record.get("benchmark")
+    if isinstance(bench, dict):
+        for old, new in (("readout", "scorer"), ("readout_version", "scorer_version")):
+            if old in bench:
+                bench[new] = bench.pop(old)
+        fs = bench.get("folder_source")
+        if isinstance(fs, dict) and "probe" in fs:
+            bench["folder_source"] = {"eval": fs.get("probe"), **{k: v for k, v in fs.items() if k != "probe"}}
+    return record
+
+
 #: ``{from_version: upgrade}``; each step produces ``from_version + 1``. Schemas 1 and 2 are not read.
-_UPGRADES: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {3: _v3_to_v4}
+_UPGRADES: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {3: _v3_to_v4, 4: _v4_to_v5}
 
 
 def migrate(result: dict) -> dict:
@@ -119,7 +137,7 @@ def _current_hashes(record: dict[str, Any]) -> dict[str, Any]:
         new = upgrade_protocol_hash(ph)
         if new != ph:
             bench["protocol_hash"] = new
-            qh = (record.get("probe") or {}).get("hash") if isinstance(record.get("probe"), dict) else None
+            qh = (record.get("scorer") or {}).get("hash") if isinstance(record.get("scorer"), dict) else None
             if isinstance(new, str) and new and isinstance(qh, str) and qh:
                 record["eval_hash"] = hashing.eval_hash(new, qh)
     return record

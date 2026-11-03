@@ -8,7 +8,7 @@ digest, never identity (the model is the user-chosen name ``describe()["model"]`
 DECLARATION alone: the frozen manifest and classes (by content), typed views of the ``benchmark.yaml`` blocks
 (prose and display keys excluded, see ``protocol_view`` / ``metrics_view`` / ``external_view`` /
 ``input_contract_view``) and declared versions (``protocol_version``, ``READOUT_VERSION``). No source file enters
-it: a folder's ``probe.py`` / ``reader.py`` and yavih's own readouts and metrics may be refactored, re-implemented or
+it: a folder's ``eval.py`` / ``reader.py`` and yavih's own readouts and metrics may be refactored, re-implemented or
 ported without moving the hash, and their behaviour is pinned by ``protocol_version`` and the folder's conformance
 fixture (``yavih.conformance``), not by their bytes. The folder's source digests (``source_sha256`` of the normalized
 AST) are recorded as provenance (``Benchmark.folder_source``), never compared for identity. ``input_hash`` covers
@@ -38,6 +38,7 @@ from yavih.versions import (
     PROBE_SCHEMA,
     PROTOCOL_SCHEMA,
     READOUT_VERSION,
+    SCORER_SCHEMA,
 )
 
 __all__ = [
@@ -82,6 +83,10 @@ __all__ = [
     "describe_sha256",
     "PROBE_TRAIN_FIELDS",
     "probe_hash",
+    "scorer_config_hash",
+    "output_contract_view",
+    "fields_view",
+    "DEFAULT_OUTPUT_SCHEMA",
     "eval_hash",
     "features_fingerprint",
     "unit_id",
@@ -206,7 +211,7 @@ def _ast_json(node: Any) -> Any:
 
 
 def normalized_source(text: str | bytes) -> str:
-    """The provenance form of a folder's ``reader.py`` / ``probe.py``: the parsed AST with comments (never
+    """The provenance form of a folder's ``reader.py`` / ``eval.py``: the parsed AST with comments (never
     in an AST) and every docstring / bare string statement removed, serialized field by field without source
     positions and without empty or absent fields, as canonical JSON. A comment, docstring, blank-line or formatting
     edit leaves it unchanged; any change to what the code does changes it. The serialization does not use
@@ -219,7 +224,7 @@ def normalized_source(text: str | bytes) -> str:
 
 
 def source_sha256(text: str | bytes) -> str:
-    """``sha256(normalized_source(text))``: the PROVENANCE digest of a folder's ``reader.py`` / ``probe.py``
+    """``sha256(normalized_source(text))``: the PROVENANCE digest of a folder's ``reader.py`` / ``eval.py``
     (``Benchmark.folder_source``, recorded in sidecars and results); never part of a hash since ``yavih-protocol-5``."""
     return sha256_hex(normalized_source(text).encode("utf-8"))
 
@@ -369,6 +374,47 @@ def find_prose(value: Any, path: str = "") -> list[tuple[str, str]]:
     return out
 
 
+#: The 1.0 hand-off (``yavih.codecs.DEFAULT_SCHEMA`` re-exports it): a token matrix per row plus optional media
+#: positions. A folder that declares no ``output_contract.schema`` has it, and so does one that declares exactly it:
+#: both hash alike (:func:`output_contract_view`).
+DEFAULT_OUTPUT_SCHEMA: dict[str, dict[str, Any]] = {
+    "feat": {"type": "array", "dtype": ["float16", "float32"], "shape": ["N", "D"], "stats": True},
+    "pos": {"type": "array", "dtype": "float32", "shape": ["N", 4], "optional": True, "constant": "allowed", "exact": True},
+}
+
+
+def fields_view(fields: Mapping[str, Any]) -> dict[str, Any]:
+    """The hashed ``fields`` block (component ``streams``): every field entry as written, minus ``storage: file`` and
+    ``role: input`` (the defaults), so a schema-2 ``streams`` block and its schema-3 migration hash identically."""
+    out: dict[str, Any] = {}
+    for name, entry in dict(fields or {}).items():
+        e = dict(entry or {})
+        if e.get("storage") == "file":
+            e.pop("storage")
+        if e.get("role") == "input":
+            e.pop("role")
+        out[str(name)] = e
+    return out
+
+
+def output_contract_view(output_contract: Mapping[str, Any], codec_versions: Mapping[str, int] | None = None) -> dict[str, Any]:
+    """The hashed ``output_contract``: the block as written, minus a ``schema`` that is absent or canonically
+    :data:`DEFAULT_OUTPUT_SCHEMA` (so every 1.0 folder hashes as before), plus ``codecs: {name: version}`` of the
+    codecs a declared schema names (a codec version bump moves exactly the folders that use the codec)."""
+    oc = dict(output_contract or {})
+    schema = oc.get("schema")
+    if schema is None or canon(dict(schema)) == canon(DEFAULT_OUTPUT_SCHEMA):
+        oc.pop("schema", None)
+        return oc
+    names = sorted({str(e.get("type")) for e in dict(schema).values() if isinstance(e, Mapping)})
+    versions = dict(codec_versions or {})
+    missing = [n for n in names if n not in versions]
+    if missing:
+        raise ValueError(f"output_contract_view: no version for codec(s) {missing} (resolve the schema's codecs first)")
+    oc["codecs"] = {n: int(versions[n]) for n in names}
+    return oc
+
+
 def input_components(
     *,
     name: str,
@@ -381,6 +427,7 @@ def input_components(
     manifest: Mapping[str, Any],
     manifest_hash: str,
     readout: str,
+    codec_versions: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """The INPUT side of a benchmark, one entry per component: everything that decides what a bridge is
     handed and what its features must satisfy — the rows and media (``manifest_hash``, the manifest's ``key`` and
@@ -397,7 +444,7 @@ def input_components(
         "splits": splits,
         "streams": streams,
         "input_contract": input_contract_view(input_contract),
-        "output_contract": output_contract,
+        "output_contract": output_contract_view(output_contract, codec_versions),
         "readout": readout,
         "readout_inputs": input_readout_view(readout=readout, protocol=protocol, readout_params=readout_params,
                                              input_contract=input_contract, output_contract=output_contract),
@@ -508,6 +555,7 @@ def protocol_hashes(
     manifest: Mapping[str, Any],
     manifest_hash: str,
     readout: str,
+    codec_versions: Mapping[str, int] | None = None,
 ) -> ProtocolHashes:
     """``yavih-protocol-5``: the input side, the scoring side and their combination, from the benchmark's
     declaration only (raw yaml blocks, the manifest digest, the readout name and ``yavih.versions``). Nothing
@@ -516,7 +564,7 @@ def protocol_hashes(
         raise TypeError("protocol_hashes: manifest (the benchmark.yaml manifest block) is required")
     inp = input_components(name=name, splits=splits, streams=streams, input_contract=input_contract, output_contract=output_contract,
                            protocol=protocol, readout_params=readout_params, manifest=manifest, manifest_hash=manifest_hash,
-                           readout=readout)
+                           readout=readout, codec_versions=codec_versions)
     sco = scoring_components(protocol_version=protocol_version, protocol=protocol, external=external, metrics=metrics,
                              readout_params=readout_params, targets=targets, manifest=manifest, readout=readout)
     ih, sh = input_hash_of(inp), scoring_hash_of(sco)
@@ -617,6 +665,17 @@ def probe_hash(cfg: Any) -> str:
     return sha256_canon(payload)
 
 
+def scorer_config_hash(name: str, version: int) -> str:
+    """The configuration hash of a scorer that trains nothing (``stateless`` / ``direct``): the constant
+    ``sha256(canon({"schema": SCORER_SCHEMA, "scorer": name, "version": version}))``. It fills the second slot of
+    ``eval_hash`` the way ``probe_hash`` does for a probe, so every consumer of ``probe_hash`` keeps its shape."""
+    if not isinstance(name, str) or not name:
+        raise TypeError(f"scorer_config_hash: name must be a non-empty str, got {name!r}")
+    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+        raise TypeError(f"scorer_config_hash: version must be an int >= 1, got {version!r}")
+    return sha256_canon({"schema": SCORER_SCHEMA, "scorer": name, "version": int(version)})
+
+
 # --------------------------------------------------------------------------- eval hash
 
 
@@ -643,9 +702,12 @@ def features_fingerprint(
     pos_sha256: str | None,
     shards: Sequence[Sequence[Any]],
     n_present: int,
+    outputs_sha256: str | None = None,
 ) -> str:
     """The feature set's integrity digest; ``shards`` = ``[[lo, hi, sha256], …]`` in row order (the caller sorts by
-    ``lo``; this function does not reorder so a wrong order is a different fingerprint)."""
+    ``lo``; this function does not reorder so a wrong order is a different fingerprint). ``outputs_sha256``: the
+    declared output schema's sha256 of a generic set (absent from the payload for the feature matrix, whose
+    fingerprints are therefore unchanged)."""
     for s in shards:
         if len(s) != 3:
             raise ValueError(f"features_fingerprint: each shard entry is [lo, hi, sha256], got {s!r}")
@@ -659,6 +721,8 @@ def features_fingerprint(
         "shards": [[int(lo), int(hi), str(sha)] for lo, hi, sha in shards],
         "n_present": n_present,
     }
+    if outputs_sha256 is not None:
+        payload["outputs_sha256"] = outputs_sha256
     return sha256_canon(payload)
 
 

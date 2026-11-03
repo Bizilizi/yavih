@@ -1,5 +1,5 @@
 """Packaged benchmark folders: ``yavih/benchmarks/<name>/`` with ``README.md``,
-``benchmark.yaml``, ``manifest.csv.gz``, ``classes.csv``, an optional ``probe.py``, ``bridge_template.py``,
+``benchmark.yaml``, ``manifest.csv.gz``, ``classes.csv``, an optional ``eval.py``, ``bridge_template.py``,
 ``make_manifest.py``, ``prepare/``, ``tests/``.
 
 ``Benchmark.load`` finds them through ``importlib.resources`` (the wheel test: every

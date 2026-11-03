@@ -3,7 +3,7 @@ contracts, ``external``, data status, media-info table, alias resolution (the
 ``bench *`` commands).
 
 Core module: numpy + pyyaml + stdlib only. Metric names are resolved against
-``yavih.metrics.registry`` overlaid by the folder's ``probe.py`` ``METRICS`` (names and protocol keys only;
+``yavih.metrics.registry`` overlaid by the folder's ``eval.py`` ``METRICS`` (names and protocol keys only;
 no sklearn). Decoders are never imported here; ``bench verify`` reads bytes through ``yavih.sample`` and
 decodes its health sample through the optional ``yavih.media.decode``.
 
@@ -11,7 +11,7 @@ Layering:
 
 - ``load_yaml`` parses and validates everything that can be checked from the yaml alone
   (schema, unknown keys at every level, cross references, metric names and protocol keys) plus the
-  folder's ``probe.py`` hooks (``METRICS``, ``PROTOCOL_KEYS``) when one sits next to the yaml.
+  folder's ``eval.py`` hooks (``METRICS``, ``PROTOCOL_KEYS``) when one sits next to the yaml.
 - ``Benchmark.from_dir`` adds the folder checks (``name == folder``, manifest/classes sha256,
   label parsing, media columns per split) and computes ``manifest_hash``/``protocol_hash``.
 - ``bench_verify`` is the only function that touches media or derived files;
@@ -44,7 +44,7 @@ from yavih import config as _config
 from yavih import hash_history as _hash_history
 from yavih import hashing
 from yavih.metrics import registry as _registry
-from yavih.sample import INFO_VOCAB, MediaInfoTable, Sample, media_info_path
+from yavih.sample import MediaInfoTable, Sample, media_info_path
 from yavih.shipped import bench_file, bench_file_text, bench_files, prepare_steps
 from yavih.suites import CAPABILITIES
 from yavih.versions import BENCHMARK_SCHEMA_VERSION
@@ -126,7 +126,7 @@ class _RegistryView(Mapping):
     def _map(self) -> dict[str, Any]:
         from yavih.readouts import registry
 
-        return {n: getattr(r, self._attr) for n, r in registry.all_readouts().items()}
+        return {n: getattr(r, self._attr) for n, r in registry.all_scorers().items()}
 
     def __getitem__(self, key: str) -> Any:
         return self._map()[key]
@@ -150,6 +150,17 @@ def _readout_names() -> frozenset[str]:
     return frozenset(registry.names())
 
 
+def _scorer_families(name: str) -> frozenset[str]:
+    """The names a metric may be declared for to serve scorer ``name`` (itself and its family); an unregistered
+    name serves only itself (the schema check reports it)."""
+    from yavih.readouts import registry
+
+    try:
+        return registry.get(name).families()
+    except registry.UnknownScorer:
+        return frozenset({name})
+
+
 #: The registered readout names (a live view; ``yavih.readouts.registry``).
 READOUTS: Mapping[str, Any] = _RegistryView("name")
 #: How ``manifest.label`` is parsed: the core's manifest vocabulary; each readout names the kinds it scores.
@@ -163,19 +174,26 @@ SOURCE_KINDS: frozenset[str] = frozenset({"public_url", "torrent", "manual_porta
 #: person who holds it (decayed YouTube media, a private file); ``site-only`` = staged at the origin site only.
 #: Provenance for people and agents; never hashed.
 OBTAIN_TIERS: frozenset[str] = frozenset({"auto", "manual-download", "needs-licence", "needs-data-owner", "site-only"})
-LAYOUTS: frozenset[str] = frozenset({"dir", "tar_index"})
-COLUMN_ROLES: frozenset[str] = frozenset({"media", "extra", "label_aux"})
-COLUMN_TYPES: frozenset[str] = frozenset({"str", "int", "float"})
-STREAM_KINDS: frozenset[str] = frozenset({"video", "audio", "image"})
+from yavih.fields import (  # noqa: E402 - the one vocabulary
+    COLUMN_ROLES,
+    COLUMN_TYPES,
+    FIELD_ROLES,
+    LAYOUTS,
+    STORAGES,
+    STREAM_KINDS,
+    info_vocab,
+    is_file_kind,
+)
+
 CLASS_KEYS: frozenset[str] = frozenset({"name", "mid", "index"})
 VIEWS: frozenset[str] = frozenset({"none", "rows"})
-TARGET_KINDS: frozenset[str] = frozenset({"dense_depth"})
-TARGET_SOURCES: frozenset[str] = frozenset({"derived_file"})
+from yavih.fields import TARGET_KINDS, TARGET_SOURCES  # noqa: E402
+
 #: Keys every ``protocol`` block carries; anything else is a per-benchmark label fact that
-#: must be consumed (a metric, the readout, ``probe.py`` ``PROTOCOL_KEYS`` or ``input_contract.facts``).
+#: must be consumed (a metric, the readout, ``eval.py`` ``PROTOCOL_KEYS`` or ``input_contract.facts``).
 PROTOCOL_FIXED_KEYS: frozenset[str] = frozenset({"clip_seconds", "train_draw", "views"})
 #: Per-benchmark protocol keys the readout driver consumes that no registered metric declares.
-#: A key only one benchmark consumes belongs to its ``probe.py`` ``PROTOCOL_KEYS``.
+#: A key only one benchmark consumes belongs to its ``eval.py`` ``PROTOCOL_KEYS``.
 READOUT_PROTOCOL_KEYS: Mapping[str, frozenset[str]] = _RegistryView("protocol_keys")
 #: Allowed ``readout_params`` keys per readout (the key set must be exactly this). Declared by each readout.
 READOUT_PARAM_KEYS: Mapping[str, frozenset[str]] = _RegistryView("param_keys")
@@ -316,6 +334,7 @@ class ColumnSpec:
     type: str  # "str" | "int" | "float"
     role: str  # COLUMN_ROLES
     stream: str | tuple[str, ...] | None = None  # role media: the stream(s) this column feeds (AVE: one mp4 for video+audio)
+    field: str | None = None  # role cell: the cell field this column's value is handed over as
 
     def streams(self) -> tuple[str, ...]:
         if self.stream is None:
@@ -399,6 +418,16 @@ def _per_split(value: Any, split: str, role: str | None, what: str) -> Any:
 
 
 @dataclass(frozen=True)
+class CellSpec:
+    """A ``cell`` field: the value of one typed manifest column, handed to the bridge as ``Sample.cells[name]`` (a
+    caption, an option list, a point query). ``kind`` names what the value means (``[a-z][a-z0-9_]*``, the folder's
+    vocabulary); ``column`` is a ``manifest.columns`` entry with ``role: cell`` and ``field: <name>``."""
+
+    kind: str
+    column: str
+
+
+@dataclass(frozen=True)
 class StreamSpec:
     """Any of ``media_column/root/layout/layout_params`` may be a per-split dict.
     ``layout_params_per_split`` is decided at load: true iff every key is a split value or role
@@ -457,6 +486,9 @@ class RootSpec:
     default: str
     description: str | None = None
     prepare_only: bool = False  # read only by prepare/ (doctor reports it missing as a note, not a warning)
+    #: ``{repo, revision, repo_type, allow_patterns}``: the Hugging Face revision ``yavih bench snapshot`` downloads into
+    #: this root (``yavih.hf``); provenance, never hashed
+    hf: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -505,19 +537,41 @@ class InputContractSpec:
 
 
 @dataclass(frozen=True)
+class StreamContractSpec:
+    """``output_contract.stream`` of a streaming benchmark (``shape: sequence``): the bridge answers one update every
+    ``update_interval_s`` seconds of the recording (cutoffs ``k * update_interval_s``, ``k >= 1``), causally
+    (``yavih.stream``)."""
+
+    update_interval_s: float
+
+
+@dataclass(frozen=True)
 class OutputContractSpec:
-    """``output_contract``: pinned ``shape: fixed`` and ``coordinates: media``, the spatial target frame
-    and the readout eligibility ``requires``."""
+    """``output_contract``: ``shape: fixed`` (every symbol of the schema fixed per feature set) or ``sequence`` (a
+    streaming benchmark: one row per recording, the bridge returns its update sequence, ``stream`` set and the schema
+    :data:`yavih.codecs.STREAM_SCHEMA`), pinned
+    ``coordinates: media``, the spatial target frame, the eligibility ``requires``, the ``schema`` of what a bridge
+    returns per row (``None`` = the default feature matrix, ``yavih.codecs.DEFAULT_SCHEMA``) and ``sampling``
+    (``required``: the bridge generates and must declare ``describe()["sampling"]``; ``optional`` otherwise)."""
 
     shape: str
     coordinates: str
     target_frame: str | None
     requires: RequiresSpec
+    schema: Mapping[str, Any] | None = None
+    sampling: str = "optional"
+    stream: StreamContractSpec | None = None
+
+    @property
+    def resolved_schema(self) -> dict[str, dict[str, Any]]:
+        from yavih.codecs import schema_of
+
+        return schema_of({"schema": self.schema})
 
 
 @dataclass(frozen=True)
 class ExternalSpec:
-    """``external`` entry: an original-author package the folder's ``probe.py`` calls (never a yavih
+    """``external`` entry: an original-author package the folder's ``eval.py`` calls (never a yavih
     dependency)."""
 
     name: str
@@ -542,7 +596,7 @@ class BenchmarkSpec:
     budget: BudgetSpec
     manifest: ManifestSpec
     splits: SplitsSpec
-    streams: Mapping[str, StreamSpec]
+    streams: Mapping[str, StreamSpec]  # the file fields
     targets: Mapping[str, TargetSpec] | None
     data: DataSpec
     protocol: Mapping[str, Any]
@@ -552,7 +606,9 @@ class BenchmarkSpec:
     external: tuple[ExternalSpec, ...]
     readout_params: Mapping[str, Any]
     raw: Mapping[str, Any] = field(repr=False, compare=False, default_factory=dict)
-    #: names resolved through the folder's ``probe.py`` ``METRICS`` (provenance; not hashed)
+    #: the cell fields (a typed manifest column handed over as is)
+    cells: Mapping[str, CellSpec] = field(default_factory=dict)
+    #: names resolved through the folder's ``eval.py`` ``METRICS`` (provenance; not hashed)
     folder_metrics: tuple[str, ...] = field(default=(), compare=False)
     #: ``obtain`` (optional; not hashed)
     obtain: ObtainSpec | None = field(default=None, compare=False)
@@ -878,8 +934,13 @@ def _parse_columns(v: Any, path: str) -> dict[str, ColumnSpec]:
     for name, c in d.items():
         p = f"{path}.{name}"
         c = _expect_mapping(c, p)
-        _check_keys(c, p, ["type", "role"], ["stream"])
+        _check_keys(c, p, ["type", "role"], ["stream", "field"])
         role = _enum(c["role"], f"{p}.role", COLUMN_ROLES)
+        fld = _str(c.get("field"), f"{p}.field", nullable=True)
+        if role == "cell" and fld is None:
+            raise SchemaError(f"{p}: a cell column must name its `field`")
+        if role != "cell" and fld is not None:
+            raise SchemaError(f"{p}: `field` is only valid with role cell")
         stream_raw = c.get("stream")
         stream: str | tuple[str, ...] | None
         if isinstance(stream_raw, list):
@@ -892,7 +953,7 @@ def _parse_columns(v: Any, path: str) -> dict[str, ColumnSpec]:
             raise SchemaError(f"{p}: a media column must name its `stream`")
         if role != "media" and stream is not None:
             raise SchemaError(f"{p}: `stream` is only valid with role media")
-        out[name] = ColumnSpec(type=_enum(c["type"], f"{p}.type", COLUMN_TYPES), role=role, stream=stream)
+        out[name] = ColumnSpec(type=_enum(c["type"], f"{p}.type", COLUMN_TYPES), role=role, stream=stream, field=fld)
     return out
 
 
@@ -1001,8 +1062,8 @@ def _parse_splits(v: Any, path: str) -> SplitsSpec:
         if train or ev:
             raise SchemaError(f"{path}: with `folds` every fold is held out once; `train` and `eval` must be empty")
     else:
-        if not train or not ev:
-            raise SchemaError(f"{path}: `train` and `eval` must each name at least one split value (or use `folds`)")
+        if not ev:
+            raise SchemaError(f"{path}: `eval` must name at least one split value (or use `folds`)")
     return SplitsSpec(train=train, eval=ev, floor=floor, folds=folds, unused=unused, min_eval_coverage=cov)
 
 
@@ -1031,13 +1092,16 @@ def _check_per_split_cover(value: Any, path: str, splits: SplitsSpec, *, value_t
 _LAYOUT_PARAM_KEYS: Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "dir": ((), ()),
     "tar_index": ((), ()),
+    # cells "<file>#<row>"; the column holding the bytes, the struct field of a {bytes, path} column (an HF Audio /
+    # Image feature), the file extension when the struct names none
+    "parquet": (("column",), ("struct_field", "ext")),
+    # cells "<file>.npy#<row>": one row of an [n, ...] array, handed over as the .npy bytes of that row
+    "npy_rows": ((), ()),
 }
 
 
 def _parse_streams(v: Any, path: str, splits: SplitsSpec, columns: Mapping[str, ColumnSpec], roots: Mapping[str, RootSpec]) -> dict[str, StreamSpec]:
-    d = _expect_mapping(v, path)
-    if not d:
-        raise SchemaError(f"{path}: at least one stream is required")
+    d = _expect_mapping(v, path)  # may be empty: a benchmark whose fields are all cells (``_parse_fields`` needs one field)
     out: dict[str, StreamSpec] = {}
     for name, s in d.items():
         p = f"{path}.{name}"
@@ -1045,7 +1109,9 @@ def _parse_streams(v: Any, path: str, splits: SplitsSpec, columns: Mapping[str, 
             raise SchemaError(f"{p}: stream names must match [a-z][a-z0-9_]*")
         s = _expect_mapping(s, p)
         _check_keys(s, p, ["kind", "media_column", "root"], ["layout", "layout_params", "required"])
-        kind = _enum(s["kind"], f"{p}.kind", STREAM_KINDS)
+        kind = _str(s["kind"], f"{p}.kind")
+        if not is_file_kind(kind):
+            raise SchemaError(f"{p}.kind: {kind!r} must match [a-z][a-z0-9_]* (a media kind {sorted(STREAM_KINDS)} or an opaque one: pointcloud, mesh, ...)")
         media_column = s["media_column"]
         _check_per_split_cover(media_column, f"{p}.media_column", splits, value_type=str)
         root = s["root"]
@@ -1137,9 +1203,17 @@ def _parse_data(v: Any, path: str) -> DataSpec:
         if not re.match(r"^[a-z][a-z0-9_]*$", name):
             raise SchemaError(f"{p}: root names must match [a-z][a-z0-9_]* (they become env var parts)")
         r = _expect_mapping(r, p)
-        _check_keys(r, p, ["default"], ["description", "prepare_only"])
+        _check_keys(r, p, ["default"], ["description", "prepare_only", "hf"])
+        hf = None
+        if r.get("hf") is not None:
+            from yavih.hf import parse_hf
+
+            try:
+                hf = parse_hf(r["hf"], f"{p}.hf")
+            except ValueError as e:
+                raise SchemaError(str(e)) from None
         roots[name] = RootSpec(default=_str(r["default"], f"{p}.default"), description=_str(r.get("description"), f"{p}.description", nullable=True),
-                               prepare_only=_bool(r["prepare_only"], f"{p}.prepare_only") if "prepare_only" in r else False)
+                               prepare_only=_bool(r["prepare_only"], f"{p}.prepare_only") if "prepare_only" in r else False, hf=hf)
     derived = d.get("derived")
     if derived is not None:
         derived = _str_dict(derived, f"{path}.derived")
@@ -1181,26 +1255,64 @@ def _check_protocol(proto: Mapping[str, Any], path: str) -> None:
         _check_region(proto["target_region"], f"{path}.target_region")
 
 
-def _parse_input_contract(v: Any, path: str, streams: Mapping[str, StreamSpec], proto: Mapping[str, Any], columns: Mapping[str, ColumnSpec]) -> InputContractSpec:
+_KIND_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _parse_fields(v: Any, path: str, columns: Mapping[str, ColumnSpec]) -> tuple[dict[str, Any], dict[str, CellSpec]]:
+    """``fields``: name -> ``{storage: file, kind, media_column, root, layout?, layout_params?, required?}`` (a file the
+    reader hands over as ``Sample.streams[name]``) or ``{storage: cell, kind, column}`` (``Sample.cells[name]``).
+    Returns the file entries without ``storage`` (parsed by ``_parse_streams``) and the cell fields."""
+    d = _expect_mapping(v, path)
+    if not d:
+        raise SchemaError(f"{path}: at least one field is required (a file or a cell)")
+    files: dict[str, Any] = {}
+    cells: dict[str, CellSpec] = {}
+    for name, e in d.items():
+        p = f"{path}.{name}"
+        if not isinstance(name, str) or not re.match(r"^[a-z][a-z0-9_]*$", name):
+            raise SchemaError(f"{p}: a field name matches [a-z][a-z0-9_]*")
+        e = _expect_mapping(e, p)
+        storage = _enum(e.get("storage"), f"{p}.storage", STORAGES)
+        role = e.get("role", "input")
+        if role not in FIELD_ROLES:
+            raise SchemaError(f"{p}.role: one of {sorted(FIELD_ROLES)}")
+        if storage == "file":
+            files[name] = {k: x for k, x in e.items() if k not in ("storage", "role")}
+            continue
+        _check_keys(e, p, ["storage", "kind", "column"], ["role"])
+        kind = _str(e["kind"], f"{p}.kind")
+        if not _KIND_RE.match(kind):
+            raise SchemaError(f"{p}.kind: {kind!r} must match [a-z][a-z0-9_]* (what the value means: text, options, point_query, ...)")
+        col = _str(e["column"], f"{p}.column")
+        c = columns.get(col)
+        if c is None or c.role != "cell" or c.field != name:
+            raise SchemaError(f"{p}.column: {col!r} must be a manifest column with role cell and field {name!r}")
+        cells[name] = CellSpec(kind=kind, column=col)
+    return files, cells
+
+
+def _parse_input_contract(v: Any, path: str, streams: Mapping[str, StreamSpec], proto: Mapping[str, Any], columns: Mapping[str, ColumnSpec],
+                          cells: Mapping[str, CellSpec] | None = None) -> InputContractSpec:
     d = _expect_mapping(v, path)
     _check_keys(d, path, ["handed_over", "info", "facts", "materialize"])
     names = set(streams)
+    every = names | set(cells or {})
     ho = _str_dict(d["handed_over"], f"{path}.handed_over")
-    if set(ho) != names:
-        raise SchemaError(f"{path}.handed_over: keys must be exactly the streams {sorted(names)}, got {sorted(ho)}")
+    if set(ho) != every:
+        raise SchemaError(f"{path}.handed_over: keys must be exactly the fields {sorted(every)}, got {sorted(ho)}")
     for k, sentence in ho.items():
         if not sentence.strip():
-            raise SchemaError(f"{path}.handed_over.{k}: one non-empty sentence per stream")
+            raise SchemaError(f"{path}.handed_over.{k}: one non-empty sentence per field")
     info_raw = _expect_mapping(d["info"], f"{path}.info")
     if set(info_raw) != names:
-        raise SchemaError(f"{path}.info: keys must be exactly the streams {sorted(names)}, got {sorted(info_raw)}")
+        raise SchemaError(f"{path}.info: keys must be exactly the file fields {sorted(names)} (a cell has no media facts), got {sorted(info_raw)}")
     info: dict[str, tuple[str, ...]] = {}
     for k, keys in info_raw.items():
         keys_t = _str_list(keys, f"{path}.info.{k}")
         kind = streams[k].kind
-        bad = sorted(set(keys_t) - INFO_VOCAB[kind])
+        bad = sorted(set(keys_t) - info_vocab(kind))
         if bad:
-            raise SchemaError(f"{path}.info.{k}: {bad} are not media facts of a {kind!r} stream (known: {sorted(INFO_VOCAB[kind])})")
+            raise SchemaError(f"{path}.info.{k}: {bad} are not facts of a {kind!r} file field (known: {sorted(info_vocab(kind))})")
         info[k] = keys_t
     facts = _str_list(d["facts"], f"{path}.facts")
     for f in facts:
@@ -1276,11 +1388,14 @@ def _parse_materialize(v: Any, path: str, columns: Mapping[str, ColumnSpec]) -> 
     return json.loads(json.dumps(m))
 
 
-def _parse_output_contract(v: Any, path: str, readout: str, streams: Mapping[str, StreamSpec]) -> OutputContractSpec:
+SAMPLING_MODES: frozenset[str] = frozenset({"optional", "required"})
+
+
+def _parse_output_contract(v: Any, path: str, readout: str, streams: Mapping[str, StreamSpec], codecs: Mapping[str, Any] | None = None) -> OutputContractSpec:
     d = _expect_mapping(v, path)
-    _check_keys(d, path, ["shape", "coordinates", "target_frame", "requires"])
-    if d["shape"] != "fixed":
-        raise SchemaError(f"{path}.shape: pinned to 'fixed' (one (N, D) per feature set)")
+    _check_keys(d, path, ["shape", "coordinates", "target_frame", "requires"], ["schema", "sampling", "stream"])
+    if d["shape"] not in ("fixed", "sequence"):
+        raise SchemaError(f"{path}.shape: 'fixed' (one value per row under the schema) or 'sequence' (a streaming benchmark)")
     if d["coordinates"] != "media":
         raise SchemaError(f"{path}.coordinates: pinned to 'media'")
     tf = d["target_frame"]
@@ -1290,7 +1405,51 @@ def _parse_output_contract(v: Any, path: str, readout: str, streams: Mapping[str
         full = sorted(n for n, r in _RegistryView("full_frame").items() if r)
         raise SchemaError(f"{path}.target_frame: must be 'full_frame' iff the readout is one of {full} (readout {readout!r})")
     requires = _parse_requires(d["requires"], f"{path}.requires", readout, streams)
-    return OutputContractSpec(shape="fixed", coordinates="media", target_frame=tf, requires=requires)
+    from yavih import codecs as _codecs
+
+    schema = d.get("schema")
+    if schema is not None:
+        reg = _codecs.registry(codecs)
+        problems = _codecs.check_schema(schema, reg)
+        if problems:
+            raise SchemaError(f"{path}." + f"; {path}.".join(problems))
+        schema = {str(k): dict(e) for k, e in schema.items()}
+    if not _codecs.has_default_feature_keys(schema):
+        used = [k for k in ("pos", "streams") if getattr(requires, k)] + [k for k in ("grid", "t_bins", "annotated_frame") if getattr(requires, k) is not None]
+        if used:
+            raise SchemaError(f"{path}.requires: {used} measure media positions of the default feature keys (feat, pos); "
+                              "a schema without them declares requires {pos: [], streams: [], grid: null, t_bins: null}")
+        rdesc = _readout(readout)
+        if rdesc.dense or rdesc.requires_grid is True or rdesc.requires_t_bins is True:
+            raise SchemaError(f"{path}.schema: scorer {readout!r} reads the default feature keys (feat, pos); keep them in the schema")
+    sampling = d.get("sampling", "optional")
+    if sampling not in SAMPLING_MODES:
+        raise SchemaError(f"{path}.sampling: one of {sorted(SAMPLING_MODES)}")
+    stream = _parse_stream_contract(d, path, schema)
+    return OutputContractSpec(shape=str(d["shape"]), coordinates="media", target_frame=tf, requires=requires, schema=schema,
+                              sampling=str(sampling), stream=stream)
+
+
+def _parse_stream_contract(d: Mapping[str, Any], path: str, schema: Mapping[str, Any] | None) -> StreamContractSpec | None:
+    """``shape: sequence`` iff a ``stream`` block iff the schema is :data:`yavih.codecs.STREAM_SCHEMA`, written out."""
+    from yavih import codecs as _codecs
+
+    seq = d["shape"] == "sequence"
+    if seq != ("stream" in d):
+        raise SchemaError(f"{path}: shape 'sequence' and a stream block go together (a streaming benchmark declares both)")
+    if not seq:
+        if _codecs.is_stream_schema(schema):
+            raise SchemaError(f"{path}.schema: the stream schema needs shape 'sequence' and a stream block")
+        return None
+    if not _codecs.is_stream_schema(schema):
+        raise SchemaError(f"{path}.schema: a streaming benchmark declares exactly yavih.codecs.STREAM_SCHEMA "
+                          f"({sorted(_codecs.STREAM_SCHEMA)}), written out so its codec versions are hashed")
+    st = _expect_mapping(d["stream"], f"{path}.stream")
+    _check_keys(st, f"{path}.stream", ["update_interval_s"])
+    dt = st["update_interval_s"]
+    if isinstance(dt, bool) or not isinstance(dt, int | float) or not 0 < float(dt) <= 60:
+        raise SchemaError(f"{path}.stream.update_interval_s: seconds in (0, 60]")
+    return StreamContractSpec(update_interval_s=float(dt))
 
 
 def _parse_external(v: Any, path: str) -> tuple[ExternalSpec, ...]:
@@ -1314,19 +1473,40 @@ def _parse_external(v: Any, path: str) -> tuple[ExternalSpec, ...]:
 
 @dataclass(frozen=True)
 class FolderHooks:
-    """What ``Benchmark.load`` reads from a folder's ``probe.py``: ``METRICS`` (name -> MetricSpec,
-    overlaying the registry for this benchmark only) and ``PROTOCOL_KEYS`` (consumption check). ``present`` is
-    whether the folder ships a ``probe.py`` at all (a non-empty ``external`` requires one)."""
+    """What ``Benchmark.load`` reads from a folder's ``eval.py``: ``METRICS`` (name -> MetricSpec,
+    overlaying the registry for this benchmark only), ``PROTOCOL_KEYS`` (consumption check) and ``SCORER`` (the
+    folder's own scorer, registered under the folder's name). ``present`` is whether the folder ships an
+    ``eval.py`` at all (a non-empty ``external`` requires one)."""
 
     present: bool = False
     metrics: Mapping[str, Any] = field(default_factory=dict)
     protocol_keys: frozenset[str] = frozenset()
     sha256: str | None = None
+    scorer: Any | None = None
+    codecs: Mapping[str, Any] = field(default_factory=dict)
+
+
+EVAL_FILE = "eval.py"
+#: The pre-1.1 name of the hooks file; its presence is refused with a rename hint.
+_LEGACY_EVAL_FILE = "probe" + ".py"
+
+
+def eval_path(folder: str | os.PathLike) -> Path | None:
+    """The folder's ``eval.py`` (its scoring hooks), or ``None`` when it ships none. A ``eval.py`` (the pre-1.1
+    name) is refused: rename it."""
+    folder = Path(folder)
+    legacy = folder / _LEGACY_EVAL_FILE
+    if legacy.is_file():
+        raise SchemaError(f"{legacy}: a folder's scoring hooks live in {EVAL_FILE} (rename {_LEGACY_EVAL_FILE} to {EVAL_FILE})")
+    p = folder / EVAL_FILE
+    return p if p.is_file() else None
 
 
 def _resolve_metric_names(names: Sequence[str], readout: str, *, sets: Sequence[str] | None, kinds: Sequence[str], folder: Mapping[str, Any]) -> dict[str, Any]:
     """``REGISTRY`` overlaid by the folder's ``METRICS``: a folder metric may replace a registry
-    entry of the same name only if it keeps its ``readouts``, ``shape`` and ``kind``."""
+    entry of the same name only if it keeps its ``readouts``, ``shape`` and ``kind``. A metric is allowed when it is
+    declared for the scorer or for the scorer's family (``Scorer.families()``)."""
+    families = _scorer_families(readout)
     out: dict[str, Any] = {}
     for name in names:
         if name in folder:
@@ -1336,14 +1516,14 @@ def _resolve_metric_names(names: Sequence[str], readout: str, *, sets: Sequence[
             except _registry.UnknownMetric:
                 base = None
             if base is not None and (frozenset(spec.readouts) != frozenset(base.readouts) or spec.shape != base.shape or spec.kind != base.kind):
-                raise _registry.MetricNotAllowed(f"probe.py METRICS[{name!r}] replaces a registry metric but changes its readouts/shape/kind")
-            if not _registry.allows(spec, readout):
-                raise _registry.MetricNotAllowed(f"metric {name!r} (probe.py) is not allowed for readout {readout!r} (allowed: {sorted(spec.readouts)})")
+                raise _registry.MetricNotAllowed(f"eval.py METRICS[{name!r}] replaces a registry metric but changes its readouts/shape/kind")
+            if not _registry.allows(spec, families):
+                raise _registry.MetricNotAllowed(f"metric {name!r} (eval.py) is not allowed for scorer {readout!r} (allowed: {sorted(spec.readouts)})")
             if spec.kind not in kinds:
-                raise _registry.MetricNotAllowed(f"metric {name!r} (probe.py) has kind {spec.kind!r}, expected one of {sorted(kinds)}")
+                raise _registry.MetricNotAllowed(f"metric {name!r} (eval.py) has kind {spec.kind!r}, expected one of {sorted(kinds)}")
             out[name] = spec
         else:
-            out.update(_registry.resolve_names([name], readout, sets=sets, kinds=kinds))
+            out.update(_registry.resolve_names([name], families, sets=sets, kinds=kinds))
     return out
 
 
@@ -1383,7 +1563,7 @@ def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: Sp
         folder_ci = getattr((folder_metrics or {}).get(k), "ci", None) or frozenset()
         if x is not None and k not in _registry.CI_ADMISSIBLE[x] and x not in folder_ci:
             raise SchemaError(f"{path}.ci.{k}: no {x} interval is defined for {k!r} ("
-                              f"{x} admits {sorted(_registry.CI_ADMISSIBLE[x])} and the probe.py metrics that declare it in MetricSpec.ci)")
+                              f"{x} admits {sorted(_registry.CI_ADMISSIBLE[x])} and the eval.py metrics that declare it in MetricSpec.ci)")
     bootstrap = d.get("bootstrap")
     if bootstrap is not None:
         bootstrap = _expect_mapping(bootstrap, f"{path}.bootstrap")
@@ -1503,6 +1683,8 @@ def _check_readout_params(rp: Any, path: str, readout: str, streams: Mapping[str
                 raise SchemaError(f"{path}.{k}: {x!r} is not a declared stream")
         elif k == "shuffled_control":
             _bool(x, f"{path}.{k}")
+        elif k == "groups":  # the stream readout's label groups (its validate_spec checks the entries)
+            _expect_mapping(x, f"{path}.{k}")
         else:
             _int(x, f"{path}.{k}", minimum=0 if k == "shuffle_seed" else 1)
     try:  # the readout's own cross-checks (a message starts with the key it names, e.g. ".T: ...")
@@ -1514,7 +1696,7 @@ def _check_readout_params(rp: Any, path: str, readout: str, streams: Mapping[str
 
 def _check_protocol_keys(proto: Mapping[str, Any], readout: str, resolved: Mapping[str, Any], *, probe_keys: frozenset[str] = frozenset(), facts: Sequence[str] = ()) -> None:
     """Every protocol key the metrics declare is present, and no per-benchmark key is left
-    unconsumed — consumed means named by a metric, the readout (``READOUT_PROTOCOL_KEYS``), ``probe.py``'s
+    unconsumed — consumed means named by a metric, the readout (``READOUT_PROTOCOL_KEYS``), ``eval.py``'s
     ``PROTOCOL_KEYS`` or ``input_contract.facts``."""
     required = _registry.protocol_keys_for(resolved.values())
     present = frozenset(proto) - PROTOCOL_FIXED_KEYS
@@ -1523,13 +1705,13 @@ def _check_protocol_keys(proto: Mapping[str, Any], readout: str, resolved: Mappi
         raise SchemaError(f"protocol: missing key(s) {missing} required by metrics {sorted(n for n, s in resolved.items() if s.protocol_keys & set(missing))}")
     missing_probe = sorted(probe_keys - frozenset(proto))
     if missing_probe:
-        raise SchemaError(f"protocol: missing key(s) {missing_probe} declared by probe.py PROTOCOL_KEYS")
+        raise SchemaError(f"protocol: missing key(s) {missing_probe} declared by eval.py PROTOCOL_KEYS")
     allowed = required | READOUT_PROTOCOL_KEYS[readout] | probe_keys | frozenset(facts)
     undeclared = sorted(present - allowed)
     if undeclared:
         raise SchemaError(
             f"protocol: per-benchmark key(s) {undeclared} are consumed by no registered metric, not by the {readout!r} readout, "
-            "not by probe.py PROTOCOL_KEYS and not listed in input_contract.facts"
+            "not by eval.py PROTOCOL_KEYS and not listed in input_contract.facts"
         )
 
 
@@ -1538,14 +1720,14 @@ _TOP_KEYS = [
     "name",
     "aliases",
     "title",
-    "readout",
+    "scorer",
     "protocol_version",
     "changelog",
     "source",
     "budget",
     "manifest",
     "splits",
-    "streams",
+    "fields",
     "targets",
     "data",
     "protocol",
@@ -1559,11 +1741,19 @@ _TOP_KEYS = [
 
 def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks | None = None) -> BenchmarkSpec:
     """Validate a parsed yaml mapping into a ``BenchmarkSpec``. ``hooks`` are the folder's
-    ``probe.py`` ``METRICS`` / ``PROTOCOL_KEYS`` (``load_yaml`` reads them next to the yaml)."""
+    ``eval.py`` ``METRICS`` / ``PROTOCOL_KEYS`` / ``SCORER`` (``load_yaml`` reads them next to the yaml)."""
     hooks = hooks or FolderHooks()
     d = _expect_mapping(raw, "")
+    if isinstance(d, Mapping) and d.get("schema_version") == BENCHMARK_SCHEMA_VERSION - 1:
+        raise SchemaError(f"schema_version: 2 is the 1.0 schema (`streams:`); rewrite the folder with `yavih bench migrate <folder> --write` "
+                          f"(schema {BENCHMARK_SCHEMA_VERSION}: `fields:`; the hashes do not move) ({origin})")
+    if isinstance(d, Mapping) and "readout" in d and "scorer" not in d:
+        raise SchemaError(f"readout: the key is `scorer` (the scorer the folder is scored by; `yavih bench migrate`) ({origin})")
     _check_keys(d, "", _TOP_KEYS, ["obtain", "header", "capability"])
     sv = _int(d["schema_version"], "schema_version")
+    if sv == BENCHMARK_SCHEMA_VERSION - 1:
+        raise SchemaError(f"schema_version: {sv} is the 1.0 schema (`streams:`); rewrite the folder with `yavih bench migrate <folder> --write` "
+                          f"(schema {BENCHMARK_SCHEMA_VERSION}: `fields:`; the hashes do not move) ({origin})")
     if sv != BENCHMARK_SCHEMA_VERSION:
         raise SchemaError(f"schema_version: {sv} != BENCHMARK_SCHEMA_VERSION {BENCHMARK_SCHEMA_VERSION} ({origin})")
     name = _str(d["name"], "name")
@@ -1576,8 +1766,10 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
         if a == name:
             raise SchemaError(f"aliases: {a!r} is the benchmark's own name")
     title = _str(d["title"], "title")
-    readout = _enum(d["readout"], "readout", _readout_names())
+    readout = _enum(d["scorer"], "scorer", _readout_names())
     rdesc = _readout(readout)
+    if hooks.scorer is not None and readout != hooks.scorer.name:
+        raise SchemaError(f"scorer: {readout!r}, but eval.py declares SCORER {hooks.scorer.name!r} (a folder with its own scorer is scored by it)")
     protocol_version = _int(d["protocol_version"], "protocol_version", minimum=1)
     changelog = _parse_changelog(d["changelog"], "changelog")
     if changelog[-1].version != protocol_version:
@@ -1593,11 +1785,17 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
         if splits.role_of(s) is None:
             raise SchemaError(f"budget.clips: {s!r} is not a declared split value")
     data = _parse_data(d["data"], "data")
-    streams = _parse_streams(d["streams"], "streams", splits, manifest.columns, data.roots)
+    hf_revs = {n: r.hf["revision"] for n, r in data.roots.items() if r.hf}
+    if source.revision and hf_revs and any(rev != source.revision for rev in hf_revs.values()):
+        raise SchemaError(f"data.roots: hf revisions {hf_revs} differ from source.revision {source.revision!r} (one release, one revision)")
+    file_raw, cells = _parse_fields(d["fields"], "fields", manifest.columns)
+    streams = _parse_streams(file_raw, "fields", splits, manifest.columns, data.roots)
     for cname, c in manifest.columns.items():
         for st in c.streams():
             if st not in streams:
-                raise SchemaError(f"manifest.columns.{cname}.stream: {st!r} is not a declared stream")
+                raise SchemaError(f"manifest.columns.{cname}.stream: {st!r} is not a declared file field")
+        if c.role == "cell" and c.field not in cells:
+            raise SchemaError(f"manifest.columns.{cname}.field: {c.field!r} is not a declared cell field")
     needs_index = any(lay == "tar_index" for s in streams.values() for lay in s.layouts())
     if needs_index and data.tar_index is None:
         raise SchemaError("data.tar_index: required by a tar_index layout")
@@ -1609,12 +1807,14 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
         raise SchemaError(f"targets: present iff the readout takes its labels from targets ({with_targets})")
     if targets is not None and manifest.label.kind != "none":
         raise SchemaError("manifest.label.kind: must be none when labels come from targets")
+    if rdesc.is_probe and not splits.train and not splits.folds:
+        raise SchemaError(f"splits.train: scorer {readout!r} trains a probe and needs at least one train split value (or use `folds`)")
     if manifest.label.kind not in rdesc.label_kinds:
         raise SchemaError(f"manifest.label.kind: readout {readout} needs kind {' or '.join(sorted(rdesc.label_kinds))}, got {manifest.label.kind!r}")
     proto = _expect_mapping(d["protocol"], "protocol")
     _check_protocol(proto, "protocol")
-    input_contract = _parse_input_contract(d["input_contract"], "input_contract", streams, proto, manifest.columns)
-    output_contract = _parse_output_contract(d["output_contract"], "output_contract", readout, streams)
+    input_contract = _parse_input_contract(d["input_contract"], "input_contract", streams, proto, manifest.columns, cells)
+    output_contract = _parse_output_contract(d["output_contract"], "output_contract", readout, streams, hooks.codecs)
     af = output_contract.requires.annotated_frame
     if af is not None:
         if af["fact"] not in input_contract.facts:
@@ -1623,8 +1823,10 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
             raise SchemaError(f"output_contract.requires.annotated_frame.fact: protocol.{af['fact']} must be a number of media seconds")
     external = _parse_external(d["external"], "external")
     if external and not hooks.present:
-        raise SchemaError("external: a non-empty external block requires the folder's probe.py, which calls the package")
+        raise SchemaError("external: a non-empty external block requires the folder's eval.py, which calls the package")
     metrics, resolved = _parse_metrics(d["metrics"], "metrics", readout, manifest.label, splits, hooks.metrics)
+    if rdesc.floor_outputs is None and metrics.floors:
+        raise SchemaError(f"metrics.floors: scorer {readout!r} declares no floor outputs; declare `floors: []` (the report then greys no row)")
     ext_names = {e.name for e in external}
     for mname, mspec in resolved.items():
         ext = getattr(mspec, "external", None)
@@ -1645,6 +1847,7 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
         manifest=manifest,
         splits=splits,
         streams=streams,
+        cells=cells,
         targets=targets,
         data=data,
         protocol=dict(proto),
@@ -1681,14 +1884,15 @@ def _load_module(path: Path, prefix: str) -> Any:
 
 
 def folder_hooks(folder: str | os.PathLike) -> FolderHooks:
-    """The folder's ``probe.py`` hooks: ``METRICS`` and ``PROTOCOL_KEYS``, its sha256."""
-    path = Path(folder) / "probe.py"
-    if not path.is_file():
+    """The folder's ``eval.py`` hooks: ``METRICS``, ``PROTOCOL_KEYS`` and ``SCORER`` (registered under the folder's
+    name with ``yavih.readouts.registry.register_folder`` so the yaml's ``scorer:`` resolves), its sha256."""
+    path = eval_path(folder)
+    if path is None:
         return FolderHooks()
     try:
-        mod = _load_module(path, "yavih_benchmark_probe")
+        mod = _load_module(path, "yavih_benchmark_eval")
     except Exception as e:  # noqa: BLE001 - surfaced as a schema error naming the file
-        raise SchemaError(f"{path}: cannot import ({type(e).__name__}: {e}); probe.py imports only stdlib, numpy and yavih core at module scope") from e
+        raise SchemaError(f"{path}: cannot import ({type(e).__name__}: {e}); eval.py imports only stdlib, numpy and yavih core at module scope") from e
     metrics = getattr(mod, "METRICS", {}) or {}
     if not isinstance(metrics, Mapping):
         raise SchemaError(f"{path}: METRICS must be a dict[str, MetricSpec]")
@@ -1698,12 +1902,84 @@ def folder_hooks(folder: str | os.PathLike) -> FolderHooks:
     keys = getattr(mod, "PROTOCOL_KEYS", frozenset()) or frozenset()
     if isinstance(keys, str) or not all(isinstance(k, str) for k in keys):
         raise SchemaError(f"{path}: PROTOCOL_KEYS must be a frozenset[str]")
-    return FolderHooks(present=True, metrics=dict(metrics), protocol_keys=frozenset(keys), sha256=hashing.sha256_hex(path.read_bytes()))
+    scorer = getattr(mod, "SCORER", None)
+    if scorer is not None:
+        from yavih.readouts import registry
+
+        if not isinstance(scorer, registry.Scorer):
+            raise SchemaError(f"{path}: SCORER must be a yavih.readouts.registry.Scorer")
+        if scorer.name != Path(folder).resolve().name:
+            raise SchemaError(f"{path}: SCORER.name {scorer.name!r} must be the folder's own name {Path(folder).resolve().name!r}")
+        try:
+            registry.register_folder(scorer)
+        except ValueError as e:
+            raise SchemaError(f"{path}: {e}") from e
+    from yavih.codecs import folder_codecs
+
+    try:
+        codecs = folder_codecs(mod)
+    except ValueError as e:
+        raise SchemaError(f"{path}: {e}") from e
+    return FolderHooks(present=True, metrics=dict(metrics), protocol_keys=frozenset(keys), sha256=hashing.sha256_hex(path.read_bytes()),
+                       scorer=scorer, codecs=codecs)
+
+
+def migrate_schema(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """A schema-2 ``benchmark.yaml`` mapping as schema 3: ``streams`` becomes ``fields`` with ``storage: file`` first in
+    every entry, and a ``readout`` key becomes ``scorer``. Pure; a schema-3 mapping is returned as a copy. The hashes
+    do not move (``hashing.fields_view`` drops the defaults)."""
+    d = dict(raw)
+    if d.get("schema_version") != 2:
+        return d
+    out: dict[str, Any] = {}
+    for k, v in d.items():
+        if k == "schema_version":
+            out[k] = 3
+        elif k == "streams":
+            out["fields"] = {n: {"storage": "file", **dict(e or {})} for n, e in dict(v or {}).items()}
+        elif k == "readout":
+            out["scorer"] = v
+        else:
+            out[k] = v
+    return out
+
+
+def migrate_text(text: str) -> str:
+    """:func:`migrate_schema` on the yaml text, keeping its comments and layout: ``schema_version: 2`` becomes 3, the
+    top-level ``streams:`` key ``fields:``, ``readout:`` ``scorer:``, and ``storage: file`` is inserted as the first
+    key of every field entry. ``ValueError`` when the result does not parse to :func:`migrate_schema` of the input."""
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    in_fields = False
+    for line in lines:
+        bare = line.rstrip("\n")
+        if re.match(r"^schema_version:\s*2\b", bare):
+            line = re.sub(r"^schema_version:\s*2", "schema_version: 3", line)
+        elif re.match(r"^readout:", bare):
+            line = "scorer:" + line[len("readout:"):]
+        elif re.match(r"^streams:", bare):
+            line = "fields:" + line[len("streams:"):]
+            in_fields = True
+            out.append(line)
+            continue
+        elif in_fields and bare and not bare.startswith((" ", "#")):
+            in_fields = False
+        if in_fields:
+            m = re.match(r"^(  )([a-z][a-z0-9_]*):\s*(#.*)?$", bare)
+            if m:
+                out.append(line)
+                out.append("    storage: file\n")
+                continue
+        out.append(line)
+    new = "".join(out)
+    if yaml.safe_load(new) != migrate_schema(yaml.safe_load(text)):
+        raise ValueError("the text migration does not reproduce migrate_schema (a flow-style `streams:` block?); edit the file by hand")
+    return new
 
 
 def load_yaml(path: str | os.PathLike) -> BenchmarkSpec:
-    """Parse and validate ``benchmark.yaml`` into a ``BenchmarkSpec``, with the hooks of a
-    ``probe.py`` next to it. Unknown keys at any level are an error (``SchemaError``). Does not touch the
+    """Parse and validate ``benchmark.yaml`` into a ``BenchmarkSpec``, with the hooks of an
+    ``eval.py`` next to it. Unknown keys at any level are an error (``SchemaError``). Does not touch the
     manifest, media or derived files."""
     p = Path(path)
     try:
@@ -1761,6 +2037,8 @@ def _parse_typed(cell: str, ctype: str, where: str) -> Any:
             return int(cell)
         if ctype == "float":
             return float(cell)
+        if ctype == "json":
+            return json.loads(cell)
     except ValueError as e:
         raise ManifestError(f"{where}: cannot parse {cell!r} as {ctype}") from e
     return cell
@@ -2267,34 +2545,6 @@ class DataStatus:
         return p
 
 
-class _TarIndex:
-    """``index.json`` v1: ``{"version": 1, "shards": [...], "members": {key: [shard_idx, offset, size]}}``."""
-
-    def __init__(self, path: Path, root: Path) -> None:
-        if not path.is_file():
-            raise DataNotReady(f"tar index {path} is missing")
-        with open(path, encoding="utf-8") as fh:
-            d = json.load(fh)
-        if d.get("version") != 1 or not isinstance(d.get("members"), dict) or not isinstance(d.get("shards"), list):
-            raise ManifestError(f"tar index {path}: expected {{version: 1, shards: [...], members: {{...}}}}")
-        self.path = path
-        self.members: dict[str, list] = d["members"]
-        # An absolute shard path in the index is used as is (never joined to the root).
-        self.shards = [Path(s) if os.path.isabs(s) else root / s for s in d["shards"]]
-
-    def has(self, key: str) -> bool:
-        return key in self.members
-
-    def locate(self, key: str) -> tuple[Path, int, int] | None:
-        m = self.members.get(key)
-        if m is None:
-            return None
-        shard, offset, size = int(m[0]), int(m[1]), int(m[2])
-        if shard >= len(self.shards):
-            return None
-        return self.shards[shard], offset, size
-
-
 class _Presence:
     """Media presence per (stream, split) with one ``scandir`` per directory instead of a stat per
     file (fast on network filesystems with hundreds of thousands of files)."""
@@ -2303,7 +2553,7 @@ class _Presence:
         self.bench = bench
         self.roots = roots
         self._dir_cache: dict[Path, set[str]] = {}
-        self._tar_cache: dict[Path, _TarIndex] = {}
+        self._tar_cache: dict[Path, Any] = {}
 
     def _listing(self, directory: Path) -> set[str]:
         names = self._dir_cache.get(directory)
@@ -2316,13 +2566,22 @@ class _Presence:
             self._dir_cache[directory] = names
         return names
 
-    def _tar_index(self, root: Path) -> _TarIndex:
+    def _tar_index(self, root: Path) -> Any:
+        """The reader's ``media.tarindex.TarIndex`` (relative shard names resolve against the index's directory,
+        exactly where ``RawStream`` reads them): presence and the fingerprint see the bytes the bridge will get."""
+        from yavih.media.tarindex import TarIndex
+
         rel = self.bench.spec.data.tar_index
         assert rel is not None
         path = root / rel
         idx = self._tar_cache.get(path)
         if idx is None:
-            idx = _TarIndex(path, root)
+            if not path.is_file():
+                raise DataNotReady(f"tar index {path} is missing")
+            try:
+                idx = TarIndex(str(path))  # this scan's own instance: a rewritten index is never served stale
+            except (ValueError, json.JSONDecodeError) as e:
+                raise ManifestError(f"tar index {path}: {e}") from e
             self._tar_cache[path] = idx
         return idx
 
@@ -2338,7 +2597,27 @@ class _Presence:
             return None
         if layout == "tar_index":
             loc = self._tar_index(root).locate(cell)
-            return [loc] if loc is not None else None
+            return [(Path(loc[0]), int(loc[1]), int(loc[2]))] if loc is not None else None
+        if layout == "npy_rows":
+            from yavih.media.npyrows import has_row as npy_has_row
+            from yavih.media.npyrows import row_location
+            from yavih.media.parquet import parse_cell
+
+            rel, row = parse_cell(cell)
+            path = str(root / rel)
+            if not npy_has_row(path, row):
+                return None
+            p, off, size = row_location(path, row)
+            return [(Path(p), off, size)]
+        if layout == "parquet":
+            from yavih.media.parquet import chunk_location, has_row, parse_cell
+
+            rel, row = parse_cell(cell)
+            path = str(root / rel)
+            if not has_row(path, row):
+                return None
+            p, off, size = chunk_location(path, row, str(flat["layout_params"]["column"]))
+            return [(Path(p), off, size)]
         raise SchemaError(f"unknown layout {layout!r}")  # pragma: no cover - schema refuses it
 
     def scan(self) -> tuple[dict[str, dict[str, Any]], list[tuple[Path, int, int | None]]]:
@@ -2411,7 +2690,7 @@ def media_fingerprint(locations: Sequence[tuple[Path, int, int | None]], manifes
 
 class Benchmark:
     """A loaded benchmark folder. ``protocol_hash`` (= ``H(input_hash, scoring_hash)``) is computed by ``load``
-    from the yaml, the manifest, ``reader.py``, ``probe.py`` and ``yavih.versions`` only, so it is identical in every env."""
+    from the yaml, the manifest, ``reader.py``, ``eval.py`` and ``yavih.versions`` only, so it is identical in every env."""
 
     name: str
     spec: BenchmarkSpec
@@ -2462,23 +2741,27 @@ class Benchmark:
             bi = int(spec.protocol["background_index"])
             if not (0 <= bi < len(classes)):
                 raise ManifestError(f"{self.name}: protocol.background_index {bi} is outside classes.csv (0..{len(classes) - 1})")
-        # reader.py decides what is handed over (input side) and probe.py decides targets, metrics and the external call
-        # (scoring side). Neither enters a hash (yavih-protocol-5: identity is the declaration, behaviour is pinned by
-        # protocol_version and the conformance fixture); the digest of each one's normalized source is PROVENANCE,
-        # recorded in sidecars and results so two numbers under one hash can be traced to the code that produced them.
+        # reader.py decides what is handed over (input side) and eval.py decides the scorer, targets, metrics and the
+        # external call (scoring side). Neither enters a hash (yavih-protocol-5: identity is the declaration, behaviour
+        # is pinned by protocol_version and the conformance fixture); the digest of each one's normalized source is
+        # PROVENANCE, recorded in sidecars and results so two numbers under one hash can be traced to the code that
+        # produced them.
         reader_py = self.folder / "reader.py"
-        probe_py = self.folder / "probe.py"
+        eval_py = eval_path(self.folder)
         self.reader_sha256: str | None = hashing.source_sha256(reader_py.read_bytes()) if reader_py.is_file() else None
-        self.probe_sha256: str | None = hashing.source_sha256(probe_py.read_bytes()) if probe_py.is_file() else None
-        #: ``{"probe": sha256|None, "reader": sha256|None}``: the folder's source provenance (never identity).
-        self.folder_source: dict[str, str | None] = {"probe": self.probe_sha256, "reader": self.reader_sha256}
+        self.eval_sha256: str | None = hashing.source_sha256(eval_py.read_bytes()) if eval_py is not None else None
+        #: ``{"eval": sha256|None, "reader": sha256|None}``: the folder's source provenance (never identity).
+        self.folder_source: dict[str, str | None] = {"eval": self.eval_sha256, "reader": self.reader_sha256}
         raw = spec.raw
+        self.codecs: dict[str, Any] = self._codec_registry()
+        schema = spec.output_contract.schema
+        codec_versions = {str(e["type"]): int(self.codecs[str(e["type"])].version) for e in (schema or {}).values()}
         hashes = hashing.protocol_hashes(
             name=spec.name,
             protocol_version=spec.protocol_version,
             protocol=raw["protocol"],
             splits=raw["splits"],
-            streams=raw["streams"],
+            streams=hashing.fields_view(raw["fields"]),
             input_contract=raw["input_contract"],
             output_contract=raw["output_contract"],
             external=raw["external"],
@@ -2488,6 +2771,7 @@ class Benchmark:
             manifest=raw["manifest"],
             manifest_hash=self.manifest_hash,
             readout=spec.readout,
+            codec_versions=codec_versions,
         )
         self.hashes: hashing.ProtocolHashes = hashes
         self.protocol_hash = hashes.protocol_hash
@@ -2496,9 +2780,9 @@ class Benchmark:
         self.scoring_hash: str = hashes.scoring_hash
         _hash_history.register(self.name, spec.aliases, spec.changelog)
         # The per-set metrics are concrete specs after expansion at load, overlaid by
-        # the folder's probe.py METRICS for this benchmark only.
+        # the folder's eval.py METRICS for this benchmark only.
         sets = list(spec.manifest.label.sets) if spec.manifest.label.sets else None
-        hooks = folder_hooks(self.folder) if self.probe_sha256 is not None else FolderHooks()
+        hooks = folder_hooks(self.folder) if self.eval_sha256 is not None else FolderHooks()
         self.metric_specs: dict[str, Any] = {}
         for names, kinds in ((spec.metrics.list, ("metric", "disclosure")), (spec.metrics.floors, ("floor",)), (spec.metrics.controls, ("control",))):
             self.metric_specs.update(_resolve_metric_names(names, spec.readout, sets=sets, kinds=kinds, folder=hooks.metrics))
@@ -2670,10 +2954,24 @@ class Benchmark:
             raise ImportError(f"{path} must define iter_samples(bench, split, rows, batch_size, canaries, canary_seed, *, shard=None, roots=None)")
         return mod
 
-    def probe_module(self) -> Any | None:
-        """The folder's ``probe.py`` as a module (its hooks), or ``None`` when the folder ships none."""
-        path = self.folder / "probe.py"
-        return _load_module(path, "yavih_benchmark_probe") if path.is_file() else None
+    def _codec_registry(self) -> dict[str, Any]:
+        """Every codec this folder's schema may name: the built-ins, entry points and the folder's ``eval.py``
+        ``CODECS``."""
+        from yavih.codecs import registry
+
+        hooks = folder_hooks(self.folder) if eval_path(self.folder) is not None else FolderHooks()
+        return registry(hooks.codecs)
+
+    def output_schema(self) -> dict[str, tuple[dict[str, Any], Any]]:
+        """``{key: (entry, codec)}`` of the folder's output schema (the default feature matrix when none is declared)."""
+        from yavih.codecs import resolve_schema
+
+        return resolve_schema(self.spec.output_contract.resolved_schema, self.codecs)
+
+    def eval_module(self) -> Any | None:
+        """The folder's ``eval.py`` as a module (its hooks), or ``None`` when the folder ships none."""
+        path = eval_path(self.folder)
+        return _load_module(path, "yavih_benchmark_eval") if path is not None else None
 
     def media_info(self) -> MediaInfoTable | None:
         """The site census ``$YAVIH_HOME/media_info/<name>-<manifest_hash12>.jsonl.gz``, or ``None``
@@ -2698,6 +2996,8 @@ class Benchmark:
             "input_contract": json.loads(json.dumps(raw["input_contract"])),
             "output_contract": json.loads(json.dumps(raw["output_contract"])),
             "facts": json.loads(json.dumps({k: self.spec.protocol[k] for k in self.spec.input_contract.facts})),
+            "fields": {**{n: {"storage": "file", "kind": s.kind} for n, s in self.spec.streams.items()},
+                       **{n: {"storage": "cell", "kind": c.kind} for n, c in self.spec.cells.items()}},
         }
         from yavih.bridge import BenchmarkView
 
@@ -2832,14 +3132,14 @@ def list_benchmarks(*, data: dict | None = None, scan: bool = True) -> list[dict
         try:
             bench = Benchmark.from_dir(folder, data=data)
         except BenchmarkError as e:
-            rows.append({"name": name, "aliases": [], "readout": None, "capability": [], "clips": {}, "media_gb": None, "source_kind": None, "obtain": None, "status": "invalid", "error": f"{type(e).__name__}: {e}", "folder": str(folder)})
+            rows.append({"name": name, "aliases": [], "scorer": None, "capability": [], "clips": {}, "media_gb": None, "source_kind": None, "obtain": None, "status": "invalid", "error": f"{type(e).__name__}: {e}", "folder": str(folder)})
             continue
         status = _status_word(bench, scan=scan)
         rows.append(
             {
                 "name": bench.name,
                 "aliases": list(bench.spec.aliases),
-                "readout": bench.spec.readout,
+                "scorer": bench.spec.readout,
                 "capability": list(bench.spec.capability),
                 "clips": {s: bench.n_rows(s) for s in bench.spec.splits.read_values()},
                 "media_gb": bench.spec.budget.media_gb,
@@ -2917,7 +3217,7 @@ def bench_info(ref: str, *, readme_only: bool = False, setup: bool = False, data
     }
 
 
-_FOLDER_FILES = ("benchmark.yaml", "README.md", "setup.md", "manifest.csv.gz", "classes.csv", "reader.py", "probe.py", "bridge_template.py", "make_manifest.py")
+_FOLDER_FILES = ("benchmark.yaml", "README.md", "setup.md", "manifest.csv.gz", "classes.csv", "reader.py", "eval.py", "bridge_template.py", "make_manifest.py")
 #: ``$YAVIH_HOME/benchmarks/<name>/.yavih_fetch.json``: the yavih version, protocol hash and per-file sha256 of the
 #: source a copy was synced from, so a copy left behind by an older yavih is detected instead of silently winning.
 FETCH_STAMP = ".yavih_fetch.json"
@@ -3079,7 +3379,7 @@ def _decode_sample(bench: Benchmark, picks: Sequence[tuple[str, int]]) -> dict[s
     try:
         from yavih.media import decode as _decode
 
-        lib = {k: _decode.decoder_info(k) for k in sorted({s.kind for s in bench.spec.streams.values()})}
+        lib = {k: _decode.decoder_info(k) for k in sorted({s.kind for s in bench.spec.streams.values()} & {"video", "audio", "image"})}
     except DecoderMissing as e:
         return {"ok": 0, "failed": 0, "skipped": f"no decoder installed: {e}"}
     ok = failed = 0
@@ -3088,6 +3388,12 @@ def _decode_sample(bench: Benchmark, picks: Sequence[tuple[str, int]]) -> dict[s
         try:
             s = bench.sample(split, r)
             for st in s.streams.values():
+                if st.kind == "array":
+                    st.arrays()  # stored arrays: they load without pickle
+                    continue
+                if st.kind not in ("video", "audio", "image"):
+                    st.bytes()  # an opaque file: readable is all yavih checks
+                    continue
                 if st.kind in ("video", "audio") and st.info.get("has_track") is False:
                     continue  # a file without this track: nothing to decode, and not a failure
                 if st.kind == "video":
@@ -3128,6 +3434,13 @@ def _external_status(bench: Benchmark) -> dict[str, dict[str, Any]]:
     from yavih.external import status
 
     return {e.name: status(e.name, e.pip, e.version_pin) for e in bench.spec.external}
+
+
+def _snapshot_status(bench: Benchmark, roots: Mapping[str, str]) -> dict[str, Any]:
+    """``{root: snapshot_status}`` of every root that declares a Hugging Face revision (``yavih.hf``)."""
+    from yavih.hf import snapshot_status
+
+    return {n: snapshot_status(roots[n], r.hf) for n, r in bench.spec.data.roots.items() if r.hf and n in roots}
 
 
 def bench_verify(ref: str, *, census: bool = False, decode_sample: int = 32, fingerprint_sample: int = 256, data: dict | None = None) -> dict[str, Any]:
@@ -3208,6 +3521,7 @@ def bench_verify(ref: str, *, census: bool = False, decode_sample: int = 32, fin
         "external": _external_status(bench),
         "media_fingerprint": fingerprint,
         "data_roots": dict(roots),
+        "snapshots": _snapshot_status(bench, roots),
         "data_status_path": status.path,
         "status": status.status_word(),
     }

@@ -31,7 +31,7 @@ classes on the official eval set.
 
 ### Protocol
 
-`readout: clf` with `label.kind: multi` (BCE attentive probe on frozen features), `protocol_version: 1`.
+`scorer: clf` with `label.kind: multi` (BCE attentive probe on frozen features), `protocol_version: 1`.
 Headline metric **`map`** = macro-averaged average precision over the fixed 200-class vocabulary on
 the full official eval set; a class without eval positives would count AP = 0 (there is none:
 `effective_pos_classes = 200`, minimum 32 positives per class). Chance `map ≈ 0.0189` (mean per-class

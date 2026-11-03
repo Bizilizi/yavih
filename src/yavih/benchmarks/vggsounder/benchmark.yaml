@@ -1,12 +1,12 @@
 # vggsounder: human docs in README.md, the agent's contracts in setup.md.
 # Values under `manifest`, `upstream` and `budget.clips` are printed by make_manifest.py (`make_manifest.py --check`
 # confirms them); `budget.media_gb` and `curation.short_clips` come from prepare/04_media_facts.py.
-schema_version: 2
+schema_version: 3
 name: vggsounder
 aliases: []
 title: VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes)
 capability: [audio-visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
-readout: clf
+scorer: clf
 protocol_version: 1
 header:
   name: VGGSounder
@@ -111,8 +111,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:
+fields:
   video:
+    storage: file
     kind: video
     media_column: rel_video
     root: media_root
@@ -120,6 +121,7 @@ streams:
     layout_params: {}
     required: true
   audio:
+    storage: file
     kind: audio
     media_column: rel_audio
     root: media_root

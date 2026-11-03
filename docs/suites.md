@@ -34,10 +34,10 @@ groups:
 | `name` | `[a-z0-9][a-z0-9_-]*`, at most 64 characters; equals the file name (`<name>.yaml`) when loaded by name |
 | `description` | one non-empty line |
 | `groups` | non-empty list of `{capability, entries}`; each capability at most once |
-| `groups[].capability` | `audio`, `visual`, `audio-visual`, `temporal`, `spatial` or `retrieval` (`yavih.suites.CAPABILITIES`, the vocabulary of `benchmark.yaml` `capability` too) |
+| `groups[].capability` | `audio`, `visual`, `audio-visual`, `temporal`, `spatial`, `retrieval` or `generation` (`yavih.suites.CAPABILITIES`, the vocabulary of `benchmark.yaml` `capability` too) |
 | `groups[].entries[].benchmark` | a benchmark name or alias (`yavih bench list`); an alias is stored as the folder's name |
 | `groups[].entries[].readings` | non-empty list of distinct reading tags; each one a reading the folder's `bridge_template.py` declares (a literal `"reading"`, or the `choices` of its `reading` argument) |
-| `groups[].entries[].join` | `false` (default) or `true`: the folder's `probe.py` defines `join()`, and the readings are scored together by `yavih report build --join <benchmark> <reading>=RUN ...` ([results](results.md#joins)); needs at least two readings |
+| `groups[].entries[].join` | `false` (default) or `true`: the folder's `eval.py` defines `join()`, and the readings are scored together by `yavih report build --join <benchmark> <reading>=RUN ...` ([results](results.md#joins)); needs at least two readings |
 | `groups[].entries[].required` | `true` (default) or `false`: an optional entry is marked `(optional)` in the completeness views |
 | `groups[].entries[].status` | `packaged` (default: the benchmark resolves to a folder) or `pending` (no folder yet: listed, never planned or checked) |
 

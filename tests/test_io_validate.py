@@ -27,7 +27,7 @@ import pytest
 from yavih import hashing
 from yavih.io.diff import diff_features
 from yavih.io.finalize import build_meta, finalize, meta_fingerprint, read_meta
-from yavih.io.format import FEATURE_FORMAT_VERSION, FormatError
+from yavih.io.format import FEATURE_FORMAT_VERSION, READABLE_FEATURE_FORMATS, FormatError
 from yavih.io.inspect import inspect_features
 from yavih.io.stage import StageError, stage_features
 from yavih.io.validate import (
@@ -424,7 +424,7 @@ def test_clean_passes_and_writes_meta(split_dir: Path) -> None:
 
     meta = read_meta(split_dir)
     assert rep.meta_path == str(split_dir / "_meta.json")
-    assert meta["format_version"] == 4
+    assert meta["format_version"] == FEATURE_FORMAT_VERSION == 5
     assert (meta["model"], meta["reading"]) == ("synth-model", "v")
     assert meta["split"] == "train" and meta["benchmark"]["manifest_hash"] == MH
     assert meta["benchmark"]["media_info_sha256"] is None  # the sidecar's benchmark block passes through
@@ -442,7 +442,7 @@ def test_clean_passes_and_writes_meta(split_dir: Path) -> None:
     assert meta["validation"]["notes"][0]["code"] == "N_ELIGIBILITY"
     sidecars = [json.loads((split_dir / f"shard-{i:06d}.json").read_text()) for i in range(2)]
     fp = hashing.features_fingerprint(
-        format_version=4, dtype="float16", N=4, D=8, pos_mode="constant", pos_sha256=meta["features"]["pos_sha256"],
+        format_version=FEATURE_FORMAT_VERSION, dtype="float16", N=4, D=8, pos_mode="constant", pos_sha256=meta["features"]["pos_sha256"],
         shards=[[s["shard"]["rows"][0], s["shard"]["rows"][1], s["tar"]["sha256"]] for s in sidecars], n_present=24,
     )
     assert meta["fingerprint"] == fp == meta_fingerprint(sidecars)
@@ -565,8 +565,8 @@ def test_E_FORMAT(split_dir: Path) -> None:
 
 
 def test_E_FORMAT_older_feature_set_must_be_re_extracted(split_dir: Path) -> None:
-    """Only this yavih's feature format is read; an older one is re-extracted."""
-    write_features(split_dir, format_version=FEATURE_FORMAT_VERSION - 1)
+    """Only the formats this yavih reads (4 and 5) are read; an older one is re-extracted."""
+    write_features(split_dir, format_version=min(READABLE_FEATURE_FORMATS) - 1)
     rep = validate_features(split_dir, bench=FakeBench())
     assert not rep.ok and codes(rep)["errors"].count("E_FORMAT") == 2
     assert "re-extract" in rep.errors[0].message and "unsupported format_version" in rep.errors[0].message
@@ -1537,7 +1537,7 @@ def test_finalize_rewrites_only_when_changed(tmp_path: Path) -> None:
 def test_read_meta_refuses_newer_format(tmp_path: Path) -> None:
     d = tmp_path / "s"
     d.mkdir()
-    (d / "_meta.json").write_text(json.dumps({"format_version": 5}))
+    (d / "_meta.json").write_text(json.dumps({"format_version": FEATURE_FORMAT_VERSION + 1}))
     with pytest.raises(FormatError):
         read_meta(d)
     (d / "_meta.json").write_text(json.dumps({"format_version": "1"}))
@@ -1881,3 +1881,43 @@ def test_superseded_and_current_input_hashes_agree_across_shards(split_dir: Path
     edit_sidecar(split_dir, 1, lambda sc: sc["benchmark"].update({"input_hash": IH}))
     assert validate_features(split_dir, bench=FakeBench()).ok
     assert "E_HASH_INPUT" not in codes(validate_features(split_dir, bench=None, write_meta=False))["errors"]
+
+
+# ----------------------------------------------------------------------------- eligibility is the scorer's verdict
+
+
+def test_eligibility_is_delegated_to_the_scorer(tmp_path, monkeypatch):
+    """validate measures the facts and asks the scorer: a scorer's own ``eligibility(view)`` decides (here it adds a
+    missing item), its declared ``output_keys`` must be present, and without a hook the ``requires`` rules apply."""
+    from yavih.readouts import registry
+    from yavih.readouts.eligibility import EligibilityView, requires_missing
+
+    seen: list[EligibilityView] = []
+
+    def picky(view: EligibilityView):
+        seen.append(view)
+        return ["custom"], ["the scorer wants more"]
+
+    clf = registry.get("clf")
+    picky_clf = registry.Scorer(
+        name="clf", version=clf.version, module=clf.module, kind="probe", label_kinds=clf.label_kinds, requires_t_bins=False,
+        requires_grid=False, train=clf.train, head=clf.head, loss=clf.loss, head_families=clf.head_families, losses=clf.losses,
+        floor_outputs=clf.floor_outputs, eligibility=picky, output_keys=frozenset({"feat", "pos"}),
+    )
+    bench = FakeBench(n_rows={"train": 6, "val": 6})
+    split_dir = tmp_path / "f" / "train"
+    write_features(split_dir, n_rows=6, n_shards=1, pos_mode="none")
+    try:
+        registry.register(picky_clf, replace=True)
+        rep = validate_features(split_dir, bench=bench, write_meta=False)
+    finally:
+        registry.reset()
+    assert rep.ok and rep.eligibility["eligible"] is False
+    assert rep.eligibility["missing"] == ["custom", "schema:pos"]  # pos_mode none: no pos key in the set
+    assert rep.eligibility["reason"].startswith("the scorer wants more; missing: custom, schema:pos")
+    v = seen[0]
+    assert v.scorer == "clf" and v.N == 4 and v.pos_mode == "none" and v.dense is False and v.output_keys == {"feat"}
+    # the default verdict on the same facts: nothing missing for clf
+    assert requires_missing(v) == ([], [])
+    rep2 = validate_features(split_dir, bench=bench, write_meta=False)
+    assert rep2.eligibility["eligible"] is True and rep2.eligibility["missing"] == []

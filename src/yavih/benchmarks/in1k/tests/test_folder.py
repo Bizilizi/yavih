@@ -32,8 +32,8 @@ _isolated_yavih_home = F.isolated_yavih_home
 spec, manifest_bytes, rows, bench = F.spec, F.manifest_bytes, F.rows, F.bench
 
 TOP_LEVEL = [
-    "schema_version", "name", "aliases", "title", "capability", "header", "readout", "protocol_version", "changelog", "source", "obtain",
-    "budget", "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract", "external", "protocol",
+    "schema_version", "name", "aliases", "title", "capability", "header", "scorer", "protocol_version", "changelog", "source", "obtain",
+    "budget", "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract", "external", "protocol",
     "metrics", "readout_params",
 ]
 IMAGE_INFO_VOCAB = {"width", "height", "container", "bytes"}  # RawStream.info keys valid for kind image
@@ -53,13 +53,13 @@ def test_folder_lint_clean():
 def test_folder_contents():
     scripts = sorted(p.name for p in (HERE / "prepare").glob("*.sh"))
     assert scripts and all(re.match(r"^\d{2}_", s) for s in scripts), scripts
-    assert not (HERE / "probe.py").exists()  # external: [] -> no authors' code to call
+    assert not (HERE / "eval.py").exists()  # external: [] -> no authors' code to call
 
 
 def test_yaml_schema2_top_level(spec):
     assert list(spec) == TOP_LEVEL
-    assert spec["schema_version"] == 2
-    assert spec["name"] == "in1k" == HERE.name and spec["readout"] == "clf"
+    assert spec["schema_version"] == 3
+    assert spec["name"] == "in1k" == HERE.name and spec["scorer"] == "clf"
     assert spec["aliases"] == ["imagenet1k", "imagenet"]
 
 
@@ -75,7 +75,7 @@ def test_protocol_holds_label_facts_only(spec):
 
 
 def test_streams_block(spec):
-    assert spec["streams"] == {
+    assert F.file_fields(spec) == {
         "image": {"kind": "image", "media_column": "rel_media", "root": "media_root", "layout": "dir", "layout_params": {}, "required": True}
     }
     assert spec["manifest"]["columns"] == {"rel_media": {"type": "str", "role": "media", "stream": "image"}}
@@ -85,7 +85,7 @@ def test_streams_block(spec):
 def test_input_contract(spec):
     ic = spec["input_contract"]
     assert set(ic) == {"handed_over", "info", "facts", "materialize"}
-    assert set(ic["handed_over"]) == set(spec["streams"]) == set(ic["info"])
+    assert set(ic["handed_over"]) == set(F.file_fields(spec)) == set(ic["info"])
     assert "exactly as stored" in ic["handed_over"]["image"]
     assert ic["info"]["image"] == ["width", "height", "container", "bytes"]
     assert set(ic["info"]["image"]) <= IMAGE_INFO_VOCAB

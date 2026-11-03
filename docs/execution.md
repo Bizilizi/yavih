@@ -270,7 +270,7 @@ One JSON object per line, sorted keys:
 | kind | one per | `cmd` | `out` | `depends_on` |
 |---|---|---|---|---|
 | `extract` | entry × split of the benchmark's `train`, `eval`, `floor` and `folds` roles × shard | `python -m yavih.extract …` | `<run_dir>/features/<split>` | none |
-| `probe` | entry × seed | `python -m yavih.cli probe run <run_dir> --seeds <k> [--results R] [--waive …]` | `<run_dir>` | every extract unit of the entry |
+| `probe` | entry × seed | `python -m yavih.cli eval run <run_dir> --seeds <k> [--results R] [--waive …]` | `<run_dir>` | every extract unit of the entry |
 | `report` | plan | `python -m yavih.cli report build '<out>/*' --fmt md --out <out>/_report/report.md` | `<out>/_report` | every probe unit |
 
 - The run directory is `<out>/<benchmark>/<model>/<reading>/` with the canonical benchmark name.
@@ -401,7 +401,7 @@ For one unit, `exec`:
      a probe with `needs.scratch_gb > 0` the scratch root (`YAVIH_SCRATCH` → `[scratch] root` →
      `SLURM_TMPDIR`) is checked for space (exit 3 when short) and stale `<unit_id>.<host>.<pid>`
      scratch directories (dead pid, or older than 36 h) are swept. Without a scratch root the probe
-     reads the features in place (memmap backend, `W_SIZE`), as `probe run` does;
+     reads the features in place (memmap backend, `W_SIZE`), as `eval run` does;
 7. maps the outcome to a status and an exit code, and writes the final record to
    `<out>/logs/last.json` and `<out>/logs/last.<id>.json`; it prints
    `[yavih] unit <id> <kind> <status> wall_s=… exit=N` on stderr.
@@ -425,7 +425,7 @@ environment while the launcher starts the model environment.
 `--deadline` takes the forms listed in [cli](cli.md#--deadline). `--deadline slurm` is
 `SLURM_JOB_END_TIME − --deadline-margin` (default 900 s); inside a SLURM job without a usable
 `SLURM_JOB_END_TIME` it is `E_DEADLINE_SPEC` (exit 1), never "now"; outside SLURM it means no
-deadline. `exec` exports the resolved epoch as `YAVIH_DEADLINE`, which `extract` and `probe run`
+deadline. `exec` exports the resolved epoch as `YAVIH_DEADLINE`, which `extract` and `eval run`
 inherit:
 
 - an extract checks after every batch whether the next batch (estimated from the batches so far)

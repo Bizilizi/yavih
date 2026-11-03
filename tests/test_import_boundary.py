@@ -154,7 +154,8 @@ def test_no_extra_for_an_original_author_package():
 
     project = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]
     extras = project.get("optional-dependencies") or {}
-    assert set(extras) <= {"media", "probe", "dev"}, sorted(extras)
+    # hf: yavih's own parquet layout and Hugging Face data roots (pyarrow, huggingface_hub), not an author's package
+    assert set(extras) <= {"media", "probe", "dev", "hf"}, sorted(extras)
     deps = list(project.get("dependencies") or []) + [d for v in extras.values() for d in v]
     for pkg in AUTHOR_PACKAGES:
         assert not any(pkg in d.lower() for d in deps), f"{pkg} appears in pyproject dependencies {deps}"

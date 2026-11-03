@@ -55,7 +55,7 @@ _CI_BINARY = frozenset({"acc", "acc@0.5", "acc@0.3", "center_in_gt"})
 #: (``map``); ``pooled_binomial`` pools the fold accuracies. ``Benchmark.load`` refuses any other
 #: ``metrics.ci`` pairing;
 #: ``tests/test_metrics_intervals.py`` pins this table equal to ``yavih.metrics.intervals.admissible``. A folder
-#: metric (``probe.py`` ``METRICS``) adds its own: ``MetricSpec.ci`` names the kinds its ``per_clip`` supports.
+#: metric (``eval.py`` ``METRICS``) adds its own: ``MetricSpec.ci`` names the kinds its ``per_clip`` supports.
 CI_ADMISSIBLE: dict[str, frozenset[str]] = {
     "binomial": _CI_BINARY,
     "bootstrap_clip": _CI_BINARY | frozenset({
@@ -137,6 +137,11 @@ class MetricSpec:
     #: folder metrics: the ``metrics.ci`` kinds this metric admits (``binomial`` / ``pooled_binomial`` need a per-row
     #: 0/1 ``per_clip``, ``bootstrap_clip`` any ``per_clip``); registry metrics use ``CI_ADMISSIBLE``.
     ci: frozenset[str] = frozenset()
+    #: folder metrics whose statistic is not a mean of per-clip values (a distribution distance such as KAD):
+    #: ``interval(kind, outputs, targets, protocol, split_meta) -> (lo, hi)``, used for the kinds in ``ci`` in place of
+    #: the per-clip bootstrap; it must resample clips with ``yavih.metrics.intervals.bootstrap_draws`` and the
+    #: ``split_meta["bootstrap"]`` settings, so every interval of a result shares one resampling scheme.
+    interval: Callable[..., Any] | None = field(default=None, compare=False)
     #: folder metrics: one line naming what computes it (an external package's own metric name and definition)
     description: str = field(default="", compare=False)
 
@@ -159,8 +164,10 @@ class MetricSpec:
         object.__setattr__(self, "ci", frozenset(self.ci or ()))
         if self.ci - CI_KINDS:
             raise ValueError(f"MetricSpec {self.name}: ci kinds {sorted(self.ci - CI_KINDS)} not in {sorted(CI_KINDS)}")
-        if self.ci and self.per_clip is None:
-            raise ValueError(f"MetricSpec {self.name}: declaring ci {sorted(self.ci)} needs a per_clip function")
+        if self.ci and self.per_clip is None and self.interval is None:
+            raise ValueError(f"MetricSpec {self.name}: declaring ci {sorted(self.ci)} needs a per_clip or an interval function")
+        if self.interval is not None and not callable(self.interval):
+            raise ValueError(f"MetricSpec {self.name}: interval must be callable")
         if self.per_clip is not None and not callable(self.per_clip):
             raise ValueError(f"MetricSpec {self.name}: per_clip must be callable")
 
@@ -285,7 +292,7 @@ _pattern("auc_pr_<set>_floor", "classification", "auc_pr_floor", ["clf"], kind="
 _reg(["acc_mean", "acc_pstd"], "classification", ["clf"])
 _reg(["acc_per_fold"], "classification", ["clf"], shape="list")
 _reg(["n_folds"], "classification", ["clf"], kind="disclosure")
-# (avsync's offset metrics and floor-arm controls live in that folder's probe.py METRICS)
+# (avsync's offset metrics and floor-arm controls live in that folder's eval.py METRICS)
 # seq
 _SEQ_KEYS = ["num_segments", "segments_scored", "segment_offset", "background_index"]
 _reg(["seg_acc", "clip_acc", "seg_acc_boundary"], "segment", ["seq"], keys=_SEQ_KEYS)
@@ -355,7 +362,7 @@ def resolve(name: str, *, sets: Iterable[str] | None = None) -> MetricSpec:
 
 def resolve_names(
     names: Iterable[str],
-    readout: str,
+    readout: str | Iterable[str],
     *,
     sets: Iterable[str] | None = None,
     kinds: Iterable[str] | None = None,
@@ -368,17 +375,20 @@ def resolve_names(
     for name in names:
         spec = resolve(name, sets=sets)
         if not allows(spec, readout):
-            raise MetricNotAllowed(f"metric {name!r} is not allowed for readout {readout!r} (allowed: {sorted(spec.readouts)})")
+            shown = readout if isinstance(readout, str) else "/".join(sorted(readout))
+            raise MetricNotAllowed(f"metric {name!r} is not allowed for scorer {shown!r} (allowed: {sorted(spec.readouts)})")
         if kinds_set is not None and spec.kind not in kinds_set:
             raise MetricNotAllowed(f"metric {name!r} has kind {spec.kind!r}, expected one of {sorted(kinds_set)}")
         out[name] = spec
     return out
 
 
-def allows(spec: Any, readout: str) -> bool:
-    """Whether ``spec`` (a ``MetricSpec``) may be listed by a benchmark with this readout."""
+def allows(spec: Any, readout: str | Iterable[str]) -> bool:
+    """Whether ``spec`` (a ``MetricSpec``) may be listed by a benchmark scored by ``readout``: one scorer name, or the
+    names a scorer answers to (``Scorer.families()``: itself and its family)."""
     rs = frozenset(getattr(spec, "readouts", ()) or ())
-    return readout in rs or ANY_READOUT in rs
+    names = {readout} if isinstance(readout, str) else set(readout)
+    return bool(names & rs) or ANY_READOUT in rs
 
 
 def protocol_keys_for(specs: Iterable[MetricSpec]) -> frozenset[str]:

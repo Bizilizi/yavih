@@ -25,11 +25,13 @@ import inspect
 import io
 import os
 import tarfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from yavih import codecs as _codecs
 from yavih import hashing
 from yavih.io.format import (
     CONSTANT_POS_MEMBER,
@@ -42,6 +44,7 @@ from yavih.io.format import (
     canary_basename,
     member_basename,
     npy_bytes,
+    output_member_name,
     pos_sha256,
     shard_sidecar_name,
     shard_tar_name,
@@ -117,6 +120,18 @@ def _to_pos(x: Any) -> np.ndarray:
     return np.ascontiguousarray(arr, dtype=np.float32)
 
 
+def output_schema_of(bench: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """``(declared schema | None, {key: (entry, codec)} | None)``: ``None, None`` for the default feature matrix."""
+    oc = getattr(getattr(bench, "spec", None), "output_contract", None)
+    schema = getattr(oc, "schema", None) if oc is not None else None
+    if schema is None and isinstance(oc, Mapping):
+        schema = oc.get("schema")
+    if schema is None or _codecs.is_default_schema(schema):
+        return None, None
+    codecs = getattr(bench, "codecs", None) or _codecs.registry()
+    return {str(k): dict(v) for k, v in schema.items()}, _codecs.resolve_schema(schema, codecs)
+
+
 def _duration(info: Any) -> float | None:
     d = info.get("duration_s") if isinstance(info, dict) else None
     return None if d is None else float(d)
@@ -148,12 +163,19 @@ class FeatureWriter:
             raise ValueError(f"shard index {index} out of range for n={n}")
         if lo < 0 or hi < lo:
             raise ValueError(f"rows must be a half-open [lo, hi) with 0 <= lo <= hi, got {rows}")
-        dtype = str(getattr(bridge, "dtype", describe.get("dtype")))
-        pos_mode = str(getattr(bridge, "pos_mode", describe.get("pos_mode")))
-        if dtype not in FEATURE_DTYPES:
-            raise ValueError(f"dtype {dtype!r} not in {sorted(FEATURE_DTYPES)}")
-        if pos_mode not in POS_MODES:
-            raise ValueError(f"pos_mode {pos_mode!r} not in {sorted(POS_MODES)}")
+        # The output schema: the default feature matrix (written exactly as format 4: .feat.npy / .pos.npy and the
+        # `features` block) or a declared schema (generic: one member per key, the `outputs` block).
+        self.schema, self.resolved = output_schema_of(bench)
+        self.generic = self.resolved is not None
+        if self.generic:
+            dtype, pos_mode = "float32", "none"  # unused by the generic path; the `features` block records nulls
+        else:
+            dtype = str(getattr(bridge, "dtype", describe.get("dtype")))
+            pos_mode = str(getattr(bridge, "pos_mode", describe.get("pos_mode")))
+            if dtype not in FEATURE_DTYPES:
+                raise ValueError(f"dtype {dtype!r} not in {sorted(FEATURE_DTYPES)}")
+            if pos_mode not in POS_MODES:
+                raise ValueError(f"pos_mode {pos_mode!r} not in {sorted(POS_MODES)}")
 
         self.split = split
         self.split_dir = split_dir_for(out_dir, split)
@@ -178,6 +200,9 @@ class FeatureWriter:
 
         self.N: int | None = None
         self.D: int | None = None
+        self.bound: dict[str, int] = {}  # generic: every schema symbol, bound by the first row that carries it
+        self.emitted: list[str] | None = None  # generic: the schema keys this feature set carries (fixed by the first write)
+        self.key_dtypes: dict[str, str] = {}  # generic: the stored dtype of each array key (one per feature set)
         self.members: list[dict[str, Any]] = []
         self.canary_members: list[dict[str, Any]] = []
         self.missing: list[dict[str, Any]] = []
@@ -291,7 +316,9 @@ class FeatureWriter:
         used = m.get("used")
         if not isinstance(used, dict):
             raise FeatureMetaError(clip_id, "row meta lacks `used` (what the bridge consumed per stream)")
-        missing = [s for s in (self.describe.get("input") or {}) if s not in used]
+        from yavih.bridge import input_streams
+
+        missing = [s for s in input_streams(self.describe.get("input")) if s not in used]
         if missing:
             raise FeatureMetaError(clip_id, f"`used` lacks stream(s) {missing} declared in describe()['input']")
         return m
@@ -402,6 +429,128 @@ class FeatureWriter:
                 self.members.append(entry)
                 self._written_rows.add(r)
                 self._last_row = r
+
+    def write_outputs(
+        self,
+        rows: list[int],
+        clip_ids: list[str],
+        outputs: Mapping[str, Any],
+        meta: list[dict] | None = None,
+        canary: bool = False,
+    ) -> None:
+        """The generic path (a declared ``output_contract.schema``): ``outputs = {key: values}`` with one value per
+        row for every key the feature set carries (an ``[B, ...]`` array or a list). Every non-optional key is
+        required, the carried keys are fixed by the first write, each value passes its codec's ``check`` (symbols
+        bound once per feature set; ``FeatureShapeError`` for shape/dtype, ``FeatureValueError`` for values), and
+        one ``{row}.{key}.{ext}`` member is written per key after the row's ``.json``."""
+        self._check_open()
+        if not self.generic:
+            raise RuntimeError("write_outputs: this benchmark has the default schema; use write(rows, clip_ids, feats, pos)")
+        assert self.resolved is not None
+        rows = [int(r) for r in rows]
+        clip_ids = [str(c) for c in clip_ids]
+        if meta is not None and len(meta) != len(rows):
+            raise AssertionError(f"write_outputs: len(meta)={len(meta)} != len(rows)={len(rows)}")
+        if len(rows) == 0:
+            return
+        first = clip_ids[0]
+        unknown = sorted(set(outputs) - set(self.resolved))
+        if unknown:
+            raise FeatureShapeError(first, tuple(unknown), tuple(self.resolved))
+        keys = [k for k in self.resolved if k in outputs]
+        missing = [k for k, (spec, _) in self.resolved.items() if k not in outputs and not spec.get("optional", False)]
+        if missing:
+            raise FeatureMetaError(first, f"outputs lack the schema key(s) {missing}")
+        if self.emitted is None:
+            self.emitted = keys
+        elif keys != self.emitted:
+            raise FeatureMetaError(first, f"outputs carry keys {keys}, earlier rows carried {self.emitted} (one key set per feature set)")
+        per_key: dict[str, list[Any]] = {}
+        for k in keys:
+            vals = outputs[k]
+            seq = list(vals) if not isinstance(vals, np.ndarray) else [vals[i] for i in range(vals.shape[0])]
+            if len(seq) != len(rows):
+                raise AssertionError(f"write_outputs: outputs[{k!r}] holds {len(seq)} values for {len(rows)} rows")
+            per_key[k] = seq
+
+        if canary:
+            for r, cid in zip(rows, clip_ids, strict=True):
+                if r not in self._written_rows:
+                    raise ValueError(f"{cid}: canary of row {r}, which was not written in this shard")
+            self._canary_phase = True
+        else:
+            if self._canary_phase:
+                raise ValueError("regular members after canary members (canaries come after all regular members)")
+            for r, cid in zip(rows, clip_ids, strict=True):
+                self._check_row(r, cid)
+            if any(b <= a for a, b in zip([self._last_row, *rows], rows, strict=False)):
+                raise ValueError(f"rows {rows} not strictly ascending after row {self._last_row}")
+
+        # every value is checked before any member of this call is written: a bad call writes nothing
+        encoded: list[dict[str, bytes]] = [{} for _ in rows]
+        header_lens: list[dict[str, int]] = [{} for _ in rows]
+        for k in keys:
+            spec, codec = self.resolved[k]
+            for i, cid in enumerate(clip_ids):
+                v = per_key[k][i]
+                if codec.name == "array":
+                    v = _codecs.to_numpy(v)
+                    if v.dtype.name != self.key_dtypes.setdefault(k, v.dtype.name):
+                        raise FeatureShapeError(cid, (k, v.dtype.name), (k, self.key_dtypes[k]))
+                findings = codec.check(v, spec, self.bound)
+                errors = [f for f in findings if f.is_error]
+                if errors:
+                    msg = f"output {k!r}: " + "; ".join(f"{f.code}: {f.message}" for f in errors)
+                    if any(f.code == "E_MEMBERS" for f in errors):
+                        raise FeatureShapeError(cid, (k,), (msg,))
+                    raise FeatureValueError(cid, msg)
+                payload = codec.encode(v, spec)
+                encoded[i][k] = payload
+                if codec.name == "array":
+                    header_lens[i][k] = len(payload) - int(_codecs.to_numpy(v).nbytes)
+        metas = [self._check_meta(cid, meta[i] if meta is not None else None) for i, cid in enumerate(clip_ids)]
+        for i, (r, cid) in enumerate(zip(rows, clip_ids, strict=True)):
+            m = metas[i]
+            rec: dict[str, Any] = {"row": r, "clip_id": cid, "media_key": m.pop("media_key", None), "media": m.pop("media"), "used": m.pop("used")}
+            if canary:
+                rec["canary_of"] = r
+            m.pop("canary_of", None)
+            rec.update(m)
+            base = canary_basename(r) if canary else member_basename(r)
+            self._add_member(base + ".json", hashing.canon(jsonable(rec)).encode("utf-8"))
+            parts: dict[str, dict[str, int]] = {}
+            for k in keys:
+                spec, codec = self.resolved[k]
+                payload = encoded[i][k]
+                off = self._add_member(output_member_name(r, k, codec.ext_for(spec), canary=canary), payload)
+                part = {"offset_data": off, "nbytes": len(payload)}
+                if k in header_lens[i]:
+                    part["header_len"] = header_lens[i][k]
+                    part["nbytes"] = len(payload) - header_lens[i][k]
+                parts[k] = part
+            entry: dict[str, Any] = {
+                "row": r, "clip_id": cid, "media_key": rec["media_key"], "parts": parts,
+                "duration_s": {str(k): _duration(v) for k, v in rec["media"].items()},
+            }
+            if canary:
+                self.canary_members.append(entry)
+            else:
+                self.members.append(entry)
+                self._written_rows.add(r)
+                self._last_row = r
+
+    def _outputs_block(self) -> dict[str, Any]:
+        """The sidecar's ``outputs`` block: the declared schema (``null`` = the default feature matrix), its sha256,
+        the bound symbols and, per carried key, the codec, its version, the member extension and an array's dtype."""
+        if not self.generic:
+            return {"schema": None, "schema_sha256": _codecs.schema_sha256(None),
+                    "bound": {"N": self.N, "D": self.D} if self.N is not None else {}, "keys": None}
+        assert self.resolved is not None
+        keys = {}
+        for k in self.emitted or []:
+            spec, codec = self.resolved[k]
+            keys[k] = {"codec": codec.name, "version": int(codec.version), "ext": codec.ext_for(spec), "dtype": self.key_dtypes.get(k)}
+        return {"schema": self.schema, "schema_sha256": _codecs.schema_sha256(self.schema), "bound": dict(self.bound), "keys": keys}
 
     def record_missing(self, row: int, clip_id: str, reason: str) -> None:
         """A missing row: it goes to the sidecar ``missing`` list and is NOT written."""
@@ -519,12 +668,13 @@ class FeatureWriter:
             },
             missing=sorted(self.missing, key=lambda m: m["row"]),
             features={
-                "dtype": self.dtype.name,
+                "dtype": None if self.generic else self.dtype.name,
                 "N": self.N,
                 "D": self.D,
                 "pos_mode": self.pos_mode,
                 "pos_sha256": pos_sha256(self._pos_payload) if self._pos_payload is not None else None,
             },
+            outputs=self._outputs_block(),
             bridge=self._bridge_block(),
             tar={"file": self.tar_path.name, "bytes": self._hf.nbytes, "sha256": self._hf.sha.hexdigest()},
             members=self.members,

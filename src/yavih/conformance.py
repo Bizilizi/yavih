@@ -2,7 +2,7 @@
 recorded next to the folder at its ``protocol_version`` and checked against tolerance.
 
 Identity is the declaration (``yavih-protocol-5``, :mod:`yavih.hashing`): no source file enters ``protocol_hash``.
-What pins the behaviour of the code behind a declared version — the folder's ``probe.py`` and the readouts and
+What pins the behaviour of the code behind a declared version — the folder's ``eval.py`` and the readouts and
 metrics of yavih alike — is this fixture. Every folder carries ``conformance/expected.json``; a change that moves
 its numbers beyond tolerance is ``E_CONFORMANCE_DRIFT`` until ``protocol_version`` is bumped (or the readout's
 ``VERSION``, which moves every folder on it) and the fixture is re-recorded.
@@ -11,7 +11,7 @@ The fixture holds no inputs. At check time a stable generator (sha256 in counter
 methods, which NEP 19 leaves free to change between releases) draws a small population of the folder's REAL
 manifest rows per role and fabricates probe outputs (and, for ``grid``, dense targets) in the readout's output
 shape; the folder's whole scoring path then runs on them: the readout's target construction, the metrics registry
-with the folder's protocol values, the folder's ``probe.py`` ``METRICS`` / ``score`` and the pinned external
+with the folder's protocol values, the folder's ``eval.py`` ``METRICS`` / ``score`` and the pinned external
 package where present. Only ``expected.json`` (a few KB) is stored. Population sizes keep ``1 / n`` above the
 default tolerance, so a single row scored differently still fails while an interpolation-level difference passes.
 
@@ -42,6 +42,7 @@ __all__ = [
     "DEFAULT_TOLERANCE",
     "EXPECTED_FILE",
     "POPULATION",
+    "population_builder",
     "ConformanceError",
     "Finding",
     "ConformanceReport",
@@ -205,7 +206,7 @@ class _Ctx:
     """What the target builders and the scoring step read from a ``ReadoutContext``: the folder, its protocol and
     manifests; never features. Duck-typed so that this module imports no torch."""
 
-    def __init__(self, bench: Any, probe_mod: Any, reading: str | None) -> None:
+    def __init__(self, bench: Any, eval_mod: Any, reading: str | None) -> None:
         from yavih.readouts.base import _json_native, resolve_metric_specs
 
         self.bench = bench
@@ -216,8 +217,8 @@ class _Ctx:
         self.ci = dict(bench.spec.metrics.ci)
         self.bootstrap = dict(bench.spec.metrics.bootstrap) if bench.spec.metrics.bootstrap else None
         self.roles = bench.roles()
-        self.metric_specs = resolve_metric_specs(bench.spec, probe_mod)
-        self.probe_mod = probe_mod
+        self.metric_specs = resolve_metric_specs(bench.spec, eval_mod)
+        self.eval_mod = eval_mod
         self.reading = reading
         self.seed = 0
         self._manifests: dict[str, Any] = {}
@@ -239,7 +240,7 @@ class _Ctx:
         return [m.clip_ids[i] for i in idx] if hasattr(m, "clip_ids") else [m.clip_id[i] for i in idx]
 
     def hook_targets(self, split: str, rows: np.ndarray) -> Any | None:
-        fn = getattr(self.probe_mod, "targets", None)
+        fn = getattr(self.eval_mod, "targets", None)
         if fn is None:
             return None
         return fn(self.bench, split, np.asarray(rows, dtype=np.int64))
@@ -247,7 +248,7 @@ class _Ctx:
     def scorer(self, splits: Sequence[str], rows: np.ndarray, targets: Any) -> Any:
         from yavih.readouts.base import _accepts_keyword
 
-        fn = getattr(self.probe_mod, "score", None)
+        fn = getattr(self.eval_mod, "score", None)
         if fn is None:
             return None
         split = "+".join(splits)
@@ -462,22 +463,32 @@ def _population_box(ctx: _Ctx, tag: str) -> dict[str, Any]:
             "eval_splits": list(ctx.roles["eval"]), "eval_rows": eval_rows}
 
 
+#: The built-in populations by scorer family: a scorer with ``family="clf"`` (kNN over pooled tokens, say) is
+#: checked on clf's population; a scorer with its own ``conformance_population`` uses that.
 _POPULATIONS = {"clf": _population_clf, "seq": _population_seq, "grid": _population_grid, "box": _population_box}
+
+
+def population_builder(scorer: Any) -> Any | None:
+    """The population builder of ``scorer``: its own ``conformance_population(ctx, tag)``, else the built-in one of
+    its family (``_POPULATIONS``), else ``None``."""
+    if getattr(scorer, "conformance_population", None) is not None:
+        return scorer.conformance_population
+    return _POPULATIONS.get(scorer.family or scorer.name)
 
 
 # --------------------------------------------------------------------------- compute
 
 
-def _readings(probe_mod: Any) -> list[str | None]:
-    """The readings a reading-routed ``score`` hook is checked under (``probe.py`` ``READINGS``), else ``[None]``."""
+def _readings(eval_mod: Any) -> list[str | None]:
+    """The readings a reading-routed ``score`` hook is checked under (``eval.py`` ``READINGS``), else ``[None]``."""
     from yavih.readouts.base import _accepts_keyword
 
-    fn = getattr(probe_mod, "score", None)
+    fn = getattr(eval_mod, "score", None)
     if fn is None or not _accepts_keyword(fn, "reading"):
         return [None]
-    readings = getattr(probe_mod, "READINGS", None)
+    readings = getattr(eval_mod, "READINGS", None)
     if not readings:
-        raise ConformanceError(E_UNSUPPORTED, "probe.py score() takes a reading but declares no READINGS tuple")
+        raise ConformanceError(E_UNSUPPORTED, "eval.py score() takes a reading but declares no READINGS tuple")
     return [str(r) for r in readings]
 
 
@@ -497,19 +508,24 @@ def compute(bench: Any) -> dict[str, Any]:
     Raises ``ConformanceError`` (``W_CONFORMANCE_SKIPPED`` when an external package is absent,
     ``E_CONFORMANCE_UNSUPPORTED`` for a readout without a population or a scoring refusal unrelated to an external
     package, whose own code and message are kept in the message text)."""
-    from yavih.readouts.base import ProbeRefused, evaluate_metrics, folder_probe
+    from yavih.readouts import registry
+    from yavih.readouts.base import ProbeRefused, evaluate_metrics, folder_eval
 
     readout = bench.spec.readout
-    build = _POPULATIONS.get(readout)
+    try:
+        scorer = registry.get(readout)
+    except registry.UnknownScorer as e:
+        raise ConformanceError(E_UNSUPPORTED, f"{bench.name}: {e}") from e
+    build = population_builder(scorer)
     if build is None:
-        raise ConformanceError(E_UNSUPPORTED, f"{bench.name}: no conformance population for readout {readout!r}")
+        raise ConformanceError(E_UNSUPPORTED, f"{bench.name}: scorer {readout!r} declares no conformance population")
     externals = _externals(bench)
-    probe_mod = folder_probe(bench)
+    eval_mod = folder_eval(bench)
     tag = f"{bench.manifest_hash}:conformance:{GENERATOR_VERSION}"
     values: dict[str, Any] = {}
     population: dict[str, Any] | None = None
-    for reading in _readings(probe_mod):
-        ctx = _Ctx(bench, probe_mod, reading)
+    for reading in _readings(eval_mod):
+        ctx = _Ctx(bench, eval_mod, reading)
         pop = build(ctx, tag)
         try:
             blocks = evaluate_metrics(ctx.metric_specs, outputs=pop["outputs"], targets=pop["targets"], protocol=ctx.protocol,
@@ -584,8 +600,20 @@ def _record_dict(bench: Any, computed: Mapping[str, Any]) -> dict[str, Any]:
             "protocol_hash": bench.protocol_hash, "scoring_hash": bench.scoring_hash,
             "folder_source": dict(getattr(bench, "folder_source", None) or {}),
             "externals": dict(computed.get("externals") or {}),
+            "scorer": _scorer_block(bench),
         },
     }
+
+
+def _scorer_block(bench: Any) -> dict[str, Any]:
+    """``{name, version, kind}`` of the folder's scorer: provenance of what scored the fixture (never compared)."""
+    from yavih.readouts import registry
+
+    try:
+        r = registry.get(bench.spec.readout)
+    except registry.UnknownScorer:
+        return {}
+    return {"name": r.name, "version": int(r.version), "kind": r.kind}
 
 
 def _compare(expected: Mapping[str, Any], got: Mapping[str, Any], tol: Mapping[str, float]) -> tuple[int, list[dict[str, Any]]]:
@@ -741,7 +769,7 @@ def record(bench: Any, *, same_version: bool = False, reason: str | None = None,
 
 def record_copied(bench: Any, source: Path | str, *, copied_from: str) -> dict[str, Any]:
     """Write ``bench``'s ``conformance/expected.json`` from the fixture of folder ``source`` instead of computing it:
-    for a folder whose scoring path IS ``source``'s (``yavih bench new --like``: the same manifest, classes, ``probe.py``
+    for a folder whose scoring path IS ``source``'s (``yavih bench new --like``: the same manifest, classes, ``eval.py``
     and metrics) when the external package that path needs is absent here (:func:`record` raises
     ``W_CONFORMANCE_SKIPPED``). The values, population, generator and external versions are ``source``'s; every
     identity field is the new folder's exactly as :func:`record` would write it (``benchmark``, ``protocol_version``,

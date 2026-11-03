@@ -146,24 +146,24 @@ def test_metric_names_resolve(spec: dict):
 
 def test_schema_and_protocol(spec: dict):
     """Schema 2, protocol_version 1 with one changelog entry, no removed reader key anywhere."""
-    assert spec["schema_version"] == 2
+    assert spec["schema_version"] == 3
     assert spec["protocol_version"] == 1 == spec["changelog"][-1]["version"]
     assert [c["version"] for c in spec["changelog"]] == [1]
     assert spec["changelog"][0]["invalidates"] is False and spec["changelog"][0]["supersedes"] == []
     assert not (F.walk_keys(spec) & REMOVED_READER_KEYS), F.walk_keys(spec) & REMOVED_READER_KEYS
     assert "requires" not in spec  # moved into output_contract.requires
     assert spec["protocol"] == {"clip_seconds": 5.0, "train_draw": None, "views": "none"}
-    assert spec["streams"] == {
+    assert F.file_fields(spec) == {
         "audio": {"kind": "audio", "media_column": "rel_path", "root": "media_root", "layout": "dir", "layout_params": {}, "required": True}
     }
-    assert spec["readout"] == "clf" and spec["readout_params"] == {} and spec["targets"] is None
+    assert spec["scorer"] == "clf" and spec["readout_params"] == {} and spec["targets"] is None
     assert spec["data"]["derived"] == {} and spec["data"]["tar_index"] is None
 
 
 def test_input_contract(spec: dict):
     ic = spec["input_contract"]
     assert set(ic) == {"handed_over", "info", "facts", "materialize"}
-    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["streams"]) == {"audio"}
+    assert set(ic["handed_over"]) == set(ic["info"]) == set(F.file_fields(spec)) == {"audio"}
     assert "as stored" in ic["handed_over"]["audio"] and "44.1 kHz" in ic["handed_over"]["audio"]
     assert ic["info"]["audio"] == INFO_KEYS
     assert ic["facts"] == [] and ic["materialize"] is None
@@ -177,7 +177,7 @@ def test_output_contract_and_external(spec: dict):
         "requires": {"pos": [], "streams": [], "grid": None, "t_bins": None},
     }
     assert spec["external"] == []
-    assert not (HERE / "probe.py").exists()  # no authors' scorer: accuracy is yavih's
+    assert not (HERE / "eval.py").exists()  # no authors' scorer: accuracy is yavih's
 
 
 def test_yaml_parses_via_benchmark_from_dir(isolated: Path):

@@ -66,9 +66,9 @@ def test_folder_lint_clean():
 
 
 def test_schema2_top_level_and_no_removed_keys(spec: dict):
-    assert spec["schema_version"] == 2 and spec["name"] == "fsd50k" == HERE.name
-    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "readout", "protocol_version", "changelog", "source", "obtain",
-                          "budget", "manifest", "splits", "streams", "targets", "data", "input_contract", "output_contract",
+    assert spec["schema_version"] == 3 and spec["name"] == "fsd50k" == HERE.name
+    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "scorer", "protocol_version", "changelog", "source", "obtain",
+                          "budget", "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract",
                           "external", "protocol", "metrics", "readout_params"]
     assert "requires" not in spec  # moved into output_contract.requires
 
@@ -92,11 +92,11 @@ def test_changelog(spec: dict):
 
 def test_input_contract(spec: dict):
     ic = spec["input_contract"]
-    assert list(spec["streams"]) == ["audio"]
-    st = spec["streams"]["audio"]
+    assert list(F.file_fields(spec)) == ["audio"]
+    st = F.file_fields(spec)["audio"]
     assert st == {"kind": "audio", "media_column": "rel_path", "root": "media_root", "layout": "dir", "layout_params": {}, "required": True}
     assert set(ic) == {"handed_over", "info", "facts", "materialize"}
-    assert set(ic["handed_over"]) == set(ic["info"]) == set(spec["streams"])
+    assert set(ic["handed_over"]) == set(ic["info"]) == set(F.file_fields(spec))
     assert "exactly as stored" in ic["handed_over"]["audio"] and "nothing decoded" in ic["handed_over"]["audio"]
     assert ic["info"]["audio"] == ["duration_s", "sample_rate", "n_samples", "channels", "container", "bytes"]
     assert set(ic["info"]["audio"]) <= AUDIO_INFO_VOCAB
@@ -109,8 +109,8 @@ def test_output_contract_and_external(spec: dict):
         "shape": "fixed", "coordinates": "media", "target_frame": None,
         "requires": {"pos": [], "streams": [], "grid": None, "t_bins": None},
     }
-    assert spec["external"] == [] and not (HERE / "probe.py").exists()  # non-empty external would require probe.py
-    assert spec["readout"] == "clf" and spec["readout_params"] == {}
+    assert spec["external"] == [] and not (HERE / "eval.py").exists()  # non-empty external would require eval.py
+    assert spec["scorer"] == "clf" and spec["readout_params"] == {}
 
 
 def test_protocol_holds_label_facts_only(spec: dict):

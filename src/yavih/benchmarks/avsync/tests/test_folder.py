@@ -63,20 +63,20 @@ def mat_mod():
 
 
 def test_yaml_schema2_and_changelog(spec):
-    assert spec["schema_version"] == 2 and spec["name"] == HERE.name == "avsync" and spec["readout"] == "clf"
+    assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "avsync" and spec["scorer"] == "clf"
     assert spec["protocol_version"] == 1 == spec["changelog"][-1]["version"]
     assert [c["version"] for c in spec["changelog"]] == [1]
     assert spec["changelog"][-1]["supersedes"] == []
     # the reader does not cut windows: no window / frame-rule key in the protocol
     assert "requires" not in spec and not (REMOVED_PROTOCOL_KEYS & set(spec["protocol"]))
-    for s in spec["streams"].values():
+    for s in F.file_fields(spec).values():
         assert "bridge_decode_allowed" not in s
     assert all(c.get("role") != "window" for c in spec["manifest"]["columns"].values())
     assert spec["external"] == []
 
 
 def test_streams_and_input_contract(spec):
-    st, ic = spec["streams"], spec["input_contract"]
+    st, ic = F.file_fields(spec), spec["input_contract"]
     assert set(st) == {"video", "audio"} == set(ic["handed_over"]) == set(ic["info"])
     for name, s in st.items():
         assert s == {"kind": name, "media_column": "rel_media", "root": "derived_root", "layout": "dir", "layout_params": {}, "required": True}
@@ -207,7 +207,7 @@ def test_metric_names_resolve(spec):
 
 
 def test_floor_threshold_matches_readme(spec):
-    floor_threshold = F.load_module(HERE / "probe.py", "avsync_probe").floor_threshold  # the folder's metrics
+    floor_threshold = F.load_module(HERE / "eval.py", "avsync_probe").floor_threshold  # the folder's metrics
 
     sig = spec["protocol"]["floor_sigmas"]
     expected = 1 / 9 + sig * math.sqrt((1 / 9) * (8 / 9) / ROWS["stationary"])

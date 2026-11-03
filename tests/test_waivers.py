@@ -240,7 +240,7 @@ def test_exec_passes_the_matrix_waiver_to_the_probe(monkeypatch, tmp_path):
     seen = {}
     monkeypatch.setattr(readouts, "probe", lambda run_dir, **kw: seen.update(kw))
     unit = SimpleNamespace(cwd=str(tmp_path), out="runs/b/m/v", seed=0, expected_status="ok", profile=None,
-                           cmd=["python", "-m", "yavih.cli", "probe", "run", "runs/b/m/v", "--seeds", "0",
+                           cmd=["python", "-m", "yavih.cli", "eval", "run", "runs/b/m/v", "--seeds", "0",
                                 "--waive", "E_DEAD_ROWS=register tokens"])
     plan_exec._run_probe(unit, deadline=None, scratch=None)
     assert seen["waive"] == {"E_DEAD_ROWS": "register tokens"} and seen["validate_first"] is True

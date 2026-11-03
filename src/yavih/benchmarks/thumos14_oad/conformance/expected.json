@@ -1,0 +1,55 @@
+{
+ "benchmark": "thumos14_oad",
+ "generator": 1,
+ "population": {
+  "eval": 40,
+  "floor": 0,
+  "folds": 0,
+  "train": 40
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "65434dae826d0f787cb808ab374f6cd279e3aae1",
+  "externals": {},
+  "folder_source": {
+   "eval": "3cdd935e8235d6398ee8266f071c55c75fb5f735997f0eb014f835e0d1a5f0d1",
+   "reader": null
+  },
+  "protocol_hash": "284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912",
+  "scorer": {
+   "kind": "probe",
+   "name": "stream",
+   "version": 1
+  },
+  "scoring_hash": "1758d7dc80da95a52a9fc13fa1644b14c47b2cd8357d308a8c1965b86e2d52e9",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "frame_map_floor": 0.001,
+  "frame_map_gru": 0.001,
+  "frame_map_linear": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "frame_map_gru": [
+     0.270167287378401,
+     0.3400339856665932
+    ],
+    "frame_map_linear": [
+     0.270167287378401,
+     0.3400339856665932
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "frame_map_floor": 0.019599994203864574
+   },
+   "metrics": {
+    "frame_map_gru": 0.29163363749870486,
+    "frame_map_linear": 0.29163363749870486
+   }
+  }
+ }
+}

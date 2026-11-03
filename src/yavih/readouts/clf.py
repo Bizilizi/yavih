@@ -7,7 +7,7 @@ controls`` with ``split_meta`` carrying what the clf metric families read
 (multi_sets eval matrices), ``floor`` (``{outputs, targets}`` of the floor role) and ``folds``
 (``{fold: {outputs, targets}}`` in ``splits.folds`` order).
 
-The folder ``probe.py`` may replace the target construction (``targets`` hook) and compute
+The folder ``eval.py`` may replace the target construction (``targets`` hook) and compute
 the metrics whose spec names ``external`` (``score`` hook, e.g. the official ``vggsounder`` package).
 With ``log_samples`` the scored rows are returned as ``samples`` parts.
 """
@@ -21,11 +21,11 @@ import numpy as np
 
 from yavih.readouts._targets import clf_targets
 from yavih.readouts.base import ProbeRefused, ReadoutContext, evaluate_metrics, lazy_module
-from yavih.readouts.registry import Readout
+from yavih.readouts.registry import Scorer
 
 _fit = lazy_module("yavih.readouts._fit")  # torch: imported on first use, never by the descriptor
 
-__all__ = ["READOUT", "VERSION", "run_clf"]
+__all__ = ["SCORER", "VERSION", "run_clf"]
 
 #: The readout version: enters ``protocol_hash``; ``yavih.versions.READOUT_VERSION`` reads it here.
 #: The readout's conformance band on the synthetic end-to-end run (``tests/test_e2e_synthetic.py``): the oracle bridge's
@@ -249,8 +249,8 @@ def _floor_outputs(train_targets: Any, n_eval: int, *, protocol: dict, label_kin
     return out
 
 
-READOUT = Readout(
-    name="clf", version=VERSION, module=__name__, label_kinds=frozenset({"single", "multi", "multi_sets"}),
+SCORER = Scorer(
+    name="clf", version=VERSION, module=__name__, kind="probe", label_kinds=frozenset({"single", "multi", "multi_sets"}),
     requires_t_bins=False, requires_grid=False, dense=False,
     train=_CLF_TRAIN, head=_head, loss=_loss, geometry=_geometry,
     head_families=frozenset({"attentive_probe_v1"}), losses=frozenset({"ce", "bce"}), floor_outputs=_floor_outputs,

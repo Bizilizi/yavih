@@ -45,14 +45,14 @@ __all__ = [
 ]
 
 #: ``kind`` of a shipped folder file (``yavih bench files``).
-FILE_KINDS: tuple[str, ...] = ("readme", "setup", "yaml", "template", "probe", "manifest", "classes", "conformance", "prepare", "test", "other")
+FILE_KINDS: tuple[str, ...] = ("readme", "setup", "yaml", "template", "eval", "manifest", "classes", "conformance", "prepare", "test", "other")
 #: ``yavih bench show <b> <what>``: the short names and the file each one means.
 SHORT_NAMES: dict[str, str] = {
     "readme": "README.md",
     "setup": "setup.md",
     "yaml": "benchmark.yaml",
     "template": "bridge_template.py",
-    "probe": "probe.py",
+    "eval": "eval.py",
     "classes": "classes.csv",
     "manifest": "manifest.csv.gz",
     "conformance": "conformance/expected.json",

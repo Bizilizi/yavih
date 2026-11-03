@@ -1,7 +1,7 @@
 """Comparability and the ``report()`` entry point.
 
 Comparability is decided only by what yavih controls: two results are comparable iff the benchmark name
-(after alias), ``eval_hash = sha256(canon({protocol_hash, probe_hash}))`` and ``standard`` agree. Bridge
+(after alias), ``eval_hash = sha256(canon({protocol_hash, probe_hash: scorer_hash}))`` and ``standard`` agree. Bridge
 decisions (``describe()``, ``describe_sha256``, weights, dtype, batch size) are recorded and shown, never a key.
 
 Selection (both views): results are keyed ``(benchmark, eval_hash, model, reading)``; within a key the
@@ -14,7 +14,7 @@ Results a re-probe moved to ``probe/_stale/`` (index records ``moved_aside``) ar
 (``W_BRIDGE_CHANGED``, ``--detail``; the in-place reconfiguration of one run directory); one of a live configuration
 (a re-extraction or a re-probe of the same configuration) is ignored.
 
-View 1: per model, the lm-evaluation-harness table ``benchmark | reading | version | eval_hash | readout |
+View 1: per model, the lm-evaluation-harness table ``benchmark | reading | version | eval_hash | scorer |
 metric | value | ci95 | floor`` (:func:`lm_eval_tables`; the floor is the one whose ``floor_of`` names the
 metric). View 2: columns ``(benchmark, eval_hash)`` (standard and non-standard apart), rows ``(model,
 reading)``; ``mean ± std`` with ``n_seeds``; a row is greyed when its headline CI overlaps its floor or it
@@ -106,7 +106,7 @@ class Report:
     joins: dict[str, Any] = field(default_factory=dict)
     n_results: int = 0
     paths: dict[str, str] = field(default_factory=dict)
-    #: view 1: ``{model: [row]}`` with rows ``{benchmark, reading, version, eval_hash, readout, metric, value,
+    #: view 1: ``{model: [row]}`` with rows ``{benchmark, reading, version, eval_hash, scorer, metric, value,
     #: std, n_seeds, ci95, floor, status, reason}``
     lm_eval: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     merged: list[str] = field(default_factory=list)
@@ -215,6 +215,9 @@ def _bench_meta(name: str) -> dict[str, Any]:
         if isinstance(streams, Mapping) and streams:
             kinds = {str(k): str(getattr(v, "kind", "") or (v.get("kind", "") if isinstance(v, Mapping) else "")) for k, v in streams.items()}
             out["stream_kinds"] = {k: v for k, v in kinds.items() if v}
+        cells = getattr(spec, "cells", None)
+        if isinstance(cells, Mapping) and cells:
+            out["cell_kinds"] = {str(k): str(getattr(v, "kind", "")) for k, v in cells.items() if getattr(v, "kind", "")}
         return out
     except Exception:  # noqa: BLE001
         return {}
@@ -231,7 +234,7 @@ def _eval_hash_of(result: dict) -> str:
     if isinstance(eh, str) and eh:
         return eh
     ph = (result.get("benchmark") or {}).get("protocol_hash")
-    qh = (result.get("probe") or {}).get("hash")
+    qh = (result.get("scorer") or {}).get("hash")
     if isinstance(ph, str) and ph and isinstance(qh, str) and qh:
         return hashing.eval_hash(ph, qh)
     return ""
@@ -278,7 +281,13 @@ def _model(result: dict) -> str:
 
 
 def _reading(result: dict) -> str:
-    return str(result.get("reading") or _describe(result).get("reading") or "")
+    """The row's reading; a real-time streaming result adds its device (``reading@device``): a real-time number is
+    comparable only on one hardware configuration, so each device is a row of its own."""
+    r = str(result.get("reading") or _describe(result).get("reading") or "")
+    st = _describe(result).get("stream")
+    if isinstance(st, Mapping) and st.get("mode") == "realtime":
+        r = f"{r}@{st.get('device') or 'unknown device'}"
+    return r
 
 
 def _describe_sha(result: dict) -> str:
@@ -302,7 +311,7 @@ def _dedup_seeds(results: Sequence[dict]) -> list[dict]:
     """One result per ``probe.seed`` (the newest ``created`` wins), sorted by seed: ``n_seeds`` counts distinct seeds."""
     by_seed: dict[int, dict] = {}
     for r in results:
-        sd = int((r.get("probe") or {}).get("seed", 0) or 0)
+        sd = int((r.get("scorer") or {}).get("seed", 0) or 0)
         if sd not in by_seed or _created(r) > _created(by_seed[sd]):
             by_seed[sd] = r
     return [by_seed[k] for k in sorted(by_seed)]
@@ -405,14 +414,24 @@ def _unfingerprinted(result: dict) -> bool:
 _MODALITY = {"audio": "audio", "video": "visual", "image": "visual"}
 
 
-def _stream_modalities(result: dict, stream_kinds: Mapping[str, str] | None) -> frozenset[str] | None:
-    """Modalities of the streams the bridge read (``describe()["streams"]``, names or ``{"name": …}``),
-    via the benchmark's ``streams.*.kind`` or, for a stream the spec does not list, a name that IS a
-    kind; ``None`` when any stream cannot be placed (the caller then keeps the reading expected)."""
-    streams = _describe(result).get("streams") or []
+def _cell_modality(kind: str) -> str:
+    """A cell field's modality: ``text`` for a ``text`` cell (a caption, a prompt), else ``cell:<kind>``."""
+    return "text" if kind == "text" else f"cell:{kind}"
+
+
+def _stream_modalities(result: dict, stream_kinds: Mapping[str, str] | None, cell_kinds: Mapping[str, str] | None = None) -> frozenset[str] | None:
+    """Modalities of the fields the bridge read: ``describe()["streams"]`` (names or ``{"name": …}``), else the keys of
+    ``describe()["input"]`` (a generation bridge declares no stream tags), via the benchmark's ``streams.*.kind`` and
+    cell kinds or, for a stream the spec does not list, a name that IS a kind; ``None`` when any field cannot be placed
+    (the caller then keeps the reading expected)."""
+    d = _describe(result)
+    streams = d.get("streams") or (list(d["input"]) if isinstance(d.get("input"), Mapping) else [])
     out: set[str] = set()
     for s in streams:
         name = str(s.get("name") if isinstance(s, Mapping) else s)
+        if name in (cell_kinds or {}):
+            out.add(_cell_modality(cell_kinds[name]))
+            continue
         kind = (stream_kinds or {}).get(name) or name
         mod = _MODALITY.get(kind)
         if mod is None:
@@ -622,7 +641,7 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         "benchmark": key[0],
         "eval_hash": key[1],
         "protocol_hash": (first.get("benchmark") or {}).get("protocol_hash"),
-        "probe_hash": (first.get("probe") or {}).get("hash"),
+        "scorer_hash": (first.get("scorer") or {}).get("hash"),
         "model": _model(first),
         "reading": _reading(first),
         "bridge_name": str(bridge.get("name", "")),
@@ -633,7 +652,7 @@ def _row_from(results: Sequence[dict], *, column_id: str, key: tuple[str, str], 
         "reason": first.get("reason") if status != "ok" else None,
         "not_applicable": na,
         "seed": seed,
-        "seeds": sorted({int((r.get("probe") or {}).get("seed", 0)) for r in ok}),
+        "seeds": sorted({int((r.get("scorer") or {}).get("seed", 0)) for r in ok}),
         "n_seeds": n_seeds,
         "registry": next((r["registry"].get("id") for r in results if r.get("registry")), None),
         "headline": headline,
@@ -660,7 +679,7 @@ def _missing_row(column: dict[str, Any], model: str, reading: str) -> dict[str, 
         "benchmark": column["benchmark"],
         "eval_hash": column["eval_hash"],
         "protocol_hash": column["protocol_hash"],
-        "probe_hash": column["probe_hash"],
+        "scorer_hash": column["scorer_hash"],
         "model": model,
         "reading": reading,
         "bridge_name": "",
@@ -773,13 +792,13 @@ def _row_detail(sel: Selection, headline: str | None) -> dict[str, Any]:
         "features_fingerprint": sel.fingerprint or None,
         "older_configs": [
             {"describe_sha256": dsha or None, "diff": describe_diff(shown_describe, _describe(rs[0])),
-             "seeds": sorted({int((r.get("probe") or {}).get("seed", 0) or 0) for r in rs}),
+             "seeds": sorted({int((r.get("scorer") or {}).get("seed", 0) or 0) for r in rs}),
              "headline": _headline_value(_dedup_seeds(rs), headline), "created": _newest(rs),
              "moved_aside": dsha in sel.moved_aside}
             for dsha, rs in sel.configs[1:]
         ],
         "older_feature_sets": [
-            {"fingerprint": fp or None, "seeds": [int((r.get("probe") or {}).get("seed", 0) or 0) for r in rs],
+            {"fingerprint": fp or None, "seeds": [int((r.get("scorer") or {}).get("seed", 0) or 0) for r in rs],
              "headline": _headline_value(rs, headline), "created": _newest(rs)}
             for fp, rs in sel.feature_sets[1:]
         ],
@@ -824,7 +843,7 @@ def lm_eval_tables(records: Sequence[dict], aliases: Mapping[str, str] | None = 
             first = results[0]
             bmeta = first.get("benchmark") or {}
             base = {"benchmark": bench + ("" if std else " (nonstandard)"), "reading": reading, "version": bmeta.get("protocol_version"),
-                    "eval_hash": eh[:12], "readout": bmeta.get("readout")}
+                    "eval_hash": eh[:12], "scorer": bmeta.get("scorer")}
             waived = waived_of(results)
             if waived:  # marked († and a footnote), never greyed
                 base["waived"] = waived
@@ -922,20 +941,22 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
     reading_mods: dict[tuple[str, str], frozenset[str] | None] = {}
     for (key, _std), results in groups.items():
         kinds = meta_of(key[0]).get("stream_kinds")
+        cells = meta_of(key[0]).get("cell_kinds")
         for r in results:
             mdl, rd = _model(r), _reading(r)
             if mdl and rd and rd not in readings_by_model.setdefault(mdl, []):
                 readings_by_model[mdl].append(rd)
             if mdl and rd:
-                mods = _stream_modalities(r, kinds)
+                mods = _stream_modalities(r, kinds, cells)
                 prev = reading_mods.get((mdl, rd), frozenset())
                 reading_mods[(mdl, rd)] = None if (mods is None or prev is None) else prev | mods
 
     def expected_readings(mdl: str, bench: str) -> list[str]:
-        kinds = meta_of(bench).get("stream_kinds")
-        if not kinds or any(k not in _MODALITY for k in kinds.values()):
+        kinds = meta_of(bench).get("stream_kinds") or {}
+        cells = meta_of(bench).get("cell_kinds") or {}
+        if (not kinds and not cells) or any(k not in _MODALITY for k in kinds.values()):
             return list(readings_by_model.get(mdl, []))
-        have = {_MODALITY[k] for k in kinds.values()}
+        have = {_MODALITY[k] for k in kinds.values()} | {_cell_modality(k) for k in cells.values()}
         return [rd for rd in readings_by_model.get(mdl, []) if not reading_mods.get((mdl, rd)) or reading_mods[(mdl, rd)] <= have]
 
     def col_sort(item):
@@ -962,16 +983,16 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
         meta = bench_meta.get(bench, {})
         headline = _pick_headline(metric_names, floor_names, meta)
         pvs = sorted({(r.get("benchmark") or {}).get("protocol_version") for r in results if isinstance((r.get("benchmark") or {}).get("protocol_version"), int)})
-        readouts = sorted({str((r.get("benchmark") or {}).get("readout", "")) for r in results})
+        scorers = sorted({str((r.get("benchmark") or {}).get("scorer", "")) for r in results})
         first = results[0]
         column: dict[str, Any] = {
             "id": column_id,
             "benchmark": bench,
             "eval_hash": eh,
             "protocol_hash": (first.get("benchmark") or {}).get("protocol_hash"),
-            "probe_hash": (first.get("probe") or {}).get("hash"),
+            "scorer_hash": (first.get("scorer") or {}).get("hash"),
             "protocol_version": pvs[0] if len(pvs) == 1 else (pvs or None),
-            "readout": readouts[0] if len(readouts) == 1 else readouts,
+            "scorer": scorers[0] if len(scorers) == 1 else scorers,
             "standard": std,
             "comparable": std,
             "metrics": metric_names,
@@ -1004,7 +1025,7 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             rep.warnings.append({
                 "code": "W_FOLDER_SOURCE_DIFFERS", "column": column_id,
                 "message": f"{bench}: results under one protocol hash were scored by {len(sources)} different versions of the "
-                           "folder's probe.py / reader.py (benchmark.folder_source); comparable by declaration (the "
+                           "folder's eval.py / reader.py (benchmark.folder_source); comparable by declaration (the "
                            "conformance fixture holds them within tolerance), shown for diagnosis",
             })
 
@@ -1036,7 +1057,7 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             if seeds == "aggregate":
                 part_rows = [_row_from(sel.shown, seed=None, paths=[paths_of.get(id(r), "") for r in sel.shown], **row_kw)]
             else:
-                part_rows = [_row_from([r], seed=int((r.get("probe") or {}).get("seed", 0)), paths=[paths_of.get(id(r), "")], **row_kw)
+                part_rows = [_row_from([r], seed=int((r.get("scorer") or {}).get("seed", 0)), paths=[paths_of.get(id(r), "")], **row_kw)
                              for r in sel.shown]
             for row in part_rows:
                 row["n_configs"], row["n_feature_sets"] = len(sel.configs), len(sel.feature_sets)
@@ -1146,7 +1167,7 @@ def report(
     """Index → the per-model lm-eval tables + the comparability columns → rendered text;
     writes ``runs/_index.jsonl`` and, when the runs root is known, ``runs/_report/report.<fmt>`` +
     ``DONE``. ``join={"<benchmark>": {"<reading>": run, ...}}`` calls that benchmark folder's
-    ``probe.py`` ``join()`` (:func:`yavih.report.join.run_join`; vggsounder: ``a``/``v``/``av``) and writes
+    ``eval.py`` ``join()`` (:func:`yavih.report.join.run_join`; vggsounder: ``a``/``v``/``av``) and writes
     the joined numbers to the model's results directory under ``<benchmark>:a+v+av``. ``merge_results`` merges every model's
     ``results_*.json`` under ``results_root`` (default ``yavih.config.results_root`` of the runs root)
     into one ``results_<timestamp>.json`` per model. ``suite`` (a name, a path or a ``yavih.suites.Suite``) adds the

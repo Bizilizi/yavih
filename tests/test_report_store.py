@@ -61,12 +61,12 @@ def test_lm_eval_table_rows_order_floor_and_na():
     k = by_bench["k400"]
     assert k[0]["metric"] == "acc" and k[0]["value"] == pytest.approx(0.55) and k[0]["std"] == pytest.approx(0.0707, abs=1e-3)
     assert k[0]["n_seeds"] == 2 and k[0]["ci95"] == pytest.approx([0.45, 0.55])  # the lowest seed's interval
-    assert by_bench["nyuv2_depth"] == [{"benchmark": "nyuv2_depth", "reading": "v", "version": 2, "eval_hash": EH[:12], "readout": "grid",
+    assert by_bench["nyuv2_depth"] == [{"benchmark": "nyuv2_depth", "reading": "v", "version": 2, "eval_hash": EH[:12], "scorer": "grid",
                                         "metric": "—", "value": None, "std": None, "n_seeds": 1, "ci95": None, "floor": None,
                                         "status": "not_applicable", "reason": "eligibility: missing pos"}]
     text = tables.render_lm_eval({"m": rows})
     # the nine-column table, eval_hash next to the version
-    assert "| benchmark | reading | version | eval_hash | readout | metric | value | ci95 | floor |" in text
+    assert "| benchmark | reading | version | eval_hash | scorer | metric | value | ci95 | floor |" in text
     assert f"| vggss_box | av | 2 | `{EH[:12]}` | box | **iou_mean** | 0.4 | [0.35, 0.45] | 0.2 |" in text
     assert f"| nyuv2_depth | v | 2 | `{EH[:12]}` | grid | — | _not_applicable_ (eligibility: missing pos) | — | — |" in text
     assert re.search(r"\| k400 \| v \| 2 \| `[0-9a-f]{12}` \| clf \| \*\*acc\*\* \| 0\.55 ± 0\.07071 \(n_seeds 2\) \|", text)
@@ -107,7 +107,7 @@ def test_write_invocation_without_a_benchmark_object(tmp_path):
     assert paths["results_file"] == tmp_path / "m" / "results_2026-10-08T14-00-00.123456.json"
     assert paths["samples_file"] == tmp_path / "m" / "samples_k400_v_2026-10-08T14-00-00.123456.jsonl"
     doc = json.loads(paths["results_file"].read_text())
-    assert doc["results_version"] == store.RESULTS_FILE_VERSION == 2
+    assert doc["results_version"] == store.RESULTS_FILE_VERSION == 3
     assert set(doc["results"]) == {"k400:v"}
     r = doc["results"]["k400:v"]
     assert r["acc"] == 0.5 and r["acc_floor"] == 0.1 and r["n_seeds"] == 2 and r["headline"] == "acc"  # NaN ignored in the mean
@@ -117,7 +117,7 @@ def test_write_invocation_without_a_benchmark_object(tmp_path):
     assert cfg["bridge"] == recs[0]["bridge"] and cfg["describe_sha256"] == recs[0]["bridge"]["describe_sha256"]
     assert doc["versions"] == {"k400:v": 2} and doc["higher_is_better"]["k400:v"] == {"acc": True}
     assert doc["config"]["model"] == "m" and doc["config"]["bridge"] == recs[0]["bridge"]
-    assert doc["config"]["probe"]["seeds"] == [0, 1] and doc["config"]["probe"]["standard"] is True
+    assert doc["config"]["scoring"]["seeds"] == [0, 1] and doc["config"]["scoring"]["standard"] is True
     assert doc["env"]["host"] == "h" and doc["yavih_version"] and doc["date"].endswith("Z")
     with pytest.raises(ValueError):
         store.write_invocation([make_result(model="a"), make_result(model="b")], results_root=tmp_path)
@@ -185,33 +185,46 @@ def test_merge_results_a_standard_entry_holds_the_key_and_provenance_survives(tm
     t0 = dt.datetime(2026, 10, 8, 10, tzinfo=dt.timezone.utc)
     std = make_result(model="m", acc=0.8, probe_hash="p" * 64)
     fast = make_result(model="m", acc=0.4, probe_hash="f" * 64, standard=False)
-    fast["probe"]["config"] = {"fast": True}
+    fast["scorer"]["config"] = {"fast": True}
     order = (std, fast) if standard_first else (fast, std)
     for i, rec in enumerate(order):
         store.write_invocation([rec], results_root=tmp_path, now=t0 + dt.timedelta(hours=i))
     doc = json.loads(store.merge_results(tmp_path, now=t0 + dt.timedelta(hours=2))[0].read_text())
-    assert doc["results"]["k400:v"]["acc"] == 0.8 and doc["configs"]["k400:v"]["probe"]["standard"] is True
+    assert doc["results"]["k400:v"]["acc"] == 0.8 and doc["configs"]["k400:v"]["scoring"]["standard"] is True
     other = f"k400:v@{hashing.eval_hash(PH, 'f' * 64)[:12]}"
-    assert doc["results"][other]["acc"] == 0.4 and doc["configs"][other]["probe"] == {"config": {"fast": True}, "seeds": [0], "standard": False}
-    assert doc["config"]["probe"]["standard"] is True  # the file-level block describes the main-key entries
+    assert doc["results"][other]["acc"] == 0.4 and doc["configs"][other]["scoring"] == {"config": {"fast": True}, "seeds": [0], "standard": False}
+    assert doc["config"]["scoring"]["standard"] is True  # the file-level block describes the main-key entries
 
 
 def test_merge_skips_a_results_file_of_another_version(tmp_path, capsys):
-    """A merge reads files of ``RESULTS_FILE_VERSION`` only: an older or newer one is skipped with a notice."""
+    """A merge reads files of ``RESULTS_FILE_VERSION`` (a version-2 file upgraded in memory): an older or newer one
+    is skipped with a notice."""
     t0 = dt.datetime(2026, 10, 8, 10, tzinfo=dt.timezone.utc)
     cur = make_result(model="vjepa", acc=0.6)
     store.write_invocation([make_result(model="vjepa", acc=0.5)], results_root=tmp_path, now=t0)
     path = store.write_invocation([cur], results_root=tmp_path, now=t0 + dt.timedelta(hours=1))["results_file"]
     doc = json.loads(Path(path).read_text())
     assert store.upgrade_results_file(doc) == doc
-    for version in (store.RESULTS_FILE_VERSION - 1, store.RESULTS_FILE_VERSION + 1, None):
+    for version in (1, store.RESULTS_FILE_VERSION + 1, None):
         with pytest.raises(ValueError):
             store.upgrade_results_file({**doc, "results_version": version})
     (tmp_path / "vjepa" / "results_2026-10-07T10-00-00.000000.json").write_text(
-        json.dumps({**doc, "results_version": store.RESULTS_FILE_VERSION - 1, "results": {"k400:v": {"acc": 0.1}}}))
+        json.dumps({**doc, "results_version": 1, "results": {"k400:v": {"acc": 0.1}}}))
     (merged,) = store.merge_results(tmp_path, now=t0 + dt.timedelta(hours=2))
     assert json.loads(merged.read_text())["results"]["k400:v"]["acc"] == 0.6
     assert "older than this yavih reads" in capsys.readouterr().err
+
+
+def test_a_version_2_results_file_reads_under_the_scorer_names(tmp_path):
+    """Version 3 renamed ``readout`` / ``readout_version`` / ``probe_hash`` and the ``probe`` provenance blocks."""
+    path = store.write_invocation([make_result(model="vjepa", acc=0.6)], results_root=tmp_path)["results_file"]
+    cur = json.loads(Path(path).read_text())
+    old = json.loads(json.dumps(cur))
+    old["results_version"] = 2
+    old["config"]["probe"] = old["config"].pop("scoring")
+    c = old["configs"]["k400:v"]
+    c["probe"], c["readout"], c["readout_version"], c["probe_hash"] = c.pop("scoring"), c.pop("scorer"), c.pop("scorer_version"), c.pop("scorer_hash")
+    assert store.upgrade_results_file(old) == cur
 
 
 def test_report_merge_results_flag(tmp_path):

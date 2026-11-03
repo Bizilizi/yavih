@@ -28,8 +28,8 @@ __all__ = [
     "parse_layout",
 ]
 
-#: Head families and losses the built-in trainer implements; a registered readout adds its own (``Readout.head_families``,
-#: ``Readout.losses``), which ``ProbeConfig`` then accepts too.
+#: Head families and losses the built-in trainer implements; a registered probe scorer adds its own (``Scorer.head_families``,
+#: ``Scorer.losses``), which ``ProbeConfig`` then accepts too.
 HEAD_FAMILIES: frozenset[str] = frozenset({"attentive_probe_v1", "dense_query_v1", "dense_av_v1"})
 LOSSES: frozenset[str] = frozenset({"ce", "bce", "ce_seq", "l1_log", "box_l1_giou"})
 SCHEDULES: frozenset[str] = frozenset({"cosine"})
@@ -77,21 +77,24 @@ def _readout(readout: str) -> Any:
     from yavih.readouts import registry
 
     try:
-        return registry.get(readout)
-    except registry.UnknownReadout as e:
-        raise ValueError(f"unknown readout {readout!r}; expected one of {sorted(registry.names())}") from e
+        r = registry.get(readout)
+    except registry.UnknownScorer as e:
+        raise ValueError(f"unknown scorer {readout!r}; expected one of {sorted(registry.names())}") from e
+    if not r.is_probe:
+        raise ValueError(f"scorer {readout!r} is kind {r.kind!r}: it trains no probe and has no ProbeConfig")
+    return r
 
 
 def _head_families() -> frozenset[str]:
     from yavih.readouts import registry
 
-    return HEAD_FAMILIES.union(*(r.head_families for r in registry.all_readouts().values()))
+    return HEAD_FAMILIES.union(*(r.head_families for r in registry.all_scorers().values()))
 
 
 def _losses() -> frozenset[str]:
     from yavih.readouts import registry
 
-    return LOSSES.union(*(r.losses for r in registry.all_readouts().values()))
+    return LOSSES.union(*(r.losses for r in registry.all_scorers().values()))
 
 
 def _from_bench(bench: Benchmark) -> dict[str, Any]:

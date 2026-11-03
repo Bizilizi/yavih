@@ -5,7 +5,7 @@ A probe writes one `result.json` per seed: the atomic, DONE-marked record the sc
 directory per model, lm-evaluation-harness style) is derived from them for downstream readers and is never read
 to decide anything.
 
-How the numbers are produced: [readouts](readouts.md). What `eval_hash`, `protocol_hash` and `probe_hash`
+How the numbers are produced: [readouts](readouts.md). What `eval_hash`, `protocol_hash` and `scorer_hash`
 cover: [hashing](hashing.md). Validation waivers: [validation](validation.md).
 
 ## result.json
@@ -13,26 +13,27 @@ cover: [hashing](hashing.md). Validation waivers: [validation](validation.md).
 Path: `<run_dir>/probe/<eval_hash12>/seed<k>/result.json`, where a standard run directory is
 `<runs root>/<benchmark>/<model>/<reading>/`. `result.json` is written atomically and schema-checked
 (`readouts.base.check_result`); for `status` `ok` or `not_applicable` a `DONE` marker follows, carrying
-`result_sha256`, `protocol_hash`, `probe_hash`, `eval_hash`, `model`, `reading`, `describe_sha256`,
-`features_fingerprint`, `yavih_version` and `created`. A `failed` result never gets a DONE.
+`result_sha256`, `protocol_hash`, `probe_hash` (the scorer's hash, under the hash payloads' name), `eval_hash`,
+`model`, `reading`, `describe_sha256`, `features_fingerprint`, `yavih_version` and `created`. A `failed` result
+never gets a DONE.
 
 ```jsonc
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "status": "ok",                          // "ok" | "not_applicable" | "failed"
   "reason": null,                          // a string for not_applicable / failed
   "standard": true,                        // false for a non-pinned ProbeConfig
-  "eval_hash": "…",                        // sha256(canon({protocol_hash, probe_hash})): the comparability key
-  "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2,
-                "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"probe": "…", "reader": null}},
+  "eval_hash": "…",                        // sha256(canon({protocol_hash, probe_hash: scorer.hash})): the comparability key
+  "benchmark": {"name": "ave", "protocol_version": 2, "scorer": "seq", "scorer_version": 2,
+                "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"eval": "…", "reader": null}},
   "model": "vjepa2-l",                     // describe()["model"]
   "reading": "av",                         // describe()["reading"]
   "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
   "features": {"fingerprint": "…", "dtype": "float16", "N": 1568, "D": 1024, "pos_mode": "per_sample",
                "bytes": 5.2e9, "backend": "ram", "canary_max_rel_l2": 3.1e-6, "batch_tolerance": 1e-05,
                "rules_checked": {"video": {"temporal": "uniform", "spatial": true}}},
-  "probe": {"hash": "…", "config": {…}, "seed": 0, "selected_lr": 3e-4, "epochs_run": 23,
-            "best_epoch": 13, "stop": "patience", "n_train": 2362, "n_val": 262},
+  "scorer": {"hash": "…", "config": {…}, "seed": 0, "selected_lr": 3e-4, "epochs_run": 23,
+             "best_epoch": 13, "stop": "patience", "n_train": 2362, "n_val": 262},
   "metrics": {"seg_acc": 0.412, "clip_acc": 0.412, "seg_acc_boundary": 0.531, "n_boundary": 104, "n_eval": 316},
   "ci95": {"seg_acc": [0.36, 0.47], "seg_acc_boundary": [0.44, 0.63]},
   "floors": {"seg_acc_floor": 0.164, "seg_acc_boundary_floor": 0.499},
@@ -57,15 +58,15 @@ Values are illustrative.
 
 | key | content |
 |---|---|
-| `schema_version` | `RESULT_SCHEMA_VERSION` (4) |
+| `schema_version` | `RESULT_SCHEMA_VERSION` (5) |
 | `status`, `reason` | `reason` is null for `ok`, a string otherwise |
-| `standard` | true iff the probe config's `probe_hash` equals the pinned one |
-| `eval_hash` | full hex; must equal the hash of `benchmark.protocol_hash` and `probe.hash` |
-| `benchmark` | exactly `name` (canonical), `protocol_version`, `readout`, `readout_version`, `manifest_hash`, `protocol_hash`, `folder_source` (`{probe, reader}` normalized-source digests of the folder's `probe.py` / `reader.py` at scoring: provenance, never a key; `null` in a schema-3 record read through [`report.migrate`](hashing.md#reportmigrate)) |
+| `standard` | true iff the configuration's hash equals the scorer's pinned one (`probe_hash` for a probe; always the constant `scorer_config_hash` for a stateless or direct scorer, so true unless a testing configuration overrides it) |
+| `eval_hash` | full hex; must equal the hash of `benchmark.protocol_hash` and `scorer.hash` |
+| `benchmark` | exactly `name` (canonical), `protocol_version`, `scorer` and `scorer_version` (the scorer's name and `VERSION`), `manifest_hash`, `protocol_hash`, `folder_source` (`{eval, reader}` normalized-source digests of the folder's `eval.py` / `reader.py` at scoring: provenance, never a key; `null` in a schema-3 record read through [`report.migrate`](hashing.md#reportmigrate)) |
 | `model`, `reading` | from the bridge's `describe()`; `model` matches `[A-Za-z0-9][A-Za-z0-9_.-]{0,63}`, `reading` `[A-Za-z0-9][A-Za-z0-9_-]{0,31}` |
 | `bridge` | exactly `name`, `describe`, `describe_sha256` (current describe schema), `source_sha256`; recorded, never a key |
 | `features` | exactly `fingerprint` (the split's, or a sha256 over the per-split ones), `dtype`, `N`, `D`, `pos_mode`, `bytes` (summed), `backend` (`ram` / `memmap`), `canary_max_rel_l2`, `batch_tolerance`, `rules_checked` (per stream: the temporal rule or `"custom"`, the spatial check). Null for a plan-time `not_applicable`; every key present with null geometry for a bridge-declared one |
-| `probe` | exactly `hash`, `config` (`ProbeConfig.to_json()`), `seed`, `selected_lr`, `epochs_run`, `best_epoch`, `stop`, `n_train`, `n_val` (fit fields null for a non-ok status; under folds, means over folds) |
+| `scorer` | exactly `hash` (`Scorer.hash_config`: `probe_hash` of the `ProbeConfig` for a probe), `config` (`ProbeConfig.to_json()`, or `ScorerConfig.to_json()` = `{scorer, version, kind}` for a scorer that trains nothing), `seed`, `selected_lr`, `epochs_run`, `best_epoch`, `stop`, `n_train`, `n_val` (fit fields null for a non-ok status or a non-probe scorer; under folds, means over folds) |
 | `metrics`, `ci95`, `floors`, `controls` | `ok` only (see rules) |
 | `chance` | `metrics.chance` |
 | `external` | `{package: version}` of the packages whose code produced a reported number; `{}` when none |
@@ -105,7 +106,7 @@ Rules:
 
 ### The result key
 
-A result is keyed `(benchmark name after alias, eval_hash, model, reading, probe.seed)`. Nothing in `bridge`
+A result is keyed `(benchmark name after alias, eval_hash, model, reading, scorer.seed)`. Nothing in `bridge`
 (`describe()`, `describe_sha256`, weights fingerprint, args, dtype, batch size) is part of it: those are
 recorded so a reader sees what produced the number, and the report uses `describe_sha256` only to tell
 configurations of one key apart. Two numbers of one benchmark are comparable iff `eval_hash` and `standard`
@@ -153,7 +154,7 @@ Both views select results the same way:
   moved-aside result of a live configuration is ignored. A row key with moved-aside results only gets no row.
 - Feature set: within the shown configuration, results are grouped by `features.fingerprint`; more than one is
   `W_FEATURES_DIFFER` and the newest is shown.
-- Seeds: aggregated over one configuration and one feature set only, deduplicated on `probe.seed` (newest
+- Seeds: aggregated over one configuration and one feature set only, deduplicated on `scorer.seed` (newest
   `created` wins), so `n_seeds` counts distinct seeds. `--seeds list` prints one row per seed instead.
 
 ### View 1: per-model tables
@@ -237,7 +238,7 @@ is `missing` with the note `partial only`.
   (`columns[].metrics`, the rows' `metrics`, view 1 rows with `in_table: false`) and in md under `--detail`.
   Without `metrics.table` every metric is shown (`columns[].table` = `columns[].metrics`).
 - `csv`: view 2 in long format, one line per (row, metric) plus one per control, with `benchmark`, `eval_hash`,
-  `protocol_hash`, `probe_hash`, `model`, `reading`, `describe_sha256`, `features_fingerprint`, `bridge_name`,
+  `protocol_hash`, `scorer_hash`, `model`, `reading`, `describe_sha256`, `features_fingerprint`, `bridge_name`,
   `status`, `seed`, `n_seeds`, coverage, `metric`, `kind`, `value`, `std`, `floor`, `ci_lo`, `ci_hi`,
   `chance`, `tie` ([ties](#ties)), `partial` (`true` / `false`), `flag` (`;`-joined flags, e.g. `below_floor`)
   and `waived`.
@@ -254,7 +255,7 @@ is `missing` with the note `partial only`.
 |---|---|
 | `W_BRIDGE_CHANGED` | a row key holds several bridge configurations; newest shown |
 | `W_FEATURES_DIFFER` | the shown configuration holds several feature sets; newest shown, never averaged |
-| `W_FOLDER_SOURCE_DIFFERS` | results in a column were scored by different versions of the folder's `probe.py` / `reader.py` (`benchmark.folder_source`); comparable by declaration, listed for diagnosis. A result without a recorded source (`null`: schema 3, a registry entry without one) is unknown and not compared |
+| `W_FOLDER_SOURCE_DIFFERS` | results in a column were scored by different versions of the folder's `eval.py` / `reader.py` (`benchmark.folder_source`); comparable by declaration, listed for diagnosis. A result without a recorded source (`null`: schema 3, a registry entry without one) is unknown and not compared |
 | `W_POPULATION_DIFFERS` | eval populations differ within a column |
 | `W_MISSING_READING` | a model lacks an expected reading in a column |
 | `W_NONSTANDARD` | a column of non-pinned probe configs: comparable with nothing |
@@ -266,7 +267,7 @@ To show two configurations of one model side by side, give them two `model` name
 
 `--join <benchmark> <reading>=RUN ...` (e.g. `--join vggsounder a=RUN v=RUN av=RUN`; a RUN is a run directory,
 a `probe/<eval_hash12>/` directory or a seed directory; the lowest seed is used) calls the benchmark folder's
-`probe.py` `join()` hook. The core refuses (exit 2) results of different benchmarks or `eval_hash`es
+`eval.py` `join()` hook. The core refuses (exit 2) results of different benchmarks or `eval_hash`es
 (`E_JOIN_MIXED`), different eval `ids_sha256` (`E_JOIN_POPULATION`), readings of more than one `model`
 (`E_JOIN_MODEL`), a missing result or `eval_logits.npy` (`E_JOIN_MISSING`) and a non-`ok` status
 (`E_JOIN_STATUS`); a benchmark without a `join()` hook is `E_JOIN_UNSUPPORTED` (exit 1); the folder's
@@ -302,7 +303,7 @@ prints the same statuses for one model without building a report.
 
 ### Root
 
-Decided before any training (`yavih.readouts.base.resolve_results_root`): `probe run --results DIR` (a matrix
+Decided before any training (`yavih.readouts.base.resolve_results_root`): `eval run --results DIR` (a matrix
 `results` key), else `YAVIH_RESULTS`, else config `[results] root` ([configuration](configuration.md)), else
 `yavih-bench/results` when a project is discovered ([project layout](project-layout.md)), else the directory
 `results` next to the runs root of a standard run directory: the absolute run directory's last three components
@@ -330,30 +331,31 @@ One directory per model name, every reading and benchmark of it inside. `<timest
 
 ### File schema
 
-`RESULTS_FILE_VERSION = 2`:
+`RESULTS_FILE_VERSION = 3` (a version-2 file, written before the scorer names, is read with `readout` /
+`readout_version` / `probe_hash` / `probe` renamed to `scorer` / `scorer_version` / `scorer_hash` / `scoring`):
 
 ```jsonc
 {
-  "results_version": 2,
+  "results_version": 3,
   "results": {"ave:av": {"seg_acc": 0.412, "seg_acc_ci95": [0.36, 0.47], "seg_acc_floor": 0.164,
                          "clip_acc": 0.412,
                          "seg_acc_boundary": 0.531, "seg_acc_boundary_ci95": [0.44, 0.63],
                          "seg_acc_boundary_floor": 0.499, "n_boundary": 104, "n_eval": 316,
                          "status": "ok", "headline": "seg_acc", "n_seeds": 1, "coverage_eval": 1.0}},
   "configs": {"ave:av": {"benchmark": "ave", "reading": "av", "eval_hash": "…",
-                         "readout": "seq", "readout_version": 2, "protocol_version": 2,
-                         "protocol_hash": "…", "probe_hash": "…", "manifest_hash": "…",
+                         "scorer": "seq", "scorer_version": 2, "protocol_version": 2,
+                         "protocol_hash": "…", "scorer_hash": "…", "manifest_hash": "…",
                          "roles": {"train": {"splits": ["train"], "n": 2624}, "eval": {"splits": ["test"], "n": 316}},
                          "metrics": {"headline": "seg_acc", "list": […], "floors": […], "controls": []},
                          "input_contract": {…}, "output_contract": {…}, "external": [],
-                         "probe": {"config": {…}, "seeds": [0], "standard": true},
+                         "scoring": {"config": {…}, "seeds": [0], "standard": true},
                          "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
                          "describe_sha256": "…", "features_fingerprint": "…",
                          "unit_results": ["<runs root>/ave/vjepa2-l/av/probe/<eval_hash12>/seed0/result.json"]}},
   "versions": {"ave:av": 2},
   "higher_is_better": {"ave:av": {"seg_acc": true, "clip_acc": true, "seg_acc_boundary": true}},
   "n_samples": {"ave:av": {"train": 2624, "eval": 316}},
-  "config": {"model": "vjepa2-l", "bridge": {…}, "probe": {"config": {…}, "seeds": [0], "standard": true},
+  "config": {"model": "vjepa2-l", "bridge": {…}, "scoring": {"config": {…}, "seeds": [0], "standard": true},
              "external": {}},
   "git_hash": "3f2a…",
   "yavih_version": "0.2.0",
@@ -366,11 +368,11 @@ One directory per model name, every reading and benchmark of it inside. `<timest
 | key | content |
 |---|---|
 | `results[key]` | every `metrics.list` value under its name, `<m>_ci95` per `ci95` entry, `<m>_floor` for every metric with a floor (`floor_of`), every control under its name, `status`, `headline`, `n_seeds`, `coverage_eval` (`present / nominal` of eval). With several seeds a value is the mean, `<m>_std` the standard deviation (omitted for equal integer counts) and `<m>_ci95` the interval of the lowest seed. A non-`ok` entry holds only `status` and `reason`. `waived` (the codes) when waivers are recorded |
-| `configs[key]` | `benchmark`, `reading`, `eval_hash` (the comparability key), `readout`, `readout_version`, `protocol_version`, `protocol_hash`, `probe_hash`, `manifest_hash`, `roles` (splits and present counts), `metrics`, `input_contract`, `output_contract`, `external` (the `benchmark.yaml` entries), `probe` (`config`, `seeds`, `standard`), `bridge`, `describe_sha256`, `features_fingerprint`, `unit_results`; `waived` `[{code, reason, source, count}]` when present. A join entry carries `joined: {reading: {describe_sha256, unit_results}}` and `warnings` instead of `bridge` |
+| `configs[key]` | `benchmark`, `reading`, `eval_hash` (the comparability key), `scorer`, `scorer_version`, `protocol_version`, `protocol_hash`, `scorer_hash`, `manifest_hash`, `roles` (splits and present counts), `metrics`, `input_contract`, `output_contract`, `external` (the `benchmark.yaml` entries), `scoring` (`config`, `seeds`, `standard`), `bridge`, `describe_sha256`, `features_fingerprint`, `unit_results`; `waived` `[{code, reason, source, count}]` when present. A join entry carries `joined: {reading: {describe_sha256, unit_results}}` and `warnings` instead of `bridge` |
 | `versions[key]` | `protocol_version` (lm-eval's task version) |
 | `higher_is_better[key]` | from `MetricSpec.higher_is_better`; metrics with `None` (disclosures, controls) omitted |
 | `n_samples[key]` | present rows per role (`train`, `eval`, `floor`) |
-| `config` | `model`; `bridge` and `probe` of a single-entry file (of a merged file only when every main entry agrees, else null); `external` = every package version any entry used; a merged file adds `merged_from` |
+| `config` | `model`; `bridge` and `scoring` of a single-entry file (of a merged file only when every main entry agrees, else null); `external` = every package version any entry used; a merged file adds `merged_from` |
 | `git_hash` | the running yavih's source commit (`yavih.buildinfo`), or null |
 | `yavih_version`, `date`, `env` | writer version, UTC date, host / python / torch / cuda / gpu / SLURM job |
 
@@ -403,7 +405,7 @@ coverage (`present / nominal`, else its recorded `fraction`) is below `min_eval_
 ### --merge-results
 
 `report build --merge-results` reads every `results_*.json` under `<results_root>/<model>/` for the models in
-the report (a file of another `results_version` is skipped with a notice) and, for every
+the report (a file of another `results_version` than 2 or 3 is skipped with a notice) and, for every
 model with two or more files, writes one merged `results_<timestamp>.json`:
 
 - the newest entry per `(benchmark, reading, eval_hash)` wins: one entry, so one configuration and one feature
@@ -411,6 +413,6 @@ model with two or more files, writes one merged `results_<timestamp>.json`:
 - entries of one `(benchmark, reading)` with different `eval_hash`es are all kept: the newest standard entry of
   the newest `protocol_version` under `<benchmark>:<reading>` (a non-standard entry holds it only when no
   standard one exists), the others under `<benchmark>:<reading>@<eval_hash12>`;
-- every entry keeps its own provenance in `configs[key]`; file-level `config.probe` and `config.bridge` are those
+- every entry keeps its own provenance in `configs[key]`; file-level `config.scoring` and `config.bridge` are those
   of the main-key entries when they agree, else null; `config.merged_from` lists the files whose entries were
   kept.

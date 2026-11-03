@@ -10,7 +10,7 @@ digests); resumption compares them and ``bridge.describe_sha256`` (consistency,
 not identity): a shard written under another bridge configuration is moved to ``_stale/``.
 
 The benchmark side of a shard's identity is ``benchmark.input_hash`` — a scoring edit
-(metric pin, ``probe.py``, readout version) leaves finished shards alone. Every comparison goes through
+(metric pin, ``eval.py``, readout version) leaves finished shards alone. Every comparison goes through
 :func:`identity_value`, which maps a recorded input hash through the folder changelog's ``supersedes_input``
 (``yavih.hash_history``).
 """

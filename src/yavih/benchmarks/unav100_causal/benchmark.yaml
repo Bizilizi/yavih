@@ -1,0 +1,188 @@
+# yavih benchmark folder — UnAV-100 causal recognition (streaming, scorer stream). Rows: make_manifest.py from the
+# pinned Hugging Face revision of UnAV-100. People: README.md; the agent: setup.md.
+schema_version: 3
+name: unav100_causal
+aliases: []
+title: UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel)
+capability: [audio-visual, temporal, streaming]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+scorer: stream
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-03"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438
+    input_hash: 4b78f464f5ee6da552bb4e32891bd1d6d937e2142286c3667e0b9ca2e9a6307f
+    supersedes: []
+
+header:
+  name: UnAV-100 (causal)
+  title: Dense-Localizing Audio-Visual Events in Untrimmed Videos — causal streaming recognition
+  venue: "Geng et al. · CVPR 2023 · streaming adaptation in yavih"
+  abstract: >-
+    10 790 untrimmed YouTube videos (up to 60 s) with 30 059 audio-visual events of 100 classes, often concurrent.
+    Scored causally: the encoder observes each video as a stream and every one-second bin is labelled, multilabel, at
+    its end from what had been seen by then.
+
+source:
+  kind: public_url
+  urls:
+    - "https://huggingface.co/datasets/ttgeng233/UnAV-100"
+    - "https://unav100.github.io/"
+    - "https://github.com/ttgeng233/UnAV"
+  revision: "daeb88bc14eeff48f8a4ac2836b67f6c350f847b"
+  licence: >-
+    The project page states CC BY 4.0 (copyright of the videos stays with their owners); the Hugging Face dataset card
+    states CC BY-NC-SA 4.0. Treat it as CC BY-NC-SA 4.0, the stricter: research use. Code (the authors'): MIT. Cite
+    Geng et al., "Dense-Localizing Audio-Visual Events in Untrimmed Videos", CVPR 2023.
+  bytes: 66123100000          # 13 tar parts (12 x 5 368 709 120 + 1 351 094 873) + 3 parquets (556 kB)
+  sha256:
+    data/train.parquet: d8b1302fc12dc22a62ca23b592392cb000d00d2a487a70aa40876dde52742d55
+    data/validation.parquet: 551e1781c8a8fd77cb7a1daf0ad9b71346c615864de7bba6fb5dba3565dadc6b
+    data/test.parquet: 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
+    unav_raw_videos.tar.gz.part_00: aa8dc6798fc8b99d69533b4ebd068a0f659532d13ff82a21a527db5fbdd37f65
+    unav_raw_videos.tar.gz.part_12: d38371218b5f1dcf2babd039b882608ecf4cd24a6863b4f6c6a39dc03eb788d3
+  notes: >-
+    One public Hugging Face revision: the annotation parquets (identical to the official unav100_annotations.json,
+    sha256 2fdfc587ad36fc405496b5520d967b5df54b2d82027d16d69e968b5cf04d3dba) and the authors' video archive in 13
+    parts (every part's sha256 is its Hub LFS hash, checked by prepare/01). prepare/02 concatenates and extracts the
+    archive into raw_videos/ (one <video_id>.mp4 per video, h264 + AAC, as the authors trimmed them).
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "yavih bench snapshot unav100_causal (66 GB, public, no account), then prepare/02 extracts the videos"
+budget:
+  clips: {train: 6487, test: 2166}
+  media_gb: 66.1
+  extract_min_per_1k_clips_ref: 85.0   # 84 window encodes per 42 s video (0.5 s updates) for an offline baseline
+  probe_minutes_ref: {stream: 30}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 030f7a589a8993313dcb811f1f07e2593657dae013e0d2b8641c62708e2b1954
+  classes: null              # class names: event_classes.csv (index = the official label_id), read by make_manifest.py
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: [video, audio]}
+    duration_s: {type: float, role: label_aux}
+    events: {type: json, role: label_aux}
+  upstream:
+    source: "UnAV-100 annotation parquets at the pinned Hugging Face revision; recording durations from the video headers"
+    sha256: 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
+    rows: 10786
+    note: >-
+      Upstream = the three annotation parquets (10 790 videos, 30 059 events; train 6 489 / validation 2 134 / test
+      2 167). Per video: its file raw_videos/<video_id>.mp4, its recording duration (the video track's duration_s from
+      yavih's header probe) and its events [start, end, class] (class index in event_classes.csv, the official label_id
+      order). Excluded: 4 videos whose recording duration differs from the annotated duration by more than 1 s
+      (2 train, 1 validation, 1 test). No draw.
+    upstream_files:
+      "data/train.parquet": d8b1302fc12dc22a62ca23b592392cb000d00d2a487a70aa40876dde52742d55
+      "data/validation.parquet": 551e1781c8a8fd77cb7a1daf0ad9b71346c615864de7bba6fb5dba3565dadc6b
+      "data/test.parquet": 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
+      "unav100_annotations.json (official, class order)": 2fdfc587ad36fc405496b5520d967b5df54b2d82027d16d69e968b5cf04d3dba
+    curation:
+      total_upstream: 10790
+      per_split:
+        train: {listed: 6487, staged: 6487, missing: 0}
+        validation: {listed: 2133, staged: 2133, missing: 0}
+        test: {listed: 2166, staged: 2166, missing: 0}
+      excluded:
+        duration_mismatch: 4
+      short_clips: 0
+      leakage_audit: null
+
+splits:
+  train: [train]
+  eval: [test]
+  floor: []
+  folds: null
+  unused: [validation]
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/unav100"
+      description: "the Hugging Face snapshot (data/*.parquet, unav_raw_videos.tar.gz.part_00 ... _12) + raw_videos/<video_id>.mp4 extracted by prepare/02"
+      hf: {repo: ttgeng233/UnAV-100, revision: "daeb88bc14eeff48f8a4ac2836b67f6c350f847b", repo_type: dataset}   # yavih bench snapshot unav100_causal; provenance, not hashed
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: "the UnAV-100 mp4 raw_videos/<video_id>.mp4 exactly as stored (h264, 6-52 fps, 9.5-60.1 s, up to 1280x720); the bridge reads it causally, update by update"
+    audio: "the same mp4 bytes as video (read once); its AAC track (44.1 kHz) is described by info; the bridge reads it causally, update by update"
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: sequence
+  coordinates: media
+  target_frame: null
+  requires: {pos: [], streams: [], grid: null, t_bins: null}
+  stream: {update_interval_s: 0.5}
+  schema:
+    emb: {type: array, dtype: [float16, float32], shape: ["*", D], stats: true}
+    support: {type: array, dtype: float64, shape: ["*", 4], exact: true, finite: false}
+    cutoff: {type: array, dtype: float64, shape: ["*"], exact: true}
+    timing: {type: json, kind: object, optional: true, volatile: true}
+
+external: []
+
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+  bin_seconds: 1.0
+  positive_coverage: 0.5
+  length_slices: {short: [0, 3], medium: [3, 10], long: [10, null]}
+  onset: {false_alerts_per_hour: 60, tolerance_s: 1.0}
+
+metrics:
+  headline: map_gru
+  list: [map_linear, map_gru, map_short_linear, map_short_gru, map_medium_linear, map_medium_gru, map_long_linear, map_long_gru,
+         onset_recall_linear, onset_recall_gru, onset_delay_s_linear, onset_delay_s_gru, false_alerts_per_h_linear, false_alerts_per_h_gru]
+  floors: [bin_map_floor]
+  controls: []
+  chance: {}
+  ci: {map_linear: bootstrap_clip, map_gru: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params:
+  groups: {event: {loss: bce, classes: 100}}

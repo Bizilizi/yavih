@@ -64,14 +64,14 @@ def test_shipped_suites_validate():
 
 def test_default_readings_subset_of_templates():
     """Every reading of a shipped suite is one its folder's bridge template declares, and every join names a folder
-    whose probe.py defines join() (what `report build --join` calls)."""
+    whose eval.py defines join() (what `report build --join` calls)."""
     for name in ("minimal", "default"):
         for _cap, e in load_suite(name).entries():
             folder = packaged_folder(e.benchmark)
             assert folder is not None and e.status == "packaged" and e.required
             assert set(e.readings) <= template_readings((folder / "bridge_template.py").read_text(encoding="utf-8")), e
             if e.join:
-                assert "\ndef join(" in (folder / "probe.py").read_text(encoding="utf-8")
+                assert "\ndef join(" in (folder / "eval.py").read_text(encoding="utf-8")
     assert suites.expected_store_keys("minimal") == ["esc50:a", "ssv2:v", "vggsounder:a", "vggsounder:v", "vggsounder:av",
                                                      "vggsounder:a+v+av"]
     assert [p["benchmark"] for p in suites.pairs("default")].count("audioset20k") == 3

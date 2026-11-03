@@ -25,18 +25,24 @@ or private files: request access from the dataset authors or whoever holds them)
 the sizes of the upstream release and the layout rules are in that folder's `setup.md`.
 
 <!-- yavih:bench-table data begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-| benchmark | readout | source | media touched (frozen) | frozen rows | handed over | obtain | how to stage it |
+| benchmark | scorer | source | media touched (frozen) | frozen rows | handed over | obtain | how to stage it |
 |---|---|---|---|---|---|---|---|
+| audiocaps_t2a | audiocaps_t2a | `public_url` | 0.9 GB = `budget.media_gb` | 776 test | text (cell) | auto | `yavih bench info audiocaps_t2a --setup` |
 | audioset20k | clf (multi) | `public_url`; 66.1 GB = `source.bytes` | 66 GB = `budget.media_gb` | 17 726 train / 16 223 eval | video + audio | auto | `yavih bench info audioset20k --setup` |
 | ave | seq (segments) | `public_url`; 13.4 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 2 624 train / 316 test | video + audio | auto | `yavih bench info ave --setup` |
+| ave_causal | stream | `public_url`; 13.4 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 2 592 train / 316 test | video + audio | auto | `yavih bench info ave_causal --setup` |
 | avsync | clf (floor role) | `derived`; 407.0 GB = `source.bytes` | 74.4 GB = `budget.media_gb` | 24 000 train / 3 000 test / 5 997 stationary | video + audio (materialized at prepare time) | needs-data-owner | `yavih bench info avsync --setup` |
+| epic100_anticipation_stream | stream | `public_url`; 740.0 GB = `source.bytes` | 740 GB = `budget.media_gb` | 495 train / 138 validation | video + audio | auto | `yavih bench info epic100_anticipation_stream --setup` |
 | esc50 | clf (folds) | `public_url`; 0.6 GB = `source.bytes` | 0.88 GB = `budget.media_gb` | 2 000 in folds 1–5 (400 each) | audio | auto | `yavih bench info esc50 --setup` |
 | fsd50k | clf (multi) | `public_url`; 24.7 GB = `source.bytes` | 22.9 GB = `budget.media_gb` | 20 000 train / 10 231 eval | audio | auto | `yavih bench info fsd50k --setup` |
 | in1k (aliases `imagenet1k`, `imagenet`) | clf | `manual_portal`; 154.6 GB = `source.bytes` | 12.43 GB = `budget.media_gb` | 50 000 train / 50 000 val | image | needs-licence | `yavih bench info in1k --setup` |
 | k400 | clf | `torrent`; 157.3 GB = `source.bytes` | 20.2 GB = `budget.media_gb` | 20 000 train / 13 492 val | video | auto | `yavih bench info k400 --setup` |
 | nyuv2_depth | grid | `manual_portal`; 145.8 GB = `source.bytes` | 8.2 GB = `budget.media_gb` | 12 000 train / 654 eval | image | manual-download | `yavih bench info nyuv2_depth --setup` |
 | ssv2 | clf | `manual_portal`; 19.5 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 20 000 train / 24 777 val | video | needs-licence | `yavih bench info ssv2 --setup` |
+| thumos14_oad | stream | `public_url`; 34.8 GB = `source.bytes` | 34.8 GB = `budget.media_gb` | 200 validation / 213 test | video + audio | auto | `yavih bench info thumos14_oad --setup` |
+| unav100_causal | stream | `public_url`; 66.1 GB = `source.bytes` | 66.1 GB = `budget.media_gb` | 6 487 train / 2 166 test | video + audio | auto | `yavih bench info unav100_causal --setup` |
 | vggsounder | clf (multi_sets) | `public_url`; 407.0 GB = `source.bytes` | 67 GB = `budget.media_gb` | 20 000 train / 12 008 test | video + audio | needs-data-owner | `yavih bench info vggsounder --setup` |
+| vggsounder_v2a | vggsounder_v2a | `public_url` | 4.5 GB = `budget.media_gb` | 3 000 test | video (materialized at prepare time) | needs-data-owner | `yavih bench info vggsounder_v2a --setup` |
 | vggss_box | box (box) | `public_url`; 10.5 GB = `source.bytes` | 9.35 GB = `budget.media_gb` | 3 700 train / 914 eval | video + audio | needs-data-owner | `yavih bench info vggss_box --setup` |
 <!-- yavih:bench-table data end -->
 
@@ -65,7 +71,7 @@ also in setup.md. Roots marked `prepare_only` are read only by `prepare/` and `m
 `doctor` reports them missing as a note.
 
 <!-- yavih:bench-table prepare_roots begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-Roots marked `prepare_only`: avsync `media_root` and `curation_root`; nyuv2_depth `geonet_root`; vggss_box `annotations_root`.
+Roots marked `prepare_only`: audiocaps_t2a `source_root`; avsync `media_root` and `curation_root`; nyuv2_depth `geonet_root`; vggss_box `annotations_root`.
 <!-- yavih:bench-table prepare_roots end -->
 
 Every folder script resolves its defaults through the same
@@ -145,7 +151,7 @@ lines; "None." for most), "## Input contract", "## Output contract", "## Prepare
 expected `yavih bench verify <b>` output), "## Gotchas" (bridge mistakes that pass validation on
 this benchmark). One per folder:
 <!-- yavih:bench-table names begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-`audioset20k`, `ave`, `avsync`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `ssv2`, `vggsounder`, `vggss_box`.
+`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `ssv2`, `thumos14_oad`, `unav100_causal`, `vggsounder`, `vggsounder_v2a`, `vggss_box`.
 <!-- yavih:bench-table names end -->
 
 ## 6. Failure modes yavih guards against

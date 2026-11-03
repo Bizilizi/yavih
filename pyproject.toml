@@ -41,6 +41,7 @@ Changelog = "https://github.com/Bizilizi/yavih/releases"
 [project.optional-dependencies]
 media = ["av>=11", "soundfile>=0.12", "pillow>=9", "scipy>=1.10"]
 probe = ["torch>=2.1"]
+hf = ["pyarrow>=14", "huggingface_hub>=0.26"]  # layout: parquet; Hugging Face data roots
 # No extra for an original-author package (vggsounder, Probe3D, …): such packages are installed
 # independently as each folder's setup.md "## Dependencies" says and reached only through
 # yavih.external.require.

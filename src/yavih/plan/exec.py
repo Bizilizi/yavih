@@ -15,7 +15,7 @@ units write a log with the traceback; ``--deadline-margin`` default 900 s (> the
   A unit whose child exits 1 (usage / configuration) gets its own status ``misconfigured`` (exit 1, never
   resubmitted by a driver loop). Every record carries ``history = {attempts, status, streak}`` so ``plan status`` can
   flag a unit that keeps exiting 3 or 4 the same way. Without a configured scratch root a probe unit runs, as
-  ``probe run`` does, on the features in place (memmap) instead of exiting 3.
+  ``eval run`` does, on the features in place (memmap) instead of exiting 3.
 - Slots: ``--slots K`` gives slot ``g`` the ``g``-th entry of the INHERITED ``CUDA_VISIBLE_DEVICES`` (a non-cgroup
   SLURM node, Kubernetes GPU UUIDs, ``docker --gpus device=4,5``), and every slot — probes included — is a separate
   ``yavih exec --id`` process, so devices, torch globals and signal flags never cross between units.
@@ -347,7 +347,7 @@ def _status_for_code(rc: int) -> str:
 def _scratch_preflight(unit: Unit, *, env: dict[str, str], log_path: str | None = None) -> tuple[str | None, str | None]:
     """Returns ``(scratch_dir, problem)``: ``problem`` set → exit 3 not_ready. Without a
     configured scratch root (``YAVIH_SCRATCH`` → config ``[scratch] root`` → ``SLURM_TMPDIR``) the probe reads the
-    features in place (memmap backend, ``W_SIZE`` in its result) exactly as ``probe run`` does — slower, never a
+    features in place (memmap backend, ``W_SIZE`` in its result) exactly as ``eval run`` does — slower, never a
     not-ready loop."""
     need_gb = float(unit.needs.get("scratch_gb") or 0)
     if need_gb <= 0:
@@ -470,10 +470,10 @@ def _run_probe(unit: Unit, *, deadline: float | None, scratch: str | None) -> No
         readouts.probe_not_applicable(run_dir, unit=unit.to_json(), profile=profile, seed=seed, write_results="--no-results" not in unit.cmd)
         return
     kw: dict[str, Any] = {}
-    if "--no-results" in unit.cmd:  # `plan build --sample N`: no results-store file, as `probe run --no-results`
+    if "--no-results" in unit.cmd:  # `plan build --sample N`: no results-store file, as `eval run --no-results`
         kw["write_results"] = False
     results = _cmd_option(unit.cmd, "--results")
-    if results:  # matrix `results` → the probe's results-store root, as `probe run --results` would
+    if results:  # matrix `results` → the probe's results-store root, as `eval run --results` would
         kw["results_root"] = resolve_path(unit, results)
     waive = [cmd_v for i, tok in enumerate(unit.cmd[:-1]) if tok == "--waive" for cmd_v in (unit.cmd[i + 1],)]
     if waive:  # matrix `waive`: the operator's waivers for the validate prologue

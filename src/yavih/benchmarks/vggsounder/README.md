@@ -38,7 +38,7 @@ clips (Chen et al., ICASSP 2020): 199 176 YouTube segments listed in `vggsound.c
 ### Protocol
 
 A frozen-feature attentive probe trained on VGGSound-train predicts the label set of each VGGSounder test clip;
-the authors' package scores the predictions. `readout: clf`, `label.kind: multi_sets`, BCE on one-hot train
+the authors' package scores the predictions. `scorer: clf`, `label.kind: multi_sets`, BCE on one-hot train
 targets, the pinned attentive probe. `protocol_version: 1`.
 
 | split | role | rows | content |
@@ -60,7 +60,7 @@ average precision, the paper's mAP) on the reading's own set. The report's defau
 `hit_rate@1` and `f1@1` (`metrics.table`); the other 57 are in `result.json`, the results store, json / csv output
 and `report --detail`. No interval is defined (`metrics.ci: {}`): seeds are the noise estimate, run at least two.
 The modality-confusion score `mu` needs all three readings: `yavih report build --join vggsounder a=RUN v=RUN
-av=RUN` (the folder's `probe.py` `join()`) runs the package's `compute_all_results` on the three readings and
+av=RUN` (the folder's `eval.py` `join()`) runs the package's `compute_all_results` on the three readings and
 stores its whole output (the 30 metrics on all five sets, `mu` for `a`, `v` and `av`); its markdown shows rows A /
 V / AV with mAP (`auc_pr`), HIT (`hit_rate@1`), F1 (`f1@1`) and `mu`, labelled A, V and A∩V for the package keys
 `a`, `v` and `av` (A∩V: both A and V top-1 hit when AV top-1 fails).

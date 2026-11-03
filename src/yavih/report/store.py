@@ -202,7 +202,7 @@ def _std(values: list[Any]) -> float | None:
 
 
 def _seed(r: Mapping[str, Any]) -> int:
-    return int((r.get("probe") or {}).get("seed") or 0)
+    return int((r.get("scorer") or {}).get("seed") or 0)
 
 
 def _spec_of(bench: Any) -> Any:
@@ -221,8 +221,8 @@ def _headline(spec: Any, metric_names: Sequence[str], floor_names: Sequence[str]
 def benchmark_entry(results: Sequence[Mapping[str, Any]], *, bench: Any = None, result_paths: Sequence[str | None] = ()) -> dict[str, Any]:
     """The five per-entry blocks of one results file from the seeds' ``result.json`` records of
     ONE ``(benchmark, eval_hash, model, reading)``: ``{"name", "reading", "key", "results", "configs", "version",
-    "higher_is_better", "n_samples", "external", "bridge", "probe", "model", "env"}``. ``configs`` carries the
-    entry's ``benchmark``, ``reading``, ``eval_hash`` and its own provenance (``probe``, ``bridge``,
+    "higher_is_better", "n_samples", "external", "bridge", "scoring", "model", "env"}``. ``configs`` carries the
+    entry's ``benchmark``, ``reading``, ``eval_hash`` and its own provenance (``scoring``, ``bridge``,
     ``describe_sha256``, ``features_fingerprint``): one model directory holds several readings, i.e. several
     bridges."""
     if not results:
@@ -233,20 +233,20 @@ def benchmark_entry(results: Sequence[Mapping[str, Any]], *, bench: Any = None, 
     name = str(bmeta.get("name"))
     spec = _spec_of(bench)
     ok = [r for r in results if r.get("status") == "ok"]
-    probe_mod = None
+    eval_mod = None
     if bench is not None:
         try:
-            from yavih.readouts.base import folder_probe
+            from yavih.readouts.base import folder_eval
 
-            probe_mod = folder_probe(bench)
-        except Exception:  # noqa: BLE001 - facts only; a broken probe.py was refused by the probe already
-            probe_mod = None
+            eval_mod = folder_eval(bench)
+        except Exception:  # noqa: BLE001 - facts only; a broken eval.py was refused by the probe already
+            eval_mod = None
 
     if ok:
         metric_names = list((ok[0].get("metrics") or {}).keys())
         floor_names = list((ok[0].get("floors") or {}).keys())
         control_names = list((ok[0].get("controls") or {}).keys())
-        info = metric_info(metric_names, floors=floor_names, probe_metrics=getattr(probe_mod, "METRICS", None))
+        info = metric_info(metric_names, floors=floor_names, probe_metrics=getattr(eval_mod, "METRICS", None))
         block: dict[str, Any] = {}
         for m in metric_names:
             vals = [(r.get("metrics") or {}).get(m) for r in ok]
@@ -309,13 +309,13 @@ def benchmark_entry(results: Sequence[Mapping[str, Any]], *, bench: Any = None, 
         "benchmark": name,
         "reading": reading,
         "eval_hash": first.get("eval_hash"),
-        "readout": bmeta.get("readout"),
-        "readout_version": bmeta.get("readout_version"),
+        "scorer": bmeta.get("scorer"),
+        "scorer_version": bmeta.get("scorer_version"),
         "protocol_version": bmeta.get("protocol_version"),
         "protocol_hash": bmeta.get("protocol_hash"),
-        "probe_hash": (first.get("probe") or {}).get("hash"),
+        "scorer_hash": (first.get("scorer") or {}).get("hash"),
         "manifest_hash": bmeta.get("manifest_hash"),
-        "folder_source": bmeta.get("folder_source"),  # provenance: the folder's probe.py / reader.py digests
+        "folder_source": bmeta.get("folder_source"),  # provenance: the folder's eval.py / reader.py digests
         "roles": roles,
         "metrics": {
             "headline": getattr(metrics_cfg, "headline", None) or block.get("headline"),
@@ -326,8 +326,8 @@ def benchmark_entry(results: Sequence[Mapping[str, Any]], *, bench: Any = None, 
         "input_contract": _plain(getattr(spec, "input_contract", None)),
         "output_contract": _plain(getattr(spec, "output_contract", None)),
         "external": _plain(getattr(spec, "external", None)) or [],
-        # per-entry probe provenance: survives --merge-results, which keeps one file-level config
-        "probe": {"config": (first.get("probe") or {}).get("config"), "seeds": [_seed(r) for r in results],
+        # per-entry scorer provenance: survives --merge-results, which keeps one file-level config
+        "scoring": {"config": (first.get("scorer") or {}).get("config"), "seeds": [_seed(r) for r in results],
                   "standard": all(bool(r.get("standard")) for r in results)},
         "bridge": first.get("bridge"),
         "describe_sha256": bridge.get("describe_sha256"),
@@ -356,7 +356,7 @@ def benchmark_entry(results: Sequence[Mapping[str, Any]], *, bench: Any = None, 
         "n_samples": n_samples,
         "external": external,
         "bridge": first.get("bridge"),
-        "probe": {"config": (first.get("probe") or {}).get("config"), "seeds": [_seed(r) for r in results],
+        "scoring": {"config": (first.get("scorer") or {}).get("config"), "seeds": [_seed(r) for r in results],
                   "standard": all(bool(r.get("standard")) for r in results)},
         "model": first.get("model"),
         "env": first.get("env") or {},
@@ -385,7 +385,7 @@ def _env(first_env: Mapping[str, Any]) -> dict[str, Any]:
 
 def results_document(entries: Sequence[Mapping[str, Any]], *, keys: Sequence[str] | None = None, extra_config: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Assemble the results file from :func:`benchmark_entry` outputs (``keys`` = the ``results`` key per
-    entry, default ``<benchmark>:<reading>``). File-level ``config.bridge`` / ``config.probe`` are those of the
+    entry, default ``<benchmark>:<reading>``). File-level ``config.bridge`` / ``config.scoring`` are those of the
     entries when they all agree (always for one entry), else ``null`` (see ``configs[key]``)."""
     if not entries:
         raise ValueError("results_document needs at least one entry")
@@ -397,7 +397,7 @@ def results_document(entries: Sequence[Mapping[str, Any]], *, keys: Sequence[str
     config = {
         "model": first.get("model"),
         "bridge": _agreed([e.get("bridge") for e in entries]),
-        "probe": _agreed([e.get("probe") for e in entries]),
+        "scoring": _agreed([e.get("scoring") for e in entries]),
         "external": external,
     }
     config.update(dict(extra_config or {}))
@@ -473,14 +473,38 @@ def join_reading(readings: Sequence[str]) -> str:
     return "+".join([r for r in _JOIN_ORDER if r in rs] + [r for r in rs if r not in _JOIN_ORDER])
 
 
+_V3_NAMES = (("probe", "scoring"), ("readout", "scorer"), ("readout_version", "scorer_version"), ("probe_hash", "scorer_hash"))
+
+
+def _v2_to_v3(doc: dict[str, Any]) -> dict[str, Any]:
+    """Version 3 renamed the scorer's names (``readout`` → ``scorer``, ``readout_version`` → ``scorer_version``,
+    ``probe_hash`` → ``scorer_hash``, the ``probe`` provenance blocks ``{config, seeds, standard}`` → ``scoring``); values
+    and hashes unchanged."""
+    blocks = [c for c in (doc.get("configs") or {}).values() if isinstance(c, dict)]
+    if isinstance(doc.get("config"), dict):
+        blocks.append(doc["config"])
+    for c in blocks:
+        for old, new in _V3_NAMES:
+            if old in c:
+                c[new] = c.pop(old)
+        fs = c.get("folder_source")
+        if isinstance(fs, dict) and "probe" in fs:
+            c["folder_source"] = {"eval": fs.get("probe"), **{k: v for k, v in fs.items() if k != "probe"}}
+    doc["results_version"] = 3
+    return doc
+
+
 def upgrade_results_file(doc: Mapping[str, Any]) -> dict[str, Any]:
-    """A results file of ``RESULTS_FILE_VERSION`` (a deep copy). A file of another version raises ``ValueError``:
-    a newer one needs a newer yavih, an older one is re-written by ``yavih report`` from its ``result.json``
+    """A results file of ``RESULTS_FILE_VERSION`` (a deep copy; a version-2 file is upgraded in memory). A file of
+    another version raises ``ValueError``: a newer one needs a newer yavih, an older one is re-written by ``yavih report`` from its ``result.json``
     records."""
     out = json.loads(json.dumps(doc))
     version = out.get("results_version")
     if not isinstance(version, int) or isinstance(version, bool) or version > RESULTS_FILE_VERSION:
         raise ValueError(f"results_version {version!r} is newer than RESULTS_FILE_VERSION {RESULTS_FILE_VERSION} (or not an int)")
+    if version == 2:
+        out = _v2_to_v3(out)
+        version = 3
     if version < RESULTS_FILE_VERSION:
         raise ValueError(f"results_version {version} is older than this yavih reads ({RESULTS_FILE_VERSION}); "
                          "re-run `yavih report` over its result.json records")
@@ -510,13 +534,13 @@ def read_results_files(model_dir: str | os.PathLike) -> list[tuple[Path, dict]]:
 
 
 def _entry_standard(doc: Mapping[str, Any], key: str) -> bool:
-    """Whether a results-file entry was scored under the pinned probe: the entry's own ``configs[key].probe``,
-    else the file-level ``config.probe`` (one invocation = one entry)."""
+    """Whether a results-file entry was scored under the pinned scorer configuration: the entry's own
+    ``configs[key].scoring``, else the file-level ``config.scoring`` (one invocation = one entry)."""
     cfg = (doc.get("configs") or {}).get(key) or {}
-    probe = cfg.get("probe") if isinstance(cfg.get("probe"), Mapping) else None
-    if probe is None:
-        probe = (doc.get("config") or {}).get("probe") or {}
-    return bool(probe.get("standard", False))
+    scoring = cfg.get("scoring") if isinstance(cfg.get("scoring"), Mapping) else None
+    if scoring is None:
+        scoring = (doc.get("config") or {}).get("scoring") or {}
+    return bool(scoring.get("standard", False))
 
 
 def _merge_model(files: Sequence[tuple[Path, dict]]) -> dict[str, Any]:
@@ -526,7 +550,7 @@ def _merge_model(files: Sequence[tuple[Path, dict]]) -> dict[str, Any]:
     under ``<benchmark>:<reading>`` (a non-standard, e.g. ``fast()``, entry holds it only when no standard one
     exists) and the others under ``<benchmark>:<reading>@<eval_hash12>``. ``benchmark``, ``reading`` and
     ``eval_hash`` come from ``configs[key]``, never from the key. Each entry keeps its own provenance
-    (``configs[key]``: ``probe``, ``bridge``, ``describe_sha256``, ``features_fingerprint``)."""
+    (``configs[key]``: ``scoring``, ``bridge``, ``describe_sha256``, ``features_fingerprint``)."""
     newest: dict[tuple[str, str, str], tuple[int, Path, dict, str]] = {}
     for order, (path, doc) in enumerate(files):  # oldest first: a later file overwrites
         for key in doc["results"]:
@@ -564,8 +588,8 @@ def _merge_model(files: Sequence[tuple[Path, dict]]) -> dict[str, Any]:
     cfg = dict((latest_doc or {}).get("config") or {})
     cfg["external"] = external
     cfg["merged_from"] = sorted(merged_from)  # the files whose entries the merge kept
-    # the file-level probe / bridge blocks describe the main-key entries only when they agree; else see configs[key]
-    cfg["probe"] = _agreed([(out["configs"].get(k) or {}).get("probe") for k in mains])
+    # the file-level scoring / bridge blocks describe the main-key entries only when they agree; else see configs[key]
+    cfg["scoring"] = _agreed([(out["configs"].get(k) or {}).get("scoring") for k in mains])
     cfg["bridge"] = _agreed([(out["configs"].get(k) or {}).get("bridge") for k in mains])
     return {
         "results_version": RESULTS_FILE_VERSION,
@@ -617,10 +641,10 @@ def write_join(results_root: str | os.PathLike, model: str, *, benchmark: str, j
         "results": {key: {**_plain(dict(joined)), "status": "ok"}},
         "configs": {key: {
             "benchmark": benchmark, "reading": reading, "eval_hash": first.get("eval_hash"),
-            "readout": bmeta.get("readout"), "readout_version": bmeta.get("readout_version"),
+            "scorer": bmeta.get("scorer"), "scorer_version": bmeta.get("scorer_version"),
             "protocol_version": bmeta.get("protocol_version"), "protocol_hash": bmeta.get("protocol_hash"),
-            "probe_hash": (first.get("probe") or {}).get("hash"), "manifest_hash": bmeta.get("manifest_hash"),
-            "probe": {"config": (first.get("probe") or {}).get("config"), "seeds": sorted({_seed(r) for r in refs.values()}),
+            "scorer_hash": (first.get("scorer") or {}).get("hash"), "manifest_hash": bmeta.get("manifest_hash"),
+            "scoring": {"config": (first.get("scorer") or {}).get("config"), "seeds": sorted({_seed(r) for r in refs.values()}),
                       "standard": all(bool(r.get("standard")) for r in refs.values())},
             "joined": {rd: {"describe_sha256": (r.get("bridge") or {}).get("describe_sha256"),
                             "unit_results": [str((unit_results or {}).get(rd))] if (unit_results or {}).get(rd) else []}
@@ -633,7 +657,7 @@ def write_join(results_root: str | os.PathLike, model: str, *, benchmark: str, j
         "config": {
             "model": model,
             "bridge": None,
-            "probe": None,
+            "scoring": None,
             "external": dict(external or {}),
         },
         "git_hash": git_hash(),

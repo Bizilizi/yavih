@@ -33,7 +33,7 @@ YouTube when the dataset was made.
 
 ### Protocol
 
-`readout: clf`, `label.kind: multi` (BCE), `protocol_version: 1`. yavih predicts the 527 labels of each eval clip
+`scorer: clf`, `label.kind: multi` (BCE), `protocol_version: 1`. yavih predicts the 527 labels of each eval clip
 from frozen features of the clip's video and/or audio track with the pinned attentive probe; the labels are audio
 events whatever the reading, so a video-only bridge predicts sound events from pixels.
 

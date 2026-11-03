@@ -54,7 +54,7 @@ pip install --no-deps vggsounder==1.0
 - `--no-deps` is load-bearing: the package declares `datasets>=4.5.0`, whose dependencies can upgrade numpy past
   what the installed torch supports. Its scorer (`vggsounder.benchmark`) imports **pandas, scikit-learn and
   tqdm**, which `--no-deps` does not install: `pip install pandas scikit-learn tqdm` if absent.
-- Assert-import (`benchmark.yaml` `external`, `probe.py` → `yavih.external.require`): `import vggsounder` must
+- Assert-import (`benchmark.yaml` `external`, `eval.py` → `yavih.external.require`): `import vggsounder` must
   succeed and `importlib.metadata.version("vggsounder")` must equal `1.0`, else the probe exits 3
   (`E_EXTERNAL_MISSING` / `E_EXTERNAL_VERSION`) before training, printing the pip line. `yavih doctor --bench
   vggsounder` shows it. The pin is the **PyPI release**: a source checkout of the authors' repo reports another
@@ -151,7 +151,7 @@ vggsounder: manifest sha ok; labels ok; curation ok; targets_sha_ok=None; derive
 
 A copy with decayed clips reports them as missing; below 95 % eval coverage the probe refuses.
 
-Scoring: `yavih probe run <run>` calls `probe.py` `score()` with the run's `describe()["reading"]`, which routes
+Scoring: `yavih eval run <run>` calls `eval.py` `score()` with the run's `describe()["reading"]`, which routes
 exactly as the package does: reading `a` → its logits under pkl key `a`, scored on the sets `a` (ids `<metric>`)
 and `a only` (`<metric>_only`); `v` → `v` and `v only`; `av` → `av` only (its `*_only` ids are `null`). The 30
 metric names are the package's `compare_labels_logits` keys (`f1@k`, `f1_macro@k`, `accuracy@k`, `jaccard@k`,

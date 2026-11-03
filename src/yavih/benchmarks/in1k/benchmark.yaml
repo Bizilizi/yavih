@@ -1,7 +1,7 @@
-# yavih benchmark: ImageNet-1K single-label image classification (schema 2).
+# yavih benchmark: ImageNet-1K single-label image classification (schema 3).
 # Frozen by make_manifest.py from the public ILSVRC2012 devkit and train file list; README.md (people),
 # setup.md (agent: obtain, dependencies, input/output contracts, verify).
-schema_version: 2
+schema_version: 3
 name: in1k
 aliases: [imagenet1k, imagenet]
 title: ImageNet-1K image classification (frozen 50/class train draw, full 50k val)
@@ -14,7 +14,7 @@ header:
     1.28 million training and 50 000 validation photographs from the ILSVRC2012 challenge, each labelled
     with one of 1 000 WordNet object categories. The task is to name the object category of a single
     still image; the standard score is top-1 accuracy on the validation set.
-readout: clf
+scorer: clf
 protocol_version: 1
 changelog:
   - version: 1
@@ -103,8 +103,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:
+fields:
   image:
+    storage: file
     kind: image
     media_column: rel_media
     root: media_root

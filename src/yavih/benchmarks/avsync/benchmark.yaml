@@ -1,6 +1,6 @@
-# yavih benchmark folder — avsync (schema 2). Values under `manifest`, `budget` and `manifest.upstream` are printed by
+# yavih benchmark folder — avsync (schema 3). Values under `manifest`, `budget` and `manifest.upstream` are printed by
 # make_manifest.py (`--check` verifies them).
-schema_version: 2
+schema_version: 3
 name: avsync
 aliases: []
 title: AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor)
@@ -14,7 +14,7 @@ header:
     against each other by one of nine offsets from −2 to +2 seconds, and the task is to name the offset. Clips
     are chosen for audible and visible transients; stationary clips, where the offset cannot be read, serve as a
     validity floor.
-readout: clf
+scorer: clf
 protocol_version: 1
 changelog:
   - version: 1
@@ -115,8 +115,9 @@ splits:
   unused: []
   min_eval_coverage: 0.95
 
-streams:
+fields:
   video:
+    storage: file
     kind: video
     media_column: rel_media
     root: derived_root
@@ -124,6 +125,7 @@ streams:
     layout_params: {}
     required: true
   audio:
+    storage: file
     kind: audio
     media_column: rel_media
     root: derived_root

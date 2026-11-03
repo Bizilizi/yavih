@@ -89,20 +89,20 @@ def make_result(
     ok = status == "ok"
     ci = [acc - 0.05, acc + 0.05] if ci is None else ci
     return {
-        "schema_version": 4,
+        "schema_version": 5,
         "status": status,
         "reason": None if ok else "eligibility: missing pos",
         "standard": standard,
         "eval_hash": hashing.eval_hash(protocol_hash, probe_hash),
-        "benchmark": {"name": bench, "protocol_version": protocol_version, "readout": readout, "readout_version": 1 if readout == "clf" else 2,
-                      "manifest_hash": "9" * 64, "protocol_hash": protocol_hash, "folder_source": {"probe": None, "reader": None}},
+        "benchmark": {"name": bench, "protocol_version": protocol_version, "scorer": readout, "scorer_version": 1 if readout == "clf" else 2,
+                      "manifest_hash": "9" * 64, "protocol_hash": protocol_hash, "folder_source": {"eval": None, "reader": None}},
         "model": model,
         "reading": reading,
         "bridge": {"name": bridge_name, "describe": describe, "describe_sha256": hashing.describe_sha256(describe), "source_sha256": "7" * 64},
         "features": {"fingerprint": fingerprint, "dtype": "float16", "N": 1568, "D": 1024, "pos_mode": "constant", "bytes": 1e9,
                      "backend": "ram", "canary_max_rel_l2": 1e-6, "batch_tolerance": 1e-5,
                      "rules_checked": rules_checked if rules_checked is not None else {"video": {"temporal": "uniform", "spatial": True}}},
-        "probe": {"hash": probe_hash, "config": {"head": {"family": "attentive_probe_v1"}}, "seed": seed, "selected_lr": 3e-4,
+        "scorer": {"hash": probe_hash, "config": {"head": {"family": "attentive_probe_v1"}}, "seed": seed, "selected_lr": 3e-4,
                   "epochs_run": 10, "best_epoch": 5, "stop": "patience", "n_train": 90, "n_val": 10},
         "metrics": (metrics if metrics is not None else {"acc": acc, "n_eval": eval_present}) if ok else {},
         "ci95": {"acc": ci} if ok and "acc" in (metrics or {"acc": 1}) else {},
@@ -123,7 +123,7 @@ def make_result(
 def seed_dir_of(runs: Path, result: dict[str, Any]) -> Path:
     """``runs/<bench>/<model>/<reading>/probe/<eval_hash12>/seed<k>/``."""
     return (runs / result["benchmark"]["name"] / result["model"] / result["reading"] / "probe" / result["eval_hash"][:12]
-            / f"seed{result['probe']['seed']}")
+            / f"seed{(result.get('scorer') or result.get('probe'))['seed']}")
 
 
 def write_result(runs: Path, result: dict[str, Any], *, done: bool | str = True, with_npy: bool = False, seed_dir: Path | None = None) -> Path:
@@ -135,7 +135,7 @@ def write_result(runs: Path, result: dict[str, Any], *, done: bool | str = True,
     path.write_bytes(data)
     if done is True:
         marker = {"result_sha256": hashlib.sha256(data).hexdigest(), "protocol_hash": result["benchmark"]["protocol_hash"],
-                  "probe_hash": result["probe"]["hash"], "features_fingerprint": (result.get("features") or {}).get("fingerprint"),
+                  "probe_hash": (result.get("scorer") or result.get("probe"))["hash"], "features_fingerprint": (result.get("features") or {}).get("fingerprint"),
                   "yavih_version": "0.1.0", "created": result["created"]}
         marker.update(eval_hash=result["eval_hash"], model=result["model"], reading=result["reading"],
                       describe_sha256=result["bridge"]["describe_sha256"])
@@ -167,7 +167,24 @@ def test_migrate_identity_for_current_schema():
     r = make_result()
     out = migrate(r)
     assert out == r and out is not r
-    assert out["schema_version"] == RESULT_SCHEMA_VERSION == 4
+    assert out["schema_version"] == RESULT_SCHEMA_VERSION == 5
+
+
+def test_a_schema_4_result_reads_under_the_scorer_names():
+    """Schema 5 renamed ``probe`` → ``scorer``, ``benchmark.readout`` / ``readout_version`` → ``scorer`` /
+    ``scorer_version`` and ``folder_source.probe`` → ``.eval``; nothing else moves, the eval_hash included."""
+    cur = make_result()
+    old = json.loads(json.dumps(cur))
+    old["schema_version"] = 4
+    old["probe"] = old.pop("scorer")
+    b = old["benchmark"]
+    b["readout"], b["readout_version"] = b.pop("scorer"), b.pop("scorer_version")
+    b["folder_source"] = {"probe": "1" * 64, "reader": None}
+    up = migrate(old)
+    assert "probe" in old and "readout" in old["benchmark"]  # in memory only
+    want = json.loads(json.dumps(cur))
+    want["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None}
+    assert up == want
 
 
 def test_migrate_refuses_newer_schema_and_bad_types():
@@ -352,11 +369,13 @@ def test_a_schema_3_result_loads_and_reports(runs: Path):
     old = make_result(model="m1", acc=0.4)
     old["schema_version"] = 3
     del old["benchmark"]["folder_source"]
+    old["probe"] = old.pop("scorer")
+    old["benchmark"]["readout"], old["benchmark"]["readout_version"] = old["benchmark"].pop("scorer"), old["benchmark"].pop("scorer_version")
     up = migrate(old)
-    assert up["schema_version"] == RESULT_SCHEMA_VERSION == 4 and up["benchmark"]["folder_source"] is None
-    assert "folder_source" not in old["benchmark"]  # in memory only
+    assert up["schema_version"] == RESULT_SCHEMA_VERSION == 5 and up["benchmark"]["folder_source"] is None
+    assert "folder_source" not in old["benchmark"] and "probe" in old  # in memory only
     cur = make_result(model="m2", acc=0.6)
-    cur["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
+    cur["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None}
     write_result(runs, old)
     write_result(runs, cur)
     rep = report([str(runs / "*")], write=False)
@@ -370,13 +389,13 @@ def test_a_schema_3_result_loads_and_reports(runs: Path):
 def test_folder_source_differs_compares_known_sources_only():
     """Two known, different sources in one column warn; a missing one next to known ones that agree does not."""
     a, b, c = (make_result(model=m) for m in ("m1", "m2", "m3"))
-    a["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
-    b["benchmark"]["folder_source"] = {"probe": "1" * 64, "reader": None}
+    a["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None}
+    b["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None}
     c["benchmark"]["folder_source"] = None
     rep = build_report(_records(a, b, c))
     assert "W_FOLDER_SOURCE_DIFFERS" not in {w["code"] for w in rep.warnings}
     assert "folder_source_differs" not in rep.columns[0]["flags"]
-    b["benchmark"]["folder_source"] = {"probe": "2" * 64, "reader": None}
+    b["benchmark"]["folder_source"] = {"eval": "2" * 64, "reader": None}
     rep = build_report(_records(a, b, c))
     assert [w["code"] for w in rep.warnings].count("W_FOLDER_SOURCE_DIFFERS") == 1
     assert "folder_source_differs" in rep.columns[0]["flags"]
@@ -817,7 +836,7 @@ def test_render_formats_agree_and_json_round_trips():
     js = build_report(recs, fmt="json")
     assert md.text.startswith("# yavih report") and "| model | reading |" in md.text and f"eval_hash `{EH[:12]}`" in md.text
     header = csv_rep.text.splitlines()[0].split(",")
-    assert header[:8] == ["benchmark", "eval_hash", "protocol_hash", "probe_hash", "model", "reading", "describe_sha256", "features_fingerprint"]
+    assert header[:8] == ["benchmark", "eval_hash", "protocol_hash", "scorer_hash", "model", "reading", "describe_sha256", "features_fingerprint"]
     assert "flag" in header
     data = json.loads(js.text)
     assert data["columns"] == md.columns and data["rows"] == md.rows and data["fmt"] == "json"
@@ -977,3 +996,19 @@ def test_packaged_tolerance_beats_a_recorded_one():
     assert ties({**packaged, "tolerance": {"acc": 0.2}}, 0.0001) == [True, True]  # the folder's declared entry wins
     assert ties({}, 0.1) == [True, True]  # not packaged here: the recorded tolerance
     assert ties({}, 0.0001) == [False, False]
+
+
+def test_reading_modalities_come_from_input_fields_and_cells():
+    """A generation bridge declares no stream tags: its modalities come from describe()["input"], a text cell counts as
+    the text modality, so a text-to-audio reading is never MISSING on a video-only benchmark and vice versa."""
+    from yavih.report.compare import _stream_modalities
+
+    def result(describe):
+        return {"bridge": {"describe": describe}}
+
+    v2a = result({"input": {"video": {"norm": {}, "decoder": {}}}})
+    t2a = result({"input": {"caption": {"note": "verbatim"}}})
+    assert _stream_modalities(v2a, {"video": "video"}) == frozenset({"visual"})
+    assert _stream_modalities(t2a, {}, {"caption": "text"}) == frozenset({"text"})
+    assert _stream_modalities(result({"input": {"options": {}}}), {}, {"options": "options"}) == frozenset({"cell:options"})
+    assert _stream_modalities(result({"streams": ["audio"], "input": {"audio": {}}}), {"audio": "audio"}) == frozenset({"audio"})

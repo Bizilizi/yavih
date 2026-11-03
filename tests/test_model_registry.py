@@ -33,7 +33,7 @@ def world(tmp_path, monkeypatch):
                for s in (0, 1)]
     for r in results:
         r["benchmark"]["folder_source"] = dict(bench.folder_source)
-        r["benchmark"]["readout_version"] = 1
+        r["benchmark"]["scorer_version"] = 1
     paths = [write_result(runs, r) for r in results]
     results_root = tmp_path / "results"
     file = store.write_invocation(results, results_root=results_root, bench=bench, result_paths=[str(p) for p in paths])["results_file"]
@@ -50,7 +50,7 @@ def test_export_writes_entries_and_protocol_payloads(world, tmp_path):
     assert entry["registry_version"] == R.REGISTRY_ENTRY_VERSION
     assert entry["id"] == f"{bench.name}/{hashing.hash12(hashing.eval_hash(bench.protocol_hash, world['qh']))}/lab/toy/v"
     i = entry["identity"]
-    assert (i["protocol_hash"], i["probe_hash"], i["input_hash"], i["scoring_hash"]) == (bench.protocol_hash, world["qh"], bench.input_hash, bench.scoring_hash)
+    assert (i["protocol_hash"], i["scorer_hash"], i["input_hash"], i["scoring_hash"]) == (bench.protocol_hash, world["qh"], bench.input_hash, bench.scoring_hash)
     assert i["standard"] is True and i["protocol_version"] == bench.spec.protocol_version
     assert entry["model"] == {**entry["model"], "name": "lab/toy", "org": "lab", "model": "toy"}
     s = entry["score"]
@@ -68,6 +68,25 @@ def test_export_writes_entries_and_protocol_payloads(world, tmp_path):
     assert len(out2["protocols"]) == 0 and json.loads(Path(out2["entries"][0]).read_text())["provenance"]["replaces"]
 
 
+def test_a_version_1_entry_is_checked_and_read_under_the_scorer_names(world, tmp_path):
+    """Version 2 renamed identity.readout / readout_version / probe_hash, provenance.probe_config and
+    folder_source.probe; a version-1 entry still passes the check and reads as the current shape."""
+    reg = tmp_path / "registry"
+    R.export(world["results_root"], org="lab", out=reg)
+    path = next((reg / "entries").rglob("*.json"))
+    cur = json.loads(path.read_text())
+    old = json.loads(json.dumps(cur))
+    old["registry_version"] = 1
+    i, prov = old["identity"], old["provenance"]
+    i["readout"], i["readout_version"], i["probe_hash"] = i.pop("scorer"), i.pop("scorer_version"), i.pop("scorer_hash")
+    prov["probe_config"] = prov.pop("scorer_config")
+    prov["folder_source"] = {"probe": prov["folder_source"]["eval"], "reader": prov["folder_source"]["reader"]}
+    assert R.upgrade_entry(old) == cur and old["registry_version"] == 1
+    path.write_text(json.dumps(old))
+    assert R.check(reg).findings == []
+    assert [r["result"]["scorer"]["hash"] for r in R.records(reg)] == [world["qh"]] * 2
+
+
 def test_check_accepts_a_clean_registry_and_names_every_defect(world, tmp_path):
     reg = tmp_path / "registry"
     R.export(world["results_root"], org="lab", out=reg)
@@ -82,7 +101,7 @@ def test_check_accepts_a_clean_registry_and_names_every_defect(world, tmp_path):
         path.write_text(json.dumps(e))
         return R.check(reg)
 
-    assert [f.code for f in with_entry(lambda e: e["identity"].__setitem__("probe_hash", "0" * 64)).errors] == [R.E_HASH]
+    assert [f.code for f in with_entry(lambda e: e["identity"].__setitem__("scorer_hash", "0" * 64)).errors] == [R.E_HASH]
     assert R.E_CONFORMANCE in [f.code for f in with_entry(lambda e: e["conformance"].__setitem__("passed", False)).errors]
     assert R.E_ID in [f.code for f in with_entry(lambda e: e.__setitem__("id", "x")).errors]
     assert R.W_NONSTANDARD in [f.code for f in with_entry(lambda e: e["identity"].__setitem__("standard", False)).warnings]

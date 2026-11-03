@@ -121,9 +121,9 @@ yavih report build "$R/*"
 exactly the `preempted` (exit 4) and `not_ready` (exit 3) units, and units killed without any
 final record (`plan status` lists them under `stale running`). Extract units are keyed by the
 benchmark's input hash and probe units by its protocol hash: after a scoring-side change of a
-benchmark (a `protocol_version` bump, which is how a `probe.py` or metric fix lands once its conformance fixture
+benchmark (a `protocol_version` bump, which is how a `eval.py` or metric fix lands once its conformance fixture
 is re-recorded; a pinned package or readout version) `--pending` re-plans the probes and no extraction. A
-`probe.py` edit by itself moves no hash and re-plans nothing. A `plan.jsonl` written by an older yavih (older plan schema) is refused:
+`eval.py` edit by itself moves no hash and re-plans nothing. A `plan.jsonl` written by an older yavih (older plan schema) is refused:
 rebuild it with `plan build` (finished shards are kept). `--time` is `needs.minutes` plus
 20 min: the 15 min `--deadline-margin` plus start-up. `yavih plan calibrate "$R"`
 between iterations raises `needs.minutes` ×1.5 for units their own deadline stopped while running
@@ -345,7 +345,7 @@ Lower-level pieces, for your own runner:
   (a finished shard is skipped, a probe resumes from its checkpoint). GPU UUIDs in
   `CUDA_VISIBLE_DEVICES` work with `--slots`.
 - CPU-only machines: a profile measured without a GPU (`peak_gpu_gb: 0`) plans `needs.gpu: 0`;
-  `yavih probe run --device cpu` forces the probe onto the CPU.
+  `yavih eval run --device cpu` forces the probe onto the CPU.
 - A bridge that calls a local inference server (Triton, vLLM) needs `allow_loopback: true` in its
   matrix entry (`--allow-loopback`): loopback only, recorded in every sidecar.
 

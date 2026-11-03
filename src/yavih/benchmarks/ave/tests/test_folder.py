@@ -49,7 +49,7 @@ def view(spec):
 
     return BenchmarkView(
         name="ave", aliases=[], readout="seq", protocol_version=spec["protocol_version"], protocol_hash="0" * 64,
-        streams={k: v["kind"] for k, v in spec["streams"].items()}, input_contract=spec["input_contract"],
+        streams={k: v["kind"] for k, v in F.file_fields(spec).items()}, input_contract=spec["input_contract"],
         output_contract=spec["output_contract"], facts={k: spec["protocol"][k] for k in spec["input_contract"]["facts"]},
     )
 
@@ -58,7 +58,7 @@ def view(spec):
 
 
 def test_yaml_schema2_and_changelog(spec):
-    assert spec["schema_version"] == 2 and spec["name"] == HERE.name == "ave" and spec["readout"] == "seq"
+    assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "ave" and spec["scorer"] == "seq"
     assert spec["aliases"] == []
     assert spec["protocol_version"] == 1 == spec["changelog"][-1]["version"]
     assert [c["version"] for c in spec["changelog"]] == [1]
@@ -68,7 +68,7 @@ def test_yaml_schema2_and_changelog(spec):
 
 
 def test_streams_and_input_contract(spec):
-    st = spec["streams"]
+    st = F.file_fields(spec)
     assert set(st) == {"video", "audio"}
     for name, kind in (("video", "video"), ("audio", "audio")):
         assert st[name] == {"kind": kind, "media_column": "rel_media", "root": "media_root", "layout": "tar_index",
@@ -91,7 +91,7 @@ def test_output_contract_and_external(spec):
         "requires": {"pos": ["t"], "streams": ["video"], "grid": None, "t_bins": 8},
     }
     assert spec["external"] == []
-    assert not (HERE / "probe.py").exists(), "external is empty: no probe.py"
+    assert not (HERE / "eval.py").exists(), "external is empty: no eval.py"
     assert spec["targets"] is None
 
 

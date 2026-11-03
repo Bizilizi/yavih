@@ -362,7 +362,7 @@ def test_scaffold_records_a_fixture(tmp_path, monkeypatch):
     from yavih.scaffold import new_benchmark
 
     monkeypatch.chdir(tmp_path)
-    folder = new_benchmark("scaffolded", readout="clf", dir=tmp_path)
+    folder = new_benchmark("scaffolded", scorer="clf", dir=tmp_path)
     b = Benchmark.from_dir(folder)
     assert C.read_expected(b) is not None and C.check(b).ok
     from yavih.scaffold import scaffold_conformance
@@ -411,3 +411,24 @@ def test_scaffold_copies_the_like_fixture_when_the_package_is_absent(tmp_path, m
     fresh = C.record(b, force=True).record
     assert {k: v for k, v in fresh["recorded_with"].items() if k != "commit"} == {k: v for k, v in rw.items() if k not in ("copied_from", "commit")}
     assert {k: v for k, v in fresh.items() if k != "recorded_with"} == {k: v for k, v in rec.items() if k != "recorded_with"}
+
+
+def test_population_follows_the_scorer_family_or_its_own_builder():
+    """A scorer with ``family="clf"`` is checked on clf's population; a scorer declaring its own
+    ``conformance_population`` uses that; one with neither has no fixture (E_CONFORMANCE_UNSUPPORTED)."""
+    from yavih.readouts.registry import Scorer
+
+    fam = Scorer(name="fam", version=1, module="m", kind="stateless", label_kinds=frozenset({"single"}), family="clf")
+    assert C.population_builder(fam) is C._population_clf
+    own = lambda ctx, tag: {}  # noqa: E731
+    mine = Scorer(name="mine", version=1, module="m", kind="direct", label_kinds=frozenset({"none"}), conformance_population=own)
+    assert C.population_builder(mine) is own
+    none = Scorer(name="none_at_all", version=1, module="m", kind="direct", label_kinds=frozenset({"none"}))
+    assert C.population_builder(none) is None
+
+
+def test_fixture_records_the_scorer(tmp_path):
+    b = _bench(tmp_path)
+    rec = C.record(b).record
+    assert rec["recorded_with"]["scorer"] == {"name": b.spec.readout, "version": 1, "kind": "probe"}
+    assert C.read_expected(b)["recorded_with"]["scorer"] == rec["recorded_with"]["scorer"]

@@ -1,4 +1,4 @@
-"""``yavih.benchmark`` tests: folder schema, manifest, resolution, census, protocol hash, ``bench *``, probe.py/reader.py, label kinds.
+"""``yavih.benchmark`` tests: folder schema, manifest, resolution, census, protocol hash, ``bench *``, eval.py/reader.py, label kinds.
 
 Every benchmark folder here is written by the test itself (synthetic, no network, no decoders).
 ``make_folder`` builds a valid schema-2 folder from a header/rows/classes triple plus a yaml mutation so
@@ -60,13 +60,13 @@ def _csv(header: list[str], rows: list[list[str]]) -> bytes:
 
 
 def base_spec(name: str, **over: Any) -> dict[str, Any]:
-    """A minimal valid schema-2 clf/single yaml; shas are filled by make_folder."""
+    """A minimal valid schema-3 clf/single yaml; shas are filled by make_folder."""
     spec: dict[str, Any] = {
         "schema_version": BENCHMARK_SCHEMA_VERSION,
         "name": name,
         "aliases": [],
         "title": "synthetic",
-        "readout": "clf",
+        "scorer": "clf",
         "protocol_version": 2,
         "changelog": [
             {"version": 1, "date": "2026-10-07", "reason": "test", "invalidates": False},
@@ -92,7 +92,7 @@ def base_spec(name: str, **over: Any) -> dict[str, Any]:
             },
         },
         "splits": {"train": ["train"], "eval": ["val"], "floor": [], "folds": None, "unused": [], "min_eval_coverage": 0.95},
-        "streams": {"video": {"kind": "video", "media_column": "rel_media", "root": "media_root", "layout": "dir", "layout_params": {}, "required": True}},
+        "fields": {"video": {"storage": "file", "kind": "video", "media_column": "rel_media", "root": "media_root", "layout": "dir", "layout_params": {}, "required": True}},
         "targets": None,
         "data": {"roots": {"media_root": {"default": "${data.root}/" + name, "description": "d"}}, "tar_index": None, "derived": {}},
         "input_contract": {
@@ -113,7 +113,7 @@ def base_spec(name: str, **over: Any) -> dict[str, Any]:
 
 def set_streams(s: dict[str, Any], streams: dict[str, dict[str, Any]], info: dict[str, list[str]] | None = None) -> None:
     """Replace ``streams`` and keep ``input_contract.handed_over``/``info`` in step (exactly the stream names)."""
-    s["streams"] = streams
+    s["fields"] = {n: {"storage": "file", **v} for n, v in streams.items()}
     s["input_contract"]["handed_over"] = {n: f"the stored {v['kind']} exactly as stored" for n, v in streams.items()}
     s["input_contract"]["info"] = {n: list((info or {}).get(n, [])) for n in streams}
 
@@ -169,7 +169,7 @@ def make_folder(
     if mutate is not None:
         mutate(spec)
     if probe_py is not None:
-        (folder / "probe.py").write_text(probe_py, encoding="utf-8")
+        (folder / "eval.py").write_text(probe_py, encoding="utf-8")
     (folder / "benchmark.yaml").write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return folder
 
@@ -189,7 +189,7 @@ def with_roots(monkeypatch: pytest.MonkeyPatch, name: str, **roots: Path) -> Non
 def _expected_protocol_hash(b: Benchmark) -> str:
     raw = b.spec.raw
     return hashing.protocol_hash(
-        name=b.name, protocol_version=b.spec.protocol_version, protocol=raw["protocol"], splits=raw["splits"], streams=raw["streams"],
+        name=b.name, protocol_version=b.spec.protocol_version, protocol=raw["protocol"], splits=raw["splits"], streams=hashing.fields_view(raw["fields"]),
         input_contract=raw["input_contract"], output_contract=raw["output_contract"], external=raw["external"], metrics=raw["metrics"],
         readout_params=raw["readout_params"], targets=raw["targets"], manifest=raw["manifest"], manifest_hash=b.manifest_hash,
         readout=b.spec.readout,
@@ -223,7 +223,7 @@ def test_load_hashes_match_oracle(tmp_path):
 
     facts = set(raw["input_contract"].get("facts") or [])
     inp = {"name": "synth_clf", "manifest_hash": oracle, "manifest": {"key": raw["manifest"]["key"], "columns": raw["manifest"]["columns"]},
-           "splits": raw["splits"], "streams": raw["streams"],
+           "splits": raw["splits"], "streams": hashing.fields_view(raw["fields"]),
            "input_contract": {k: raw["input_contract"].get(k) for k in ("info", "facts", "materialize")}, "output_contract": raw["output_contract"],
            "readout": "clf", "readout_inputs": {"params": {}, "protocol": {k: v for k, v in sorted(raw["protocol"].items())
                                                                          if k in set(hashing.INPUT_PROTOCOL_KEYS) | facts}}}
@@ -291,7 +291,7 @@ def test_protocol_hash_is_env_independent_and_ignores_aliases(tmp_path):
     assert b1.protocol_hash == b2.protocol_hash and b1.manifest_hash == b2.manifest_hash
     # every typed view is hashed: streams, the contracts' data keys, external, a label fact; prose and site facts are not
     for n, mut in enumerate([
-        lambda s: s["streams"]["video"].__setitem__("required", False),
+        lambda s: s["fields"]["video"].__setitem__("required", False),
         lambda s: s["input_contract"]["handed_over"].__setitem__("video", "something else"),
         lambda s: s["input_contract"]["info"].__setitem__("video", ["duration_s"]),
         lambda s: s["output_contract"]["requires"].__setitem__("pos", ["t"]),
@@ -319,7 +319,7 @@ def test_protocol_hash_is_env_independent_and_ignores_aliases(tmp_path):
         ("manifest", "upstream"),
         ("manifest", "upstream", "curation"),
         ("splits",),
-        ("streams", "video"),
+        ("fields", "video"),
         ("data",),
         ("data", "roots", "media_root"),
         ("input_contract",),
@@ -368,10 +368,10 @@ def test_unknown_keys_and_layouts_are_schema_errors(tmp_path):
     f = make_folder(tmp_path / "a", mutate=lambda s: s.__setitem__("requires", {"pos": [], "streams": [], "grid": None, "t_bins": None}))
     with pytest.raises(SchemaError, match="requires"):
         load_yaml(f / "benchmark.yaml")
-    f = make_folder(tmp_path / "b", mutate=lambda s: s["streams"]["video"].__setitem__("bridge_decode_allowed", False))
+    f = make_folder(tmp_path / "b", mutate=lambda s: s["fields"]["video"].__setitem__("bridge_decode_allowed", False))
     with pytest.raises(SchemaError, match="bridge_decode_allowed"):
         load_yaml(f / "benchmark.yaml")
-    f = make_folder(tmp_path / "c", mutate=lambda s: s["streams"]["video"].__setitem__("layout", "mat"))
+    f = make_folder(tmp_path / "c", mutate=lambda s: s["fields"]["video"].__setitem__("layout", "mat"))
     with pytest.raises(SchemaError, match="layout"):
         load_yaml(f / "benchmark.yaml")
     f = make_folder(tmp_path / "d", mutate=lambda s: s["manifest"]["columns"].__setitem__("offset_seconds", {"type": "float", "role": "window"}))
@@ -393,7 +393,7 @@ def _schema_cases() -> list[tuple[str, Callable[[dict], None] | None, str]]:
         ("source_kind", lambda s: s["source"].__setitem__("kind", "ftp"), "source.kind"),
         ("budget_clips_unknown_split", lambda s: s["budget"]["clips"].__setitem__("test", 1), "budget.clips"),
         ("budget_probe_minutes_missing_readout", lambda s: s["budget"].__setitem__("probe_minutes_ref", {"seq": 1}), "probe_minutes_ref"),
-        ("media_column_not_declared", lambda s: s["streams"]["video"].__setitem__("media_column", "rel_path"), "media_column"),
+        ("media_column_not_declared", lambda s: s["fields"]["video"].__setitem__("media_column", "rel_path"), "media_column"),
         ("media_column_wrong_role", lambda s: s["manifest"]["columns"].__setitem__("rel_media", {"type": "str", "role": "extra"}), "role: media"),
         ("media_column_wrong_stream", lambda s: s["manifest"]["columns"]["rel_media"].__setitem__("stream", "audio"), "stream"),
         ("column_stream_without_media_role", lambda s: s["manifest"]["columns"].__setitem__("x", {"type": "int", "role": "extra", "stream": "video"}), "stream"),
@@ -403,11 +403,11 @@ def _schema_cases() -> list[tuple[str, Callable[[dict], None] | None, str]]:
         ("split_train_empty", lambda s: s["splits"].__setitem__("train", []), "train"),
         ("folds_with_train", lambda s: s["splits"].__setitem__("folds", ["1", "2"]), "folds"),
         ("min_eval_coverage_range", lambda s: s["splits"].__setitem__("min_eval_coverage", 1.5), "min_eval_coverage"),
-        ("stream_kind", lambda s: s["streams"]["video"].__setitem__("kind", "text"), "kind"),
-        ("stream_layout", lambda s: s["streams"]["video"].__setitem__("layout", "zip"), "layout"),
-        ("stream_root_undeclared", lambda s: s["streams"]["video"].__setitem__("root", "other_root"), "root"),
-        ("layout_params_unknown", lambda s: s["streams"]["video"].__setitem__("layout_params", {"x": 1}), "layout_params"),
-        ("tar_index_missing", lambda s: s["streams"]["video"].__setitem__("layout", "tar_index"), "tar_index"),
+        ("stream_kind", lambda s: s["fields"]["video"].__setitem__("kind", "Text!"), "kind"),
+        ("stream_layout", lambda s: s["fields"]["video"].__setitem__("layout", "zip"), "layout"),
+        ("stream_root_undeclared", lambda s: s["fields"]["video"].__setitem__("root", "other_root"), "root"),
+        ("layout_params_unknown", lambda s: s["fields"]["video"].__setitem__("layout_params", {"x": 1}), "layout_params"),
+        ("tar_index_missing", lambda s: s["fields"]["video"].__setitem__("layout", "tar_index"), "tar_index"),
         ("tar_index_unused", lambda s: s["data"].__setitem__("tar_index", "index.json"), "tar_index"),
         ("views", lambda s: s["protocol"].__setitem__("views", "clips"), "views"),
         ("clip_seconds_non_positive", lambda s: s["protocol"].__setitem__("clip_seconds", 0.0), "clip_seconds"),
@@ -438,7 +438,7 @@ def _schema_cases() -> list[tuple[str, Callable[[dict], None] | None, str]]:
         ("external_not_list", lambda s: s.__setitem__("external", {}), "external"),
         ("external_keys", lambda s: s.__setitem__("external", [{"name": "pkg", "pip": "pkg==1"}]), "external"),
         ("external_empty_value", lambda s: s.__setitem__("external", [{"name": "pkg", "pip": "", "version_pin": "1", "used_for": "x"}]), "non-empty"),
-        ("external_without_probe_py", lambda s: s.__setitem__("external", [{"name": "pkg", "pip": "pkg==1", "version_pin": "1", "used_for": "x"}]), "probe.py"),
+        ("external_without_probe_py", lambda s: s.__setitem__("external", [{"name": "pkg", "pip": "pkg==1", "version_pin": "1", "used_for": "x"}]), "eval.py"),
         # metrics
         ("unknown_metric", lambda s: s["metrics"].__setitem__("list", ["acc", "accuracy"]), "accuracy"),
         ("metric_wrong_readout", lambda s: s["metrics"].__setitem__("list", ["acc", "seg_acc"]), "seg_acc"),
@@ -515,7 +515,7 @@ def test_score_hook_gets_the_reading_only_when_it_declares_it():
         return {}
 
     for fn in (plain, routed, anykw):
-        ctx = SimpleNamespace(probe_mod=SimpleNamespace(score=fn), bench=None, reading="av")
+        ctx = SimpleNamespace(eval_mod=SimpleNamespace(score=fn), bench=None, reading="av")
         ReadoutContext.scorer(ctx, ["test"], [0, 1], None)(None)
     assert seen == [("plain", "test"), ("routed", "av"), ("anykw", "av")]
 
@@ -571,9 +571,9 @@ def test_load_yaml_does_not_touch_the_manifest(tmp_path):
         Benchmark.from_dir(folder)
 
 
-# ----------------------------------------------------------------------------- probe.py hooks and external
+# ----------------------------------------------------------------------------- eval.py hooks and external
 
-PROBE_PY = '''"""probe.py of a synthetic folder."""
+PROBE_PY = '''"""eval.py of a synthetic folder."""
 from yavih.metrics.registry import MetricSpec
 
 
@@ -599,19 +599,19 @@ def test_probe_py_metrics_overlay_and_protocol_keys(tmp_path):
     assert set(b.metric_specs) == {"acc", "my_score", "n_eval", "acc_floor"}
     assert b.metric_specs["my_score"].fn(None, None, None, None) == 0.0
     assert b.spec.folder_metrics == ("my_score",)
-    assert b.probe_sha256 == hashing.source_sha256(PROBE_PY) and b.protocol_hash == _expected_protocol_hash(b)
-    assert b.folder_source == {"probe": b.probe_sha256, "reader": None}
-    assert b.probe_module().PROTOCOL_KEYS == {"helper_key"}
-    # probe.py is provenance, never identity (yavih-protocol-5): a comment edit leaves its digest, a code edit moves
+    assert b.eval_sha256 == hashing.source_sha256(PROBE_PY) and b.protocol_hash == _expected_protocol_hash(b)
+    assert b.folder_source == {"eval": b.eval_sha256, "reader": None}
+    assert b.eval_module().PROTOCOL_KEYS == {"helper_key"}
+    # eval.py is provenance, never identity (yavih-protocol-5): a comment edit leaves its digest, a code edit moves
     # the digest, and neither moves protocol_hash — behaviour is pinned by protocol_version and the conformance fixture
-    (f / "probe.py").write_text(PROBE_PY + "# comment\n")
+    (f / "eval.py").write_text(PROBE_PY + "# comment\n")
     assert Benchmark.from_dir(f).folder_source == b.folder_source
-    (f / "probe.py").write_text(PROBE_PY + "EXTRA = 1\n")
+    (f / "eval.py").write_text(PROBE_PY + "EXTRA = 1\n")
     b2 = Benchmark.from_dir(f)
-    assert b2.folder_source["probe"] != b.folder_source["probe"]
+    assert b2.folder_source["eval"] != b.folder_source["eval"]
     assert b2.protocol_hash == b.protocol_hash and b2.input_hash == b.input_hash and b2.scoring_hash == b.scoring_hash
-    # without probe.py the folder metric is unknown and the helper key unconsumed
-    (f / "probe.py").unlink()
+    # without eval.py the folder metric is unknown and the helper key unconsumed
+    (f / "eval.py").unlink()
     with pytest.raises(SchemaError, match="my_score"):
         load_yaml(f / "benchmark.yaml")
     # METRICS' protocol keys are required; PROTOCOL_KEYS are required and count as consumed
@@ -637,7 +637,7 @@ def test_probe_py_may_replace_a_registry_metric_only_keeping_its_shape(tmp_path)
 
 def test_probe_py_import_errors_are_schema_errors(tmp_path):
     f = make_folder(tmp_path, probe_py="import nonexistent_package_xyz\n")
-    with pytest.raises(SchemaError, match="probe.py.*cannot import"):
+    with pytest.raises(SchemaError, match="eval.py.*cannot import"):
         load_yaml(f / "benchmark.yaml")
     f2 = make_folder(tmp_path / "b", probe_py="METRICS = {'x': 1}\n")
     with pytest.raises(SchemaError, match="MetricSpec"):
@@ -808,7 +808,7 @@ def test_multi_sets_kind_vggsounder_shape(tmp_path):
 
 
 def _box_spec_mutate(s: dict[str, Any]) -> None:
-    s["readout"] = "box"
+    s["scorer"] = "box"
     s["budget"]["probe_minutes_ref"] = {"box": 1}
     s["manifest"]["label"].update({"kind": "box", "column": "box"})
     s["manifest"]["classes"] = None
@@ -867,7 +867,7 @@ def test_box_kind_vggss_shape(tmp_path):
 
 
 def _seq_spec_mutate(s: dict[str, Any]) -> None:
-    s["readout"] = "seq"
+    s["scorer"] = "seq"
     s["budget"]["probe_minutes_ref"] = {"seq": 1}
     s["manifest"]["label"]["kind"] = "segments"
     s["manifest"]["columns"] = {
@@ -937,7 +937,7 @@ def test_segments_kind_ave_shape(tmp_path):
 
 
 def _grid_spec_mutate(s: dict[str, Any]) -> None:
-    s["readout"] = "grid"
+    s["scorer"] = "grid"
     s["budget"]["probe_minutes_ref"] = {"grid": 1}
     s["manifest"]["label"].update({"kind": "none", "column": None})
     s["manifest"]["classes"] = None
@@ -1046,10 +1046,10 @@ def test_grid_schema_rules(tmp_path):
         (lambda s: s["readout_params"].__setitem__("visual_stream", "video"), "visual_stream"),
         (lambda s: s["output_contract"].__setitem__("target_frame", None), "target_frame"),
         (lambda s: s["protocol"].__setitem__("target_region", [0.0, 0.875, 1.0, 0.125]), "target_region"),
-        (lambda s: s["streams"]["image"].__setitem__("layout", {"train": "dir", "eval": "npy_memmap"}), "layout"),
-        (lambda s: s["streams"]["image"].__setitem__("root", {"train": "derived_root"}), "no entry for split"),
-        (lambda s: s["streams"]["image"].__setitem__("root", {"train": "derived_root", "test": "derived_root"}), "split values or role words"),
-        (lambda s: s["streams"]["image"].__setitem__("root", {"train": "derived_root", "eval": "derived_root"}), None),  # per-split, role words
+        (lambda s: s["fields"]["image"].__setitem__("layout", {"train": "dir", "eval": "npy_memmap"}), "layout"),
+        (lambda s: s["fields"]["image"].__setitem__("root", {"train": "derived_root"}), "no entry for split"),
+        (lambda s: s["fields"]["image"].__setitem__("root", {"train": "derived_root", "test": "derived_root"}), "split values or role words"),
+        (lambda s: s["fields"]["image"].__setitem__("root", {"train": "derived_root", "eval": "derived_root"}), None),  # per-split, role words
     ]:
         f = make_folder(tmp_path / (match or "ok").replace(" ", "_").replace(".", "_").replace("|", "_"), "nyuv2_depth", header=GRID_HEADER, rows=GRID_ROWS, classes=None, mutate=lambda s, mut=mut: (_grid_spec_mutate(s), mut(s)))
         if match is None:
@@ -1111,8 +1111,8 @@ def _materialize() -> dict[str, Any]:
     }
 
 
-#: avsync's offset metrics and floor-arm controls are its probe.py METRICS, not registry names.
-AVSYNC_PROBE = (Path(bm.__file__).parent / "benchmarks" / "avsync" / "probe.py").read_text(encoding="utf-8")
+#: avsync's offset metrics and floor-arm controls are its eval.py METRICS, not registry names.
+AVSYNC_PROBE = (Path(bm.__file__).parent / "benchmarks" / "avsync" / "eval.py").read_text(encoding="utf-8")
 
 
 def _avsync_mutate(s: dict[str, Any]) -> None:
@@ -1370,7 +1370,7 @@ def test_folder_reader_is_provenance_and_receives_the_shard(tmp_path, monkeypatc
     folder = make_folder(tmp_path, rows=rows, mutate=lambda s: (s["budget"].__setitem__("clips", {"train": 20, "val": 6}), s["manifest"].__setitem__("upstream", None)))
     with_roots(monkeypatch, "synth", media_root=tmp_path / "media")
     b0 = Benchmark.from_dir(folder)
-    assert b0.folder_source == {"probe": None, "reader": None}
+    assert b0.folder_source == {"eval": None, "reader": None}
     (folder / "reader.py").write_text(READER_PY, encoding="utf-8")
     b = Benchmark.from_dir(folder)
     assert b.folder_source["reader"] == hashing.source_sha256(READER_PY)
@@ -1441,7 +1441,7 @@ def test_data_status_cache_presence_and_bench_list(tmp_path, yavih_home, monkeyp
         Benchmark.load("synth", data={"nope": "/x"}).data_status()
     rows = list_benchmarks()
     mine = [r for r in rows if r["name"] == "synth"]
-    assert mine and mine[0]["readout"] == "clf" and mine[0]["clips"] == {"train": 4, "val": 2} and mine[0]["source_kind"] == "derived"
+    assert mine and mine[0]["scorer"] == "clf" and mine[0]["clips"] == {"train": 4, "val": 2} and mine[0]["source_kind"] == "derived"
     assert mine[0]["status"].startswith("partial") and mine[0]["aliases"] == []
     monkeypatch.delenv("YAVIH_DATA__SYNTH__MEDIA_ROOT")
     path.unlink()
@@ -1625,7 +1625,7 @@ def test_spec_is_frozen_and_raw_is_the_hashed_yaml(tmp_path):
     assert spec.manifest.upstream.curation.invariant_holds()
     assert bm.READOUT_PARAM_KEYS["box"] == {"grid", "visual_stream", "conditioning_stream", "shuffled_control", "shuffle_seed"}
     assert bm.PROTOCOL_FIXED_KEYS == set(raw["protocol"]) == {"clip_seconds", "train_draw", "views"}
-    assert bm.LAYOUTS == {"dir", "tar_index"} and "window" not in bm.COLUMN_ROLES
+    assert bm.LAYOUTS == {"dir", "tar_index", "parquet", "npy_rows"} and "window" not in bm.COLUMN_ROLES
 
 
 def test_core_import_boundary_for_benchmark_module():
@@ -1642,3 +1642,126 @@ def test_core_import_boundary_for_benchmark_module():
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert proc.returncode == 0 and proc.stdout.strip() == "", proc.stderr
 
+
+
+def test_tar_index_in_a_subdirectory_resolves_shards_like_the_reader(tmp_path, yavih_home, monkeypatch):
+    """Relative shard names resolve against the index's directory for presence and the fingerprint, as the reader
+    resolves them (a regression: presence joined them to the data root and counted rows the reader cannot read)."""
+    def mutate(s):
+        _tar_mutate(s)
+        s["data"]["tar_index"] = "idx/index.json"
+
+    folder = make_folder(tmp_path, "tarsub", header=TAR_HEADER, rows=TAR_ROWS, classes=TAR_CLASSES, mutate=mutate)
+    media = tmp_path / "media"
+    members = {r[3]: f"audio-{r[0]}".encode() for r in TAR_ROWS}
+    _make_tar_index(media / "idx", members)  # shards next to the index, not at the root
+    with_roots(monkeypatch, "tarsub", media_root=media)
+    b = Benchmark.from_dir(folder)
+    assert b.data_status().per_split["train"]["present"] == 4
+    rep = bench_verify(str(folder), decode_sample=0, data={"media_root": str(media)})
+    assert rep["media_fingerprint"] is not None
+    s = next(b.reader("eval"))
+    assert s.streams["audio"].member[0] == str(media / "idx" / "shard-000000.tar") and s.streams["audio"].bytes() == b"audio-b0"
+    (media / "idx" / "index.json").unlink()
+    with pytest.raises(Exception, match="tar index"):
+        Benchmark.from_dir(folder).data_status(refresh=True)
+
+
+def _wav(seconds: float, sr: int = 16000) -> bytes:
+    sf = pytest.importorskip("soundfile")
+    buf = io.BytesIO()
+    sf.write(buf, np.zeros(int(seconds * sr), dtype=np.float32), sr, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
+
+def _write_hf_parquet(path: Path, clips: list[tuple[str, bytes]], row_group_size: int = 2) -> None:
+    """An HF-style file: `id` and an Audio feature `audio: struct{bytes, path}`."""
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    audio = pa.array([{"bytes": b, "path": f"{cid}.wav"} for cid, b in clips], type=pa.struct([("bytes", pa.binary()), ("path", pa.string())]))
+    pq.write_table(pa.table({"id": [cid for cid, _ in clips], "audio": audio}), path, row_group_size=row_group_size)
+
+
+def test_parquet_layout_reads_one_column_in_place(tmp_path, yavih_home, monkeypatch):
+    pq = pytest.importorskip("pyarrow.parquet")
+    from yavih.media import parquet as P
+
+    rows = [[r[0], r[1], r[2], f"data/part-0.parquet#{i}"] for i, r in enumerate(TAR_ROWS)]
+
+    def mutate(s):
+        _tar_mutate(s)
+        s["data"]["tar_index"] = None
+        s["fields"]["audio"].update(layout="parquet", layout_params={"column": "audio", "struct_field": "bytes", "ext": "wav"})
+        s["input_contract"]["info"]["audio"] = ["duration_s", "sample_rate"]
+
+    folder = make_folder(tmp_path, "pqbench", header=TAR_HEADER, rows=rows, classes=TAR_CLASSES, mutate=mutate)
+    media = tmp_path / "hf"
+    clips = [(r[0], _wav(0.5 + 0.25 * i)) for i, r in enumerate(TAR_ROWS[:5])]  # b1 (row 5) is not in the file
+    _write_hf_parquet(media / "data" / "part-0.parquet", clips)
+    P._CACHE.clear()
+    with_roots(monkeypatch, "pqbench", media_root=media)
+    b = Benchmark.from_dir(folder)
+    st = b.data_status()
+    assert st.per_split["train"]["present"] == 4 and st.per_split["eval"] == {"present": 1, "nominal": 2, "missing_first10": ["b1"]}
+    seen: list[list[str]] = []
+    orig = pq.ParquetFile.read_row_group
+    monkeypatch.setattr(pq.ParquetFile, "read_row_group", lambda self, i, columns=None, **kw: (seen.append(list(columns or [])), orig(self, i, columns=columns, **kw))[1])
+    s = next(b.reader("eval"))
+    assert s.streams["audio"].bytes() == clips[4][1] and s.streams["audio"].path is None
+    assert s.streams["audio"].info["sample_rate"] == 16000 and abs(s.streams["audio"].info["duration_s"] - 1.5) < 1e-3
+    assert seen and all(c == ["audio"] for c in seen)  # only the named column is ever read
+    rep = bench_verify(str(folder), decode_sample=3, data={"media_root": str(media)})
+    assert rep["media_fingerprint"] is not None and rep["decode_sample"]["failed"] == 0 and rep["decode_sample"]["ok"] > 0
+    _write_hf_parquet(media / "data" / "part-0.parquet", [(c, b + b"\0") for c, b in clips])
+    P._CACHE.clear()
+    rep2 = bench_verify(str(folder), decode_sample=0, data={"media_root": str(media)})
+    assert rep2["media_fingerprint"] != rep["media_fingerprint"]
+
+
+def test_parquet_cells_and_params_are_checked(tmp_path):
+    from yavih.media.parquet import parse_cell
+
+    assert parse_cell("a/b.parquet#12") == ("a/b.parquet", 12)
+    for bad in ("a/b.parquet", "a.parquet#x", "#3"):
+        with pytest.raises(ValueError):
+            parse_cell(bad)
+
+    def mutate(s):
+        _tar_mutate(s)
+        s["fields"]["audio"].update(layout="parquet", layout_params={})
+
+    with pytest.raises(SchemaError, match="layout_params"):
+        Benchmark.from_dir(make_folder(tmp_path, "pqbad", header=TAR_HEADER, rows=TAR_ROWS, classes=TAR_CLASSES, mutate=mutate))
+
+
+def test_npy_rows_layout_hands_over_one_row(tmp_path, yavih_home, monkeypatch):
+    from yavih.media import npyrows
+
+    rows = [[r[0], r[1], r[2], f"clouds.npy#{i}"] for i, r in enumerate(TAR_ROWS)]
+
+    def mutate(s):
+        _tar_mutate(s)
+        s["data"]["tar_index"] = None
+        s["fields"]["audio"].update(kind="pointcloud", layout="npy_rows", layout_params={})
+        s["input_contract"]["info"]["audio"] = ["container", "bytes"]
+
+    folder = make_folder(tmp_path, "npybench", header=TAR_HEADER, rows=rows, classes=TAR_CLASSES, mutate=mutate)
+    media = tmp_path / "arrays"
+    media.mkdir()
+    arr = np.random.default_rng(0).standard_normal((5, 128, 3)).astype(np.float32)  # row 5 (b1) is beyond the array
+    np.save(media / "clouds.npy", arr)
+    npyrows._CACHE.clear()
+    with_roots(monkeypatch, "npybench", media_root=media)
+    b = Benchmark.from_dir(folder)
+    st = b.data_status()
+    assert st.per_split["train"]["present"] == 4 and st.per_split["eval"] == {"present": 1, "nominal": 2, "missing_first10": ["b1"]}
+    s = next(b.reader("eval"))
+    got = np.load(io.BytesIO(s.streams["audio"].bytes()), allow_pickle=False)
+    assert np.array_equal(got, arr[4]) and s.streams["audio"].info["container"] == "npy" and s.streams["audio"].path is None
+    rep = bench_verify(str(folder), decode_sample=3, data={"media_root": str(media)})
+    assert rep["media_fingerprint"] is not None and rep["decode_sample"]["failed"] == 0
+    arr[0, 0, 0] += 1.0
+    np.save(media / "clouds.npy", arr)
+    npyrows._CACHE.clear()
+    assert bench_verify(str(folder), decode_sample=0, data={"media_root": str(media)})["media_fingerprint"] != rep["media_fingerprint"]

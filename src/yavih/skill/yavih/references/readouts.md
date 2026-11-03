@@ -1,6 +1,6 @@
 # Readouts reference — what is measured, floors, controls, results
 
-One protocol, one readout per benchmark (`benchmark.yaml[readout]`): `clf`, `seq`, `grid`, `box`.
+One protocol, one scorer per benchmark (`benchmark.yaml[scorer]`): the probes `clf`, `seq`, `grid`, `box`; `knn` (stateless, in the `clf` family: a weighted 20-nearest-neighbour vote over mean-pooled features, nothing trained); or a folder's own scorer in its `eval.py` (the generation benchmarks).
 The probe is pinned (`ProbeConfig.pinned(readout)`); any other config needs `YAVIH_TESTING=1` and
 marks the result `standard: false` (never comparable). Features are read from validated shards
 (`_meta.json` required); train rows = union of `splits.train` present rows, eval = `splits.eval`,
@@ -8,7 +8,7 @@ floor = `splits.floor`, `folds` → one probe per held-out fold. Validation = a 
 selection on val loss; early stopping; AdamW, cosine; fp32 probe math; deterministic algorithms
 (`warn_only=True`: on CUDA the attention backward has no deterministic fp32 kernel, so probe reruns
 agree to float rounding, not bit for bit; yavih captures torch's warning, names the ops in
-`probe_fit.json` `determinism` and adds `W_NONDETERMINISTIC` to `result.json`; nothing to do); seed `k` → `<runs root>/<b>/<model>/<reading>/probe/<eval_hash12>/seed<k>/`. A folder's `probe.py` may supply targets,
+`probe_fit.json` `determinism` and adds `W_NONDETERMINISTIC` to `result.json`; nothing to do); seed `k` → `<runs root>/<b>/<model>/<reading>/probe/<eval_hash12>/seed<k>/`. A folder's `eval.py` may supply targets,
 metrics and the authors' scorer; it never defines a head, loss or training loop.
 
 Readouts work in media coordinates and never need to know what your bridge did to the media:
@@ -18,7 +18,7 @@ not see empty (they get a learned null embedding); a bridge that read 8 frames a
 over the same seconds see the same targets.
 
 <!-- yavih:bench-table readout_groups begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-Packaged benchmarks per readout: `clf` audioset20k, avsync, esc50, fsd50k, in1k, k400, ssv2, vggsounder · `seq` ave · `grid` nyuv2_depth · `box` vggss_box.
+Packaged benchmarks per readout: `clf` audioset20k, avsync, esc50, fsd50k, in1k, k400, ssv2, vggsounder · `seq` ave · `grid` nyuv2_depth · `box` vggss_box · `stream` ave_causal, epic100_anticipation_stream, thumos14_oad, unav100_causal · `audiocaps_t2a` audiocaps_t2a · `vggsounder_v2a` vggsounder_v2a.
 <!-- yavih:bench-table readout_groups end -->
 
 | | `clf` | `seq` | `grid` | `box` |
@@ -66,7 +66,7 @@ vggss_box asks for 0.25; on NYUv2 Resize(224) + CenterCrop(224) covers the targe
 
 ## The benchmark authors' code (`external`)
 
-Where the authors ship a scorer, the folder's `probe.py` calls it through
+Where the authors ship a scorer, the folder's `eval.py` calls it through
 `yavih.external.require(name, pip, version_pin)` — an assert-import, never a yavih dependency:
 
 - **vggsounder**: every number is the `vggsounder` package's own (`pip install --no-deps
@@ -90,7 +90,7 @@ train ∩ eval clip_ids ≠ ∅ (`E_LEAKAGE`) · eval coverage < `min_eval_cover
 false` (`E_META_MISSING`, `E_VALIDATION` — run `features validate`) · stale
 `manifest_hash` / input hash (`E_HASH_MANIFEST`, `E_HASH_INPUT` — the benchmark's input side
 changed since extraction; the message names what changed; a scoring-side change — a `protocol_version` bump
-after a `probe.py` or metric fix, a pin, a readout version — only re-probes) · role splits extracted under different hashes (`E_HASH_MISMATCH`) ·
+after a `eval.py` or metric fix, a pin, a readout version — only re-probes) · role splits extracted under different hashes (`E_HASH_MISMATCH`) ·
 a feature format this yavih does not read (`E_FORMAT`: re-extract) · `n_folds ≠ 5` for ESC-50 (`E_FOLDS`) · a `metrics.list`
 name it cannot produce (`E_METRICS_INCOMPLETE`) · features missing (`E_NO_FEATURES`, exit 3) ·
 scratch short (`E_SCRATCH_SPACE`, exit 3) · authors' package missing or mis-versioned (exit 3).
@@ -105,13 +105,13 @@ the deadline or SIGTERM; only a hard kill (SIGKILL, OOM) loses up to that interv
 
 ```json
 {"schema_version": 4, "status": "ok", "reason": null, "standard": true, "eval_hash": "…",
- "benchmark": {"name": "ave", "protocol_version": 2, "readout": "seq", "readout_version": 2, "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"probe": "…", "reader": null}},
+ "benchmark": {"name": "ave", "protocol_version": 2, "scorer": "seq", "scorer_version": 2, "manifest_hash": "…", "protocol_hash": "…", "folder_source": {"eval": "…", "reader": null}},
  "model": "vjepa2-l", "reading": "av",
  "bridge": {"name": "vjepa-av-ave", "describe": {…}, "describe_sha256": "…", "source_sha256": "…"},
  "features": {"fingerprint": "…", "dtype": "float16", "N": 1568, "D": 1024, "pos_mode": "per_sample", "bytes": 5.2e9,
               "backend": "ram", "canary_max_rel_l2": 3.1e-6, "batch_tolerance": 1e-05,
               "rules_checked": {"video": {"temporal": "uniform", "spatial": true}}},
- "probe": {"hash": "…", "config": {…}, "seed": 0, "selected_lr": 3e-4, "epochs_run": 23, "best_epoch": 13, "stop": "patience", "n_train": 2362, "n_val": 262},
+ "scorer": {"hash": "…", "config": {…}, "seed": 0, "selected_lr": 3e-4, "epochs_run": 23, "best_epoch": 13, "stop": "patience", "n_train": 2362, "n_val": 262},
  "metrics": {"seg_acc": 0.412, "clip_acc": 0.412, "seg_acc_boundary": 0.531, "n_eval": 316, "n_boundary": 104},
  "ci95": {"seg_acc": [0.36, 0.47], "seg_acc_boundary": [0.44, 0.63]},
  "floors": {"seg_acc_floor": 0.164, "seg_acc_boundary_floor": 0.499},
@@ -125,7 +125,7 @@ the deadline or SIGTERM; only a hard kill (SIGKILL, OOM) loses up to that interv
 where clips carry different numbers of scored segments. Equal values are not a bug.) Read in this order: `status` (`ok` | `not_applicable` → `reason`,
 `not_applicable.missing`, `decided_by ∈ {validate, plan, bridge}` | `failed`: no DONE, never
 reported) → `standard` → `eval_hash` (the comparability key: two numbers of one benchmark compare iff
-it is equal; it folds `protocol_hash` and `probe_hash`, what yavih controls, and nothing of your bridge)
+it is equal; it folds `protocol_hash` and `scorer_hash`, what yavih controls, and nothing of your bridge)
 → `coverage.eval.present/nominal` (and `ids_sha256`, which must agree across
 the models you compare) → `floors` and `controls` → the headline with its `ci95` → `external`
 (the authors' package versions that produced numbers) → `probe.stop` / `epochs_run` (`max_epochs`
@@ -141,7 +141,7 @@ weights fingerprints are the warning `W_JOIN_WEIGHTS`).
 
 ## Reading `results_<timestamp>.json`
 
-`yavih probe run` (and every probe unit) writes, after its DONE markers,
+`yavih eval run` (and every probe unit) writes, after its DONE markers,
 `<results_root>/<model>/results_<timestamp>.json` (one directory per model NAME, every reading of it
 inside); with `--log-samples` also
 `samples_<benchmark>_<reading>_<timestamp>.jsonl` (one line per scored row: `clip_id`, `row`, `seed`,
@@ -156,7 +156,7 @@ the key. Keys:
   several seeds the mean, `<m>_std`, and the lowest seed's interval. A `not_applicable` entry holds
   only `status` and `reason`.
 - `configs.<benchmark>:<reading>`: `benchmark`, `reading`, `eval_hash` (the comparability key),
-  readout and its version, `protocol_version`, `protocol_hash`, `probe_hash`, `manifest_hash`, roles
+  readout and its version, `protocol_version`, `protocol_hash`, `scorer_hash`, `manifest_hash`, roles
   with counts, the metrics block, the input/output contracts, `external`, the probe config and seeds,
   the bridge (`describe()`, `describe_sha256`: provenance, per entry because one model directory holds
   several readings), `features_fingerprint`, and the `result.json` paths it was built from.

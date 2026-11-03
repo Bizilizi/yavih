@@ -1,6 +1,6 @@
 """Original-author packages: the ``external`` block of ``benchmark.yaml``.
 
-A benchmark folder's ``probe.py`` reaches the benchmark authors' own scorer / loader (VGGSounder's
+A benchmark folder's ``eval.py`` reaches the benchmark authors' own scorer / loader (VGGSounder's
 ``vggsounder`` package, Probe3D's depth metrics, ...) ONLY through :func:`require` — the assert-import:
 
 - the package absent → :class:`ExternalMissing` (``E_EXTERNAL_MISSING``, exit 3 "not ready"); the message is the
