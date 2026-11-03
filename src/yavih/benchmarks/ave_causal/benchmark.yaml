@@ -1,0 +1,173 @@
+# yavih benchmark folder — AVE causal recognition (streaming, scorer stream). Rows: make_manifest.py from the
+# packaged ave manifest. People: README.md; the agent: setup.md.
+schema_version: 3
+name: ave_causal
+aliases: []
+title: AVE causal per-second event recognition (streaming; 28 events + background)
+capability: [audio-visual, temporal, streaming]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+scorer: stream
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-03"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 73c3a319ef75ae381f2cf1482a38c4b96168345a25f196aabae0b4b95bf7c89a
+    input_hash: d9a1093cfd8e8427a1a18526de58d91a310234c6ecab1a74fe0d3a76aa4e263f
+    supersedes: []
+
+header:
+  name: AVE (causal)
+  title: Audio-Visual Event Localization in Unconstrained Videos — causal streaming adaptation
+  venue: "Tian et al. · ECCV 2018 · streaming adaptation in yavih"
+  abstract: >-
+    The AVE videos and per-second event labels, scored causally: the encoder observes each ten-second video as a
+    stream and every one-second segment is labelled at its end from what had been seen by then.
+
+source:
+  kind: public_url
+  urls:
+    - "https://huggingface.co/datasets/Helios1208/AVE_Dataset/resolve/main/AVE_Datset.tar"
+    - "https://huggingface.co/datasets/Helios1208/AVE_Dataset/resolve/main/Annotations.txt"
+    - "https://github.com/YapengTian/AVE-ECCV18/tree/master/data"
+  licence: >-
+    As for the ave folder: no licence is recorded for the AVE data on the AVE-ECCV18 GitHub repository or the HF
+    mirror Helios1208/AVE_Dataset; the media are YouTube clips (AudioSet segments) under YouTube's terms. Research
+    use only. Cite Tian et al., "Audio-Visual Event Localization in Unconstrained Videos", ECCV 2018.
+  bytes: 13353737826
+  sha256:
+    AVE_Datset.tar: 479905dc043ebae0e445c6ed1a109e5295a8f72b65ae959511db0a2bfc3a02c3
+    Annotations.txt: b0aabcea3281abb4c884e19ad4ff90314b199bea4742efe8556585a18f1396e7
+  notes: >-
+    The data are the ave folder's (one HF tar read in place through index.json); stage them with the ave folder's
+    prepare steps. This folder adds nothing to the data root.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "the ave folder's data (yavih bench prepare ave): one public HF tar + its index; nothing else"
+budget:
+  clips: {train: 2592, test: 316}
+  media_gb: 4.02
+  extract_min_per_1k_clips_ref: 20.0   # 19 window encodes per 10 s video (0.5 s updates) for an offline baseline
+  probe_minutes_ref: {stream: 10}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 6f0899eac93fdd7fc57beba016225c1a339286bdbd2c0cec9394c1808ddf6013
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: [video, audio]}
+    seconds: {type: str, role: label_aux}
+  upstream:
+    source: "the packaged ave folder's manifest.csv.gz (one row per event), grouped by video"
+    sha256: 4ff303259694f0f7537438ac017976defe3ebdde92786b4616a46d5a22bb5911
+    rows: 2908
+    note: >-
+      Upstream = the frozen ave manifest (3 248 event rows over 3 232 videos, leakage-filtered; see ave's README).
+      Kept: its train and test videos, one row per video with the label of each second (the event's class index in
+      ave's classes.csv where event_start <= s < event_end, else background = 28). Excluded: the 16 train videos
+      that carry two events over the same seconds (two classes for one second). val stays out, as it is unused in ave.
+    upstream_files:
+      "ave/manifest.csv.gz (decompressed)": 4ff303259694f0f7537438ac017976defe3ebdde92786b4616a46d5a22bb5911
+      "ave/classes.csv": e664fd38da87b56f94114fe67455c521da3a126ae29e1d0b390c478b464295b6
+    curation:
+      total_upstream: 2924
+      per_split:
+        train: {listed: 2592, staged: 2592, missing: 0}
+        test: {listed: 316, staged: 316, missing: 0}
+      excluded:
+        two_events_same_seconds: 16
+      short_clips: 0
+      leakage_audit: {against: "inherited from ave: VGGSound train ytids + AVE train ytids for test rows", excluded: 0}
+
+splits:
+  train: [train]
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: tar_index
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_media
+    root: media_root
+    layout: tar_index
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/ave"
+      description: "the ave folder's root: AVE_Datset.tar (never extracted) + index.json"
+  tar_index: index.json
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: "the AVE mp4 (tar member video/<ytid>.mp4 of AVE_Datset.tar) exactly as stored, read in place; its video track (16-46 fps, 128x96 to 1280x720, 9.96-10.08 s) is described by info; the bridge reads it causally, update by update"
+    audio: "the same mp4 bytes as video (one tar member, read once); its AAC audio track (44.1 kHz, mono or stereo, 9.7-10.1 s) is described by info; the bridge reads it causally, update by update"
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: sequence
+  coordinates: media
+  target_frame: null
+  requires: {pos: [], streams: [], grid: null, t_bins: null}
+  stream: {update_interval_s: 0.5}
+  schema:
+    emb: {type: array, dtype: [float16, float32], shape: ["*", D], stats: true}
+    support: {type: array, dtype: float64, shape: ["*", 4], exact: true, finite: false}
+    cutoff: {type: array, dtype: float64, shape: ["*"], exact: true}
+    timing: {type: json, kind: object, optional: true, volatile: true}
+
+external: []
+
+protocol:
+  clip_seconds: 10.0
+  train_draw: null
+  views: none
+  num_segments: 10
+  segment_seconds: 1.0
+  background_index: 28
+
+metrics:
+  headline: sec_acc_gru
+  list: [sec_acc_linear, sec_acc_gru, event_map_linear, event_map_gru]
+  floors: [sec_acc_floor, event_map_floor]
+  controls: []
+  chance: {}
+  ci: {sec_acc_linear: bootstrap_clip, sec_acc_gru: bootstrap_clip, event_map_linear: bootstrap_clip, event_map_gru: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params:
+  groups: {event: {loss: ce, classes: 29}}

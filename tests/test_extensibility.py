@@ -37,7 +37,7 @@ def test_builtin_readouts_describe_themselves():
     builtin = ("clf", "seq", "grid", "box")
     assert registry.names()[:4] == builtin and list(READOUTS)[:4] == list(builtin)
     assert {k: READOUT_VERSION[k] for k in builtin} == {"clf": 1, "seq": 2, "grid": 2, "box": 2}  # hashed: unchanged by the refactor
-    assert all(registry.get(n).kind != "probe" for n in registry.names()[4:])
+    assert all(registry.get(n).kind != "probe" or n == "stream" for n in registry.names()[4:])  # stream: causal heads
     for name in builtin:
         r = registry.get(name)
         assert r.module == f"yavih.readouts.{name}" and callable(r.driver()) and r.floor_outputs is not None
@@ -54,7 +54,7 @@ def test_readout_descriptors_import_without_torch():
             "from yavih.readouts import registry; from yavih.benchmark import Benchmark\n"
             "print(registry.names(), Benchmark.load('esc50').protocol_hash[:12])")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert out.returncode == 0 and "('clf', 'seq', 'grid', 'box', 'knn')" in out.stdout, out.stderr
+    assert out.returncode == 0 and "('clf', 'seq', 'grid', 'box', 'knn', 'stream')" in out.stdout, out.stderr
 
 
 def _toy_readout(module: str = "toy_readout_mod") -> registry.Scorer:

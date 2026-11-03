@@ -487,6 +487,62 @@ def _floor_outputs(train_targets: Any, n_eval: int, *, protocol: dict, label_kin
     return out
 
 
+#: recordings per role in the conformance population
+POPULATION: dict[str, int] = {"train": 40, "eval": 40}
+
+
+def _population(ctx: Any, tag: str) -> dict[str, Any]:
+    """The conformance population: the folder's own targets (``eval.py`` ``targets``) on a seeded selection of train
+    and eval recordings, and deterministic scores that are partly informative (the label plus stable noise), so every
+    metric, floor and interval of the folder runs on real target structure without features."""
+    from yavih.conformance import _values, select_rows
+
+    groups = {str(k): {"loss": str(v["loss"]), "classes": int(v["classes"])} for k, v in dict(ctx.spec.readout_params["groups"]).items()}
+
+    def role(splits: list[str], n: int, salt: str) -> list[dict[str, Any]]:
+        out = []
+        for s in splits:
+            rows = select_rows(ctx.bench.manifest_hash, s, ctx.bench.n_rows(s), n, salt=salt)
+            tg = ctx.hook_targets(s, rows)
+            if tg is None:
+                from yavih.conformance import E_UNSUPPORTED, ConformanceError
+
+                raise ConformanceError(E_UNSUPPORTED, f"{ctx.bench.name}: a streaming folder's eval.py defines targets(bench, split, rows)")
+            out.extend(tg)
+        return out
+
+    train = role(list(ctx.roles["train"]), POPULATION["train"], "train")
+    ev = role(list(ctx.roles["eval"]), POPULATION["eval"], "eval")
+    labels = {g: np.concatenate([np.asarray(t["labels"][g]) for t in ev], axis=0) for g in groups}
+    rec = np.concatenate([np.full(len(np.asarray(t["times"])), k) for k, t in enumerate(ev)])
+    times = np.concatenate([np.asarray(t["times"], dtype=np.float64) for t in ev])
+    names = sorted({n for t in ev for n in dict(t.get("meta") or {})})
+    meta = {n: np.concatenate([np.asarray(t["meta"][n]) for t in ev]) for n in names}
+    outputs = {}
+    for g, spec in groups.items():
+        c, y = spec["classes"], labels[g]
+        noise = (_values(f"{tag}:stream:{g}", (len(rec), c)) - 0.5) * 6.0
+        if spec["loss"] == "ce":
+            onehot = np.zeros((len(rec), c), np.float64)
+            ok = y >= 0
+            onehot[np.flatnonzero(ok), y[ok].astype(np.int64)] = 2.0
+            z = onehot + noise
+            z = np.exp(z - z.max(axis=1, keepdims=True))
+            outputs[g] = (z / z.sum(axis=1, keepdims=True)).astype(np.float32)
+        else:
+            outputs[g] = (1.0 / (1.0 + np.exp(-(3.0 * (np.nan_to_num(y) - 0.5) + noise)))).astype(np.float32)
+    floor = _floor_outputs(train, len(rec), protocol=ctx.protocol, label_kind="none")
+    for g, spec in groups.items():
+        if floor[g].shape[1] != spec["classes"]:  # a class absent from the drawn train targets
+            p = np.zeros(spec["classes"], np.float32)
+            p[: floor[g].shape[1]] = floor[g][0]
+            floor[g] = np.broadcast_to(p, (len(rec), spec["classes"])).copy()
+    split_meta = {"recording": rec, "time": times, "meta": meta, "has_evidence": np.ones(len(rec), bool), "groups": groups, "head": "gru",
+                  "mode": "causal", "bootstrap": dict(ctx.bootstrap or {}), "n_train": len(train), "n_eval": len(ev)}
+    return {"outputs": outputs, "targets": labels, "split_meta": split_meta, "floor_outputs": floor,
+            "eval_splits": list(ctx.roles["eval"]), "eval_rows": np.arange(len(ev), dtype=np.int64)}
+
+
 def _head(*, num_classes: int | None = None, T: int | None = None, grid: Any = None, target_size: int | None = None) -> dict:
     return {"family": "stream_heads_v1", "heads": list(HEADS), "proj": PROJ, "hidden": HIDDEN, "gru_layers": 1, "tbptt": TBPTT,
             "standardize": "train mean/std", "layout": "point", "out": num_classes}
@@ -515,5 +571,5 @@ SCORER = Scorer(
     name="stream", version=VERSION, module=__name__, kind="probe", label_kinds=frozenset({"none"}), param_keys=frozenset({"groups"}),
     requires_t_bins=False, requires_grid=False, dense=False, train=_STREAM_TRAIN, head=_head, loss=_loss_name, geometry=_geometry,
     head_families=frozenset({"stream_heads_v1"}), losses=frozenset({"stream_groups"}), score=run_stream, validate_spec=_validate_spec,
-    output_keys=frozenset({"emb", "support", "cutoff"}), floor_outputs=_floor_outputs,
+    output_keys=frozenset({"emb", "support", "cutoff"}), floor_outputs=_floor_outputs, conformance_population=_population,
 )

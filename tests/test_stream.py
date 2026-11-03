@@ -72,7 +72,7 @@ def test_a_finite_buffer_records_the_gap():
 def test_forced_causal_turns_replay_into_the_causal_mode():
     with S.forced_causal():
         out = _replay(9.0)
-    assert "timing" not in out and out["cutoff"].size == 10
+    assert out["timing"] is None and out["cutoff"].size == 10
 
 
 def test_check_row_finds_future_support_and_a_broken_log():

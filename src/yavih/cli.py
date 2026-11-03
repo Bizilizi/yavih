@@ -22,7 +22,7 @@ import socket
 import sys
 import time
 import traceback
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -1464,6 +1464,20 @@ def cmd_bench_trial(ns: argparse.Namespace) -> Envelope:
 # ----------------------------------------------------------------------------- bridge check
 
 
+def stream_line(block: Any) -> str:
+    """The bridge-check summary line of a streaming bridge's gates (empty for any other)."""
+    if not isinstance(block, Mapping):
+        return ""
+    fi = block.get("future_invariance") or {}
+    line = (f"  stream: mode={block.get('mode')} update_interval_s={block.get('update_interval_s')} future_invariance="
+            f"{len(fi.get('recordings') or [])} recordings max_rel_l2={fi.get('max_rel_l2')}")
+    rt = block.get("realtime_smoke")
+    if isinstance(rt, Mapping):
+        line += (f"; realtime smoke: {rt.get('updates')} updates, {rt.get('skipped')} skipped, latency p50 "
+                 f"{rt.get('latency_p50_s')} s, max {rt.get('latency_max_s')} s")
+    return line + "\n"
+
+
 def cmd_bridge_check(ns: argparse.Namespace) -> Envelope:
     """``yavih bridge check <bridge.py> --bench B [--n 32] [--arg k=v] [--decode-workers N] [--out profile.json]``.
 
@@ -1508,7 +1522,8 @@ def cmd_bridge_check(ns: argparse.Namespace) -> Envelope:
         f"order_rel_l2={num(inv.get('order_rel_l2'))} tolerance={num(inv.get('tolerance'))}"
         + (f" ({inv.get('tolerance_reason')})" if inv.get("tolerance_reason") else "") + "\n"
         f"  {rules_line(dict(profile.get('rules_checked') or {}), profile.get('describe'))}\n"
-        f"  clips_per_s={profile.get('clips_per_s')} at decode_workers={profile.get('decode_workers')} "
+        + stream_line(profile.get("stream"))
+        + f"  clips_per_s={profile.get('clips_per_s')} at decode_workers={profile.get('decode_workers')} "
         f"(n={profile.get('n')}, split={profile.get('split')})\n"
         f"  describe_sha256={str(dsha)[:12] if dsha else None} (consistency only, never identity)\n"
         f"  run directory: runs/{bench_name}/{model}/{reading}/\n"

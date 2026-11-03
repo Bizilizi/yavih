@@ -8,13 +8,13 @@ import pytest
 pytest.importorskip("av")
 pytest.importorskip("torch")
 
+from yavih import testing as T  # noqa: E402
 from yavih.benchmark import Benchmark  # noqa: E402
 from yavih.extract import ExtractError, bridge_check, run_extract  # noqa: E402
 from yavih.io import validate_features  # noqa: E402
 from yavih.probes.config import ProbeConfig  # noqa: E402
 from yavih.readouts import probe  # noqa: E402
 from yavih.readouts import stream as RS  # noqa: E402
-from yavih import testing as T  # noqa: E402
 from yavih.testing import stream as TS  # noqa: E402
 
 
@@ -64,3 +64,13 @@ def test_oracle_random_and_late_predictions(bench, tmp_path):
     assert oracle["floors"]["bin_acc_floor"] < band["random_max"]
     lo, hi = oracle["ci95"]["bin_acc_gru"]
     assert lo <= oracle["metrics"]["bin_acc_gru"] <= hi
+
+
+def test_conformance_records_and_checks(bench):
+    from yavih import conformance as C
+
+    C.record(bench)
+    rep = C.check(bench)
+    assert rep["ok"] if isinstance(rep, dict) else rep.ok
+    vals = C.compute(bench)["values"]["*"]
+    assert set(vals["metrics"]) == {"bin_acc_linear", "bin_acc_gru"} and "bin_acc_floor" in vals["floors"]

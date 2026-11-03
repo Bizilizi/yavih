@@ -239,7 +239,10 @@ twice on one sample differs · `E_ORACLE` (bridge check) the test oracle bridge 
 `E_READER` (exit 5) the folder's `reader.py` yielded rows out of order or outside the shard range · `E_READ_INTERNAL`
 (exit 5) reading the stored bytes raised · `E_WRITE` (exit 5) a row's features or provenance cannot be serialized ·
 `E_PREEMPTED` (exit 4) SIGTERM / SIGUSR1: shard abandoned, nothing partial · `W_MISSING_ROWS` (bridge check) sampled
-rows with missing or undecodable media. Probe (exit 2 unless noted): `E_READOUT` (exit 1) a `--readout` other than
+rows with missing or undecodable media. Streaming benchmarks: `E_FUTURE_SUPPORT` an update's support ends after its
+cutoff or spans more than the declared window · `E_REPLAY_LOG` a real-time replay log inconsistent with the scheduler
+(or, in bridge check, a replay whose updates before its first skip differ from the causal run) · `E_FUTURE_LEAK`
+(bridge check) an update changed when only the input after its cutoff changed. Probe (exit 2 unless noted): `E_READOUT` (exit 1) a `--readout` other than
 the benchmark's · `E_EVAL_PY` (exit 1) the folder's `eval.py` does not import · `E_SPLIT_MISSING` a role split
 without features · `E_META_STALE` a shard written by another configuration than `_meta.json` describes: re-run
 validate · `E_ELIGIBILITY_MISMATCH` splits disagree on eligibility · `E_HASH_PROBE` a planned unit's `probe_hash` /
@@ -247,7 +250,8 @@ validate · `E_ELIGIBILITY_MISMATCH` splits disagree on eligibility · `E_HASH_P
 profile · `E_LABELS` a row with not exactly one label on a single-label readout, or a label outside `classes.csv` ·
 `E_STREAM` a stream outside `describe()["streams"]` · `E_POS_MISSING` a readout that needs `pos` got none ·
 `E_POS_SHUFFLE` (box) the shuffled control's partners carry different token counts · `E_DURATIONS` (seq) tokens with
-`pos.t` but no `media.duration_s` · `E_EXTERNAL` (exit 3) the base of `E_EXTERNAL_MISSING` / `E_EXTERNAL_VERSION`.
+`pos.t` but no `media.duration_s` · `E_SPEC` (stream) `readout_params.groups` missing · `E_TARGETS` (stream) the
+folder's `eval.py` defines no `targets()` returning one `{times, labels}` per row · `E_EXTERNAL` (exit 3) the base of `E_EXTERNAL_MISSING` / `E_EXTERNAL_VERSION`.
 `plan build`: `E_PLAN` (exit 1) a plan that cannot be built or read (two entries on one run directory, a frozen layout
 against a `shards` pin, another plan schema, duplicate ids) · `W_NO_CENSUS` frame streams without a census: shard
 sizes are estimated.

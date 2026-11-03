@@ -1113,6 +1113,7 @@ class _Engine:
 
             if _stream.is_forced_causal():  # bridge check's causal passes of a real-time bridge: no replay log
                 want = [k for k in want if k != "timing"]
+                out = {k: v for k, v in out.items() if k != "timing"}
         got = sorted(k for k in out if k != "used")
         if sorted(want) != got:
             raise ExtractError(E_FEATURES, f"encode() returned keys {got}, describe()['outputs'] declares {sorted(want)}", exit_code=2)
@@ -1237,7 +1238,7 @@ FUTURE_GATE_RECORDINGS = 2
 
 
 def _stream_gates(make_engine: Callable[[], _Engine], smoke: list[Any], pass_a: _PassResult, d: Mapping[str, Any], dt: float, tol: float,
-                  deterministic: bool, waive_or_raise: Callable[[str, str, str], None]) -> dict[str, Any]:
+                  deterministic: bool, waive_or_raise: Callable[[str, str, str], None], missing: list[dict[str, Any]]) -> dict[str, Any]:
     """A streaming bridge's own gates. **Future invariance** (``E_FUTURE_LEAK``): for up to
     :data:`FUTURE_GATE_RECORDINGS` smoke recordings, lossless copies cut a little after the second cutoff
     (``yavih.media.perturb.future_pair``) are encoded under forced causal; every update up to cutoff ``c`` must be equal
@@ -1281,7 +1282,8 @@ def _stream_gates(make_engine: Callable[[], _Engine], smoke: list[Any], pass_a: 
                                f"(ffv1 video / flac audio in Matroska): {type(e).__name__}: {e}", "stream")
                 continue
             if len(res.by_index) != 3:
-                waive_or_raise(E_FUTURE_LEAK, f"{s.clip_id}: a lossless copy was reported missing by the bridge", "stream")
+                why = "; ".join(str(m.get("reason")) for m in missing[-3:]) or "no reason recorded"
+                waive_or_raise(E_FUTURE_LEAK, f"{s.clip_id}: a lossless copy was reported missing ({why})", "stream")
                 continue
             a = res.by_index[0][0]
             for k, c in ((1, c1), (2, c2)):
@@ -2221,7 +2223,7 @@ def _bridge_check(
                        "refuse the extracted set (E_DEAD_ROWS)", "encode")
     stream_block = None
     if stream_spec is not None:
-        stream_block = _stream_gates(engine, smoke, pass_a, d, stream_spec.update_interval_s, tol, deterministic, waive_or_raise)
+        stream_block = _stream_gates(engine, smoke, pass_a, d, stream_spec.update_interval_s, tol, deterministic, waive_or_raise, missing)
 
     # ---- per-member validation checks on pass A
     class _Collect:

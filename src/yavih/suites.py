@@ -59,7 +59,7 @@ __all__ = [
 ]
 
 #: The capability groups a suite may use, in display order.
-CAPABILITIES: tuple[str, ...] = ("audio", "visual", "audio-visual", "temporal", "spatial", "retrieval", "generation")
+CAPABILITIES: tuple[str, ...] = ("audio", "visual", "audio-visual", "temporal", "spatial", "retrieval", "generation", "streaming")
 #: ``status`` of a suite entry: ``packaged`` (a resolvable benchmark folder) or ``pending`` (none yet).
 ENTRY_STATUSES: tuple[str, ...] = ("packaged", "pending")
 #: Completeness of one ``(benchmark, reading, model)``: a DONE-marked result exists (``done``), it does not

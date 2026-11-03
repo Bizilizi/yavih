@@ -19,6 +19,7 @@ Normative descriptions of current behaviour.
 | [Benchmark folder](benchmark-folder.md) | the folder contract, the `benchmark.yaml` schema, manifest and classes, the `Benchmark` API and resolution order, README.md / setup.md contracts, what `yavih bench lint` checks |
 | [Bridge](bridge.md) | what a bridge receives (`Sample`, `RawStream`, media facts, canaries), the `Bridge` API, `describe()` keys and declared rules, the `encode()` contract, positions, `used`, guardrails, `yavih bridge check` |
 | [Output schemas and codecs](codecs.md) | what a bridge returns per row: `output_contract.schema`, the default feature matrix, the built-in codecs (`array`, `json`, `bytes`, `wav`), writing a codec, the lint self-test, what enters the hash |
+| [Streaming benchmarks](streaming.md) | one recording per row, causal and real-time modes: the stream output contract, `yavih.stream` (`causal`, `replay`), the future-invariance gate, the `stream` scorer's linear and causal GRU heads |
 | [Features](features.md) | the feature WebDataset format: shards, members, sidecars, `_layout.json`, `_meta.json`, missing rows, `NOT_APPLICABLE.json`, resumption and claims, `FeatureWriter` / `FeatureReader` |
 | [Validation](validation.md) | `yavih features validate`: every check and code with its level, eligibility, waivers and custom rules |
 | [Readouts](readouts.md) | the metric registry, common probe rules, `ProbeConfig`, the `clf` / `seq` / `grid` / `box` readouts, floors, controls, intervals |

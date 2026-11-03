@@ -281,7 +281,13 @@ def _model(result: dict) -> str:
 
 
 def _reading(result: dict) -> str:
-    return str(result.get("reading") or _describe(result).get("reading") or "")
+    """The row's reading; a real-time streaming result adds its device (``reading@device``): a real-time number is
+    comparable only on one hardware configuration, so each device is a row of its own."""
+    r = str(result.get("reading") or _describe(result).get("reading") or "")
+    st = _describe(result).get("stream")
+    if isinstance(st, Mapping) and st.get("mode") == "realtime":
+        r = f"{r}@{st.get('device') or 'unknown device'}"
+    return r
 
 
 def _describe_sha(result: dict) -> str:

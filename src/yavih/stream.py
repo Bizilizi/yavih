@@ -149,9 +149,9 @@ def replay(step: Step, *, duration_s: float, update_interval_s: float, reset: Ca
     (observations that arrived after it never enter the job). Returns the :func:`causal` arrays for the completed
     updates plus ``timing``: ``{helper_version, scheduler, buffer_s, sync, updates: [[request_s, started_at,
     ready_at], ...], skipped: [request_s, ...], gaps: [[from, to], ...]}`` in seconds since the stream started.
-    Under :func:`forced_causal` it is :func:`causal` (no clock, no ``timing``)."""
-    if is_forced_causal():
-        return causal(step, duration_s=duration_s, update_interval_s=update_interval_s, reset=reset, dim=dim)
+    Under :func:`forced_causal` it is :func:`causal` (no clock; ``timing`` is ``None``)."""
+    if is_forced_causal():  # timing None: a bridge returns the same keys either way; the engine drops it
+        return {**causal(step, duration_s=duration_s, update_interval_s=update_interval_s, reset=reset, dim=dim), "timing": None}
     if scheduler not in SCHEDULERS:
         raise ValueError(f"scheduler {scheduler!r}: one of {list(SCHEDULERS)}")
     if buffer_s is not None and not buffer_s > 0:

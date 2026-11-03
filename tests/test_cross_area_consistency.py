@@ -104,6 +104,9 @@ def test_every_shipped_bridge_declares_a_v_or_av(path: Path) -> None:
         fields = yaml.safe_load((path.parent / "benchmark.yaml").read_text(encoding="utf-8")).get("fields") or {}
         if all((f or {}).get("storage") == "cell" for f in fields.values()):
             allowed = {"t"}  # nothing but text is handed over (a caption): the model reads text
+        oc = yaml.safe_load((path.parent / "benchmark.yaml").read_text(encoding="utf-8")).get("output_contract") or {}
+        if oc.get("shape") == "sequence":  # a streaming benchmark: its real-time readings carry the -rt suffix
+            allowed = allowed | {f"{r}-rt" for r in allowed}
     assert readings and readings <= allowed, f"{path}: {readings}"
 
 

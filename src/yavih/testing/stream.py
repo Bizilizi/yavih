@@ -55,7 +55,7 @@ def _write_mp4(path: Path, seconds: list[int]) -> None:
         v.width = v.height = SIZE
         v.pix_fmt = "yuv420p"
         v.options = {"qscale": "2"}
-        for k, cls in enumerate(seconds):
+        for cls in seconds:
             for _ in range(FPS):
                 img = np.empty((SIZE, SIZE, 3), dtype=np.uint8)
                 img[...] = PALETTE[cls]
@@ -200,7 +200,7 @@ class _StreamBase(Bridge):
         self.dt = float((bench.output_contract or {}).get("stream", {}).get("update_interval_s", UPDATE_INTERVAL_S))
 
     def describe(self) -> dict:
-        return {"model": f"synth-{type(self).__name__.lower()}", "reading": "v", "weights_sha256": None, "weights_ref": "-",
+        return {"model": f"synth-{type(self).__name__.lower()}", "reading": "v-rt" if self.mode == "realtime" else "v", "weights_sha256": None, "weights_ref": "-",
                 "batch_size": self.batch_size, "views": 1, "outputs": list(self.outputs),
                 "input": {"video": {"norm": {"source": "none: the frame's mean colour in [0, 1]"},
                                     "decoder": {"lib": "pyav", "version": "stand-in"},
@@ -309,7 +309,6 @@ class RealtimeStreamBridge(_StreamBase):
 
     def encode(self, samples: list[Any]) -> dict[str, Any]:
         outs = [self._run(s) for s in samples]
-        keys = [k for k in self.outputs if all(k in o for o in outs)]
-        res = {k: [o[k] for o in outs] for k in keys}
+        res = {k: [o[k] for o in outs] for k in self.outputs}
         res["used"] = [{"video": {"times": [float(x) for x in o["support"][:, 1]]}} for o in outs]
         return res

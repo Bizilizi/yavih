@@ -636,6 +636,7 @@ The full index with descriptions, media and sources is [src/yavih/benchmarks/REA
 | audiocaps_t2a | audiocaps_t2a | none | caption (cell) | `fd_passt` | yes, `external` |
 | audioset20k | clf | multi | video, audio | `map` |  |
 | ave | seq | segments | video, audio | `seg_acc` |  |
+| ave_causal | stream | none | video, audio | `sec_acc_gru` | yes |
 | avsync | clf | single | video, audio (materialized) | `acc` | yes |
 | esc50 | clf (5 folds) | single | audio | `acc_mean` |  |
 | fsd50k | clf | multi | audio | `map` |  |

@@ -758,7 +758,9 @@ def with_files(sample: Sample, salt: str, files: Mapping[tuple, str], ext: str) 
     for name, st in sample.streams.items():
         path = files[st._src.loc]
         src = sources.setdefault(path, _Source(("file", path)))
-        streams[name] = RawStream(name, st.kind, src=src, clip_id=sample.clip_id, required_info=st._required, ext=ext,
+        # the copy's facts are probed as available, never required: a lossless re-encode may not carry every header
+        # fact the stored file does (Matroska FLAC has no sample count)
+        streams[name] = RawStream(name, st.kind, src=src, clip_id=sample.clip_id, required_info=(), ext=ext,
                                   handle=f"{salt}:{st._handle}")
     return dataclasses.replace(sample, streams=streams)
 

@@ -53,6 +53,9 @@ METRIC_LABELS: dict[str, str] = {
     "acc": "accuracy", "acc_mean": "mean acc", "map": "mAP", "seg_acc": "segment acc", "d1": "δ₁", "iou_mean": "mean IoU",
     "auc_pr": "mAP",  # vggsounder: the package's auc_pr, the paper's mAP
     "fd_passt": "FD (PaSST)",
+    # streaming benchmarks: <metric>_<head>
+    "sec_acc_gru": "segment acc (causal GRU)", "map_gru": "mAP (causal GRU)", "cap_gru": "cAP (causal GRU)",
+    "event_map_gru": "event mAP (causal GRU)", "top5_recall_action_gru": "top-5 recall (causal GRU)",
 }
 
 

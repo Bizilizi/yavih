@@ -101,6 +101,8 @@ OBTAIN_TIERS: frozenset[str] = frozenset({"auto", "manual-download", "needs-lice
 RETIRED_HEADINGS: frozenset[str] = frozenset({"Changelog", "History", "Checklist", "Maintainers"})
 #: Reading tags a bridge template may declare: what the model is given (a = audio, v = video, av = both, t = text).
 READINGS: frozenset[str] = frozenset({"a", "v", "av", "t"})
+#: A streaming benchmark's real-time reading: a base reading with the ``-rt`` suffix (``yavih.stream``).
+REALTIME_READINGS: frozenset[str] = frozenset(f"{r}-rt" for r in ("a", "v", "av"))
 #: A numbered prepare step (``prepare/01_download.sh``): what ``yavih bench prepare <name> <step>`` runs.
 _STEP_FILE_RE = re.compile(r"^\d+_[A-Za-z0-9_.-]+\.(?:sh|py)$")
 #: What a pip-installed user cannot open: the repository's docs/ pages by relative path (the wheel does not ship them;
@@ -264,6 +266,11 @@ class _Ctx:
             except Exception as e:  # noqa: BLE001 - every load failure is a finding
                 self.bench_error = f"{e.__class__.__name__}: {e}"
         self.name = str((self.raw or {}).get("name") or folder.name)
+
+    def yaml_shape(self) -> str | None:
+        """``output_contract.shape`` as written (``sequence`` for a streaming benchmark)."""
+        oc = (self.raw or {}).get("output_contract")
+        return oc.get("shape") if isinstance(oc, dict) else None
 
     def text(self, rel: str) -> str | None:
         if rel not in self._texts:
@@ -631,8 +638,9 @@ def _c_template(c: _Ctx) -> Iterator[Finding]:
     if not re.search(r'^\s+"model": "[A-Za-z0-9_.-]{1,64}",', src, flags=re.M):
         yield _err("template", "E_TEMPLATE", 'describe() lacks a literal "model" (the name results are filed under)', f)
     readings = template_readings(src)
-    if not readings or not readings <= READINGS:
-        yield _err("template", "E_TEMPLATE", f"describe()['reading'] {sorted(readings)} must be in {sorted(READINGS)}", f)
+    allowed = READINGS | (REALTIME_READINGS if c.yaml_shape() == "sequence" else frozenset())
+    if not readings or not readings <= allowed:
+        yield _err("template", "E_TEMPLATE", f"describe()['reading'] {sorted(readings)} must be in {sorted(allowed)}", f)
 
 
 def _shipped_texts(folder: Path) -> list[str]:

@@ -655,6 +655,10 @@ def validate_describe(d: dict, bridge: Bridge, bench: Any) -> None:
         _require(("timing" in (d.get("outputs") or ())) == realtime,
                  "describe()['outputs'] lists 'timing' exactly when stream.mode is 'realtime' (the replay log)")
         _require(not realtime or d["batch_size"] == 1, "a real-time replay runs one recording at a time: batch_size must be 1")
+        _require(not realtime or str(d["reading"]).endswith("-rt"),
+                 "a real-time bridge's describe()['reading'] ends with '-rt' (its numbers are rows of their own, never the causal "
+                 "reading's newest configuration)")
+        _require(realtime or not str(d["reading"]).endswith("-rt"), "the reading suffix '-rt' marks a real-time bridge (stream.mode: realtime)")
     else:
         _require("stream" not in d, "describe()['stream'] belongs to a streaming benchmark (output_contract.shape: sequence)")
 

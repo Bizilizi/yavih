@@ -136,7 +136,7 @@ tells configurations of one model name apart in the report (`W_BRIDGE_CHANGED`).
 | `weights_ref` | **no** | path or hub id; provenance only |
 | `dtype`, `pos_mode`, `streams` | yes | equal to the class attributes |
 | `batch_size` | **no** | equal to the class attribute; provenance (the canaries check batch invariance), so another batch size on another GPU is the same configuration |
-| `reading` | yes | `"a"`, `"v"` or `"av"`: what the model sees, one vocabulary across benchmarks (`[A-Za-z0-9_-]{1,32}`, first character a letter or digit; another declared tag is legal). It names the run subdirectory and the results key `<benchmark>:<reading>`, so a different spelling, e.g. `"audio"`, is a different row; the report marks a reading `MISSING` only where the benchmark has its modalities, and `report --join` routes `a`/`v`/`av` |
+| `reading` | yes | `"a"`, `"v"` or `"av"`: what the model sees, one vocabulary across benchmarks (`[A-Za-z0-9_-]{1,32}`, first character a letter or digit; another declared tag is legal; a streaming benchmark's real-time replay adds `-rt`, e.g. `av-rt`). It names the run subdirectory and the results key `<benchmark>:<reading>`, so a different spelling, e.g. `"audio"`, is a different row; the report marks a reading `MISSING` only where the benchmark has its modalities, and `report --join` routes `a`/`v`/`av` |
 | `layer`, `pooling` | yes | the tap; `"none"`, `"mean"`, `"cls"`, … |
 | `views` | yes | MUST be `1`: one deterministic view, no multi-crop/multi-clip/TTA averaging |
 | `input` | yes, except each stream's `decoder` block | per stream you READ: the declared rules of §3 below; `decoder` (`{lib, version, …}`) is recorded as provenance, like the torch or CUDA version |
