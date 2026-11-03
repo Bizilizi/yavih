@@ -85,3 +85,69 @@ def test_perstage_and_bin_map_and_recording_interval():
     v = M.bin_macro_ap(pred, gt, classes=[1, 2, 3])
     lo, hi = M.recording_interval(lambda w: M.bin_macro_ap(pred, gt, classes=[1, 2, 3], w=w), rec, samples=200, seed=0)
     assert lo <= v <= hi and hi - lo < 0.2
+
+
+# ----------------------------------------------------------------------------- EPIC-KITCHENS-100 anticipation
+# The reference below is epic-kitchens/C3-Action-Anticipation @ 73b8a00 evaluate_anticipation_json_ek100.py
+# (compute_action_scores, _scores_dict_to_ranks, mean_topk_recall), reproduced on numpy for the comparison.
+
+
+def _ref_softmax(xs):
+    m = np.max(xs, axis=1).reshape((-1, 1))
+    e = np.exp(xs - m)
+    return e / np.sum(e, axis=1).reshape((-1, 1))
+
+
+def _ref_top_scores(scores, top_n=100):
+    idx = np.argsort(scores)[:, ::-1][:, :top_n]
+    return idx, scores[np.arange(0, len(scores)).reshape(-1, 1), idx]
+
+
+def _ref_action_ranks(verb_scores, noun_scores, top_n=100):
+    top_verbs, top_verb_scores = _ref_top_scores(verb_scores, top_n)
+    top_nouns, top_noun_scores = _ref_top_scores(noun_scores, top_n)
+    mat = _ref_softmax(top_verb_scores)[:, :, np.newaxis] * _ref_softmax(top_noun_scores)[:, np.newaxis, :]
+    n = mat.shape[0]
+    ranks = mat.reshape(n, -1).argsort(axis=-1)[:, ::-1]
+    vi, ni = np.unravel_index(ranks[:, :top_n], shape=mat.shape[1:])
+    seg = np.arange(0, n).reshape(-1, 1)
+    verbs, nouns = top_verbs[seg, vi], top_nouns[seg, ni]
+    scores = mat.reshape(n, -1)[seg, ranks[:, :top_n]]
+    out = []
+    for v, nn, s in zip(verbs, nouns, scores, strict=True):  # _scores_dict_to_ranks of the {verb*1000+noun: score} dicts
+        ids = v * 1000 + nn
+        out.append(ids[np.argsort(s)[::-1]])
+    return np.array(out)
+
+
+def _ref_mean_topk_recall(rankings, labels, k=5):
+    recalls = []
+    for c in np.unique(labels):
+        idx = labels == c
+        recalls.append((rankings[idx][:, :k] == labels[idx].reshape(-1, 1)).max(1).mean())
+    return np.mean(recalls)
+
+
+def test_epic_anticipation_matches_the_official_evaluator():
+    import importlib.util
+    from pathlib import Path
+
+    p = Path(__file__).resolve().parents[1] / "src" / "yavih" / "benchmarks" / "epic100_anticipation_stream" / "eval.py"
+    spec = importlib.util.spec_from_file_location("epic_eval_ref_test", p)
+    E = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(E)
+    rng = np.random.default_rng(0)
+    n = 300
+    yv, yn = rng.integers(0, 97, n), rng.integers(0, 300, n)
+    pv = rng.dirichlet(np.ones(97) * 0.3, n)
+    pn = rng.dirichlet(np.ones(300) * 0.3, n)
+    pv[np.arange(0, n, 3), yv[::3]] += 1.0  # partly informative
+    pn[np.arange(0, n, 2), yn[::2]] += 1.0
+    pv, pn = pv / pv.sum(1, keepdims=True), pn / pn.sum(1, keepdims=True)
+    lv, ln = np.log(pv), np.log(pn)
+    meta = {"unseen": np.zeros(n, bool), "tail_verb": np.zeros(n, bool), "tail_noun": np.zeros(n, bool)}
+    out, tg, sm = {"verb": pv, "noun": pn}, {"verb": yv, "noun": yn}, {"meta": meta}
+    assert E.METRICS["mt5r_verb_gru"].fn(out, tg, {}, sm) == pytest.approx(_ref_mean_topk_recall(lv.argsort(1)[:, ::-1], yv))
+    assert E.METRICS["mt5r_noun_gru"].fn(out, tg, {}, sm) == pytest.approx(_ref_mean_topk_recall(ln.argsort(1)[:, ::-1], yn))
+    want = _ref_mean_topk_recall(_ref_action_ranks(lv, ln), yv * 1000 + yn)
+    assert E.METRICS["mt5r_action_linear"].fn(out, tg, {}, sm) == pytest.approx(want)

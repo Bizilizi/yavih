@@ -1,0 +1,182 @@
+# yavih benchmark folder — EPIC-KITCHENS-100 action anticipation on the stream (scorer stream). Rows:
+# make_manifest.py from the pinned EPIC-KITCHENS-100 annotation files. People: README.md; the agent: setup.md.
+schema_version: 3
+name: epic100_anticipation_stream
+aliases: []
+title: EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall)
+capability: [audio-visual, temporal, streaming]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+scorer: stream
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-03"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de
+    input_hash: 13b1212f287456792178699c462021824bfe6fa0666969d533ee4621521ce8ed
+    supersedes: []
+
+header:
+  name: EPIC-KITCHENS-100 (stream)
+  title: Rescaling Egocentric Vision — action anticipation on the stream
+  venue: "Damen et al. · IJCV 2022 · streaming evaluation in yavih"
+  abstract: >-
+    100 hours of egocentric kitchen video with 90 000 narrated actions. Scored on the stream: one second before each
+    action starts, the encoder's latest available prediction must name its verb, its noun and the action.
+
+source:
+  kind: public_url
+  urls:
+    - "https://github.com/epic-kitchens/epic-kitchens-100-annotations"
+    - "https://github.com/epic-kitchens/epic-kitchens-download-scripts"
+    - "https://epic-kitchens.github.io/"
+  revision: "ea8b40457a400c3fffa1c7f406ef3dc169cc2522"
+  licence: >-
+    EPIC-KITCHENS-100 videos and annotations: CC BY-NC 4.0 (non-commercial research). Cite Damen et al., "Rescaling
+    Egocentric Vision: Collection, Pipeline and Challenges for EPIC-KITCHENS-100", IJCV 2022.
+  bytes: 740000000000          # the 700 videos of EPIC-KITCHENS-100 (~740 GB); the 633 train + validation videos read here are most of it
+  sha256:
+    EPIC_100_train.csv: a3a7ef2e397bd8af12bd0496b09d61b1f2c1f3f6e1726fa86af50a27f4855e87
+    EPIC_100_validation.csv: 35f7932ba0a1127a96cac215a98d35398946f343e3cea9ad6688ed17eee9d75d
+    EPIC_100_video_info.csv: 75fd040f6662cb407b4ca2eed4811ca94df280a1aba00b6bf8a5cd286deff382
+  notes: >-
+    Annotations: the epic-kitchens-100-annotations repository at the pinned commit (revision). Videos: the official
+    downloader (epic-kitchens-download-scripts @ 4f11fb2b) from data.bris, into EPIC-KITCHENS/<participant>/videos/
+    <video_id>.MP4; the downloader checks its own md5 list. Test labels are not public: the validation videos are the
+    evaluation split, as in the streaming anticipation literature.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "the official EPIC downloader (public, no account, ~740 GB for all videos) + the pinned annotation csvs"
+budget:
+  clips: {train: 495, validation: 138}
+  media_gb: 740.0
+  extract_min_per_1k_clips_ref: 1100.0   # ~1 100 window encodes per 9 min video (0.5 s updates) for an offline baseline
+  probe_minutes_ref: {stream: 60}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: e8372fd4eab8a76e2484ed73d9f6af930cd71995eb5bc87f01caffac24935764
+  classes: null              # verb and noun class lists: the annotation repository's EPIC_100_{verb,noun}_classes.csv
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    participant_id: {type: str, role: label_aux}
+    rel_media: {type: str, role: media, stream: [video, audio]}
+    duration_s: {type: float, role: extra}
+    segments: {type: json, role: label_aux}
+  upstream:
+    source: "EPIC_100_train.csv + EPIC_100_validation.csv + EPIC_100_video_info.csv at the pinned annotation commit"
+    sha256: 35f7932ba0a1127a96cac215a98d35398946f343e3cea9ad6688ed17eee9d75d
+    rows: 633
+    note: >-
+      One row per video of the train (495) and validation (138) annotations: its participant, its file, its duration
+      (EPIC_100_video_info.csv) and every narrated segment [start_s, verb_class, noun_class] in start order (67 217 train
+      and 9 668 validation segments). Nothing excluded; no draw.
+    upstream_files:
+      "EPIC_100_train.csv": a3a7ef2e397bd8af12bd0496b09d61b1f2c1f3f6e1726fa86af50a27f4855e87
+      "EPIC_100_validation.csv": 35f7932ba0a1127a96cac215a98d35398946f343e3cea9ad6688ed17eee9d75d
+      "EPIC_100_video_info.csv": 75fd040f6662cb407b4ca2eed4811ca94df280a1aba00b6bf8a5cd286deff382
+      "EPIC_100_tail_verbs.csv (tail_verbs.csv)": 6f124f23759b2bfaa742e071619d78a08b5d2f80147db9919c612c72c9774c94
+      "EPIC_100_tail_nouns.csv (tail_nouns.csv)": 62e3449a7a95fdcb43bc2eaa52a191844f4a566ff1178d2c867b0c0822387266
+      "EPIC_100_unseen_participant_ids_validation.csv (unseen_participants.csv)": 1274797112b20dd821cd10f62537545e669c4b7d742e36590e9f0f7ffb0c6a54
+    curation:
+      total_upstream: 633
+      per_split:
+        train: {listed: 495, staged: 495, missing: 0}
+        validation: {listed: 138, staged: 138, missing: 0}
+      excluded: {}
+      short_clips: 0
+      leakage_audit: null
+
+splits:
+  train: [train]
+  eval: [validation]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/epic_kitchens_100"
+      description: "EPIC-KITCHENS/<participant>/videos/<video_id>.MP4 (the official downloader's layout) + annotations/ (the pinned csvs, prepare/01)"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: "the EPIC-KITCHENS-100 MP4 of the video exactly as stored (head-mounted camera, mostly 1920x1080 at 50 or 60 fps, minutes to an hour); the bridge reads it causally, update by update"
+    audio: "the same MP4 bytes as video (read once); its audio track is described by info; the bridge reads it causally, update by update"
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: sequence
+  coordinates: media
+  target_frame: null
+  requires: {pos: [], streams: [], grid: null, t_bins: null}
+  stream: {update_interval_s: 0.5}
+  schema:
+    emb: {type: array, dtype: [float16, float32], shape: ["*", D], stats: true}
+    support: {type: array, dtype: float64, shape: ["*", 4], exact: true, finite: false}
+    cutoff: {type: array, dtype: float64, shape: ["*"], exact: true}
+    timing: {type: json, kind: object, optional: true, volatile: true}
+
+external: []
+
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+  anticipation_s: 1.0
+
+metrics:
+  headline: mt5r_action_gru
+  list: [mt5r_verb_linear, mt5r_noun_linear, mt5r_action_linear, mt5r_verb_unseen_linear, mt5r_noun_unseen_linear, mt5r_action_unseen_linear,
+         mt5r_verb_tail_linear, mt5r_noun_tail_linear, mt5r_action_tail_linear,
+         mt5r_verb_gru, mt5r_noun_gru, mt5r_action_gru, mt5r_verb_unseen_gru, mt5r_noun_unseen_gru, mt5r_action_unseen_gru,
+         mt5r_verb_tail_gru, mt5r_noun_tail_gru, mt5r_action_tail_gru]
+  floors: [mt5r_verb_floor, mt5r_noun_floor, mt5r_action_floor]
+  controls: []
+  chance: {}
+  ci: {mt5r_verb_linear: bootstrap_clip, mt5r_noun_linear: bootstrap_clip, mt5r_action_linear: bootstrap_clip,
+       mt5r_verb_gru: bootstrap_clip, mt5r_noun_gru: bootstrap_clip, mt5r_action_gru: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params:
+  groups: {verb: {loss: ce, classes: 97}, noun: {loss: ce, classes: 300}}

@@ -32,6 +32,7 @@ the sizes of the upstream release and the layout rules are in that folder's `set
 | ave | seq (segments) | `public_url`; 13.4 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 2 624 train / 316 test | video + audio | auto | `yavih bench info ave --setup` |
 | ave_causal | stream | `public_url`; 13.4 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 2 592 train / 316 test | video + audio | auto | `yavih bench info ave_causal --setup` |
 | avsync | clf (floor role) | `derived`; 407.0 GB = `source.bytes` | 74.4 GB = `budget.media_gb` | 24 000 train / 3 000 test / 5 997 stationary | video + audio (materialized at prepare time) | needs-data-owner | `yavih bench info avsync --setup` |
+| epic100_anticipation_stream | stream | `public_url`; 740.0 GB = `source.bytes` | 740 GB = `budget.media_gb` | 495 train / 138 validation | video + audio | auto | `yavih bench info epic100_anticipation_stream --setup` |
 | esc50 | clf (folds) | `public_url`; 0.6 GB = `source.bytes` | 0.88 GB = `budget.media_gb` | 2 000 in folds 1–5 (400 each) | audio | auto | `yavih bench info esc50 --setup` |
 | fsd50k | clf (multi) | `public_url`; 24.7 GB = `source.bytes` | 22.9 GB = `budget.media_gb` | 20 000 train / 10 231 eval | audio | auto | `yavih bench info fsd50k --setup` |
 | in1k (aliases `imagenet1k`, `imagenet`) | clf | `manual_portal`; 154.6 GB = `source.bytes` | 12.43 GB = `budget.media_gb` | 50 000 train / 50 000 val | image | needs-licence | `yavih bench info in1k --setup` |
@@ -149,7 +150,7 @@ lines; "None." for most), "## Input contract", "## Output contract", "## Prepare
 expected `yavih bench verify <b>` output), "## Gotchas" (bridge mistakes that pass validation on
 this benchmark). One per folder:
 <!-- yavih:bench-table names begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `ssv2`, `unav100_causal`, `vggsounder`, `vggsounder_v2a`, `vggss_box`.
+`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `ssv2`, `unav100_causal`, `vggsounder`, `vggsounder_v2a`, `vggss_box`.
 <!-- yavih:bench-table names end -->
 
 ## 6. Failure modes yavih guards against
