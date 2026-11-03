@@ -1,0 +1,175 @@
+# yavih benchmark folder — THUMOS'14 online action detection (streaming, scorer stream). Rows: make_manifest.py from
+# the official THUMOS'14 temporal annotations. People: README.md; the agent: setup.md.
+schema_version: 3
+name: thumos14_oad
+aliases: []
+title: THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps)
+capability: [visual, temporal, streaming]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+scorer: stream
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-03"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912
+    input_hash: c26caf61c6473f9b842bcad6a97b9e76147a9c2d75a03926b9e6d05a99340b57
+    supersedes: []
+
+header:
+  name: THUMOS'14 OAD
+  title: THUMOS Challenge 2014 — online action detection
+  venue: "Jiang et al. · THUMOS 2014 · De Geest et al. ECCV 2016 (task) · LSTR NeurIPS 2021 (protocol)"
+  abstract: >-
+    413 untrimmed sports videos (24 hours) with 6 365 temporally annotated instances of 20 actions. Online action
+    detection: at every quarter second, which action is happening now, from what has been seen so far.
+
+source:
+  kind: public_url
+  urls:
+    - "https://www.crcv.ucf.edu/THUMOS14/download.html"
+    - "https://www.crcv.ucf.edu/THUMOS14/Validation_set/videos/"
+    - "https://www.crcv.ucf.edu/THUMOS14/test_set/TH14_test_set_mp4/"
+  licence: >-
+    THUMOS'14 is distributed by the University of Central Florida (CRCV) for research; the videos are YouTube content
+    of their owners (the UCF101 / THUMOS collection). No licence file is published; research use only. Cite Jiang et
+    al., "THUMOS Challenge: Action Recognition with a Large Number of Classes", 2014.
+  bytes: 34805197701          # the 413 annotated videos (video_sha256.csv) + 3 annotation files
+  sha256:
+    TH14_Temporal_annotations_validation.zip: 6a86e27d21c86be31112a1bf96318c7810a462cbff07ce14a29446f302eb6c05
+    TH14_Temporal_annotations_test.zip: 8a9f2270b90fc300c0bcf4edc8394af7874b83acf4aa4af054ae065b5120749d
+    Class_Index_Detection.txt: d0a1711d537c6837c43ddbde943aaa8c648e524ed48dd86e6561b5d3d280e98f
+  notes: >-
+    The official temporal annotations of the validation and test sets and the 413 videos they name, downloaded one by
+    one from the UCF server (prepare/01; each video's sha256 is in video_sha256.csv). The server's certificate chain
+    lacks its intermediate; prepare/01 completes it from the certificate's own issuer URL, verification on.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "prepare/01 downloads the annotations and the 413 annotated videos (34.8 GB, public, no account)"
+budget:
+  clips: {validation: 200, test: 213}
+  media_gb: 34.8
+  extract_min_per_1k_clips_ref: 850.0   # ~850 window encodes per 3.5 min video (0.25 s updates) for an offline baseline
+  probe_minutes_ref: {stream: 20}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 10227cd66387f37cf20d1e892e2e7ddb898d8e0f5911356a90fc0fe18762b0f0
+  classes: null              # the 20 detection classes: Class_Index_Detection.txt (index 1 ... 20), Ambiguous = 21
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: [video, audio]}
+    duration_s: {type: float, role: label_aux}
+    events: {type: json, role: label_aux}
+  upstream:
+    source: "the official THUMOS'14 temporal annotations (validation and test) and the 413 videos they name"
+    sha256: 8a9f2270b90fc300c0bcf4edc8394af7874b83acf4aa4af054ae065b5120749d
+    rows: 413
+    note: >-
+      Every video an annotation file names (the online-action-detection convention: 200 validation videos train, 213
+      test videos evaluate; one test video holds only an Ambiguous segment). Per video: its file, its duration (the
+      video track's duration_s from yavih's header probe) and its intervals [start, end, class], class 1 ... 20 in
+      Class_Index_Detection.txt order and 21 for Ambiguous (6 365 action instances, 188 ambiguous). Nothing excluded.
+    upstream_files:
+      "TH14_Temporal_annotations_validation.zip": 6a86e27d21c86be31112a1bf96318c7810a462cbff07ce14a29446f302eb6c05
+      "TH14_Temporal_annotations_test.zip": 8a9f2270b90fc300c0bcf4edc8394af7874b83acf4aa4af054ae065b5120749d
+      "Class_Index_Detection.txt": d0a1711d537c6837c43ddbde943aaa8c648e524ed48dd86e6561b5d3d280e98f
+    curation:
+      total_upstream: 413
+      per_split:
+        validation: {listed: 200, staged: 200, missing: 0}
+        test: {listed: 213, staged: 213, missing: 0}
+      excluded: {}
+      short_clips: 0
+      leakage_audit: null
+
+splits:
+  train: [validation]
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/thumos14"
+      description: "annotations/ (the pinned zips, unzipped) + videos/{validation,test}/<name>.mp4, written by prepare/01"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: "the THUMOS'14 mp4 exactly as stored (320x180, mostly 30 fps, 9 s to 28 min); the bridge reads it causally, update by update"
+    audio: "the same mp4 bytes as video (read once); its audio track is described by info; the bridge reads it causally, update by update"
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: sequence
+  coordinates: media
+  target_frame: null
+  requires: {pos: [], streams: [], grid: null, t_bins: null}
+  stream: {update_interval_s: 0.25}
+  schema:
+    emb: {type: array, dtype: [float16, float32], shape: ["*", D], stats: true}
+    support: {type: array, dtype: float64, shape: ["*", 4], exact: true, finite: false}
+    cutoff: {type: array, dtype: float64, shape: ["*"], exact: true}
+    timing: {type: json, kind: object, optional: true, volatile: true}
+
+external: []
+
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+  chunk_fps: 4.0
+  ambiguous_index: 21
+
+metrics:
+  headline: frame_map_gru
+  list: [frame_map_linear, frame_map_gru]
+  floors: [frame_map_floor]
+  controls: []
+  chance: {}
+  ci: {frame_map_linear: bootstrap_clip, frame_map_gru: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+
+readout_params:
+  groups: {action: {loss: ce, classes: 21}}

@@ -19,7 +19,7 @@ capabilities is listed under each.
 | [esc50](esc50/README.md) | ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy) | clf | audio | public (obtain: auto) |
 | [fsd50k](fsd50k/README.md) | FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP) | clf | audio | public (obtain: auto) |
 
-### visual (4)
+### visual (5)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -27,6 +27,7 @@ capabilities is listed under each.
 | [k400](k400/README.md) | Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe) | clf | video | torrent (obtain: auto) |
 | [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
 | [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
+| [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
 
 ### audio-visual (9)
 
@@ -42,7 +43,7 @@ capabilities is listed under each.
 | [vggsounder_v2a](vggsounder_v2a/README.md) | VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark) | vggsounder_v2a | video (materialized at prepare time) | public (obtain: needs-data-owner) |
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 
-### temporal (5)
+### temporal (6)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -50,6 +51,7 @@ capabilities is listed under each.
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
 | [epic100_anticipation_stream](epic100_anticipation_stream/README.md) | EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall) | stream | video + audio | public (obtain: auto) |
+| [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
 | [unav100_causal](unav100_causal/README.md) | UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel) | stream | video + audio | public (obtain: auto) |
 
 ### spatial (2)
@@ -66,12 +68,13 @@ capabilities is listed under each.
 | [audiocaps_t2a](audiocaps_t2a/README.md) | AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark) | audiocaps_t2a | text (cell) | public (obtain: auto) |
 | [vggsounder_v2a](vggsounder_v2a/README.md) | VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark) | vggsounder_v2a | video (materialized at prepare time) | public (obtain: needs-data-owner) |
 
-### streaming (3)
+### streaming (4)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [epic100_anticipation_stream](epic100_anticipation_stream/README.md) | EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall) | stream | video + audio | public (obtain: auto) |
+| [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
 | [unav100_causal](unav100_causal/README.md) | UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel) | stream | video + audio | public (obtain: auto) |
 <!-- yavih:bench-table index end -->
 
@@ -114,6 +117,7 @@ Read the folder's `setup.md` first, before downloading anything or writing a bri
 [k400](k400/setup.md) ·
 [nyuv2_depth](nyuv2_depth/setup.md) ·
 [ssv2](ssv2/setup.md) ·
+[thumos14_oad](thumos14_oad/setup.md) ·
 [unav100_causal](unav100_causal/setup.md) ·
 [vggsounder](vggsounder/setup.md) ·
 [vggsounder_v2a](vggsounder_v2a/setup.md) ·
