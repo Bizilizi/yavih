@@ -638,6 +638,7 @@ The full index with descriptions, media and sources is [src/yavih/benchmarks/REA
 | ave | seq | segments | video, audio | `seg_acc` |  |
 | ave_causal | stream | none | video, audio | `sec_acc_gru` | yes |
 | avsync | clf | single | video, audio (materialized) | `acc` | yes |
+| epic100_anticipation_stream | stream | none | video, audio | `mt5r_action_gru` | yes |
 | esc50 | clf (5 folds) | single | audio | `acc_mean` |  |
 | fsd50k | clf | multi | audio | `map` |  |
 | in1k (aliases `imagenet1k`, `imagenet`) | clf | single | image | `acc` |  |

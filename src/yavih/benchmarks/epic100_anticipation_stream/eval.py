@@ -21,7 +21,7 @@ Floors: the train prior on every anchor.
 from __future__ import annotations
 
 import csv
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 import numpy as np
@@ -39,7 +39,7 @@ TASKS = ("verb", "noun", "action")
 SUBSETS = ("overall", "unseen", "tail")
 
 
-@lru_cache(maxsize=None)
+@cache
 def _list(name: str, column: str) -> frozenset:
     with open(HERE / name, newline="", encoding="utf-8") as f:
         return frozenset(r[column] for r in csv.DictReader(f))
