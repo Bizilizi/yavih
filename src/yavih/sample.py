@@ -747,6 +747,22 @@ def rehandle(sample: Sample, salt: str, **identity: Any) -> Sample:
     return clone
 
 
+def with_files(sample: Sample, salt: str, files: Mapping[tuple, str], ext: str) -> Sample:
+    """A copy of ``sample`` whose streams read replacement files: ``files`` maps a stream's original byte location
+    (``RawStream._src.loc``) to a path; streams that shared a stored file share its replacement. Facts are probed
+    from the new file. ``bridge check``'s future-invariance gate hands a bridge lossless copies this way."""
+    import dataclasses
+
+    sources: dict[str, _Source] = {}
+    streams: dict[str, Any] = {}
+    for name, st in sample.streams.items():
+        path = files[st._src.loc]
+        src = sources.setdefault(path, _Source(("file", path)))
+        streams[name] = RawStream(name, st.kind, src=src, clip_id=sample.clip_id, required_info=st._required, ext=ext,
+                                  handle=f"{salt}:{st._handle}")
+    return dataclasses.replace(sample, streams=streams)
+
+
 def _media_info_of(bench: Any) -> MediaInfoTable | None:
     fn = getattr(bench, "media_info", None)
     if not callable(fn):

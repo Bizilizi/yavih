@@ -537,8 +537,19 @@ class InputContractSpec:
 
 
 @dataclass(frozen=True)
+class StreamContractSpec:
+    """``output_contract.stream`` of a streaming benchmark (``shape: sequence``): the bridge answers one update every
+    ``update_interval_s`` seconds of the recording (cutoffs ``k * update_interval_s``, ``k >= 1``), causally
+    (``yavih.stream``)."""
+
+    update_interval_s: float
+
+
+@dataclass(frozen=True)
 class OutputContractSpec:
-    """``output_contract``: pinned ``shape: fixed`` (every symbol of the schema fixed per feature set) and
+    """``output_contract``: ``shape: fixed`` (every symbol of the schema fixed per feature set) or ``sequence`` (a
+    streaming benchmark: one row per recording, the bridge returns its update sequence, ``stream`` set and the schema
+    :data:`yavih.codecs.STREAM_SCHEMA`), pinned
     ``coordinates: media``, the spatial target frame, the eligibility ``requires``, the ``schema`` of what a bridge
     returns per row (``None`` = the default feature matrix, ``yavih.codecs.DEFAULT_SCHEMA``) and ``sampling``
     (``required``: the bridge generates and must declare ``describe()["sampling"]``; ``optional`` otherwise)."""
@@ -549,6 +560,7 @@ class OutputContractSpec:
     requires: RequiresSpec
     schema: Mapping[str, Any] | None = None
     sampling: str = "optional"
+    stream: StreamContractSpec | None = None
 
     @property
     def resolved_schema(self) -> dict[str, dict[str, Any]]:
@@ -1381,9 +1393,9 @@ SAMPLING_MODES: frozenset[str] = frozenset({"optional", "required"})
 
 def _parse_output_contract(v: Any, path: str, readout: str, streams: Mapping[str, StreamSpec], codecs: Mapping[str, Any] | None = None) -> OutputContractSpec:
     d = _expect_mapping(v, path)
-    _check_keys(d, path, ["shape", "coordinates", "target_frame", "requires"], ["schema", "sampling"])
-    if d["shape"] != "fixed":
-        raise SchemaError(f"{path}.shape: pinned to 'fixed' (one (N, D) per feature set)")
+    _check_keys(d, path, ["shape", "coordinates", "target_frame", "requires"], ["schema", "sampling", "stream"])
+    if d["shape"] not in ("fixed", "sequence"):
+        raise SchemaError(f"{path}.shape: 'fixed' (one value per row under the schema) or 'sequence' (a streaming benchmark)")
     if d["coordinates"] != "media":
         raise SchemaError(f"{path}.coordinates: pinned to 'media'")
     tf = d["target_frame"]
@@ -1413,7 +1425,31 @@ def _parse_output_contract(v: Any, path: str, readout: str, streams: Mapping[str
     sampling = d.get("sampling", "optional")
     if sampling not in SAMPLING_MODES:
         raise SchemaError(f"{path}.sampling: one of {sorted(SAMPLING_MODES)}")
-    return OutputContractSpec(shape="fixed", coordinates="media", target_frame=tf, requires=requires, schema=schema, sampling=str(sampling))
+    stream = _parse_stream_contract(d, path, schema)
+    return OutputContractSpec(shape=str(d["shape"]), coordinates="media", target_frame=tf, requires=requires, schema=schema,
+                              sampling=str(sampling), stream=stream)
+
+
+def _parse_stream_contract(d: Mapping[str, Any], path: str, schema: Mapping[str, Any] | None) -> StreamContractSpec | None:
+    """``shape: sequence`` iff a ``stream`` block iff the schema is :data:`yavih.codecs.STREAM_SCHEMA`, written out."""
+    from yavih import codecs as _codecs
+
+    seq = d["shape"] == "sequence"
+    if seq != ("stream" in d):
+        raise SchemaError(f"{path}: shape 'sequence' and a stream block go together (a streaming benchmark declares both)")
+    if not seq:
+        if _codecs.is_stream_schema(schema):
+            raise SchemaError(f"{path}.schema: the stream schema needs shape 'sequence' and a stream block")
+        return None
+    if not _codecs.is_stream_schema(schema):
+        raise SchemaError(f"{path}.schema: a streaming benchmark declares exactly yavih.codecs.STREAM_SCHEMA "
+                          f"({sorted(_codecs.STREAM_SCHEMA)}), written out so its codec versions are hashed")
+    st = _expect_mapping(d["stream"], f"{path}.stream")
+    _check_keys(st, f"{path}.stream", ["update_interval_s"])
+    dt = st["update_interval_s"]
+    if isinstance(dt, bool) or not isinstance(dt, int | float) or not 0 < float(dt) <= 60:
+        raise SchemaError(f"{path}.stream.update_interval_s: seconds in (0, 60]")
+    return StreamContractSpec(update_interval_s=float(dt))
 
 
 def _parse_external(v: Any, path: str) -> tuple[ExternalSpec, ...]:
@@ -1647,6 +1683,8 @@ def _check_readout_params(rp: Any, path: str, readout: str, streams: Mapping[str
                 raise SchemaError(f"{path}.{k}: {x!r} is not a declared stream")
         elif k == "shuffled_control":
             _bool(x, f"{path}.{k}")
+        elif k == "groups":  # the stream readout's label groups (its validate_spec checks the entries)
+            _expect_mapping(x, f"{path}.{k}")
         else:
             _int(x, f"{path}.{k}", minimum=0 if k == "shuffle_seed" else 1)
     try:  # the readout's own cross-checks (a message starts with the key it names, e.g. ".T: ...")

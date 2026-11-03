@@ -47,6 +47,8 @@ __all__ = [
     "FP16_MAX_ABS",
     "FP16_WARN_ABS",
     "DEFAULT_SCHEMA",
+    "STREAM_SCHEMA",
+    "is_stream_schema",
     "ENTRY_POINT_GROUP",
     "RESERVED_KEYS",
     "Codec",
@@ -95,7 +97,9 @@ SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 CODEC_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 EXT_RE = re.compile(r"^[a-z0-9]{1,8}$")
 #: Keys every schema entry accepts besides the codec's own constraints.
-COMMON_KEYS: frozenset[str] = frozenset({"type", "optional", "constant", "stats", "exact"})
+#: ``volatile: true`` marks a key measured at run time (a replay's timing log): stored and checked, never compared by
+#: the determinism gates (rerun, shuffled, alone, canaries).
+COMMON_KEYS: frozenset[str] = frozenset({"type", "optional", "constant", "stats", "exact", "volatile"})
 CONSTANT_MODES: frozenset[str] = frozenset({"never", "allowed"})
 
 
@@ -178,6 +182,11 @@ class Codec:
 
     def is_exact(self, spec: Spec) -> bool:
         return bool(spec.get("exact", self.exact))
+
+    @staticmethod
+    def is_volatile(spec: Spec) -> bool:
+        """A run-time measurement (``volatile: true``): never compared by the determinism gates."""
+        return bool(spec.get("volatile", False))
 
 
 # ----------------------------------------------------------------------------- shared helpers
@@ -830,6 +839,23 @@ BUILTIN: dict[str, Codec] = {c.name: c for c in (ARRAY, JSON, BYTES, WAV)}
 DEFAULT_SCHEMA: dict[str, dict[str, Any]] = DEFAULT_OUTPUT_SCHEMA
 
 
+#: What a streaming bridge returns per recording (``output_contract.shape: sequence``, ``yavih.stream``): one row per
+#: update, in update order. ``emb`` the embedding available after the update; ``support`` its input support
+#: ``[video_start, video_end, audio_start, audio_end]`` in seconds of the recording (NaN for a modality it did not
+#: read); ``cutoff`` the observation cutoff the update answered (no support ends after it); ``timing`` the real-time
+#: replay log (``yavih.stream.replay``; absent in the unrestricted causal mode).
+STREAM_SCHEMA: dict[str, dict[str, Any]] = {
+    "emb": {"type": "array", "dtype": ["float16", "float32"], "shape": ["*", "D"], "stats": True},
+    "support": {"type": "array", "dtype": "float64", "shape": ["*", 4], "exact": True, "finite": False},
+    "cutoff": {"type": "array", "dtype": "float64", "shape": ["*"], "exact": True},
+    "timing": {"type": "json", "kind": "object", "optional": True, "volatile": True},
+}
+
+
+def is_stream_schema(schema: Mapping[str, Any] | None) -> bool:
+    return schema is not None and canon(dict(schema)) == canon(STREAM_SCHEMA)
+
+
 def schema_of(output_contract: Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
     """The declared ``output_contract.schema``, else :data:`DEFAULT_SCHEMA` (a copy)."""
     s = (output_contract or {}).get("schema") if output_contract is not None else None
@@ -933,7 +959,7 @@ def check_schema(schema: Mapping[str, Any], codecs: Mapping[str, Codec]) -> list
         if codec is None:
             problems.append(f"{where}.type: unknown codec {entry['type']!r}; known: {sorted(codecs)}")
             continue
-        for k in ("optional", "stats", "exact"):
+        for k in ("optional", "stats", "exact", "volatile"):
             if k in entry and not isinstance(entry[k], bool):
                 problems.append(f"{where}.{k}: a bool")
         if "constant" in entry and entry["constant"] not in CONSTANT_MODES:

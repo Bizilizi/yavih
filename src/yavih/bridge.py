@@ -644,6 +644,19 @@ def validate_describe(d: dict, bridge: Bridge, bench: Any) -> None:
                  "budget and selection rule {seed, steps, guidance, n_candidates, selection} (matched budgets, disclosed selection)")
     if "sampling" in d:
         _check_sampling(d["sampling"])
+    if oc.get("shape") == "sequence":  # a streaming benchmark: the stream record, and the timing key iff real time
+        from yavih import stream as _stream
+
+        _require("stream" in d, "a streaming benchmark (output_contract.shape: sequence): describe()['stream'] must declare "
+                 "{mode, native, video_window_s, audio_window_s, num_frames, frame_sampling, startup_policy, gap_policy, device}")
+        problems = _stream.check_describe_stream(d["stream"])
+        _require(not problems, "; ".join(problems))
+        realtime = d["stream"]["mode"] == "realtime"
+        _require(("timing" in (d.get("outputs") or ())) == realtime,
+                 "describe()['outputs'] lists 'timing' exactly when stream.mode is 'realtime' (the replay log)")
+        _require(not realtime or d["batch_size"] == 1, "a real-time replay runs one recording at a time: batch_size must be 1")
+    else:
+        _require("stream" not in d, "describe()['stream'] belongs to a streaming benchmark (output_contract.shape: sequence)")
 
     streams = d.get("streams", [])
     _require(isinstance(streams, list | tuple) and all(isinstance(s, str) for s in streams),

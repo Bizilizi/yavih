@@ -26,6 +26,7 @@ import importlib
 import importlib.util
 import inspect
 import json
+import math
 import os
 import platform
 import signal
@@ -142,6 +143,9 @@ E_TEMPLATE_UNFILLED = "E_TEMPLATE_UNFILLED"  # bridge check: TODO left in model 
 E_CONSTANT_FEATURES = "E_CONSTANT_FEATURES"  # bridge check: every smoke clip encodes to the same features (exit 2)
 E_SYNTHETIC = "E_SYNTHETIC"  # bridge check --synthetic: the tiny stand-in benchmark cannot be built (exit 1 usage / 3 media writer missing)
 E_BRIDGE = "E_BRIDGE"  # the bridge raised inside encode or prepare: a bridge bug is not coverage (exit 5)
+E_FUTURE_SUPPORT = "E_FUTURE_SUPPORT"  # a streaming update's support ends after its cutoff or exceeds the declared window (exit 2)
+E_REPLAY_LOG = "E_REPLAY_LOG"  # a real-time replay log inconsistent with the scheduler (exit 2)
+E_FUTURE_LEAK = "E_FUTURE_LEAK"  # an update changed when only input after its cutoff changed (bridge check, exit 2)
 E_FEATURES = "E_FEATURES"  # encode() returned a wrong shape / pos for the declared pos_mode (exit 2)
 E_PRECISION_DRIFT = "E_PRECISION_DRIFT"  # torch precision flags differ after encode from the enforced declaration (exit 2)
 E_WRITE = "E_WRITE"  # the writer could not serialize a row's provenance/features (exit 5)
@@ -898,8 +902,11 @@ class _Engine:
         allow_loopback: bool = False,
         release_bytes: bool = False,
         resolved: Mapping[str, Any] | None = None,
+        stream: Any | None = None,
     ) -> None:
         self.bridge = bridge
+        #: a streaming benchmark's ``output_contract.stream`` (``yavih.stream`` checks every recording's sequence)
+        self.stream = stream
         #: a declared output schema: {key: (entry, codec)}; None = the feature matrix
         self.resolved = dict(resolved) if resolved is not None else None
         self.bound: dict[str, int] = {}
@@ -1101,6 +1108,11 @@ class _Engine:
         if "used" not in out:
             raise ExtractError(E_USED, "encode() returned no 'used' entry", exit_code=2)
         want = [str(k) for k in (self.describe.get("outputs") or [])]
+        if self.stream is not None:
+            from yavih import stream as _stream
+
+            if _stream.is_forced_causal():  # bridge check's causal passes of a real-time bridge: no replay log
+                want = [k for k in want if k != "timing"]
         got = sorted(k for k in out if k != "used")
         if sorted(want) != got:
             raise ExtractError(E_FEATURES, f"encode() returned keys {got}, describe()['outputs'] declares {sorted(want)}", exit_code=2)
@@ -1121,7 +1133,28 @@ class _Engine:
                                        exit_code=2)
             values[key] = seq
         used = self._check_used(samples, out["used"])
+        if self.stream is not None:
+            self._check_stream(samples, values)
         return _Out(samples, used=used, outputs=values)
+
+    def _check_stream(self, samples: list[Any], values: Mapping[str, list[Any]]) -> None:
+        """Each recording's update sequence against the schedule (``yavih.stream.check_row``): no support after its
+        cutoff, the declared windows, the grid, the real-time log. An error is ``E_FUTURE_SUPPORT`` /
+        ``E_REPLAY_LOG`` / ``E_FEATURES`` naming the clip (exit 2)."""
+        from yavih import stream as _stream
+
+        block = dict(self.describe.get("stream") or {})
+        mode = str(block.get("mode") or "causal")
+        if _stream.is_forced_causal():
+            mode = "causal"
+        windows = {k: block.get(k) for k in ("video_window_s", "audio_window_s")}
+        for i, s in enumerate(samples):
+            row = {k: v[i] for k, v in values.items()}
+            dur = _stream.recording_duration({n: st.info for n, st in s.streams.items()})
+            problems = _stream.check_row(row, duration_s=dur, update_interval_s=self.stream.update_interval_s, mode=mode, windows=windows)
+            if problems:
+                code = problems[0][0] if problems[0][0] in ("E_FUTURE_SUPPORT", "E_REPLAY_LOG") else E_FEATURES
+                raise ExtractError(code, f"encode() stream outputs for {s.clip_id}: " + "; ".join(f"{c}: {m}" for c, m in problems), exit_code=2)
 
     def encode(self, samples: list[Any]) -> _Out:
         """Encode a batch. ``MediaUndecodable`` (or a ``MediaMissing`` the bridge's own read raised) drops the
@@ -1197,6 +1230,113 @@ class _Engine:
             reads.close()
             ra.shutdown(wait=False)
             _Audit.prepare_loopback = False
+
+
+#: Recordings of the smoke set the future-invariance gate re-encodes (two cutoffs each).
+FUTURE_GATE_RECORDINGS = 2
+
+
+def _stream_gates(make_engine: Callable[[], _Engine], smoke: list[Any], pass_a: _PassResult, d: Mapping[str, Any], dt: float, tol: float,
+                  deterministic: bool, waive_or_raise: Callable[[str, str, str], None]) -> dict[str, Any]:
+    """A streaming bridge's own gates. **Future invariance** (``E_FUTURE_LEAK``): for up to
+    :data:`FUTURE_GATE_RECORDINGS` smoke recordings, lossless copies cut a little after the second cutoff
+    (``yavih.media.perturb.future_pair``) are encoded under forced causal; every update up to cutoff ``c`` must be equal
+    between the intact copy and the one blanked after ``c`` (bit-identical when ``precision.deterministic``, else
+    within the tolerance). **Real-time smoke** (a ``realtime`` bridge): one recording replayed for real; its log
+    passes ``yavih.stream.check_row`` in the engine, and the updates before its first skipped request or gap equal the
+    causal pass's. Returns the profile's ``stream`` block."""
+    import tempfile
+
+    from yavih import stream as _stream
+    from yavih.media.perturb import future_pair
+
+    present = sorted(pass_a.by_index)
+    checked: list[dict[str, Any]] = []
+    worst = 0.0
+    with tempfile.TemporaryDirectory(prefix="yavih-future-") as tmp:
+        for j in present[:FUTURE_GATE_RECORDINGS]:
+            s = smoke[j]
+            dur = _stream.recording_duration({n: st.info for n, st in s.streams.items()})
+            g = _stream.grid(dur or 0.0, dt)
+            if len(g) < 3:
+                continue
+            c1, c2 = float(g[len(g) // 3 - 1 if len(g) >= 6 else 0]), float(g[(2 * len(g)) // 3 - 1])
+            if c2 <= c1:
+                c2 = float(g[-1])
+            until = min(float(dur), c2 + 2 * dt + 2.0)
+            files: dict[str, dict[tuple, str]] = {"A": {}, f"{c1:.6f}": {}, f"{c2:.6f}": {}}
+            try:
+                for k, loc in enumerate(sorted({st._src.loc for st in s.streams.values()}, key=repr)):
+                    st = next(x for x in s.streams.values() if x._src.loc == loc)
+                    paths = future_pair(st.bytes(), os.path.join(tmp, f"r{j}"), [c1, c2], until_s=until, name=f"s{k}")
+                    for key, path in paths.items():
+                        files[key][loc] = path
+                variants = [_sample.with_files(s, f"bridge-check-future-{key}", files[key], "mkv") for key in ("A", f"{c1:.6f}", f"{c2:.6f}")]
+                with _stream.forced_causal():
+                    res = _run_pass(make_engine(), variants, [0, 1, 2], 1)
+            except ExtractError:
+                raise
+            except Exception as e:  # noqa: BLE001 - the gate could not run: say so, never pass silently
+                waive_or_raise(E_FUTURE_LEAK, f"{s.clip_id}: the future-invariance gate could not encode the lossless copies "
+                               f"(ffv1 video / flac audio in Matroska): {type(e).__name__}: {e}", "stream")
+                continue
+            if len(res.by_index) != 3:
+                waive_or_raise(E_FUTURE_LEAK, f"{s.clip_id}: a lossless copy was reported missing by the bridge", "stream")
+                continue
+            a = res.by_index[0][0]
+            for k, c in ((1, c1), (2, c2)):
+                b = res.by_index[k][0]
+                m = np.asarray(a["cutoff"]) <= c + _stream.EPS
+                ea, eb = np.asarray(a["emb"])[m], np.asarray(b["emb"])[m]
+                sa, sb = np.asarray(a["support"])[m], np.asarray(b["support"])[m]
+                if ea.shape != eb.shape:
+                    waive_or_raise(E_FUTURE_LEAK, f"{s.clip_id}: {ea.shape[0]} vs {eb.shape[0]} updates up to cutoff {c:g} s", "stream")
+                    continue
+                r = 0.0 if ea.tobytes() == eb.tobytes() else rel_l2_stored(eb, ea)
+                worst = max(worst, r)
+                if (deterministic and r != 0.0) or (not deterministic and r > tol) or sa.tobytes() != sb.tobytes():
+                    first = next((int(i) for i in range(ea.shape[0]) if ea[i].tobytes() != eb[i].tobytes()), None)
+                    at = f" (first at cutoff {float(np.asarray(a['cutoff'])[m][first]):g} s)" if first is not None else ""
+                    waive_or_raise(E_FUTURE_LEAK, f"{s.clip_id}: updates up to cutoff {c:g} s changed when only the input after {c:g} s "
+                                   f"changed (rel_l2 {r:.3e}{at}): the bridge reads the future (a centered window, a look-ahead audio "
+                                   "frontend, normalization over the whole recording)", "stream")
+            checked.append({"clip_id": s.clip_id, "cutoffs": [c1, c2], "until_s": until})
+    block: dict[str, Any] = {"update_interval_s": dt, "mode": (d.get("stream") or {}).get("mode"),
+                             "future_invariance": {"recordings": checked, "max_rel_l2": worst}}
+    if _is_realtime(d) and present:
+        s = smoke[present[0]]
+        rt = _run_pass(make_engine(), [_sample.rehandle(s, "bridge-check-realtime")], [0], 1)
+        out = rt.by_index[0][0]
+        timing = out.get("timing") or {}
+        upd = np.asarray(timing.get("updates") or [], dtype=np.float64).reshape(-1, 3)
+        stop = min([float(x) for x in timing.get("skipped") or []] + [float(gp[0]) for gp in timing.get("gaps") or []] + [math.inf])
+        causal_out = pass_a.by_index[present[0]][0]
+        cidx = {round(float(c), 6): i for i, c in enumerate(np.asarray(causal_out["cutoff"]))}
+        rworst = 0.0
+        for i, c in enumerate(np.asarray(out["cutoff"])):
+            if c >= stop:
+                break
+            ca = np.asarray(causal_out["emb"])[cidx[round(float(c), 6)]]
+            cb = np.asarray(out["emb"])[i]
+            rworst = max(rworst, 0.0 if ca.tobytes() == cb.tobytes() else rel_l2_stored(cb, ca))
+        if (deterministic and rworst != 0.0) or (not deterministic and rworst > tol):
+            waive_or_raise(E_REPLAY_LOG, f"{s.clip_id}: the real-time replay's updates before its first skip differ from the causal "
+                           f"run's (rel_l2 {rworst:.3e}): the replay must run the same computation, only on a clock", "stream")
+        lat = (upd[:, 2] - upd[:, 0]) if upd.size else np.zeros(0)
+        block["realtime_smoke"] = {"clip_id": s.clip_id, "updates": int(upd.shape[0]), "skipped": len(timing.get("skipped") or []),
+                                   "gaps": len(timing.get("gaps") or []), "latency_p50_s": float(np.median(lat)) if lat.size else None,
+                                   "latency_max_s": float(lat.max()) if lat.size else None, "max_rel_l2_vs_causal": rworst}
+    return block
+
+
+def _stream_of(bench: Any) -> Any | None:
+    """``output_contract.stream`` of a streaming benchmark, else ``None``."""
+    oc = getattr(getattr(bench, "spec", None), "output_contract", None)
+    return getattr(oc, "stream", None)
+
+
+def _is_realtime(describe: Mapping[str, Any]) -> bool:
+    return (describe.get("stream") or {}).get("mode") == "realtime"
 
 
 def _batched(samples: Sequence[Any], batch_size: int) -> list[list[Any]]:
@@ -1418,7 +1558,7 @@ def run_extract(
         # Samples of their own (their own byte sources), read again by the canary pass
         engine = _Engine(prep.bridge, d, decode_workers=workers, read_ahead=read_ahead, torch=prep.torch, on_missing=on_missing,
                          kinds=prep.view.streams, run_dir=run_dir, allow_not_applicable=True, allow_loopback=allow_loopback, resolved=schema,
-                         release_bytes=True)
+                         release_bytes=True, stream=_stream_of(prep.bench))
         canary_stats: dict[str, Any] = {"max_abs_diff": 0.0, "max_rel_l2": 0.0, "n": 0, "tolerance": tol, "mismatch": []}
         try:
             for res in engine.run(_batched(regular, batch_size), dl):
@@ -1441,8 +1581,14 @@ def run_extract(
                     if res.outputs is not None:  # per key through the codec: exact keys must be equal, the rest within tolerance
                         assert schema is not None
                         worst, differs = 0.0, False
+                        if _is_realtime(d):  # a real-time replay is timed: its determinism is bridge check's (forced causal)
+                            canary_stats["n"] += 1
+                            canary_stats["realtime_unchecked"] = canary_stats.get("realtime_unchecked", 0) + 1
+                            continue
                         for key, vals in res.outputs.items():
                             spec, codec = schema[key]
+                            if codec.is_volatile(spec):
+                                continue
                             dist = float(codec.distance(vals[k], o_feat[key], spec))  # type: ignore[index]
                             if codec.is_exact(spec):
                                 differs = differs or dist != 0.0
@@ -1657,6 +1803,8 @@ def _compare(name: str, a: _PassResult, b: _PassResult, samples: list[Any], tol:
                     problems.append(f"{samples[j].clip_id}: output {key!r} in one pass only")
                     continue
                 spec, codec = a.schema[key]
+                if codec.is_volatile(spec):
+                    continue
                 r = float(codec.distance(fb[key], fa[key], spec))
                 must_equal = exact or codec.is_exact(spec)
                 if not codec.is_exact(spec):
@@ -2005,32 +2153,40 @@ def _bridge_check(
     def engine() -> _Engine:
         return _Engine(prep.bridge, d, decode_workers=workers, read_ahead=read_ahead, torch=prep.torch, on_missing=on_missing,
                        kinds=kinds, run_dir=None, allow_not_applicable=True, allow_loopback=allow_loopback,
-                       resolved=output_schema_of(prep.bench)[1])
+                       resolved=output_schema_of(prep.bench)[1], stream=_stream_of(prep.bench))
 
     status, reason = "ok", None
     idx = list(range(len(smoke)))
+    stream_spec = _stream_of(prep.bench)
+    if stream_spec is not None:  # a streaming bridge: the determinism gates compare its causal path (yavih.stream)
+        from yavih import stream as _stream_mod
+
+        causal_ctx: Any = _stream_mod.forced_causal()
+    else:
+        causal_ctx = contextlib.nullcontext()
     try:
-        pass_a = _run_pass(engine(), smoke, idx, batch_size)
-        if has_prepare(prep.bridge):
-            # prepare must be a pure function of the sample: twice on fresh copies of every row pass A prepared
-            n_net = len(_Audit.network)
-            prepared = [smoke[j] for j in sorted(pass_a.by_index)]
-            problems = _prepare_twice(prep.bridge, prepared, prep.torch)
-            if _Audit.network[n_net:]:
-                raise ExtractError(E_NETWORK, f"the bridge opened network connection(s) during prepare: {_Audit.network[n_net:][:3]}", exit_code=2)
-            if problems:
-                raise ExtractError(E_PREPARE_NONDETERMINISTIC, f"prepare() on the same sample twice differs: {problems[:4]}; prepare must be a "
-                                   "pure, deterministic function of the one sample (no random crop or jitter, no state kept across calls)",
-                                   exit_code=2)
-        # every pass after A gets NEW Samples over the same cached bytes, under fresh opaque paths, so a
-        # cache keyed on the path, the stream object or the clip id cannot replay pass A's features
-        rerun = _run_pass(engine(), [_sample.rehandle(s, "bridge-check-rerun") for s in smoke], idx, batch_size)
-        perm = [int(j) for j in np.random.default_rng(0).permutation(len(smoke))]
-        shuffled = _run_pass(engine(), [_sample.rehandle(s, "bridge-check-order") for s in smoke], perm, batch_size)
-        # alone: a FRESH bridge instance (built exactly as the first), so even an instance-level content cache is cold
-        _fresh_bridge(prep, workers)
-        alone_samples = [scramble(s, k) for k, s in enumerate(smoke)]
-        alone = _run_pass(engine(), alone_samples, idx, 1)
+        with causal_ctx:
+            pass_a = _run_pass(engine(), smoke, idx, batch_size)
+            if has_prepare(prep.bridge):
+                # prepare must be a pure function of the sample: twice on fresh copies of every row pass A prepared
+                n_net = len(_Audit.network)
+                prepared = [smoke[j] for j in sorted(pass_a.by_index)]
+                problems = _prepare_twice(prep.bridge, prepared, prep.torch)
+                if _Audit.network[n_net:]:
+                    raise ExtractError(E_NETWORK, f"the bridge opened network connection(s) during prepare: {_Audit.network[n_net:][:3]}", exit_code=2)
+                if problems:
+                    raise ExtractError(E_PREPARE_NONDETERMINISTIC, f"prepare() on the same sample twice differs: {problems[:4]}; prepare must be a "
+                                       "pure, deterministic function of the one sample (no random crop or jitter, no state kept across calls)",
+                                       exit_code=2)
+            # every pass after A gets NEW Samples over the same cached bytes, under fresh opaque paths, so a
+            # cache keyed on the path, the stream object or the clip id cannot replay pass A's features
+            rerun = _run_pass(engine(), [_sample.rehandle(s, "bridge-check-rerun") for s in smoke], idx, batch_size)
+            perm = [int(j) for j in np.random.default_rng(0).permutation(len(smoke))]
+            shuffled = _run_pass(engine(), [_sample.rehandle(s, "bridge-check-order") for s in smoke], perm, batch_size)
+            # alone: a FRESH bridge instance (built exactly as the first), so even an instance-level content cache is cold
+            _fresh_bridge(prep, workers)
+            alone_samples = [scramble(s, k) for k, s in enumerate(smoke)]
+            alone = _run_pass(engine(), alone_samples, idx, 1)
     except NotApplicable as na:
         status, reason = "not_applicable", na.reason
         profile = {**base, "status": status, "reason": reason, "split": use_split, "describe": d, **ident, "warnings": warnings, "notes": notes}
@@ -2063,6 +2219,9 @@ def _bridge_check(
         waive_or_raise(E_CONSTANT_FEATURES, f"every one of the {len(pass_a.by_index)} smoke clips encodes to the same features: the bridge "
                        "ignores its input (an unfilled template's zeros, a constant fallback, a model that never ran); validate would "
                        "refuse the extracted set (E_DEAD_ROWS)", "encode")
+    stream_block = None
+    if stream_spec is not None:
+        stream_block = _stream_gates(engine, smoke, pass_a, d, stream_spec.update_interval_s, tol, deterministic, waive_or_raise)
 
     # ---- per-member validation checks on pass A
     class _Collect:
@@ -2174,6 +2333,7 @@ def _bridge_check(
             "tolerance_reason": tol_reason,
         },
         "rules_checked": rc,
+        **({"stream": stream_block} if stream_block is not None else {}),
         "clips_per_s": clips_per_s,
         "decode_workers": workers,
         "peak_gpu_gb": _peak_gpu_gb(prep.torch, prep.bridge),

@@ -1144,6 +1144,7 @@ class _ScanCtx:
     unchecked: dict[str, int] = field(default_factory=dict)  # stream -> members whose checkable rule needed a null fact
     resolved: dict | None = None  # generic sets: {key: (entry, codec)}
     tolerance: float = DEFAULT_BATCH_TOLERANCE
+    stream_dt: float | None = None
 
 
 class _Recorder:
@@ -1171,6 +1172,7 @@ class _ScanStatic:
     sampled: frozenset[int]
     elig: _EligSpec
     resolved: dict | None = None  # generic sets: {key: (entry, codec)} of the declared output schema
+    stream_dt: float | None = None  # a streaming benchmark's update interval (yavih.stream checks per recording)
 
 
 @dataclass
@@ -1195,7 +1197,7 @@ def _scan_shard_isolated(sh: _Shard, static: _ScanStatic) -> _ShardScan:
     unchecked: dict[str, int] = {}
     ctx = _ScanCtx(fx=rec, N=static.N, D=static.D, dtype=static.dtype, pos_mode=static.pos_mode, describe=static.describe,
                    kinds=static.kinds, stats=part, verify_sha=static.verify_sha, pos_blobs=blobs, unchecked=unchecked,
-                   resolved=static.resolved)
+                   resolved=static.resolved, stream_dt=static.stream_dt)
     _scan_shard(sh, ctx)
     return _ShardScan(index=sh.index, findings=rec.findings, stats=part, pos_blob=blobs.get(sh.index), unchecked=unchecked)
 
@@ -1641,8 +1643,21 @@ def _scan_shard_generic(sh: _Shard, ctx: _ScanCtx) -> None:
         if unaccounted:
             fx.add("E_ROWS", f"{len(unaccounted)} rows neither written nor in missing: {unaccounted[:10]}", where)
 
-        # canaries through the codec's distance: exact keys must be equal, the rest within the tolerance
-        for crow, cvals in sorted(canary_parts.items()):
+        # a streaming benchmark: every recording's update sequence against the schedule (yavih.stream.check_row)
+        if ctx.stream_dt is not None:
+            from yavih import stream as _stream
+
+            sblock = dict(ctx.describe.get("stream") or {})
+            windows = {k: sblock.get(k) for k in ("video_window_s", "audio_window_s")}
+            for row, parts in sorted(seen_parts.items()):
+                dur = _stream.recording_duration(dict((seen_json.get(row) or {}).get("media") or {}))
+                for code, msg in _stream.check_row(parts, duration_s=dur, update_interval_s=ctx.stream_dt,
+                                                   mode=str(sblock.get("mode") or "causal"), windows=windows):
+                    fx.add(code if code.startswith("E_") else "E_MEMBERS", msg, f"{where}:row {row}")
+        realtime = (ctx.describe.get("stream") or {}).get("mode") == "realtime"
+        # canaries through the codec's distance: exact keys must be equal, the rest within the tolerance (a real-time
+        # replay is timed: its determinism is established by bridge check under forced causal)
+        for crow, cvals in sorted(canary_parts.items()) if not realtime else ():
             orig = seen_parts.get(crow)
             if orig is None:
                 fx.add("E_MEMBERS", f"canary c{crow:09d} has no original row", where)
@@ -1650,6 +1665,8 @@ def _scan_shard_generic(sh: _Shard, ctx: _ScanCtx) -> None:
             worst = 0.0
             for key, cv in cvals.items():
                 spec, codec = resolved[key]
+                if codec.is_volatile(spec):
+                    continue
                 d = float(codec.distance(cv, orig.get(key), spec))
                 if codec.is_exact(spec):
                     if d != 0.0:
@@ -1662,6 +1679,13 @@ def _scan_shard_generic(sh: _Shard, ctx: _ScanCtx) -> None:
                 fx.add("E_MEMBERS", f"canary c{crow:09d} has no c{crow:09d}.json", where)
             elif "used" in cj and hashing.canon(cj.get("used")) != hashing.canon((seen_json.get(crow) or {}).get("used")):
                 stats.canary_mismatch.append((crow, "used"))
+
+
+def _stream_dt(view: _BenchView | None) -> float | None:
+    """The update interval of a streaming benchmark (``output_contract.stream``), else ``None``."""
+    st = (view.output_contract or {}).get("stream") if view is not None else None
+    dt = st.get("update_interval_s") if isinstance(st, Mapping) else getattr(st, "update_interval_s", None)
+    return float(dt) if dt is not None else None
 
 
 def _resolve_generic(shards: list[_Shard], view: _BenchView | None, fx: _Findings | _Recorder) -> dict | None:
@@ -2244,7 +2268,7 @@ def validate_features(
     if resolved is not None or (N >= 1 and D >= 1):
         static = _ScanStatic(N=N, D=D, dtype=np.dtype(dtype_name if dtype_name not in (None, "None") else "float32"), pos_mode=pos_mode,
                              describe=describe, kinds=kinds, verify_sha=verify_sha, sampled=frozenset(sampled), elig=espec,
-                             resolved=resolved)
+                             resolved=resolved, stream_dt=_stream_dt(view))
         _scan_shards(shards, static, validate_workers(shards), fx, stats, pos_blobs, unchecked_rows)
     # a declared checkable rule that could not be evaluated on some rows (a fact it needs is null there)
     for sname, k_rows in sorted(unchecked_rows.items()):
