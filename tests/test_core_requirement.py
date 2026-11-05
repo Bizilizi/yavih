@@ -9,7 +9,14 @@ from unittest import mock
 import pytest
 
 from yavih import lint
-from yavih.benchmark import Benchmark, CoreVersionError, SchemaError, check_core, core_status, packaged_benchmarks
+from yavih.benchmark import (
+    Benchmark,
+    CoreVersionError,
+    SchemaError,
+    check_core,
+    core_status,
+    packaged_benchmarks,
+)
 from yavih.cli import exit_code_for
 
 
