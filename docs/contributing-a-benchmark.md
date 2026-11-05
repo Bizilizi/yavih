@@ -6,6 +6,12 @@ folder must satisfy is the [benchmark folder](benchmark-folder.md) reference; th
 repeating it, and spells out only what the code checks without a reference page saying so. The reasons behind
 the rules are in [design](design.md).
 
+**The core is read-only for a benchmark contribution.** Whatever your protocol needs that yavih does not ship (a
+scorer, a head or loss, a metric, an output type, a bridge-check gate, an eligibility rule, a synthetic stand-in, a
+reading, a capability tag, a label kind) goes into the folder through the extension points of
+[extending through a folder](extending-through-a-folder.md): that is the intended path, not a workaround. A pull
+request that adds a benchmark changes files inside its folder only, plus the generated tables (step 10).
+
 Throughout, `<name>` is the new benchmark's name (`[a-z][a-z0-9_]*`, the folder name, the `name:` in
 `benchmark.yaml`) and `F=src/yavih/benchmarks/<name>` is its folder.
 
@@ -33,7 +39,8 @@ yavih bench new <name> --like vggsounder --dir src/yavih/benchmarks            #
 ```
 
 `--like` picks the folder whose machinery is copied; without it the readout's default is used (`clf` esc50, `seq`
-ave, `grid` nyuv2_depth, `box` vggss_box). Pick the folder whose streams and readings are closest to the new
+ave, `grid` nyuv2_depth, `box` vggss_box; any other scorer: the first folder that uses it). `--like` a folder that owns
+its scorer copies it under the new folder's name (its `eval.py` `SCORER`, its metrics' `readouts`, the yaml's `scorer`). Pick the folder whose streams and readings are closest to the new
 benchmark: `vggsounder` or `audioset20k` for an audio-visual one whose bridge serves `a`, `v` and `av`, `k400`
 for video only.
 
@@ -198,8 +205,11 @@ coordinates ([bridge](bridge.md)). These parts are read by code, so write them e
 ## 7. `eval.py` (only when needed)
 
 Write a `eval.py` only when the registry lacks what the protocol needs: a metric (`METRICS`), protocol keys it
-consumes (`PROTOCOL_KEYS`), target construction (`targets`), the authors' scorer (`score`) or a cross-reading join
-(`join`) ([eval.py hooks](benchmark-folder.md#evalpy-hooks); new readouts: [adding a scorer](adding-a-scorer.md)).
+consumes (`PROTOCOL_KEYS`), target construction (`targets`), the authors' scorer (`score`), a cross-reading join
+(`join`), a scorer of the folder's own (`SCORER`, any kind, with its own heads and losses), output types (`CODECS`),
+bridge-check gates (`BRIDGE_CHECKS`), an eligibility rule (`eligible`) or readings of its own (`READINGS`)
+([eval.py hooks](benchmark-folder.md#evalpy-hooks); every point: [extending through a folder](extending-through-a-folder.md)).
+A folder scorer that no core fixture covers ships its own stand-in in `testing.py` for step 12.
 Module scope imports only the standard library, numpy and yavih core; the authors' package is imported at call time
 through `yavih.external.require(name, pip, version_pin)` with the matching `external` entry. A `eval.py` copied by
 the scaffold is deleted when the folder needs none.
@@ -295,7 +305,8 @@ in process on a generated stand-in of the folder ([CLI](cli.md#bench-trial---syn
 stage (which runs the real folder's scoring path, `eval.py` and `external` included), it does not exercise the
 real data; step 13 does.
 
-**Done when:** it exits 0, every stage in `data.stages` is `ok`, and the headline clears its floor.
+**Done when:** it exits 0, every stage in `data.stages` is `ok` (or, for a scorer no stand-in covers, `conformance`
+is `ok` and the rest `not_applicable`; better, ship a `testing.py` stand-in), and the headline clears its floor.
 
 ## 13. Trial run with a fresh agent (required)
 

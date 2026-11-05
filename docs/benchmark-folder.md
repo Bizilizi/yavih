@@ -69,14 +69,19 @@ current directory, with `FOLDER=<folder>` and `YAVIH_BENCH=<name>` set. Helper s
 ### eval.py hooks
 
 All hooks are optional. Module scope imports only the standard library, numpy and yavih core (`yavih bench lint`
-imports it with torch and the folder's `external` packages blocked). It reuses the shared heads, trainer and
-`ProbeConfig`; it never defines a head, loss or training loop. Its source never enters a hash: the digest of its
+imports it with torch and the folder's `external` packages blocked); torch and the authors' packages are imported
+inside functions. It may reuse the shared heads, trainer and `ProbeConfig`, or bring its own head, loss and training
+loop through its `SCORER` ([extending through a folder](extending-through-a-folder.md)). Its source never enters a hash: the digest of its
 normalized source is recorded as provenance (`folder_source.eval`), and its behaviour is pinned by
 `protocol_version` and the folder's conformance fixture (`conformance/expected.json`, [conformance](conformance.md)).
 An edit that moves the fixture's numbers is `E_CONFORMANCE_DRIFT` until `protocol_version` is bumped.
 
 ```python
-SCORER: Scorer                      # the folder's own scorer (kind stateless or direct), named after the folder; benchmark.yaml then says `scorer: <name>`
+SCORER: Scorer                      # the folder's own scorer (probe, stateless or direct; build_head / loss_fn for its own heads and losses), named after the folder; benchmark.yaml then says `scorer: <name>`
+CODECS: dict[str, Codec]            # output types of the folder's own
+READINGS: tuple[str, ...]           # readings of the folder's own (beyond a, v, av, t); also the readings a reading-routed score is checked under
+BRIDGE_CHECKS: tuple[str | Callable, ...]  # bridge-check gates: library gate names (yavih.extract.LIBRARY_GATES) and gate(gc) callables
+def eligible(view) -> list[str] | tuple[list[str], list[str]]           # an eligibility rule of its own, after the scorer's
 METRICS: dict[str, MetricSpec]      # folder metrics; may replace a registry metric only with the same readouts/shape/kind
 PROTOCOL_KEYS: frozenset[str]       # protocol keys this file consumes (must be present in `protocol`)
 def targets(bench, split: str, rows: np.ndarray) -> np.ndarray            # replaces the readout's target construction
@@ -95,6 +100,13 @@ prints in md instead of every key (the rest under `--detail`).
 Every call into an original-author package goes through `yavih.external.require(name, pip, version_pin)` with the
 matching `benchmark.yaml` `external` entry. A `eval.py` that re-implements the authors' code instead (because it is
 not importable) says so in README "## In yavih" and setup.md "## Dependencies".
+
+### testing.py
+
+An optional `testing.py` (imported like `eval.py`, torch-free at module scope) gives `yavih bench trial --synthetic` a
+stand-in of the folder's own: `make_stand_in(work, real, *, n_eval, n_train) -> folder` and, when the core test bridges
+cannot encode its labels, `write_bridge(path, kind, *, D, bench_folder) -> path`
+([extending through a folder](extending-through-a-folder.md#a-stand-in-of-the-folders-own)).
 
 ### reader.py
 
@@ -619,8 +631,8 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |
 | `codecs` | `E_CODEC_SELFTEST` | Every folder or entry-point codec the output schema names passes `yavih.codecs.self_test` ([codecs](codecs.md#writing-a-codec)). |
 | `obtain` | `E_OBTAIN` | `obtain` is exactly `{tier, how}`, a known tier and a non-empty `how`. |
-| `capability` | `E_CAPABILITY`, `W_SUITE_CAPABILITY` (warning) | `capability` is a non-empty list of `yavih.suites.CAPABILITIES` ids. A shipped suite that lists the benchmark (by name or alias) in a group whose capability is not among its tags is a warning (`W_SUITE_CAPABILITY`). |
-| `template` | `E_TEMPLATE` | `bridge_template.py` has a literal `describe()["model"]` and a `reading` within `a`/`v`/`av`/`t` (`t`: the model is given text). |
+| `capability` | `E_CAPABILITY`, `W_CAPABILITY_UNKNOWN` (warning), `W_SUITE_CAPABILITY` (warning) | `capability` is a non-empty list of capability tags (`[a-z][a-z0-9-]*`); a tag outside `yavih.suites.CAPABILITIES` is the folder's own (`W_CAPABILITY_UNKNOWN`). A shipped suite that lists the benchmark (by name or alias) in a group whose capability is not among its tags is a warning (`W_SUITE_CAPABILITY`). |
+| `template` | `E_TEMPLATE`, `W_READING_UNKNOWN` (warning) | `bridge_template.py` has a literal `describe()["model"]` and a `reading`; a reading outside `a`/`v`/`av`/`t` (`t`: the model is given text) that the folder's `eval.py` `READINGS` does not declare is a warning. |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |
 | `imports` | `E_IMPORT` | `reader.py` / `eval.py` import in a fresh interpreter with torch and the `external` packages blocked. |
 | `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `eval.py`, `make_manifest.py`, `classes.csv`, and `TODO:` markers in `tests/*.py` and `prepare/*` (a folder test may name the bridge template's own `TODO` slots without the colon). |

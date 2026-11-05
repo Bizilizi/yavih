@@ -40,5 +40,8 @@ Normative descriptions of current behaviour.
   pull request: scaffold, protocol, freeze, prepare, docs, bridge template, hashes, tests, header, trials, CI.
 - [Trial run](trial-run.md): the required pre-PR run of a new benchmark by a fresh agent with only the wheel and
   the skill: protocol, worker prompt, report template, pass criteria.
+- [Extending through a folder](extending-through-a-folder.md): every extension point a benchmark folder owns (scorer, heads, losses,
+  metrics, codecs, bridge-check gates, eligibility, stand-in, reader, readings, capability tags, label kinds); the core
+  is read-only for a benchmark contribution.
 - [Adding a scorer](adding-a-scorer.md): the readout registry, drivers, metrics, entry points.
 - [Releasing](releasing.md): versions from git tags, CI, the release workflow, PyPI trusted publishing.

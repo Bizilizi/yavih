@@ -50,7 +50,8 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 | command | purpose | important flags |
 |---|---|---|
 | `yavih bench list` | every discoverable benchmark: aliases, readout, `capability` tags, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their suite group (`suite_capability`) and `readings` |
-| `yavih bench info` | a benchmark's README plus its `capability` tags, hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
+| `yavih bench info` | a benchmark's README plus its `capability` tags, what the folder extends (`extends:`, as `bench extensions`), hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
+| `yavih bench extensions` | what each benchmark folder extends: its own scorer, metrics, hooks, codecs, bridge-check gates, eligibility rule, stand-in, reader, readings, capability tags, label kind ([extending through a folder](extending-through-a-folder.md)) | `[<name>...]`; `--all` (every folder, also those that extend nothing) |
 | `yavih bench path` | print the benchmark folder, or the absolute path of one shipped file | `<name> [<what>]` (`what` as for `bench show`) |
 | `yavih bench files` | every shipped file of a folder with absolute path, kind (`readme`, `setup`, `yaml`, `template`, `eval`, `manifest`, `classes`, `conformance`, `prepare`, `test`, `other`) and size | `<name>` |
 | `yavih bench show` | print one shipped file | `<name> <what>`: `readme`, `setup`, `yaml`, `template`, `eval`, `classes`, `conformance` (`conformance/expected.json`), `prepare/<file>` or a path inside the folder |
@@ -92,10 +93,15 @@ runs on the stand-in, which never reads the real data; it is single-label, so th
 stand-in carry over to nothing. The trial on real data is the fresh-agent [trial run](trial-run.md); without
 `--synthetic` the command is a usage error (exit 1) that points there.
 
+The stand-in is the folder's own when it ships `testing.py` `make_stand_in` (`data.stand_in` `folder`), else the core
+fixtures' (`core`: the scorers `clf`, `seq`, `grid`, `box`, `knn` and the scorers of their families, over video, audio and
+image). For any other folder (`none`) only the `conformance` stage runs and the others are recorded `not_applicable`
+(exit 0) ([extending through a folder](extending-through-a-folder.md#a-stand-in-of-the-folders-own)).
+
 | code | exit | meaning |
 |---|---|---|
 | `E_TRIAL` | 2 | a stage failed a contract (the oracle below its floor under `--readout-fast`, a failed validation or probe); `errors[0].where` names the stage. A stage that was not ready (a decoder missing) exits 3 with its own code |
-| `E_TRIAL_NOT_READY` | 3 | no stand-in can be built: a readout other than `clf`, `seq`, `grid`, `box`, a stream kind other than video, audio, image, or no media writer (PyAV, soundfile, pillow) |
+| `E_TRIAL_NOT_READY` | 3 | the stand-in's media cannot be written here (PyAV, soundfile, pillow missing) |
 | `W_TRIAL_HEADLINE` | 0 | without `--readout-fast`, the oracle's headline did not clear its floor |
 
 ## Suites

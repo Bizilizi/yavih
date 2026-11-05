@@ -9,7 +9,8 @@ selection on val loss; early stopping; AdamW, cosine; fp32 probe math; determini
 (`warn_only=True`: on CUDA the attention backward has no deterministic fp32 kernel, so probe reruns
 agree to float rounding, not bit for bit; yavih captures torch's warning, names the ops in
 `probe_fit.json` `determinism` and adds `W_NONDETERMINISTIC` to `result.json`; nothing to do); seed `k` → `<runs root>/<b>/<model>/<reading>/probe/<eval_hash12>/seed<k>/`. A folder's `eval.py` may supply targets,
-metrics and the authors' scorer; it never defines a head, loss or training loop.
+metrics, the authors' scorer, or a scorer of its own with its own head, loss and training loop (`yavih bench info <b>`
+names what a folder extends on its `extends:` line).
 
 Readouts work in media coordinates and never need to know what your bridge did to the media:
 `seq` places a token at absolute second `t · duration_s`; `grid` and `box` place it at its
