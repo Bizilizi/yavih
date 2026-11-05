@@ -5,6 +5,7 @@ name: audiocaps_t2a
 aliases: []
 title: AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark)
 capability: [audio, generation]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: audiocaps_t2a
 protocol_version: 1
 header:

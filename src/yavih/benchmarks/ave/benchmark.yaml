@@ -5,6 +5,7 @@ name: ave
 aliases: []
 title: AVE audio-visual event localization (28 events + background, per-second labels)
 capability: [audio-visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: seq
 protocol_version: 1
 changelog:

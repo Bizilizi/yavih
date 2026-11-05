@@ -53,6 +53,9 @@ __all__ = [
     "BENCHMARK_SCHEMA_VERSION",
     "BenchmarkError",
     "SchemaError",
+    "CoreVersionError",
+    "core_status",
+    "check_core",
     "ManifestError",
     "UnknownBenchmark",
     "NoTargets",
@@ -221,6 +224,14 @@ class SchemaError(BenchmarkError, ValueError):
 
 class ManifestError(BenchmarkError, ValueError):
     """Manifest/classes are invalid (sha mismatch, unknown label, empty cell, charset). Exit 2."""
+
+
+class CoreVersionError(BenchmarkError):
+    """The installed yavih core does not satisfy the folder's ``core:`` requirement (``E_CORE_VERSION``, exit 3: a
+    dependency is not ready). The message names the pip line; yavih never upgrades itself."""
+
+    code = "E_CORE_VERSION"
+    exit_code = 3
 
 
 class UnknownBenchmark(BenchmarkError, KeyError):
@@ -617,6 +628,9 @@ class BenchmarkSpec:
     #: ``capability`` (optional in the schema, required by ``bench lint``; not hashed): ids of
     #: ``yavih.suites.CAPABILITIES`` the benchmark measures, in the yaml's order; ``()`` when absent
     capability: tuple[str, ...] = field(default=(), compare=False)
+    #: ``core`` (optional in the schema, required by ``bench lint``; not hashed): the PEP 440 specifier of the yavih
+    #: core releases that can load and score this folder (``">=1.1,<2"``); ``None`` when absent
+    core: str | None = field(default=None, compare=False)
 
     @property
     def requires(self) -> RequiresSpec:
@@ -853,6 +867,42 @@ def _parse_capability(v: Any, path: str) -> tuple[str, ...]:
             raise SchemaError(f"{path}: {c!r} is not a capability; the vocabulary is {', '.join(CAPABILITIES)} "
                               "(yavih.suites.CAPABILITIES)")
     return caps
+
+
+_CORE_CLAUSE_RE = re.compile(r"^(~=|==|!=|<=|>=|<|>)\s*v?\d+(?:\.\d+)*(?:\.\*)?(?:(?:a|b|rc|\.dev|\.post)\d+)*$")
+
+
+def _parse_core(v: Any, path: str) -> str | None:
+    """``core``: absent, or a PEP 440 specifier set (comma-separated clauses such as ``">=1.1,<2"``) naming the yavih
+    core releases this folder needs. Not hashed: it says which code can read the folder, never what a number means."""
+    if v is None:
+        return None
+    spec = _str(v, path).strip()
+    clauses = [c.strip() for c in spec.split(",")]
+    if not spec or not all(_CORE_CLAUSE_RE.match(c) for c in clauses):
+        raise SchemaError(f"{path}: {v!r} is not a PEP 440 specifier set of the yavih core releases (e.g. \">=1.1,<2\")")
+    return spec
+
+
+def core_status(core: str | None, version: str | None = None) -> dict[str, Any]:
+    """``{core, version, ok, dev, reason}``: whether the installed yavih (``version``, default ``__version__``)
+    satisfies a folder's ``core:``. ``ok`` is ``None`` without a requirement; a development build (``.devN``, a local
+    segment, a checkout without tags) is reported (``dev``) and never refused (``yavih.project.check_requirement``)."""
+    from yavih.project import check_requirement
+    from yavih.versions import __version__
+
+    r = check_requirement(core, version or __version__)
+    return {"core": core, "version": r["version"], "ok": r["ok"], "dev": r["dev"], "reason": r["reason"]}
+
+
+def check_core(spec: BenchmarkSpec, where: str | os.PathLike | None = None) -> None:
+    """Raise :class:`CoreVersionError` when the installed release does not satisfy ``spec.core`` (a development build
+    never raises)."""
+    st = core_status(spec.core)
+    if st["ok"] is False and not st["dev"]:
+        raise CoreVersionError(f"{spec.name} needs yavih core {spec.core}; this is yavih {st['version']}. Install a core that "
+                               f"fits: pip install --no-deps \"yavih{spec.core}\" (yavih never upgrades itself; or fetch a revision "
+                               f"of {spec.name} for this core: yavih bench fetch {spec.name}){f' ({where})' if where else ''}")
 
 
 def _parse_budget(v: Any, path: str, readout: str) -> BudgetSpec:
@@ -1749,7 +1799,7 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
                           f"(schema {BENCHMARK_SCHEMA_VERSION}: `fields:`; the hashes do not move) ({origin})")
     if isinstance(d, Mapping) and "readout" in d and "scorer" not in d:
         raise SchemaError(f"readout: the key is `scorer` (the scorer the folder is scored by; `yavih bench migrate`) ({origin})")
-    _check_keys(d, "", _TOP_KEYS, ["obtain", "header", "capability"])
+    _check_keys(d, "", _TOP_KEYS, ["obtain", "header", "capability", "core"])
     sv = _int(d["schema_version"], "schema_version")
     if sv == BENCHMARK_SCHEMA_VERSION - 1:
         raise SchemaError(f"schema_version: {sv} is the 1.0 schema (`streams:`); rewrite the folder with `yavih bench migrate <folder> --write` "
@@ -1778,6 +1828,7 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
     obtain = _parse_obtain(d.get("obtain"), "obtain")
     header = _parse_header(d.get("header"), "header")
     capability = _parse_capability(d.get("capability"), "capability")
+    core = _parse_core(d.get("core"), "core")
     budget = _parse_budget(d["budget"], "budget", readout)
     manifest = _parse_manifest(d["manifest"], "manifest")
     splits = _parse_splits(d["splits"], "splits")
@@ -1861,6 +1912,7 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
         obtain=obtain,
         header=header,
         capability=capability,
+        core=core,
     )
 
 
@@ -2811,6 +2863,7 @@ class Benchmark:
         spec = load_yaml(yaml_path)
         if spec.name != folder.resolve().name:
             raise SchemaError(f"name: {spec.name!r} != folder name {folder.resolve().name!r}")
+        check_core(spec, folder)
         _check_home_copy(folder.resolve())
         return cls(spec, folder.resolve(), data=data)
 

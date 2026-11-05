@@ -5,6 +5,7 @@ name: unav100_causal
 aliases: []
 title: UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel)
 capability: [audio-visual, temporal, streaming]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: stream
 protocol_version: 1
 changelog:

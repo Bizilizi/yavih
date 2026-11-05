@@ -5,6 +5,7 @@ name: epic100_anticipation_stream
 aliases: []
 title: EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall)
 capability: [audio-visual, temporal, streaming]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: stream
 protocol_version: 1
 changelog:

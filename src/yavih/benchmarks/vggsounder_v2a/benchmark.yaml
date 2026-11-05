@@ -5,6 +5,7 @@ name: vggsounder_v2a
 aliases: []
 title: VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark)
 capability: [audio-visual, generation]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: vggsounder_v2a
 protocol_version: 1
 header:

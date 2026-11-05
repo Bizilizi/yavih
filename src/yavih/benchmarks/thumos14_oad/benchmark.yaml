@@ -5,6 +5,7 @@ name: thumos14_oad
 aliases: []
 title: THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps)
 capability: [visual, temporal, streaming]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: stream
 protocol_version: 1
 changelog:

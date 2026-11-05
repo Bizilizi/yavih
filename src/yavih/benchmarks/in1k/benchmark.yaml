@@ -6,6 +6,7 @@ name: in1k
 aliases: [imagenet1k, imagenet]
 title: ImageNet-1K image classification (frozen 50/class train draw, full 50k val)
 capability: [visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 header:
   name: ImageNet-1K
   title: ImageNet Large Scale Visual Recognition Challenge

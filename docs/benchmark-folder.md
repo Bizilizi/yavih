@@ -124,6 +124,7 @@ name: k400                         # [a-z0-9_]+, == the folder's directory name
 aliases: []                        # list of [a-z0-9_]+; Benchmark.load(alias) resolves here; not hashed
 title: Kinetics-400 action recognition   # one line; bench list / bench info and the benchmarks index
 capability: [visual]               # optional for the loader, required by bench lint; not hashed; see "Capability"
+core: ">=1.1,<2"                   # PEP 440 specifier of the yavih core releases that can load and score the folder; optional for the loader, required by bench lint; not hashed; checked at load (E_CORE_VERSION); the catalog index and `yavih bench fetch` pick a revision by it
 header:                            # optional for the loader, required by bench lint; not hashed (README header image)
   name: Kinetics-400                # the display name
   title: The Kinetics Human Action Video Dataset   # the paper title
@@ -619,6 +620,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |
 | `codecs` | `E_CODEC_SELFTEST` | Every folder or entry-point codec the output schema names passes `yavih.codecs.self_test` ([codecs](codecs.md#writing-a-codec)). |
 | `obtain` | `E_OBTAIN` | `obtain` is exactly `{tier, how}`, a known tier and a non-empty `how`. |
+| `core` | `E_CORE` | `core` names the yavih core releases that can load the folder (a PEP 440 specifier; its syntax is the loader's, `E_SCHEMA`). Loading a folder under a release outside it is refused with `E_CORE_VERSION` (exit 3, the pip line in the message); a development build is never refused. |
 | `capability` | `E_CAPABILITY`, `W_SUITE_CAPABILITY` (warning) | `capability` is a non-empty list of `yavih.suites.CAPABILITIES` ids. A shipped suite that lists the benchmark (by name or alias) in a group whose capability is not among its tags is a warning (`W_SUITE_CAPABILITY`). |
 | `template` | `E_TEMPLATE` | `bridge_template.py` has a literal `describe()["model"]` and a `reading` within `a`/`v`/`av`/`t` (`t`: the model is given text). |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |

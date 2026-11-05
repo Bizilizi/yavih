@@ -5,6 +5,7 @@ name: vggss_box
 aliases: []
 title: VGG-SS audio-conditioned single-box regression
 capability: [audio-visual, spatial]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 header:
   name: VGG-SS
   title: Localizing Visual Sounds the Hard Way

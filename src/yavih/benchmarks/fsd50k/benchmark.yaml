@@ -5,6 +5,7 @@ name: fsd50k
 aliases: []
 title: FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP)
 capability: [audio]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 header:
   name: FSD50K
   title: "FSD50K: An Open Dataset of Human-Labeled Sound Events"

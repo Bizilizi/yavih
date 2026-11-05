@@ -288,7 +288,7 @@ folder · `hashes` `E_CHANGELOG_HASH` · `hashed` `E_HASHED_PROSE` · `budget` `
 `readme` / `setup` `E_README` / `E_SETUP` headings, header line, links, pins; `E_README_HASH` a quoted
 `protocol_hash` that is not current · `external` `E_EXTERNAL` a pin without a full `pip install` line · `codecs`
 `E_CODEC_SELFTEST` a folder codec of the output schema fails its self-test · `obtain`
-`E_OBTAIN` · `capability` `E_CAPABILITY` missing or outside the vocabulary, `W_SUITE_CAPABILITY` a shipped suite
+`E_OBTAIN` · `core` `E_CORE` no `core:` specifier (loading under a release outside it: `E_CORE_VERSION`, exit 3, the pip line in the message; a development build is never refused) · `capability` `E_CAPABILITY` missing or outside the vocabulary, `W_SUITE_CAPABILITY` a shipped suite
 lists the folder under a capability it does not carry · `template` `E_TEMPLATE` no literal `model`, or a `reading`
 outside a | v | av | t · `citations` `E_CITATION` a citation a pip install cannot open, `E_NOTES_LINK` · `imports`
 `E_IMPORT` `reader.py` / `eval.py` need torch or an external package at import · `todo` `W_TODO` · `E_LINT_CRASH` a

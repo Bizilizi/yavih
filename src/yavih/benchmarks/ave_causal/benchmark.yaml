@@ -5,6 +5,7 @@ name: ave_causal
 aliases: []
 title: AVE causal per-second event recognition (streaming; 28 events + background)
 capability: [audio-visual, temporal, streaming]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: stream
 protocol_version: 1
 changelog:

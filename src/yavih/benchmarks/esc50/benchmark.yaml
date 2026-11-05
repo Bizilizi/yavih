@@ -4,6 +4,7 @@ name: esc50
 aliases: []
 title: ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy)
 capability: [audio]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 header:
   name: ESC-50
   title: "ESC: Dataset for Environmental Sound Classification"

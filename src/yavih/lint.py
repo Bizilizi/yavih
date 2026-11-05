@@ -33,6 +33,8 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   (or say "None"); the contract yaml copies equal ``benchmark.yaml``; ``yavih bench verify <name>``;
   the prepare steps run as ``yavih bench prepare <name> <step>``; ``source.revision`` in "## Obtain the data".
 - ``external``: every ``external[].pip`` is a runnable ``pip install …`` command.
+- ``core``: a ``core:`` PEP 440 specifier of the yavih core releases the folder needs (``E_CORE``); the catalog
+  index and ``yavih bench fetch`` pick a revision by it.
 - ``codecs``: every folder or entry-point codec the output schema names passes ``yavih.codecs.self_test``
   (``E_CODEC_SELFTEST``).
 - ``obtain``: the ``obtain: {tier, how}`` block.
@@ -545,6 +547,16 @@ def _c_external(c: _Ctx) -> Iterator[Finding]:
     for ext in (c.raw or {}).get("external") or []:
         if not str(ext.get("pip", "")).startswith("pip install "):
             yield _err("external", "E_EXTERNAL", f"external {ext.get('name')!r}: pip {ext.get('pip')!r} is not a full `pip install …` command", "benchmark.yaml")
+
+
+@_check("core")
+def _c_core(c: _Ctx) -> Iterator[Finding]:
+    """``core:`` names the core releases that can load the folder (``yavih bench fetch`` and the catalog index pick a
+    folder revision by it); its syntax is checked by the loader, its presence here."""
+    if c.raw is not None and not c.raw.get("core"):
+        yield _err("core", "E_CORE", "benchmark.yaml needs `core: \">=X.Y,<Z\"`, the PEP 440 specifier of the yavih core "
+                   "releases that can load and score this folder (the catalog index and `yavih bench fetch` pick a revision by it)",
+                   "benchmark.yaml")
 
 
 @_check("codecs")

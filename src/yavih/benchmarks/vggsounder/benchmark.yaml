@@ -6,6 +6,7 @@ name: vggsounder
 aliases: []
 title: VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes)
 capability: [audio-visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: clf
 protocol_version: 1
 header:
