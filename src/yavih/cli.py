@@ -1092,8 +1092,12 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
     cap_line = f"capability: {', '.join(data['capability'])}\n" if data["capability"] else ""
     from yavih.extensions import extends_line, folder_extensions
 
-    data["extends"] = folder_extensions(bench)
-    ext_line = extends_line(data["extends"], scorer=str(raw.get("scorer"))) + "\n"
+    try:
+        data["extends"] = folder_extensions(bench)
+        ext_line = extends_line(data["extends"], scorer=str(raw.get("scorer"))) + "\n"
+    except Exception as e:  # noqa: BLE001 - the summary line is information; a folder that cannot say is still shown
+        data["extends"] = None
+        ext_line = f"extends: unknown ({type(e).__name__}: {e})\n"
     return Envelope(data=data, paths={"folder": str(bench.folder)},
                     text=readme + ("\n" if readme and not readme.endswith("\n") else "") + cap_line + obtain_line + ext_line + summary + "\n")
 

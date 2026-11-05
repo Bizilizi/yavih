@@ -41,8 +41,7 @@ def _events(cell: str) -> list[tuple[int, int, int]]:
 
 
 def test_folder_lint_clean():
-    pytest.skip("blocked: the det readout has no conformance population in yavih (E_CONFORMANCE_UNSUPPORTED); "
-                "everything else of the lint is clean (see README '## In yavih')")
+    F.assert_lint_clean(HERE)
 
 
 def test_sha256_matches(spec: dict):

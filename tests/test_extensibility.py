@@ -37,7 +37,8 @@ def test_builtin_readouts_describe_themselves():
     builtin = ("clf", "seq", "grid", "box")
     assert registry.names()[:4] == builtin and list(READOUTS)[:4] == list(builtin)
     assert {k: READOUT_VERSION[k] for k in builtin} == {"clf": 1, "seq": 2, "grid": 2, "box": 2}  # hashed: unchanged by the refactor
-    assert all(registry.get(n).kind != "probe" or n == "stream" for n in registry.names()[4:])  # stream: causal heads
+    shipped = {m.rsplit(".", 1)[-1] for m in registry.BUILTIN}  # folder scorers may be probes too (their own heads and losses)
+    assert all(registry.get(n).kind != "probe" or n == "stream" for n in registry.names()[4:] if n in shipped)  # stream: causal heads
     for name in builtin:
         r = registry.get(name)
         assert r.module == f"yavih.readouts.{name}" and callable(r.driver()) and r.floor_outputs is not None
