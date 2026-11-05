@@ -145,8 +145,7 @@ def test_a_folder_probe_scorer_runs_the_whole_chain_on_its_own_stand_in(tmp_path
 def test_trial_without_a_stand_in_runs_conformance_and_is_not_applicable(tmp_path, yavih_home, monkeypatch):
     """A scorer neither the core fixtures nor the folder cover: conformance runs, every later stage is
     ``not_applicable``, the trial is ok (exit 0), never ``E_TRIAL_NOT_READY``."""
-    from yavih import conformance
-    from yavih import trial
+    from yavih import conformance, trial
 
     folder = _toy_folder(tmp_path)
     conformance.record(Benchmark.load(str(folder)))

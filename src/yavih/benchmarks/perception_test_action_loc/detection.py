@@ -536,7 +536,9 @@ def conformance_population(ctx: Any, tag: str, fmt: str) -> dict[str, Any]:
     C = int(ctx.bench.num_classes)
 
     def draw(role: str) -> dict[str, Any]:
-        rows_of = (lambda s: select_rows(ctx.bench.manifest_hash, s, ctx.bench.n_rows(s), POPULATION[role], salt=role))
+        def rows_of(split: str) -> np.ndarray:
+            return select_rows(ctx.bench.manifest_hash, split, ctx.bench.n_rows(split), POPULATION[role], salt=role)
+
         return _inputs(ctx, list(ctx.roles[role]), rows_of, fmt, T=T, num_classes=C, with_media=False)
 
     tr, ev = draw("train"), draw("eval")
@@ -663,9 +665,12 @@ def make_metrics(name: str, *, mean: str, per_tiou: str | None = None, at: Mappi
     if per_tiou:
         out[per_tiou] = MetricSpec(name=per_tiou, fn=lambda o, t, p, sm: [float(v) for v in ap(o, t, p, sm).mean(axis=1)], readouts=ro,
                                    protocol_keys=keys, shape="list", description="mean AP at each of protocol.tiou_thresholds")
+    def at_threshold(idx: int) -> Callable[..., float]:
+        return lambda o, t, p, sm: float(ap(o, t, p, sm).mean(axis=1)[idx])
+
     for metric, k in (at or {}).items():
-        out[metric] = MetricSpec(name=metric, fn=(lambda k: lambda o, t, p, sm: float(ap(o, t, p, sm).mean(axis=1)[k]))(int(k)), readouts=ro,
-                                 protocol_keys=keys, description=f"mean AP at protocol.tiou_thresholds[{int(k)}]")
+        out[metric] = MetricSpec(name=metric, fn=at_threshold(int(k)), readouts=ro, protocol_keys=keys,
+                                 description=f"mean AP at protocol.tiou_thresholds[{int(k)}]")
     if n_events:
         out[n_events] = MetricSpec(name=n_events, fn=lambda o, t, p, sm: float(sum(len(np.asarray(g).reshape(-1, 3)) for g in t)),
                                    readouts=ro, kind="disclosure", higher_is_better=None, description="ground-truth events scored")
