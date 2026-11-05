@@ -1,0 +1,189 @@
+schema_version: 3
+name: epic_sounds_det
+aliases: [epic_sounds_detection]
+title: EPIC-SOUNDS audio-based interaction detection (untrimmed kitchen recordings, 44 classes)
+capability: [audio, temporal]
+scorer: epic_sounds_det
+protocol_version: 1
+changelog:
+- version: 1
+  date: '2026-10-29'
+  invalidates: false
+  reason: first protocol of EPIC-SOUNDS sound detection; train 495 / validation 137 recordings, official C10 mAP
+  protocol_hash: f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255
+  input_hash: 47f2644ee17fc88f2af05f000c640eed1cbdc219b57c0123152a11211cc3848f
+header:
+  name: EPIC-SOUNDS detection
+  title: 'EPIC-SOUNDS: A Large-Scale Dataset of Actions that Sound'
+  venue: Huh, Chalk, Kazakos, Damen, Zisserman · TPAMI 2025
+  abstract: Audio annotations of the untrimmed egocentric kitchen recordings of EPIC-KITCHENS-100, with the
+    temporal extent and class of every audible interaction (44 classes). The detection task localizes and
+    classifies all of them in each full recording; it is scored by mean average precision over temporal IoU
+    thresholds 0.1 to 0.5.
+  chips: ["audio", "temporal detection", "632 recordings", "44 classes", "495 train · 137 eval", "C10 mAP, tIoU 0.1–0.5"]
+source:
+  kind: public_url
+  urls:
+  - https://github.com/epic-kitchens/epic-sounds-annotations
+  - https://github.com/epic-kitchens/C10-epic-sounds-detection
+  - https://github.com/epic-kitchens/epic-kitchens-download-scripts
+  - https://data.bris.ac.uk/data/dataset/3h91syskeag572hl6tvuovwv4d
+  - https://data.bris.ac.uk/data/dataset/2g1n6qdydwa9u22shpxqzp0t8m
+  licence: EPIC-SOUNDS annotations and EPIC-KITCHENS-100 videos are both CC BY-NC 4.0 (non-commercial; credit the
+    authors). Cite Huh et al. (TPAMI 2025) and Damen et al. (IJCV 2022).
+  revision: epic-sounds-annotations@57a922f0d352e9429f1ef8a37eee21758dd3a33c; C10-epic-sounds-detection@196e7cf2c4f17946279fb57d9ff24516b7403344;
+    epic-kitchens-download-scripts@4f11fb2b579833f360c3c7bb917bf1e24a9787b5
+  bytes: 1114703000000
+  sha256:
+    EPIC_Sounds_train.csv: 225427ab288cc5c72c1680abb29f5ab8ccd3608c3f4cf409541d2c5cf720dd32
+    EPIC_Sounds_validation.csv: fff66485d8478762fd9cde1a829e6d91713a5f2f7f917e3af746cf891dd62e5a
+    EPIC_Sounds_recognition_test_timestamps.csv: 4912b017f96e371b3d05ef6194fb2796ecffff3782eacf8909a3cbaf2af4ef3a
+    EPIC_Sounds_detection_test_videos.csv: b77ec524fdd64be5b01db6bc8472a983d58acb767c854e3d40ac98cdf4ec9bc3
+    epic-kitchens-download-scripts/data/md5.csv: 3f9c31899ff5807c8f0fed5d26a8fe62300f3f4c40dc3eea767345212c2e83c7
+    C10 EvaluationCode/audio_based_interaction_detection.py: 7c2c2509bc162e2067993def4acb392aa20077fd618a97cee2b9ecc0f5ad4338
+  notes: The labels are the public EPIC-SOUNDS train and validation CSVs; the media are the EPIC-KITCHENS-100
+    MP4s (1080p, 50 or 59.94 fps, AAC 48 kHz stereo) on data.bris.ac.uk, md5-checked against the download-scripts
+    list. Only the AAC track of each MP4 is kept (copied, never re-encoded). The detection test split (23
+    recordings) and the recognition test split (44) have no public labels and are not part of the protocol.
+obtain:
+  tier: auto
+  how: Unattended. Step 01 fetches the annotation CSVs and the md5 list from GitHub; step 02 downloads each of the
+    632 EPIC-KITCHENS-100 MP4s (1.11 TB in total, public HTTPS, no account), keeps its audio track (~6 GB) and
+    deletes the MP4. Expect days at the ~2 MB/s per connection data.bris.ac.uk serves.
+budget:
+  clips:
+    train: 495
+    validation: 137
+  media_gb: 6.3
+  extract_min_per_1k_clips_ref: 60.0
+  probe_minutes_ref:
+    epic_sounds_det: 60
+manifest:
+  file: manifest.csv.gz
+  sha256: bc4b647583bb5ac85e080b88df7ba6f08b87eb72917faccd87721484fa342b07
+  classes: classes.csv
+  classes_sha256: c46f941f1aa3c0bd74272acff283733874dc54a705fbdf8a9ca117eb1d140b4d
+  key: clip_id
+  label:
+    column: labels
+    kind: multi
+    sep: ;
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_audio:
+      type: str
+      role: media
+      stream: audio
+    events:
+      type: str
+      role: label_aux
+  upstream:
+    source: epic-kitchens/epic-sounds-annotations @ 57a922f EPIC_Sounds_{train,validation}.csv (one row per recording)
+    sha256: fff66485d8478762fd9cde1a829e6d91713a5f2f7f917e3af746cf891dd62e5a
+    rows: 699
+    note: One row per untrimmed recording (video_id); 60 055 train / 8 035 validation labelled segments live in the
+      label_aux column events (class:start_ms:stop_ms, upstream order; 928 / 33 of them are background). The 44
+      recognition-test and 23 detection-test recordings are excluded (labels withheld by the challenge server).
+      No train draw.
+    upstream_files:
+      epic-sounds-annotations/EPIC_Sounds_train.csv: 225427ab288cc5c72c1680abb29f5ab8ccd3608c3f4cf409541d2c5cf720dd32
+      epic-sounds-annotations/EPIC_Sounds_validation.csv: fff66485d8478762fd9cde1a829e6d91713a5f2f7f917e3af746cf891dd62e5a
+      epic-sounds-annotations/EPIC_Sounds_recognition_test_timestamps.csv: 4912b017f96e371b3d05ef6194fb2796ecffff3782eacf8909a3cbaf2af4ef3a
+      epic-sounds-annotations/EPIC_Sounds_detection_test_videos.csv: b77ec524fdd64be5b01db6bc8472a983d58acb767c854e3d40ac98cdf4ec9bc3
+    curation:
+      total_upstream: 699
+      per_split:
+        train:
+          listed: 495
+          staged: 495
+          missing: 0
+        validation:
+          listed: 137
+          staged: 137
+          missing: 0
+      excluded:
+        recognition_test_labels_withheld: 44
+        detection_test_labels_withheld: 23
+splits:
+  train:
+  - train
+  eval:
+  - validation
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+fields:
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_audio
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+targets: null
+data:
+  roots:
+    media_root:
+      default: ${data.root}/epic_sounds_det
+      description: audio/<video_id>.m4a (the AAC track of each EPIC-KITCHENS-100 MP4, 632 files) + annotations/ (step 01)
+  tar_index: null
+  derived: {}
+input_contract:
+  handed_over:
+    audio: the whole untrimmed recording's AAC track (48 kHz, stereo, 10 s to 62 min), copied packet for packet
+      from the EPIC-KITCHENS-100 MP4 into an m4a; nothing decoded, resampled, cut, windowed or padded
+  info:
+    audio:
+    - duration_s
+    - sample_rate
+    - n_samples
+    - channels
+    - container
+    - bytes
+  facts: []
+  materialize: null
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos:
+    - t
+    streams:
+    - audio
+    grid: null
+    t_bins: null
+external: []
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+  tiou_thresholds: [0.1, 0.2, 0.3, 0.4, 0.5]
+  eval_excluded_classes: [13]
+  events_column: events
+metrics:
+  headline: map_avg
+  list:
+  - map_avg
+  - map@0.1
+  - map@0.2
+  - map@0.3
+  - map@0.4
+  - map@0.5
+  - map_avg_paper
+  - n_eval
+  table: [map_avg, map@0.5]
+  floors:
+  - map_avg_floor
+  controls: []
+  chance: {}
+  ci: {}
+  aggregation: null
+readout_params:
+  T: 1024

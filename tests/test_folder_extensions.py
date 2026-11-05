@@ -356,3 +356,25 @@ def test_a_scaffold_like_a_folder_scorer_owns_it_under_its_new_name(tmp_path, ya
     assert b.spec.readout == "toycopy" and registry.get("toycopy").is_probe
     assert 'name="toycopy"' in (folder / "eval.py").read_text(encoding="utf-8")
     assert _first_folder_of("stream") == "ave_causal" and _first_folder_of("no_such_scorer") is None
+
+
+# ----------------------------------------------------------------------------- A6: the detection folders own their scorer
+
+
+DETECTION_FOLDERS = ("unav100", "perception_test_sound_loc", "perception_test_action_loc", "epic_sounds_det")
+
+
+def test_the_detection_folders_own_one_scorer_implementation():
+    """The four detection folders carry byte-identical copies of their scorer (``detection.py``), each registered under the
+    folder's name as a probe with its own loss; the core ships no detection readout."""
+    import importlib.util
+
+    from yavih.benchmarks import packaged_folder
+    from yavih.extensions import folder_extensions
+
+    copies = {n: (packaged_folder(n) / "detection.py").read_bytes() for n in DETECTION_FOLDERS}
+    assert len(set(copies.values())) == 1, "detection.py differs between folders: keep the copies identical (notes/UNIFY.md)"
+    for n in DETECTION_FOLDERS:
+        ext = folder_extensions(Benchmark.load(n))
+        assert ext["scorer"]["name"] == n and ext["scorer"]["kind"] == "probe" and ext["scorer"]["losses"] == [f"{n}_focal_giou"]
+    assert all(importlib.util.find_spec(m) is None for m in ("yavih.readouts.tad", "yavih.readouts.tdet", "yavih.metrics.detection"))

@@ -11,25 +11,28 @@ Grouped by each folder's `benchmark.yaml` `capability` tags (the vocabulary suit
 capabilities is listed under each.
 
 <!-- yavih:bench-table index begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-### audio (3)
+### audio (5)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [audiocaps_t2a](audiocaps_t2a/README.md) | AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark) | audiocaps_t2a | text (cell) | public (obtain: auto) |
+| [epic_sounds_det](epic_sounds_det/README.md) | EPIC-SOUNDS audio-based interaction detection (untrimmed kitchen recordings, 44 classes); alias `epic_sounds_detection` | epic_sounds_det | audio | public (obtain: auto) |
 | [esc50](esc50/README.md) | ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy) | clf | audio | public (obtain: auto) |
 | [fsd50k](fsd50k/README.md) | FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP) | clf | audio | public (obtain: auto) |
+| [perception_test_sound_loc](perception_test_sound_loc/README.md) | Perception Test temporal sound localisation (challenge train / valid) | perception_test_sound_loc | video + audio | public (obtain: auto) |
 
-### visual (5)
+### visual (6)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [in1k](in1k/README.md) | ImageNet-1K image classification (frozen 50/class train draw, full 50k val); aliases `imagenet1k`, `imagenet` | clf | image | manual portal (obtain: needs-licence) |
 | [k400](k400/README.md) | Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe) | clf | video | torrent (obtain: auto) |
 | [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
+| [perception_test_action_loc](perception_test_action_loc/README.md) | Perception Test temporal action localisation (challenge train / valid) | perception_test_action_loc | video + audio | public (obtain: auto) |
 | [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
 | [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
 
-### audio-visual (9)
+### audio-visual (12)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -38,12 +41,15 @@ capabilities is listed under each.
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
 | [epic100_anticipation_stream](epic100_anticipation_stream/README.md) | EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall) | stream | video + audio | public (obtain: auto) |
+| [perception_test_action_loc](perception_test_action_loc/README.md) | Perception Test temporal action localisation (challenge train / valid) | perception_test_action_loc | video + audio | public (obtain: auto) |
+| [perception_test_sound_loc](perception_test_sound_loc/README.md) | Perception Test temporal sound localisation (challenge train / valid) | perception_test_sound_loc | video + audio | public (obtain: auto) |
+| [unav100](unav100/README.md) | UnAV-100 dense audio-visual event localization in untrimmed videos | unav100 | video + audio | public (obtain: auto) |
 | [unav100_causal](unav100_causal/README.md) | UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel) | stream | video + audio | public (obtain: auto) |
 | [vggsounder](vggsounder/README.md) | VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes) | clf | video + audio | public (obtain: needs-data-owner) |
 | [vggsounder_v2a](vggsounder_v2a/README.md) | VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark) | vggsounder_v2a | video (materialized at prepare time) | public (obtain: needs-data-owner) |
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 
-### temporal (6)
+### temporal (10)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -51,7 +57,11 @@ capabilities is listed under each.
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
 | [epic100_anticipation_stream](epic100_anticipation_stream/README.md) | EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall) | stream | video + audio | public (obtain: auto) |
+| [epic_sounds_det](epic_sounds_det/README.md) | EPIC-SOUNDS audio-based interaction detection (untrimmed kitchen recordings, 44 classes); alias `epic_sounds_detection` | epic_sounds_det | audio | public (obtain: auto) |
+| [perception_test_action_loc](perception_test_action_loc/README.md) | Perception Test temporal action localisation (challenge train / valid) | perception_test_action_loc | video + audio | public (obtain: auto) |
+| [perception_test_sound_loc](perception_test_sound_loc/README.md) | Perception Test temporal sound localisation (challenge train / valid) | perception_test_sound_loc | video + audio | public (obtain: auto) |
 | [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
+| [unav100](unav100/README.md) | UnAV-100 dense audio-visual event localization in untrimmed videos | unav100 | video + audio | public (obtain: auto) |
 | [unav100_causal](unav100_causal/README.md) | UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel) | stream | video + audio | public (obtain: auto) |
 
 ### spatial (2)
@@ -111,13 +121,17 @@ Read the folder's `setup.md` first, before downloading anything or writing a bri
 [ave_causal](ave_causal/setup.md) ·
 [avsync](avsync/setup.md) ·
 [epic100_anticipation_stream](epic100_anticipation_stream/setup.md) ·
+[epic_sounds_det](epic_sounds_det/setup.md) ·
 [esc50](esc50/setup.md) ·
 [fsd50k](fsd50k/setup.md) ·
 [in1k](in1k/setup.md) ·
 [k400](k400/setup.md) ·
 [nyuv2_depth](nyuv2_depth/setup.md) ·
+[perception_test_action_loc](perception_test_action_loc/setup.md) ·
+[perception_test_sound_loc](perception_test_sound_loc/setup.md) ·
 [ssv2](ssv2/setup.md) ·
 [thumos14_oad](thumos14_oad/setup.md) ·
+[unav100](unav100/setup.md) ·
 [unav100_causal](unav100_causal/setup.md) ·
 [vggsounder](vggsounder/setup.md) ·
 [vggsounder_v2a](vggsounder_v2a/setup.md) ·

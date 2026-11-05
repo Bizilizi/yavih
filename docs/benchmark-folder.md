@@ -653,13 +653,17 @@ The full index with descriptions, media and sources is [src/yavih/benchmarks/REA
 | ave_causal | stream | none | video, audio | `sec_acc_gru` | yes |
 | avsync | clf | single | video, audio (materialized) | `acc` | yes |
 | epic100_anticipation_stream | stream | none | video, audio | `mt5r_action_gru` | yes |
+| epic_sounds_det (alias `epic_sounds_detection`) | epic_sounds_det | multi | audio | `map_avg` | yes |
 | esc50 | clf (5 folds) | single | audio | `acc_mean` |  |
 | fsd50k | clf | multi | audio | `map` |  |
 | in1k (aliases `imagenet1k`, `imagenet`) | clf | single | image | `acc` |  |
 | k400 | clf | single | video | `acc` |  |
 | nyuv2_depth | grid | none (targets) | image | `d1` | yes, `external` |
+| perception_test_action_loc | perception_test_action_loc | multi | video, audio | `tmap` | yes |
+| perception_test_sound_loc | perception_test_sound_loc | multi | video, audio | `tmap` | yes |
 | ssv2 | clf | single | video | `acc` |  |
 | thumos14_oad | stream | none | video, audio | `frame_map_gru` | yes |
+| unav100 | unav100 | multi | video, audio | `map_avg` | yes |
 | unav100_causal | stream | none | video, audio | `map_gru` | yes |
 | vggsounder | clf | multi_sets | video, audio | `auc_pr` | yes, `external` |
 | vggsounder_v2a | vggsounder_v2a | none | video (materialized) | `fd_passt` | yes, `external` |

@@ -1,0 +1,61 @@
+{
+ "benchmark": "perception_test_action_loc",
+ "generator": 1,
+ "population": {
+  "eval": 64,
+  "floor": 0,
+  "folds": 0,
+  "train": 64
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "16b772aedc4612ff1ebc5486c72a3dcd809f1a11+dirty",
+  "externals": {},
+  "folder_source": {
+   "eval": "0da7a7a1473470b6a7399f87549dedc549c94feb3d7fae88865328179b3ea627",
+   "reader": null
+  },
+  "protocol_hash": "19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3",
+  "scorer": {
+   "kind": "probe",
+   "name": "perception_test_action_loc",
+   "version": 1
+  },
+  "scoring_hash": "960b814d6e184a05148beb53579c7d32a3b459ac19662d5f53d8b3bc5fa9c76c",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "n_eval": 0.001,
+  "n_events": 0.001,
+  "tmap": 0.001,
+  "tmap_floor": 0.001,
+  "tmap_per_tiou": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "tmap": [
+     0.0023344197244617795,
+     0.007668431489361501
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "tmap_floor": 0.02061193869469806
+   },
+   "metrics": {
+    "n_eval": 64,
+    "n_events": 456,
+    "tmap": 0.0027776144464219847,
+    "tmap_per_tiou": [
+     0.006046787254477748,
+     0.003332744548251025,
+     0.002364153840668998,
+     0.0014748308791856853,
+     0.0006695557095264643
+    ]
+   }
+  }
+ }
+}

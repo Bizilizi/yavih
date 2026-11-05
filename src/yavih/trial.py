@@ -462,7 +462,7 @@ def format_trial(rec: dict) -> str:
             note = f"  {s['detail']['note']}"
         elif s.get("status") == "not_applicable" and s["stage"] == "stand_in":
             note = f"  {s['detail']['reason']}"
-        lines.append(f"  {s['stage']:<13} {s['status']:<8} {s['seconds']:>7.1f}s{note}")
+        lines.append(f"  {s['stage']:<13} {s['status']:<14} {s['seconds']:>7.1f}s{note}")
     h = rec.get("headline") or {}
     if h.get("metric"):
         ci = h.get("ci95")

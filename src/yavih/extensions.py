@@ -98,7 +98,7 @@ def folder_extensions(bench: Any) -> dict[str, Any]:
 
 
 def extends_line(ext: dict[str, Any], *, scorer: str | None = None) -> str:
-    """One line for ``yavih bench info``: ``extends: scorer unav100 (probe, own losses [...]); metrics [...]; ...`` or
+    """One line for ``yavih bench info``: ``extends: scorer mybench (probe, own losses [...]); metrics [...]; ...`` or
     ``extends: nothing (core scorer <scorer>)``."""
     if not ext:
         return f"extends: nothing (core scorer {scorer})" if scorer else "extends: nothing"
