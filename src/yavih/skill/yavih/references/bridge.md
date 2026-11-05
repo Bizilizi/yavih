@@ -407,8 +407,8 @@ a `describe()` with the `input` block to fill, `used` reporting, `grid_pos` with
 An unchanged copy — also a fresh `bridge new` copy, which fills only the model name — fails `bridge check`
 (`E_TEMPLATE_UNFILLED`: `weights_ref`, `norm.source`, null norm constants; then `E_CONSTANT_FEATURES`): fill it first.
 
-The shipped example is `yavih/bridges/examples/hf_reference.py` (one public HF audio model on
-ESC-50, `N = 1`, `pos_mode = "none"`); `yavih doctor --selftest` runs it.
+The shipped example is `yavih/bridges/examples/hf_reference.py` (one public HF audio model, written for
+ESC-50, `N = 1`, `pos_mode = "none"`); `yavih doctor --selftest` runs it on a synthetic audio benchmark.
 
 ## 9. `bridge check` output explained
 

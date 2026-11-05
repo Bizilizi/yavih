@@ -171,19 +171,29 @@ def project_defaults(model: str, out: str | os.PathLike | None = None) -> dict[s
 
 
 def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str | os.PathLike | None = None,
-              bridges_dir: str | None = None, force: bool = False) -> dict[str, Any]:
+              bridges_dir: str | None = None, force: bool = False, fetch: bool = True,
+              source: str | os.PathLike | None = None) -> dict[str, Any]:
     """``yavih plan init``: one bridge file per packaged suite benchmark (``yavih.shipped.bridge_new`` into
     ``<matrix dir>/<bridges_dir>/<model>_<benchmark>.py``; an existing file is kept) and the matrix skeleton
     (:func:`write_matrix_skeleton`; ``force`` overwrites the matrix only). ``out`` and ``bridges_dir`` default to the
     project's ``matrices/<model>.yaml`` and ``bridges/`` (:func:`project_defaults`), else ``matrix.yaml`` and ``bridges``
     in the current directory. Returns the skeleton record plus ``bridges: [{benchmark, path, action: created|kept}]``,
     ``project``, ``launcher_configured``, ``plan`` (:func:`plan_file`) and ``next``: one ``yavih bridge check`` command
-    per entry, then the ``plan build --out <plan>`` command, with paths as seen from the current directory."""
+    per entry, then the ``plan build --out <plan>`` command, with paths as seen from the current directory. ``fetch``:
+    the suite's catalog benchmarks that are not here are fetched first (``yavih.suites.fetch_missing``; ``fetched``,
+    ``not_fetched`` in the record); one that cannot be is listed, not planned."""
     from yavih.shipped import ShippedFileError, bridge_new
-    from yavih.suites import SuiteError, load_suite
+    from yavih.suites import SuiteError, fetch_missing, load_suite, without_unfetched
 
     _check_model(model)
     suite = load_suite(suite)
+    fetched: list[dict[str, Any]] = []
+    not_fetched: list[dict[str, Any]] = []
+    if fetch:
+        suite, fetched, not_fetched = fetch_missing(suite, source=source)
+    not_fetched += [{"benchmark": e.benchmark, "error": "not fetched (--no-fetch)"} for _c, e in suite.entries()
+                    if e.status == "packaged" and not e.fetched and e.benchmark not in {x["benchmark"] for x in not_fetched}]
+    suite = without_unfetched(suite)
     defaults = project_defaults(model, out)
     if out is None:
         out = defaults["out"]
@@ -205,6 +215,8 @@ def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str |
             bridges.append({"benchmark": e_bench, "path": str(dest.resolve()), "action": "kept", "filled": []})
     rec = write_matrix_skeleton(suite, model=model, launcher=launcher, out=path, bridges_dir=bridges_dir, force=force)
     rec["bridges"] = bridges
+    rec["fetched"] = fetched
+    rec["not_fetched"] = not_fetched
     rec["project"] = defaults["project"]
     rec["launcher_configured"] = defaults["launcher_configured"]
     commands = []

@@ -105,6 +105,9 @@ class SuiteEntry:
     required: bool = True
     status: str = "packaged"
     multi_reading: bool = False
+    #: the folder is present here (resolvable); ``False``: a catalog benchmark not fetched yet, its readings and join
+    #: checked once it is (``yavih plan init`` and ``yavih suite show --fetch`` fetch it)
+    fetched: bool = True
 
     @property
     def join_reading(self) -> str | None:
@@ -117,7 +120,8 @@ class SuiteEntry:
 
     def to_json(self) -> dict[str, Any]:
         return {"benchmark": self.benchmark, "readings": list(self.readings), "join": self.join, "required": self.required,
-                "status": self.status, "multi_reading": self.multi_reading, "join_reading": self.join_reading}
+                "status": self.status, "multi_reading": self.multi_reading, "join_reading": self.join_reading,
+                "fetched": self.fetched}
 
 
 @dataclass(frozen=True)
@@ -270,16 +274,35 @@ def _bool(raw: Any, default: bool, where: str) -> bool:
     return raw
 
 
-def _packaged_facts(bench: str, where: str) -> tuple[str, set[str], bool, bool]:
-    """``(canonical name, template readings, multi-reading template, eval.py defines join)`` of a resolvable folder."""
+def _catalog_facts(bench: str, where: str) -> tuple[str, None, None, None]:
+    """A benchmark that is not here: a catalog benchmark not fetched yet (an installed yavih ships no folder). Its
+    readings and join are checked once it is fetched; the name must be a catalog name when an index is cached."""
+    from yavih.catalog import cached_index
+
+    if not _BENCH_RE.match(bench):
+        raise SuiteError(f"{where}.benchmark {bench!r} must match [a-z0-9_]+")
+    index = cached_index()
+    if index is not None:
+        benches = index.get("benchmarks") or {}
+        if bench not in benches:
+            alias = next((n for n, e in benches.items() if bench in (e.get("aliases") or [])), None)
+            if alias is None:
+                raise SuiteError(f"{where}: benchmark {bench!r} is neither here nor in the catalog (`yavih bench list`); "
+                                 "mark it `status: pending` while it has no folder")
+            bench = alias
+    return bench, None, None, None
+
+
+def _packaged_facts(bench: str, where: str) -> tuple[str, set[str] | None, bool | None, bool | None]:
+    """``(canonical name, template readings, multi-reading template, eval.py defines join)`` of a resolvable folder;
+    ``(name, None, None, None)`` for a catalog benchmark not fetched yet."""
     from yavih.benchmark import resolve_folder
     from yavih.lint import template_readings
     from yavih.shipped import _bench_name
 
     folder = resolve_folder(bench)
     if folder is None:
-        raise SuiteError(f"{where}: benchmark {bench!r} does not resolve to a folder (`yavih bench list`); "
-                         "mark it `status: pending` while it has none")
+        return _catalog_facts(bench, where)
     template = Path(folder) / "bridge_template.py"
     if not template.is_file():
         raise SuiteError(f"{where}: benchmark {bench!r} ships no bridge_template.py ({folder})")
@@ -346,8 +369,12 @@ def validate_suite(raw: Any, *, where: str = "suite") -> Suite:
             if status == "pending":
                 if not _BENCH_RE.match(bench):
                     raise SuiteError(f"{ewhere}.benchmark {bench!r} must match [a-z0-9_]+")
-            else:
-                bench, have, multi, has_join = _packaged_facts(bench, ewhere)
+            fetched = True
+            if status != "pending":
+                bench, have, multi_t, has_join = _packaged_facts(bench, ewhere)
+                fetched = have is not None
+                multi = multi_t if multi_t is not None else multi
+            if status != "pending" and fetched:  # a catalog entry not fetched yet is checked once it is
                 if not have:
                     raise SuiteError(f"{ewhere}: {bench}'s bridge_template.py declares no reading")
                 extra = [r for r in readings if r not in have]
@@ -364,9 +391,39 @@ def validate_suite(raw: Any, *, where: str = "suite") -> Suite:
                     raise SuiteError(f"{ewhere}: ({bench}, {r}) is listed twice")
                 seen.add((bench, r))
             entries.append(SuiteEntry(benchmark=bench, readings=tuple(readings), join=join, required=required, status=status,
-                                      multi_reading=multi))
+                                      multi_reading=multi, fetched=fetched))
         groups.append(SuiteGroup(capability=str(cap), entries=tuple(entries)))
     return Suite(name=name, description=desc.strip(), groups=tuple(groups), raw=dict(top))
+
+
+def fetch_missing(suite: Suite, *, source: str | os.PathLike | None = None) -> tuple[Suite, list[dict[str, Any]], list[dict[str, Any]]]:
+    """Fetch the suite's catalog benchmarks that are not here (``yavih.catalog.fetch``) and reload it, so their
+    readings and joins are checked. Returns ``(suite, fetched records, [{benchmark, error}] not fetched)``; an entry
+    that could not be fetched stays ``fetched: False`` (``yavih plan init`` lists it as not planned)."""
+    from yavih.benchmark import BenchmarkError
+    from yavih.catalog import CatalogError, fetch
+
+    missing = list(dict.fromkeys(e.benchmark for _c, e in suite.entries() if e.status == "packaged" and not e.fetched))
+    done: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    for b in missing:
+        try:
+            done.append(fetch(b, source=source))
+        except (CatalogError, BenchmarkError, OSError) as err:
+            failed.append({"benchmark": b, "error": f"{getattr(err, 'code', type(err).__name__)}: {err}"})
+    if done:
+        ref: Any = suite.name if suite.origin in ("shipped", "project") else suite.path
+        suite = load_suite(ref) if ref is not None else suite
+    return suite, done, failed
+
+
+def without_unfetched(suite: Suite) -> Suite:
+    """The suite with every catalog entry that is not here marked ``pending`` (listed, never planned)."""
+    import dataclasses
+
+    groups = tuple(dataclasses.replace(g, entries=tuple(e if e.fetched or e.status != "packaged" else dataclasses.replace(e, status="pending")
+                                                        for e in g.entries)) for g in suite.groups)
+    return dataclasses.replace(suite, groups=groups)
 
 
 # ----------------------------------------------------------------------------- views

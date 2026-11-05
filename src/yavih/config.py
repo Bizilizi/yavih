@@ -146,7 +146,10 @@ _PLACEHOLDER = re.compile(r"\$\{(data\.root|datasets\.([a-z][a-z0-9_]*))\}")
 #: Allowed scalar keys per table (``[data]`` and ``[datasets]`` are free-form, checked separately).
 _ROOT_TABLES = ("home", "runs", "results", "scratch")
 _RESOURCE_KEYS: dict[str, type] = {"ram_budget_gb": float, "cpus": int, "decode_workers": int}
-_TOP_TABLES = (*_ROOT_TABLES, "data", "datasets", "resources", "launchers", "project", "site")
+_TOP_TABLES = (*_ROOT_TABLES, "data", "datasets", "resources", "launchers", "project", "site", "catalog")
+#: ``[catalog]``: where ``yavih bench fetch`` reads the index (``url``) and the repository archive at a commit
+#: (``archive``, with ``{repo}`` and ``{commit}`` placeholders); ``yavih.catalog`` holds the defaults.
+_CATALOG_KEYS: tuple[str, ...] = ("url", "archive")
 _ENV_SCALARS: dict[str, tuple[str, ...]] = {
     "YAVIH_HOME": ("home", "root"),
     "YAVIH_RUNS": ("runs", "root"),
@@ -1075,6 +1078,17 @@ def _schema_entries(
                     out.append((("resources", k), Value(_coerce_resource(k, v), src("resources", k))))
                 except ConfigError as e:
                     col.errors.append(f"{label}: {e}")
+        elif table == "catalog":
+            for k, v in body.items():
+                if k not in _CATALOG_KEYS:
+                    close = difflib.get_close_matches(k, list(_CATALOG_KEYS), n=1, cutoff=0.6)
+                    col.strict("W_CONFIG_UNKNOWN", f"{label}: unknown key [catalog] {k}" + (f", did you mean {close[0]!r}?" if close else "")
+                               + f"; known: {', '.join(_CATALOG_KEYS)}")
+                    continue
+                if not isinstance(v, str) or not v.strip():
+                    col.strict("W_CONFIG_TYPE", f"{label}: [catalog] {k} must be a non-empty string (a URL)")
+                    continue
+                out.append((("catalog", k), Value(v.strip(), src("catalog", k))))
         elif table == "datasets":
             for k, v in body.items():
                 if not _NAME_RE.match(str(k)):

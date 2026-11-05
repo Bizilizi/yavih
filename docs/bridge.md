@@ -613,8 +613,8 @@ Written atomically to `--out` (and returned as the `--json` `data`):
   `bridges/<name>_<b>.py` with the model name filled in; an unchanged copy fails `bridge check`
   (`E_TEMPLATE_UNFILLED`, then `E_CONSTANT_FEATURES`).
 - `yavih.bridges.examples.hf_reference` (inside the wheel; `[media]` and torch at call time) is one public HF audio
-  model on ESC-50 (`N = 1`, `pos_mode = "none"`), decoding with `yavih.media.decode`; `yavih doctor --selftest`
-  runs it.
+  model written for ESC-50 (`N = 1`, `pos_mode = "none"`), decoding with `yavih.media.decode`; `yavih doctor
+  --selftest` runs it on a synthetic audio benchmark that `yavih.testing` writes (the wheel ships no folder).
 - `yavih.testing.random_bridge` derives features from a seed and the sha256 of the bytes of every stream it
   reads: a pure function of the media that passes every invariance check, declares `custom` rules and reports
   empty `used`. `yavih.testing.oracle_bridge` encodes the label on purpose (a test fixture that breaks the

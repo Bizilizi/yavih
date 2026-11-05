@@ -30,7 +30,6 @@ import json
 import math
 import os
 import re
-import shutil
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
@@ -2804,6 +2803,7 @@ class Benchmark:
         self.eval_sha256: str | None = hashing.source_sha256(eval_py.read_bytes()) if eval_py is not None else None
         #: ``{"eval": sha256|None, "reader": sha256|None}``: the folder's source provenance (never identity).
         self.folder_source: dict[str, str | None] = {"eval": self.eval_sha256, "reader": self.reader_sha256}
+        self._folder_origin: dict[str, str | None] | None = None
         raw = spec.raw
         self.codecs: dict[str, Any] = self._codec_registry()
         schema = spec.output_contract.schema
@@ -2843,15 +2843,18 @@ class Benchmark:
     # -- construction ------------------------------------------------------------------
     @classmethod
     def load(cls, ref: str, *, data: dict | None = None, fetch: bool = False) -> Benchmark:
-        """Resolution order (``resolve_folder``): existing directory → ``$YAVIH_HOME/benchmarks/<ref>`` → packaged
-        ``yavih/benchmarks/<ref>`` → ``$YAVIH_BENCH_PATH`` → ``yavih.benchmarks`` entry-point packs → alias."""
+        """Resolution order (``resolve_folder``): existing directory → ``$YAVIH_HOME/benchmarks/<ref>`` → the
+        repository's ``benchmarks/<ref>`` (a source checkout) → the project's benchmarks directory and
+        ``$YAVIH_BENCH_PATH`` → ``yavih.benchmarks`` entry-point packs → alias. ``fetch``: a name that resolves
+        nowhere is fetched from the catalog first (``yavih bench fetch``)."""
         folder = resolve_folder(ref)
+        if folder is None and fetch:
+            folder = Path(bench_fetch(ref)["folder"])
         if folder is None:
             known = sorted(_candidate_folders())
-            raise UnknownBenchmark(f"no benchmark {ref!r}: not a directory, not under {home_benchmarks_dir()}, not packaged, not on "
-                                   f"$YAVIH_BENCH_PATH or in an installed benchmark pack, not an alias; known: {known}")
-        if fetch:
-            folder = Path(bench_fetch(ref)["folder"])
+            raise UnknownBenchmark(f"no benchmark {ref!r}: not a directory, not under {home_benchmarks_dir()} or the project's "
+                                   f"benchmarks directory, not a repository folder, not on $YAVIH_BENCH_PATH or in an installed "
+                                   f"benchmark pack, not an alias; known here: {known}. Fetch it from the catalog: yavih bench fetch {ref}")
         return cls.from_dir(folder, data=data)
 
     @classmethod
@@ -2864,7 +2867,6 @@ class Benchmark:
         if spec.name != folder.resolve().name:
             raise SchemaError(f"name: {spec.name!r} != folder name {folder.resolve().name!r}")
         check_core(spec, folder)
-        _check_home_copy(folder.resolve())
         return cls(spec, folder.resolve(), data=data)
 
     # -- manifest / classes ------------------------------------------------------------
@@ -3090,6 +3092,21 @@ class Benchmark:
         except _config.ConfigError:
             return None
 
+    @property
+    def folder_origin(self) -> dict[str, str | None]:
+        """``{repo, commit, tree}``: the lock's repository and commit for a fetched folder (``None`` otherwise) and the
+        git tree id of the folder's content (``yavih.catalog.origin``); computed once, on first use."""
+        if self._folder_origin is None:
+            from yavih.catalog import origin
+
+            self._folder_origin = origin(self.folder)
+        return dict(self._folder_origin)
+
+    def folder_provenance(self) -> dict[str, str | None]:
+        """What a result records as ``benchmark.folder_source``: the code digests (``folder_source``) and where the
+        folder came from (``folder_origin``)."""
+        return {**self.folder_source, **self.folder_origin}
+
     def __repr__(self) -> str:
         return f"Benchmark({getattr(self, 'name', '?')!r})"
 
@@ -3105,8 +3122,8 @@ def _home_benchmarks() -> list[str]:
 
 
 def packaged_benchmarks() -> list[str]:
-    """Names of the benchmark folders shipped inside the wheel (``yavih/benchmarks/<name>/``),
-    found through ``importlib.resources``."""
+    """Names of the repository's benchmark folders (``<checkout>/benchmarks/<name>/``) when yavih runs from a source
+    checkout; ``[]`` for an installed wheel, which ships the core only (``yavih bench fetch``)."""
     from yavih.benchmarks import packaged_names
 
     return packaged_names()
@@ -3270,119 +3287,15 @@ def bench_info(ref: str, *, readme_only: bool = False, setup: bool = False, data
     }
 
 
-_FOLDER_FILES = ("benchmark.yaml", "README.md", "setup.md", "manifest.csv.gz", "classes.csv", "reader.py", "eval.py", "bridge_template.py", "make_manifest.py")
-#: ``$YAVIH_HOME/benchmarks/<name>/.yavih_fetch.json``: the yavih version, protocol hash and per-file sha256 of the
-#: source a copy was synced from, so a copy left behind by an older yavih is detected instead of silently winning.
-FETCH_STAMP = ".yavih_fetch.json"
-_HOME_CHECKED: dict[str, tuple[str, str] | None] = {}
+def bench_fetch(ref: str, *, refresh: bool = False, source: str | os.PathLike | None = None) -> dict[str, Any]:
+    """``yavih bench fetch``: :func:`yavih.catalog.fetch` (the folder from the catalog at the newest revision this
+    core can load, its git tree id verified, recorded in the lock next to the benchmarks directory), then the folder
+    loaded (``manifest.sha256`` / ``classes_sha256`` re-checked). yavih never downloads media."""
+    from yavih import catalog
 
-
-def _folder_files(folder: Path) -> list[str]:
-    names = [f for f in _FOLDER_FILES if (folder / f).is_file()]
-    prep = folder / "prepare"
-    if prep.is_dir():
-        names += sorted(p.relative_to(folder).as_posix() for p in prep.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
-    return names
-
-
-def _home_copy_problem(folder: Path) -> tuple[str, str] | None:
-    """``(code, message)`` when the ``$YAVIH_HOME`` copy ``folder`` no longer matches the packaged folder of the
-    same name (``E_HOME_BENCH_STALE``) or carries no fetch stamp (``W_HOME_BENCH_UNSTAMPED``); ``None`` when it
-    matches or has no packaged counterpart (a user's own folder)."""
-    from yavih.benchmarks import packaged_folder
-    from yavih.versions import __version__
-
-    pkg = packaged_folder(folder.name)
-    if pkg is None or pkg.resolve() == folder.resolve():
-        return None
-    fix = f"run `yavih bench fetch {folder.name} --refresh`, or delete {folder}"
-    stamp = _read_status_file(folder / FETCH_STAMP)
-    if stamp is None:
-        return ("W_HOME_BENCH_UNSTAMPED", f"{folder} overrides the packaged {folder.name} folder but carries no {FETCH_STAMP} (copied by an "
-                f"older yavih); it cannot be checked against yavih {__version__}'s folder; {fix}")
-    synced = dict(stamp.get("files") or {})
-    changed = sorted(n for n in set(synced) | set(_folder_files(pkg)) if not (pkg / n).is_file() or synced.get(n) != _file_sha256(pkg / n))
-    if changed:
-        return ("E_HOME_BENCH_STALE", f"{folder} was copied from yavih {stamp.get('yavih_version')} (protocol_hash "
-                f"{str(stamp.get('protocol_hash'))[:12]}) and overrides the packaged folder, which has changed since in "
-                f"{changed[:6]}{' …' if len(changed) > 6 else ''}; the stale copy would be used silently. {fix} "
-                "(YAVIH_LENIENT=1 uses it anyway)")
-    return None
-
-
-def _check_home_copy(folder: Path) -> None:
-    """Refuse (strict) or warn (lenient) when a ``$YAVIH_HOME/benchmarks`` copy is stale."""
-    try:
-        if folder.parent.resolve() != home_benchmarks_dir().resolve():
-            return
-    except OSError:
-        return
-    key = str(folder)
-    if key not in _HOME_CHECKED:
-        _HOME_CHECKED[key] = _home_copy_problem(folder)
-    problem = _HOME_CHECKED[key]
-    if problem is None:
-        return
-    code, message = problem
-    if code.startswith("E_"):
-        try:
-            lenient = _config.load().lenient
-        except _config.ConfigError:
-            lenient = os.environ.get("YAVIH_LENIENT", "") not in ("", "0")
-        if not lenient:
-            raise _config.ConfigError(message)
-        code = "W_HOME_BENCH_STALE"
-    _config.warn_once(code, message, where=str(folder))
-
-
-def bench_fetch(ref: str, *, refresh: bool = False) -> dict[str, Any]:
-    """``yavih bench fetch``: makes the frozen manifest available under ``$YAVIH_HOME``
-    and verifies its sha256. yavih never downloads data: the manifest ships in the wheel, so fetch
-    syncs the packaged (or referenced) folder's files into ``$YAVIH_HOME/benchmarks/<name>``: absent
-    files are copied, files still equal to what the last fetch copied are refreshed when the source
-    changed, locally edited files are kept (``kept``) unless ``refresh``. It writes :data:`FETCH_STAMP`
-    and re-checks ``manifest.sha256``/``classes_sha256`` on the copy."""
-    from yavih.benchmarks import packaged_folder
-    from yavih.versions import __version__
-
-    folder = resolve_folder(ref)
-    if folder is None:
-        raise UnknownBenchmark(f"no benchmark {ref!r} to fetch")
-    spec = load_yaml(folder / "benchmark.yaml")
-    dest = home_benchmarks_dir() / spec.name
-    pkg = packaged_folder(spec.name)
-    if folder.resolve() == dest.resolve() and pkg is not None:
-        folder = pkg  # a name resolving to the home copy syncs from the packaged folder
-    copied: list[str] = []
-    kept: list[str] = []
-    if folder.resolve() != dest.resolve():
-        dest.mkdir(parents=True, exist_ok=True)
-        stamp = _read_status_file(dest / FETCH_STAMP) or {}
-        synced = dict(stamp.get("files") or {})
-        files: dict[str, str] = {}
-        for rel in _folder_files(folder):
-            src, dst = folder / rel, dest / rel
-            sha = _file_sha256(src)
-            files[rel] = sha
-            if dst.is_file():
-                have = _file_sha256(dst)
-                if have == sha:
-                    continue
-                if not refresh and have != synced.get(rel):
-                    kept.append(rel)  # edited after the last fetch (or unstamped): never overwritten silently
-                    continue
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            copied.append(rel)
-        bench = Benchmark(load_yaml(dest / "benchmark.yaml"), dest.resolve())  # raises ManifestError on a sha mismatch
-        payload = {"yavih_version": __version__, "protocol_hash": bench.protocol_hash, "source_folder": str(folder),
-                   "fetched": _utc_now(), "files": files, "kept": kept}
-        _write_json_atomic(dest / FETCH_STAMP, payload)
-        _HOME_CHECKED.pop(str(dest.resolve()), None)
-        _HOME_CHECKED.pop(str(dest), None)
-    bench = Benchmark.from_dir(dest)  # raises ManifestError on a sha mismatch
-    return {"name": bench.name, "folder": str(dest), "source_folder": str(folder), "copied": copied, "kept": kept,
-            "manifest_sha_ok": True, "manifest_hash": bench.manifest_hash}
+    out = catalog.fetch(ref, source=source, refresh=refresh)
+    bench = Benchmark.from_dir(out["folder"])
+    return {**out, "manifest_sha_ok": True, "manifest_hash": bench.manifest_hash}
 
 
 def _sample_picks(bench: Benchmark, n: int, status: DataStatus, present_rows: Mapping[str, Sequence[int]] | None = None) -> list[tuple[str, int]]:

@@ -73,8 +73,8 @@ yavih skill show --ref bridge|data|readouts|slurm|cli
 The bridge decodes with the model's own stack, or with the optional torch-free `yavih.media.decode`
 helpers (`pip install av soundfile pillow`). The probe env needs torch and the benchmark's authors'
 packages (`external`, installed exactly as setup.md "## Dependencies" says; never a yavih extra).
-Data roots and config: references/data.md. `yavih doctor --selftest` runs the shipped ESC-50
-reference bridge.
+Data roots and config: references/data.md. `yavih doctor --selftest` runs the shipped reference
+bridge on a synthetic audio benchmark (an environment check).
 
 ## 1–9. The journey
 

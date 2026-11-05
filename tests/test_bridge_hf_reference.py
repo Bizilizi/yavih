@@ -41,7 +41,7 @@ def audio_bench(**kw) -> FakeBenchmark:
 
 
 def test_module_is_cheap_and_declares_the_selftest_constants():
-    assert hf.SELFTEST_BENCH == "esc50" and hf.SELFTEST_N == 32
+    assert hf.SELFTEST_BENCH == "selftest_audio" and hf.SELFTEST_N == 32
     assert hf.REFERENCE_ACC is None or 0.0 < hf.REFERENCE_ACC <= 1.0
     assert 0 < hf.REFERENCE_TOL < 1
     assert hf.BRIDGE is hf.HFReferenceBridge
@@ -163,3 +163,16 @@ def test_import_error_message_names_the_extras(monkeypatch):
     with pytest.raises(ImportError) as ei:
         hf.HFReferenceBridge._load_model("x/y")
     assert "transformers" in str(ei.value) and "yavih[media,probe]" in str(ei.value)
+
+
+def test_selftest_runs_on_a_synthetic_audio_benchmark_without_any_folder(monkeypatch, yavih_home):
+    """``doctor --selftest`` writes its own synthetic audio benchmark (the wheel ships no folder): with the HF model
+    replaced by a deterministic stand-in bridge, the decode / encode / shape path runs end to end."""
+    pytest.importorskip("soundfile")
+    from yavih import cli
+    from yavih.testing import random_bridge
+
+    monkeypatch.setattr(hf, "HFReferenceBridge", random_bridge(None, N=1, D=8, batch_size=4))
+    out = cli._selftest()
+    assert out["bench"] == "selftest_audio" and "error" not in out, out
+    assert out["ok"] and (out["N"], out["D"]) == (1, 8)

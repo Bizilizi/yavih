@@ -102,7 +102,6 @@ def test_unknown_key_is_E_SUITE(tmp_path):
     ({"groups": [{"capability": "smell", "entries": [{"benchmark": "esc50", "readings": ["a"]}]}]}, "capability"),
     ({"groups": [{"capability": "audio", "entries": [{"benchmark": "esc50", "readings": ["v"]}]}]}, "not readings"),
     ({"groups": [{"capability": "audio", "entries": [{"benchmark": "esc50", "readings": ["a"], "join": True}]}]}, "join"),
-    ({"groups": [{"capability": "audio", "entries": [{"benchmark": "nope_bench", "readings": ["a"]}]}]}, "does not resolve"),
     ({"groups": [{"capability": "audio", "entries": [{"benchmark": "esc50", "readings": ["a"]},
                                                      {"benchmark": "esc50", "readings": ["a"]}]}]}, "twice"),
     ({"groups": [{"capability": "audio", "entries": [{"benchmark": "esc50", "readings": ["a"], "status": "maybe"}]}]}, "status"),
@@ -110,6 +109,15 @@ def test_unknown_key_is_E_SUITE(tmp_path):
 def test_validation_refusals(over, needle):
     with pytest.raises(SuiteError, match=needle):
         validate_suite(_raw(**over))
+
+
+def test_a_benchmark_that_is_not_here_is_deferred_to_the_catalog():
+    """An entry whose folder is not here is a catalog benchmark not fetched yet (a wheel ships no folder): it loads
+    with ``fetched: False`` and is checked once fetched; with a cached index an unknown name is refused
+    (tests/test_catalog.py)."""
+    s = validate_suite(_raw(groups=[{"capability": "audio", "entries": [{"benchmark": "nope_bench", "readings": ["a"]}]}]))
+    (e,) = [e for _c, e in s.entries()]
+    assert e.benchmark == "nope_bench" and not e.fetched and e.status == "packaged"
 
 
 def test_pending_entry_allowed(tmp_path):

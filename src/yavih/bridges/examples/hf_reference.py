@@ -1,5 +1,6 @@
-"""The one shipped reference bridge: a public HF audio model on ESC-50, run by ``yavih doctor --selftest`` on 32
-clips.
+"""The one shipped reference bridge: a public HF audio model, run by ``yavih doctor --selftest`` on 32 clips of a
+synthetic audio benchmark (``yavih.testing``; the wheel ships no benchmark folder). It also reads ESC-50 (a fetched
+folder) like any bridge.
 
 torch / transformers / scipy are imported at call time (``__init__``), never at module scope, so
 ``import yavih.bridges.examples.hf_reference`` is cheap and the ``[media]`` + torch requirement
@@ -42,7 +43,8 @@ __all__ = [
     "model_name",
 ]
 
-SELFTEST_BENCH = "esc50"
+#: The synthetic audio benchmark ``doctor --selftest`` writes (``yavih.testing.make_synthetic_benchmark``).
+SELFTEST_BENCH = "selftest_audio"
 SELFTEST_N = 32
 #: Public HF hub id used as the reference.
 REFERENCE_MODEL = "facebook/wav2vec2-base"

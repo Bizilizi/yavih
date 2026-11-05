@@ -786,31 +786,41 @@ def _doctor_text(d: dict[str, Any]) -> str:
 
 
 def _selftest() -> dict[str, Any]:
-    """``doctor --selftest``: run ``yavih.bridges.examples.hf_reference`` on ``SELFTEST_N`` ESC-50 clips: decodes, encodes, checks finiteness / shape and the pinned number when one exists."""
+    """``doctor --selftest``: run ``yavih.bridges.examples.hf_reference`` on ``SELFTEST_N`` clips of a synthetic audio
+    benchmark written by ``yavih.testing`` into a temporary directory (the wheel ships no benchmark folder, and the
+    check is about this environment, not about a dataset): decodes, encodes, checks finiteness and shape."""
+    import tempfile
+
     import numpy as np
 
+    from yavih.benchmark import Benchmark
     from yavih.bridge import parse_args, validate_describe
     from yavih.bridges.examples import hf_reference as ref
 
     out: dict[str, Any] = {"bench": ref.SELFTEST_BENCH, "n": ref.SELFTEST_N, "ok": False, "reference_acc": ref.REFERENCE_ACC, "tolerance": ref.REFERENCE_TOL}
     try:
-        bench = _load_bench(ref.SELFTEST_BENCH)
-        view = bench.view()  # a bridge receives the BenchmarkView, never the Benchmark
-        cls = ref.HFReferenceBridge
-        bridge = cls(view, parse_args(cls.ARGS, {}))
-        describe = bridge.describe()
-        validate_describe(describe, bridge, view)
-        split = _bench_roles(bench)["eval"][0] if _bench_roles(bench).get("eval") else _bench_roles(bench)["folds"][0]
-        samples = list(bench.reader(split, rows=range(0, ref.SELFTEST_N), batch_size=cls.batch_size))
-        feats = []
-        t0 = time.time()
-        for i in range(0, len(samples), cls.batch_size):
-            f, _, _ = bridge.encode(samples[i : i + cls.batch_size])
-            feats.append(_to_numpy(f))
-        arr = np.concatenate(feats)
+        from yavih.testing import make_synthetic_benchmark
+
+        with tempfile.TemporaryDirectory(prefix="yavih-selftest-") as tmp:
+            folder = make_synthetic_benchmark(tmp, "clf", n_train=2, n_eval=ref.SELFTEST_N, streams={"audio": "audio"},
+                                              name=ref.SELFTEST_BENCH)
+            bench = Benchmark.from_dir(folder)
+            view = bench.view()  # a bridge receives the BenchmarkView, never the Benchmark
+            cls = ref.HFReferenceBridge
+            bridge = cls(view, parse_args(cls.ARGS, {}))
+            describe = bridge.describe()
+            validate_describe(describe, bridge, view)
+            split = _bench_roles(bench)["eval"][0]
+            samples = list(bench.reader(split, rows=range(0, ref.SELFTEST_N), batch_size=cls.batch_size))
+            feats = []
+            t0 = time.time()
+            for i in range(0, len(samples), cls.batch_size):
+                f, _, _ = bridge.encode(samples[i : i + cls.batch_size])
+                feats.append(_to_numpy(f))
+            arr = np.concatenate(feats)
         out.update(N=int(arr.shape[1]), D=int(arr.shape[2]), clips_per_s=round(len(samples) / max(time.time() - t0, 1e-9), 3), finite=bool(np.isfinite(arr).all()))
         out["ok"] = bool(out["finite"]) and arr.shape[0] == len(samples)
-        out["note"] = "pinned accuracy check needs a probe run; REFERENCE_ACC is compared by the e2e test" if ref.REFERENCE_ACC is not None else "no pinned REFERENCE_ACC yet"
+        out["note"] = "synthetic clips: an environment check, no accuracy verdict"
     except Exception as e:  # noqa: BLE001
         out["error"] = f"{e.__class__.__name__}: {e}"
     return out
@@ -970,7 +980,51 @@ def _bench_row(bench: Any) -> dict[str, Any]:
         "source_kind": (raw.get("source") or {}).get("kind"),
         "obtain": dict(raw["obtain"]) if isinstance(raw.get("obtain"), dict) else None,
         "status": _status_word(bench),
+        "origin": _origin_of(bench.folder),
     }
+
+
+def _origin_of(folder: Path) -> dict[str, Any]:
+    """Where a listed folder comes from: ``fetched`` (in a lock: its commit), ``repository`` (a source checkout's
+    ``benchmarks/``) or ``local`` (a project, ``$YAVIH_BENCH_PATH`` or a pack)."""
+    from yavih.benchmarks import packaged_folder
+    from yavih.catalog import lock_entry
+
+    e = lock_entry(folder)
+    if e is not None:
+        return {"kind": "fetched", "commit": e.get("commit"), "protocol_version": e.get("protocol_version")}
+    pkg = packaged_folder(Path(folder).name)
+    if pkg is not None and pkg.resolve() == Path(folder).resolve():
+        return {"kind": "repository", "commit": None}
+    return {"kind": "local", "commit": None}
+
+
+def _catalog_rows(index: Any, have: set[str], wanted: Sequence[str] | None = None) -> list[dict[str, Any]]:
+    """``bench list`` rows of catalog benchmarks that are not here (``not fetched``), from the index metadata."""
+    rows = []
+    for name, e in sorted((index or {}).get("benchmarks", {}).items()):
+        if name in have or (wanted is not None and name not in wanted):
+            continue
+        rows.append({"name": name, "aliases": list(e.get("aliases") or []), "scorer": e.get("scorer"),
+                     "capability": list(e.get("capability") or []), "clips": dict(e.get("clips") or {}), "media_gb": e.get("media_gb"),
+                     "source_kind": None, "obtain": {"tier": e.get("obtain")} if e.get("obtain") else None, "status": "not fetched",
+                     "origin": {"kind": "catalog", "commit": (e.get("revisions") or [{}])[0].get("commit")}})
+    return rows
+
+
+def _newer_in_catalog(index: Any, row: dict[str, Any]) -> str | None:
+    """The commit of a newer compatible revision for a fetched folder, else ``None``."""
+    from yavih.catalog import CatalogError, select_revision
+
+    origin = row.get("origin") or {}
+    e = (index or {}).get("benchmarks", {}).get(row["name"])
+    if origin.get("kind") != "fetched" or not e:
+        return None
+    try:
+        rev, _ = select_revision(e)
+    except CatalogError:
+        return None
+    return str(rev["commit"]) if rev.get("commit") != origin.get("commit") else None
 
 
 def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any]], list[str]]:
@@ -985,7 +1039,7 @@ def _suite_refs(suite_ref: str) -> tuple[Any, list[str], dict[str, dict[str, Any
         if e.status != "packaged":
             pending.append(e.benchmark)
             continue
-        rec = facts.setdefault(e.benchmark, {"suite_capability": cap, "readings": []})
+        rec = facts.setdefault(e.benchmark, {"suite_capability": cap, "readings": [], "fetched": e.fetched})
         rec["readings"] += [r for r in e.readings if r not in rec["readings"]]
         if e.join:
             rec["readings"].append(str(e.join_reading))
@@ -1008,7 +1062,18 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
 
         folders = {ref: f for ref in refs if (f := resolve_folder(ref)) is not None}
         return Envelope(data={"names": list(folders)}, text=render("readme", folders) + "\n")
+    from yavih.catalog import CatalogError, cached_index, load_index
+
+    index = None
+    if getattr(ns, "catalog", False):
+        try:
+            index = load_index()
+        except CatalogError as e:
+            warnings.append(_finding("W_CATALOG", str(e)))
+    index = index or cached_index()  # no network without --catalog: the index the last fetch downloaded
     for ref in refs:
+        if suite is not None and not facts[ref].get("fetched", True):
+            continue  # listed below from the catalog
         try:
             row = _bench_row(_load_bench(ref))
         except Exception as e:  # noqa: BLE001 - one broken folder must not hide the others
@@ -1016,16 +1081,36 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
             continue
         if suite is not None:
             row.update(facts[ref])
+        if (newer := _newer_in_catalog(index, row)) is not None:
+            row["origin"]["newer"] = newer
         rows.append(row)
+    have = {r["name"] for r in rows}
+    if suite is None:
+        rows += _catalog_rows(index, have)
+    else:
+        missing = [ref for ref in refs if not facts[ref].get("fetched", True)]
+        for row in _catalog_rows(index, have, missing):
+            row.update(facts[row["name"]])
+            rows.append(row)
+        rows += [{**{"name": ref, "aliases": [], "scorer": None, "capability": [], "clips": {}, "media_gb": None, "source_kind": None,
+                     "obtain": None, "status": "not fetched", "origin": {"kind": "catalog", "commit": None}}, **facts[ref]}
+                 for ref in missing if ref not in {r["name"] for r in rows}]
     head = f"{'group':<14}{'readings':<16}" if suite is not None else ""
-    lines = [f"{head}{'name':<16}{'scorer':<8}{'capability':<23}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}status"]
+    lines = [f"{head}{'name':<16}{'scorer':<8}{'capability':<23}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}{'status':<13}origin"]
     for r in rows:
         clips = ", ".join(f"{k}={v}" for k, v in r["clips"].items())
         tier = (r.get("obtain") or {}).get("tier") or "-"
         caps = ",".join(r.get("capability") or []) or "-"
         pre = f"{r['suite_capability']:<14}{','.join(r['readings']):<16}" if suite is not None else ""
+        o = r.get("origin") or {}
+        org = o.get("kind", "-") + (f"@{str(o['commit'])[:12]}" if o.get("kind") == "fetched" and o.get("commit") else "")
+        if o.get("newer"):
+            org += f" (newer: {str(o['newer'])[:12]}, `yavih bench update`)"
         lines.append(f"{pre}{r['name']:<16}{str(r['scorer']):<8}{caps:<23}{clips:<28}{str(r['media_gb']):>9}  "
-                     f"{str(r['source_kind']):<15}{tier:<17}{r['status']}")
+                     f"{str(r['source_kind']):<15}{tier:<17}{r['status']:<13}{org}")
+    if index is None and not any((r.get("origin") or {}).get("kind") == "repository" for r in rows):
+        lines.append("catalog: no index cached here; `yavih bench list --catalog` reads it (network), "
+                     "`yavih bench fetch <name>` brings a folder")
     if suite is not None:
         lines.insert(0, f"suite {suite.name} ({suite.origin}): {suite.description}")
         if pending:
@@ -1160,14 +1245,41 @@ def cmd_bench_prepare(ns: argparse.Namespace) -> Envelope:
 
 
 def cmd_bench_fetch(ns: argparse.Namespace) -> Envelope:
-    """Build/download the manifest into ``$YAVIH_HOME`` and verify its sha: ``Benchmark.load(ref, fetch=True)``."""
-    if getattr(ns, "refresh", False):
-        from yavih.benchmark import bench_fetch
+    """``yavih bench fetch <name>[@<commit>] [--from DIR|ARCHIVE] [--refresh]``: the folder from the catalog at the
+    newest revision this core can load (``yavih.catalog.fetch``), verified, recorded in the lock."""
+    from yavih.benchmark import bench_fetch
 
-        bench_fetch(ns.name, refresh=True)
-    bench = _load_bench(ns.name, fetch=True)
-    data = {"name": bench.name, "folder": str(bench.folder), "manifest_hash": bench.manifest_hash, "manifest_sha_ok": True}
-    return Envelope(data=data, paths={"folder": str(bench.folder)}, text=f"{bench.name}: manifest verified at {bench.folder}\n")
+    rec = bench_fetch(ns.name, refresh=bool(ns.refresh), source=ns.source)
+    st = rec.get("core_status") or {}
+    note = ""
+    if st.get("ok") is False and st.get("dev"):
+        note = f" (development build {st.get('version')}: core {rec.get('core')} not enforced)"
+    verb = {"fetched": "fetched", "refreshed": "refreshed", "unchanged": "already at"}[rec["status"]]
+    text = (f"{rec['name']}: {verb} {str(rec['commit'])[:12]} (protocol_version {rec.get('protocol_version')}, core "
+            f"{rec.get('core')}){note} -> {rec['folder']}\n  lock {rec['lock']}; next: yavih bench show {rec['name']} setup\n")
+    return Envelope(data=rec, paths={"folder": rec["folder"], "lock": rec["lock"]}, text=text)
+
+
+def cmd_bench_update(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench update [<name>...] [--yes] [--from DIR|ARCHIVE]``: per fetched folder, what the newest
+    compatible revision changes; refetches only with ``--yes`` (an edited folder is reported, never overwritten)."""
+    from yavih.catalog import update
+
+    recs = update(list(ns.names or []), yes=bool(ns.yes), source=ns.source)
+    lines = []
+    for r in recs:
+        if r["status"] in ("up_to_date", "not_fetched"):
+            lines.append(f"{r['name']}: {r['status'].replace('_', ' ')}")
+            continue
+        ch = "; ".join(f"{k} {str(v['locked'])[:12]} -> {str(v['available'])[:12]}" for k, v in r["changes"].items())
+        lines.append(f"{r['name']}: {r['status'].replace('_', ' ')}: {ch}" + (" (edited here: `yavih bench fetch "
+                     f"{r['name']} --refresh` replaces it)" if r.get("modified") else ""))
+    if any(r["status"] == "update_available" for r in recs):
+        lines.append("nothing changed; `yavih bench update --yes` fetches the newer revisions (a new protocol_version or "
+                     "protocol_hash means new numbers are not comparable with the old ones)")
+    if not recs:
+        lines.append("no fetched folder here (yavih bench fetch <name>)")
+    return Envelope(data=recs, text="\n".join(lines) + "\n")
 
 
 def cmd_bench_snapshot(ns: argparse.Namespace) -> Envelope:
@@ -1397,11 +1509,14 @@ def cmd_bench_hash(ns: argparse.Namespace) -> Envelope:
         "name": bench.name, "protocol_version": bench.spec.protocol_version, "protocol_hash": bench.protocol_hash,
         "input_hash": bench.input_hash, "scoring_hash": bench.scoring_hash, "manifest_hash": bench.manifest_hash,
         "folder_source": dict(bench.folder_source),
+        "folder_origin": bench.folder_origin,
     }
     lines = [f"{bench.name} (protocol_version {bench.spec.protocol_version})",
              f"  protocol_hash  {bench.protocol_hash}", f"  input_hash     {bench.input_hash}",
              f"  scoring_hash   {bench.scoring_hash}", f"  manifest_hash  {bench.manifest_hash}",
-             f"  folder_source  eval={bench.folder_source.get('eval') or 'null'} reader={bench.folder_source.get('reader') or 'null'}"]
+             f"  folder_source  eval={bench.folder_source.get('eval') or 'null'} reader={bench.folder_source.get('reader') or 'null'}",
+             f"  folder_origin  repo={bench.folder_origin.get('repo') or 'null'} commit={bench.folder_origin.get('commit') or 'null'} "
+             f"tree={bench.folder_origin.get('tree')}"]
     if ns.explain:
         ex = bench.hashes.explain()
         data["explain"] = ex
@@ -1866,7 +1981,8 @@ def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
     ``W_LAUNCHER_UNSET`` when neither ``--launcher`` nor the configuration names one."""
     from yavih.plan.skeleton import plan_init
 
-    rec = plan_init(ns.suite, model=ns.model, launcher=ns.launcher, out=ns.out, bridges_dir=ns.bridges_dir, force=bool(ns.force))
+    rec = plan_init(ns.suite, model=ns.model, launcher=ns.launcher, out=ns.out, bridges_dir=ns.bridges_dir, force=bool(ns.force),
+                    fetch=not bool(getattr(ns, "no_fetch", False)), source=getattr(ns, "source", None))
     warnings: list[dict] = []
     if rec["launcher"] is None and not rec["launcher_configured"]:
         warnings.append(_finding("W_LAUNCHER_UNSET", "no --launcher and no default `launcher` anywhere in the configuration (neither the top "
@@ -1875,6 +1991,11 @@ def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
                                  "units run with the python running `yavih exec`"))
     lines = [f"wrote {rec['path']}: suite {rec['suite']}, model {rec['model']}, {len(rec['entries'])} entries"
              + (f" (project {rec['project']})" if rec["project"] else "")]
+    for f in rec.get("fetched") or []:
+        lines.append(f"  fetched {f['name']} at {str(f['commit'])[:12]} -> {f['folder']}")
+    for f in rec.get("not_fetched") or []:
+        lines.append(f"  not fetched {f['benchmark']}: {f['error']} (not planned; `yavih bench fetch {f['benchmark']}` then re-run with --force)")
+        warnings.append(_finding("W_NOT_FETCHED", f"{f['benchmark']}: {f['error']}", where=f["benchmark"]))
     for b in rec["bridges"]:
         lines.append(f"  bridge {b['path']} " + ("(exists, kept)" if b["action"] == "kept" else f"(created from {b['benchmark']}'s bridge_template.py)"))
     for p in rec["pending"]:
@@ -1964,14 +2085,26 @@ def cmd_suite_show(ns: argparse.Namespace) -> Envelope:
     from yavih.suites import load_suite
 
     suite = load_suite(ns.name)
+    fetched: list[dict] = []
+    failed: list[dict] = []
+    if getattr(ns, "fetch", False):
+        from yavih.suites import fetch_missing
+
+        suite, fetched, failed = fetch_missing(suite, source=getattr(ns, "source", None))
     lines = [f"suite {suite.name} ({suite.origin}: {suite.path})", f"  {suite.description}"]
+    lines += [f"  fetched {f['name']} at {str(f['commit'])[:12]}" for f in fetched]
+    lines += [f"  not fetched {f['benchmark']}: {f['error']}" for f in failed]
     for g in suite.groups:
         lines.append(f"  {g.capability}")
         for e in g.entries:
             flags = [f for f, on in (("join " + str(e.join_reading), e.join), ("optional", not e.required),
-                                     ("pending", e.status == "pending")) if on]
+                                     ("pending", e.status == "pending"),
+                                     ("not fetched: yavih suite show --fetch", e.status == "packaged" and not e.fetched)) if on]
             lines.append(f"    {e.benchmark:<14}[{', '.join(e.readings)}]" + (f"  {'; '.join(flags)}" if flags else ""))
-    return Envelope(data=suite.to_json(), paths={"suite": str(suite.path)}, text="\n".join(lines) + "\n")
+    data = suite.to_json()
+    if getattr(ns, "fetch", False):
+        data = {**data, "fetched": fetched, "not_fetched": failed}
+    return Envelope(data=data, paths={"suite": str(suite.path)}, text="\n".join(lines) + "\n")
 
 
 def cmd_suite_new(ns: argparse.Namespace) -> Envelope:
@@ -2091,6 +2224,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_suite_list)
     s = susub.add_parser("show", parents=[common_r], help="a suite's capabilities, benchmarks, readings and joins")
     s.add_argument("name", metavar="<name|file.yaml>")
+    s.add_argument("--fetch", action="store_true", help="fetch the suite's catalog benchmarks that are not here (yavih bench fetch)")
+    s.add_argument("--from", dest="source", default=None, metavar="SRC", help="as for bench fetch")
     s.set_defaults(func=cmd_suite_show)
     s = susub.add_parser("new", parents=[common_r], help="copy a suite into the project suites directory to edit")
     s.add_argument("name")
@@ -2128,6 +2263,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = bsub.add_parser("list", parents=[common_r])
     s.add_argument("--fmt", choices=["text", "md"], default="text", help="md: the markdown table the docs embed (no data scan)")
     s.add_argument("--suite", default=None, metavar="S", help="only the suite's benchmarks, with their suite group and readings")
+    s.add_argument("--catalog", action="store_true", help="read the catalog index first (network); without it the cached index is used")
     s.set_defaults(func=cmd_bench_list)
     s = bsub.add_parser("info", parents=[common_r])
     s.add_argument("name")
@@ -2155,10 +2291,17 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("script_args", nargs=argparse.REMAINDER, metavar="-- args", help="passed to the step after --")
     s.set_defaults(func=cmd_bench_prepare)
 
-    s = bsub.add_parser("fetch", parents=[common_r])
-    s.add_argument("name")
-    s.add_argument("--refresh", action="store_true", help="overwrite locally edited files of the $YAVIH_HOME copy with the packaged ones")
+    s = bsub.add_parser("fetch", parents=[common_r], help="bring a benchmark folder from the catalog (the newest revision this core can load)")
+    s.add_argument("name", help="a catalog name or alias; name@<commit> for a listed revision")
+    s.add_argument("--from", dest="source", default=None, metavar="SRC",
+                   help="offline: a yavih checkout, a directory holding catalog/index.json, or a repository archive (.tar.gz)")
+    s.add_argument("--refresh", action="store_true", help="replace the folder even when it was edited here")
     s.set_defaults(func=cmd_bench_fetch)
+    s = bsub.add_parser("update", parents=[common_r], help="show newer compatible revisions of the fetched folders; --yes fetches them")
+    s.add_argument("names", nargs="*", help="fetched benchmarks (default: every folder in the lock)")
+    s.add_argument("--yes", action="store_true", help="fetch the newer revisions (an edited folder is reported, never overwritten)")
+    s.add_argument("--from", dest="source", default=None, metavar="SRC", help="as for bench fetch")
+    s.set_defaults(func=cmd_bench_update)
     s = bsub.add_parser("verify", parents=[common_r])
     s.add_argument("name")
     s.add_argument("--census", action="store_true", help="probe every present file and write the media-info table")
@@ -2355,6 +2498,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--out", default=None, metavar="matrix.yaml", help="the matrix file (default: the project's matrices/<model>.yaml, else ./matrix.yaml)")
     s.add_argument("--bridges-dir", default=None, metavar="DIR", help="bridge files, relative to the matrix (default: the project's bridges/, else bridges); profiles go to <matrix stem>.profiles/ next to the matrix")
     s.add_argument("--force", action="store_true", help="overwrite an existing matrix file (bridge files are always kept)")
+    s.add_argument("--no-fetch", action="store_true", help="do not fetch the suite's catalog benchmarks that are not here (they are listed, not planned)")
+    s.add_argument("--from", dest="source", default=None, metavar="SRC", help="fetch from a yavih checkout or a repository archive (offline)")
     s.set_defaults(func=cmd_plan_init)
     s = plsub.add_parser("build", parents=[common_r])
     s.add_argument("matrix", metavar="<matrix.yaml>")
