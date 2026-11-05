@@ -287,3 +287,29 @@ def test_an_exported_catalog_serves_fetch_without_the_checkout(catrepo, tmp_path
     assert [r["commit"] for r in idx["benchmarks"]["catx"]["revisions"]] == [catrepo["c3"]]
     rec = catalog.fetch("catx", source=out, dest_dir=tmp_path / "w" / "benchmarks", version="9.0.0")
     assert rec["commit"] == catrepo["c3"] and rec["tree"] == catalog.tree_id(out / "benchmarks" / "catx")
+
+
+def test_plan_init_fetches_a_suite_benchmark_that_is_not_here_and_lists_one_it_cannot(catrepo, tmp_path, yavih_home, monkeypatch):
+    from yavih.plan.skeleton import plan_init
+
+    (yavih_home / "catalog").mkdir()
+    shutil.copy(catrepo["repo"] / "catalog" / "index.json", yavih_home / "catalog" / "index.json")
+    sf = tmp_path / "s.yaml"
+    sf.write_text("schema_version: 1\nname: s\ndescription: one catalog benchmark\ngroups:\n"
+                  "  - capability: audio\n    entries:\n      - {benchmark: catx, readings: [v]}\n")
+    monkeypatch.chdir(tmp_path)
+    from yavih.suites import SuiteError
+
+    with pytest.raises(SuiteError, match="catx: not fetched"):  # --no-fetch and nothing else: nothing to plan
+        plan_init(str(sf), model="toy", out=str(tmp_path / "m.yaml"), fetch=False)
+    rec = plan_init(str(sf), model="toy", out=str(tmp_path / "m.yaml"), source=catrepo["repo"])
+    assert [f["name"] for f in rec["fetched"]] == ["catx"] and rec["not_fetched"] == []
+    assert [e["benchmark"] for e in rec["entries"]] == ["catx"] and Path(rec["bridges"][0]["path"]).is_file()
+    # a benchmark that cannot be fetched is listed, not planned; the others are planned
+    two = tmp_path / "two.yaml"
+    two.write_text(sf.read_text().replace("name: s", "name: two").replace(
+        "      - {benchmark: catx, readings: [v]}\n", "      - {benchmark: catx, readings: [v]}\n      - {benchmark: esc50, readings: [a]}\n"))
+    (yavih_home / "benchmarks" / "catx").rename(tmp_path / "catx_moved")  # not here any more
+    rec = plan_init(str(two), model="toy2", out=str(tmp_path / "m2.yaml"), source=tmp_path / "nowhere")
+    assert [x["benchmark"] for x in rec["not_fetched"]] == ["catx"] and "E_CATALOG_SOURCE" in rec["not_fetched"][0]["error"]
+    assert [e["benchmark"] for e in rec["entries"]] == ["esc50"]

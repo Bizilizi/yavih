@@ -194,6 +194,10 @@ def plan_init(suite: Any, *, model: str, launcher: str | None = None, out: str |
     not_fetched += [{"benchmark": e.benchmark, "error": "not fetched (--no-fetch)"} for _c, e in suite.entries()
                     if e.status == "packaged" and not e.fetched and e.benchmark not in {x["benchmark"] for x in not_fetched}]
     suite = without_unfetched(suite)
+    if not_fetched and not any(e.status == "packaged" for _c, e in suite.entries()):
+        raise SuiteError(f"suite {suite.name!r}: nothing to plan, no benchmark is here: "
+                         + "; ".join(f"{x['benchmark']}: {x['error']}" for x in not_fetched)
+                         + " (yavih bench fetch <name>, or plan init without --no-fetch)")
     defaults = project_defaults(model, out)
     if out is None:
         out = defaults["out"]
