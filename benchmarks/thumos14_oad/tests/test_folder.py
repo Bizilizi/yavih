@@ -28,10 +28,6 @@ def eval_mod():
     return F.load_module(HERE / "eval.py", "thumos14_oad_folder_eval")
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_yaml_identity(spec):
     assert spec["name"] == "thumos14_oad" and spec["scorer"] == "stream" and spec["protocol_version"] == 1
     assert spec["output_contract"]["stream"] == {"update_interval_s": 0.25} and spec["protocol"]["chunk_fps"] == 4.0
@@ -74,13 +70,6 @@ def test_frame_map_is_the_lstr_evaluator(eval_mod):
     assert got == pytest.approx(ref, abs=1e-12)
 
 
-def test_conformance_fixture_reproduces(bench):
-    from yavih import conformance as C
-
-    rep = C.check(bench)
-    assert rep["ok"] if isinstance(rep, dict) else rep.ok
-
-
 def test_bridge_template_declares_the_stream(bench):
     from yavih.bridge import BenchmarkView, validate_describe
 
@@ -88,13 +77,6 @@ def test_bridge_template_declares_the_stream(bench):
     for reading in ("v", "av-rt"):
         b = tmpl.Thumos14OadBridge(BenchmarkView.from_benchmark(bench), {"reading": reading})
         validate_describe(b.describe(), b, bench)
-
-
-def test_docs_name_the_facts():
-    readme = (HERE / "README.md").read_text(encoding="utf-8")
-    for fact in ("200", "213", "frame_map_gru", "perframe_average_precision", "optical flow"):
-        assert fact in readme
-    assert "yavih bench verify thumos14_oad" in (HERE / "setup.md").read_text(encoding="utf-8")
 
 
 def test_manifest_rederives_on_site():

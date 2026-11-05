@@ -113,10 +113,6 @@ def test_protocol_constants(spec):
 # ----------------------------------------------------------------------------- manifest and classes
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_sha256_match(spec, manifest_rows):
     F.assert_manifest_hashes(HERE, spec)  # also: gzip mtime 0, no file name (byte-identical re-freeze)
     assert len(manifest_rows) == sum(ROWS.values()) == spec["manifest"]["upstream"]["rows"]
@@ -243,16 +239,6 @@ def test_segment_targets_and_floors(spec, manifest_rows, classes):
 
 
 # ----------------------------------------------------------------------------- README.md / setup.md
-
-
-def test_readme_facts():
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    cite, proto = F.section(text, 2, "Citation"), F.section(text, 2, "In yavih")
-    assert "```bibtex" in cite and "tian2018ave" in cite
-    assert "https://arxiv.org/abs/1803.08842" in text.split("\n\n")[1]
-    for fact in ("0.172", "0.521", "2 624", "316", "make_manifest.py"):
-        assert fact in proto, fact
 
 
 # ----------------------------------------------------------------------------- bridge template

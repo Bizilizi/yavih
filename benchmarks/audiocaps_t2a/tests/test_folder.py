@@ -54,11 +54,6 @@ def eval_mod():
 # ----------------------------------------------------------------------------- files and yaml
 
 
-def test_folder_lint_clean():
-    # conformance/expected.json is recorded where av_bench, its weights and a GPU are installed
-    F.assert_lint_clean(HERE, skip=("conformance",) if not (HERE / "conformance" / "expected.json").is_file() else ())
-
-
 def test_yaml_identity(spec):
     assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "audiocaps_t2a"
     assert spec["scorer"] == "audiocaps_t2a" and spec["protocol_version"] == 1
@@ -148,18 +143,6 @@ def test_staged_recordings_match_the_frozen_sha256(rows):
 
 
 # ----------------------------------------------------------------------------- README / setup.md
-
-
-def test_readme_follows_the_review():
-    text = (HERE / "README.md").read_text()
-    assert "Audio generative models in the multimodal era" in text and "mitsufuji2026audio" in text
-
-
-def test_setup_names_the_prepare_steps():
-    obtain = F.section((HERE / "setup.md").read_text(), 2, "Obtain the data")
-    for step in ("01", "02", "03"):
-        assert f"yavih bench prepare audiocaps_t2a {step}" in obtain
-    assert sorted(p.name for p in (HERE / "prepare").iterdir() if p.name[:2].isdigit()) == ["01_download.sh", "02_stage.py", "03_verify.sh"]
 
 
 # ----------------------------------------------------------------------------- through the core

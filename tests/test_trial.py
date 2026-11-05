@@ -50,7 +50,23 @@ def _yaml_scorer(name: str) -> str:
     return str(yaml.safe_load((packaged_folder(name) / "benchmark.yaml").read_text(encoding="utf-8"))["scorer"])
 
 
-@pytest.mark.parametrize("name", PACKAGED)
+def _trial_kind(name: str) -> tuple:
+    """What selects the synthetic stand-in's pipeline: the scorer and the label kind (the stand-in writes each stream
+    kind with the same writers whatever the folder)."""
+    import yaml
+
+    from yavih.benchmarks import packaged_folder
+
+    y = yaml.safe_load((packaged_folder(name) / "benchmark.yaml").read_text(encoding="utf-8"))
+    return (y["scorer"], (y["manifest"].get("label") or {}).get("kind"))
+
+
+#: One folder per scorer and label kind: the trial runs the same pipeline for every folder of a kind, so a new folder
+#: of a known kind adds nothing and a new kind is covered on its own (B8.3: the trial per scorer kind, not per folder).
+TRIAL_REPRESENTATIVES = sorted({_trial_kind(n): n for n in reversed(PACKAGED)}.values())
+
+
+@pytest.mark.parametrize("name", TRIAL_REPRESENTATIVES)
 def test_bench_trial_synthetic(name, capsys, yavih_home, runs_dir, monkeypatch):
     """Every stage ``ok`` and the oracle clears the headline floor under ``--readout-fast``; the user's home and runs
     root stay untouched and the environment comes back exactly as it was."""

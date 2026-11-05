@@ -49,17 +49,13 @@ def _takes_split(b) -> bool:
         return False
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 # ----------------------------------------------------------------------------- benchmark.yaml
 
 
 def test_yaml_shape(spec):
     assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "audioset20k"
     assert spec["aliases"] == [] and spec["scorer"] == "clf"
-    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "scorer", "protocol_version", "changelog", "source",
+    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "core", "header", "scorer", "protocol_version", "changelog", "source",
                           "obtain", "budget", "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract",
                           "external", "protocol", "metrics", "readout_params"]
     assert spec["header"]["name"] == "AudioSet-20K" and "Gemmeke" in spec["header"]["venue"]
@@ -172,11 +168,8 @@ def test_trackless_clips_are_rows_and_a_recorded_fact(spec, rows, mm):
     assert not any(mm.NO_VIDEO_TRACK.values())
     note = spec["manifest"]["upstream"]["note"]
     assert "no clip is excluded" in note and "except" not in note
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    setup = {h: F.section(text, 2, h) for h in ("Input contract", "Gotchas")}
     for split, key in NO_AUDIO:
-        assert f"{split}/{key}" in note and f"{split}/{key}" in setup["Input contract"] and f"{split}/{key}" in setup["Gotchas"]
-    assert "has_track" in setup["Input contract"] and "describe()" in setup["Input contract"]
+        assert f"{split}/{key}" in note
     text = (HERE / "make_manifest.py").read_text(encoding="utf-8")
     assert "excluded_keys" not in text and "NO_AUDIO_TRACK" in text
 
@@ -215,40 +208,14 @@ def test_budget_media_gb_is_the_frozen_members(spec):
 # ----------------------------------------------------------------------------- docs
 
 
-def test_readme_facts():
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    proto = F.section(text, 3, "Protocol")
-    for fact in ("0.004855", "16 223", "17 726", "`map`", "protocol_version: 1"):
-        assert fact in proto, fact
-    refreeze = F.section(text, 3, "Re-freezing the manifest")
-    for name in ("make_manifest.py", "clips.csv", "MISSING.csv", "index.json", "SHA256SUMS", "--check"):
-        assert name in refreeze, name
-
-
-def test_setup_obtain_is_the_pinned_download(spec):
-    """"## Obtain the data" is the pinned download (``source.revision`` in the three commands, lint checks it is there)."""
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    obtain = F.section(text, 2, "Obtain the data")
-    assert re.search(rf"hf download {re.escape(REPO_ID)} --repo-type dataset --revision {REVISION} --local-dir \S*audioset20k-wds-v1", obtain)
-    assert "sha256sum -c SHA256SUMS" in obtain and "yavih bench verify audioset20k" in obtain
-    assert HF_URL in obtain
+def test_prepare_scripts_pin_the_download(spec):
+    """The prepare steps download the pinned revision and verify every sha256 the yaml pins."""
     script = (HERE / "prepare" / "01_download.sh").read_text(encoding="utf-8")
     assert f"REVISION={REVISION}" in script and "hf download 11hu83/audioset20k --repo-type dataset" in script
     verify = (HERE / "prepare" / "02_verify.sh").read_text(encoding="utf-8")
     assert "sha256sum -c" in verify and "bench verify audioset20k --census" in verify
     for name, sha in spec["source"]["sha256"].items():
         assert f"pin {name}" in verify and sha in verify, name
-        assert sha in obtain, name
-
-
-def test_benchmarks_index_row(spec):
-    idx = HERE.parent / "README.md"
-    rows_ = [ln for ln in idx.read_text(encoding="utf-8").splitlines() if ln.startswith("| [audioset20k]")]
-    assert rows_, "benchmarks/README.md index has no audioset20k row"
-    cells = [c.strip() for c in rows_[0].strip("|").split("|")]
-    assert cells[0] == "[audioset20k](audioset20k/README.md)" and cells[2] == spec["scorer"]
-    assert "public" in cells[4].lower() and cells[3] == "video + audio"  # generated from benchmark.yaml streams
 
 
 # ----------------------------------------------------------------------------- bridge template + output contract

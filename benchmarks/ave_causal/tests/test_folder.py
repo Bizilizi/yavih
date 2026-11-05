@@ -26,10 +26,6 @@ def eval_mod():
     return F.load_module(HERE / "eval.py", "ave_causal_folder_eval")
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_yaml_identity(spec):
     assert spec["name"] == "ave_causal" and spec["scorer"] == "stream" and spec["protocol_version"] == 1
     oc = spec["output_contract"]
@@ -77,13 +73,6 @@ def test_metrics_on_hand_checked_predictions(eval_mod):
     assert lo <= 5 / 6 <= hi
 
 
-def test_conformance_fixture_reproduces(bench):
-    from yavih import conformance as C
-
-    rep = C.check(bench)
-    assert rep["ok"] if isinstance(rep, dict) else rep.ok
-
-
 def test_bridge_template_declares_the_stream(bench):
     from yavih.bridge import BenchmarkView, validate_describe
 
@@ -95,9 +84,3 @@ def test_bridge_template_declares_the_stream(bench):
         validate_describe(d, b, bench)
 
 
-def test_docs_name_the_facts(spec):
-    readme = (HERE / "README.md").read_text(encoding="utf-8")
-    setup = (HERE / "setup.md").read_text(encoding="utf-8")
-    for fact in ("2 592", "316", "sec_acc_gru", "ave_causal_v1", "16 train videos"):
-        assert fact in readme
-    assert "yavih bench verify ave_causal" in setup

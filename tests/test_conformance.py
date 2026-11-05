@@ -283,7 +283,7 @@ def test_packaged_folder_fixture_is_current(name):
     rec = C.read_expected(b)
     assert rec is not None and rec["protocol_version"] == b.spec.protocol_version and rec["generator"] == C.GENERATOR_VERSION
     assert rec["recorded_with"]["protocol_hash"] == b.protocol_hash, f"{name}: the fixture was recorded under another hash; re-record"
-    rep = C.check(b)
+    rep = C.check(b, cache=True)  # the verdict bench lint computes (test_packaged_folders): computed once per session
     if rep.skipped:
         pytest.skip(rep.warnings[0].message)
     assert rep.ok, [f.message for f in rep.errors]
@@ -432,3 +432,24 @@ def test_fixture_records_the_scorer(tmp_path):
     rec = C.record(b).record
     assert rec["recorded_with"]["scorer"] == {"name": b.spec.readout, "version": 1, "kind": "probe"}
     assert C.read_expected(b)["recorded_with"]["scorer"] == rec["recorded_with"]["scorer"]
+
+
+def test_the_cached_verdict_is_reused_and_a_folder_edit_invalidates_it(tmp_path, yavih_home, monkeypatch):
+    """``check(cache=True)`` (what ``bench lint`` runs) stores the verdict under the core's sources, the folder's
+    content and the externals' versions; the same folder is not re-scored, an edited one is."""
+    import shutil
+
+    folder = tmp_path / "esc50"
+    shutil.copytree(Benchmark.load("esc50").folder, folder, ignore=shutil.ignore_patterns("__pycache__"))
+    calls = []
+    real = C.check_fresh
+    monkeypatch.setattr(C, "check_fresh", lambda b: calls.append(b.name) or real(b))
+    first = C.check(Benchmark.from_dir(folder), cache=True)
+    again = C.check(Benchmark.from_dir(folder), cache=True)
+    assert len(calls) == 1 and (again.ok, again.compared, again.skipped) == (first.ok, first.compared, first.skipped)
+    assert len(list((yavih_home / "cache" / "conformance").glob("esc50-*.json"))) == 1
+    (folder / "README.md").write_text((folder / "README.md").read_text() + "\n")
+    C.check(Benchmark.from_dir(folder), cache=True)
+    assert len(calls) == 2
+    C.check(Benchmark.from_dir(folder))  # the default (bench conformance, record) never reads the cache
+    assert len(calls) == 3

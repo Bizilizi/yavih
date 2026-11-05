@@ -64,10 +64,6 @@ def setup_md():
 # ----------------------------------------------------------------------------- benchmark.yaml (schema 2)
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_yaml_schema2_and_versions(spec):
     assert spec["schema_version"] == 3
     assert spec["name"] == HERE.name == "k400" and spec["aliases"] == []
@@ -292,24 +288,6 @@ def test_metric_names_resolve(spec):
 
 
 # ----------------------------------------------------------------------------- documentation
-
-
-def test_readme_facts(readme):
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    assert "setup.md" in F.section(readme, 2, "In yavih") and "make_manifest.py" in F.section(readme, 3, "Re-freezing the manifest")
-    assert "```bibtex" in F.section(readme, 2, "Citation") and "1705.06950" in readme.split("\n\n")[1]
-
-
-def test_setup_obtain_lists_source_hashes(spec, setup_md):
-    obtain = F.section(setup_md, 2, "Obtain the data")
-    for sha in spec["source"]["sha256"].values():  # expected sha256 per downloaded file
-        assert sha in obtain
-
-
-def test_docs_quote_no_stale_hashes(readme, setup_md):
-    """protocol_hash depends on core, the yaml, the manifest and eval.py; the docs must not quote one."""
-    for text in (readme, setup_md):
-        assert not re.findall(r"protocol_hash`?\s*`?\s*[0-9a-f]{12,64}", text)
 
 
 # ----------------------------------------------------------------------------- bridge template

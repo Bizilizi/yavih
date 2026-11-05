@@ -106,10 +106,6 @@ def test_output_contract(spec):
     }
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_sha256_match(spec, manifest_rows):
     F.assert_manifest_hashes(HERE, spec)
     assert len(manifest_rows) == sum(ROWS.values()) == spec["manifest"]["upstream"]["rows"]
@@ -206,12 +202,12 @@ def test_metric_names_resolve(spec):
     assert math.isclose(m["chance"]["mae_seconds"], 0.5 * 80 / 27, abs_tol=1e-4)
 
 
-def test_floor_threshold_matches_readme(spec):
+def test_floor_threshold(spec):
     floor_threshold = F.load_module(HERE / "eval.py", "avsync_probe").floor_threshold  # the folder's metrics
 
     sig = spec["protocol"]["floor_sigmas"]
     expected = 1 / 9 + sig * math.sqrt((1 / 9) * (8 / 9) / ROWS["stationary"])
-    assert round(expected, 4) == 0.1233 and "0.1233" in (HERE / "README.md").read_text(encoding="utf-8")
+    assert round(expected, 4) == 0.1233
     assert math.isclose(float(floor_threshold(1 / 9, ROWS["stationary"], sig)), expected, rel_tol=1e-9)
 
 
@@ -228,19 +224,6 @@ def test_benchmark_loads(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
 
 # ----------------------------------------------------------------------------- documentation
-
-
-def test_setup_dependencies_pin_ffmpeg(spec):
-    """Folder fact in setup.md (the setup.md structure and contract copies are ``yavih bench lint``'s)."""
-    deps = F.section((HERE / "setup.md").read_text(encoding="utf-8"), 2, "Dependencies")
-    assert spec["input_contract"]["materialize"]["tool"]["version_pin"] in deps
-
-
-def test_recipe_sha256_is_documented(spec, mat_mod):
-    """The reproducibility pin is the recipe, not the output bytes: setup.md and the yaml comment carry its sha256."""
-    rsha = mat_mod.recipe_sha256(spec["input_contract"]["materialize"])
-    assert rsha in (HERE / "setup.md").read_text(encoding="utf-8")
-    assert f"sha256 {rsha[:8]}…" in (HERE / "benchmark.yaml").read_text(encoding="utf-8")
 
 
 # ----------------------------------------------------------------------------- bridge template

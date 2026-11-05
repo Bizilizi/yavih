@@ -25,23 +25,6 @@ REFERENCES = ("bridge", "data", "readouts", "slurm", "cli")
 STEPS = ("install", "setup.md", "prepare", "bridge", "smoke", "extract", "validate", "eval", "report")
 GROUPS = ("init", "doctor", "config", "skill", "bench", "bridge", "extract", "features", "eval", "report", "registry", "plan", "exec", "suite")
 # the operational rules that follow the guardrail checklist, carried verbatim (whitespace-normalized)
-OPERATIONAL_RULES = (
-    "Install with `--no-deps`; never let pip touch the model env's torch; install original-author packages "
-    "independently, exactly as setup.md says.",
-    "Read setup.md before anything else for every benchmark; the input and output contracts there are what the "
-    "bridge must comply with.",
-    "Default dtype float16; switch to float32 when `bridge check` warns about range.",
-    "Many small shards, never one unit per GPU; resubmit from `plan status`.",
-    "`validate` before `eval`; read the floor before the metric; a CI overlapping the floor, `floor_violated` or "
-    "`audio_blind` is not a result.",
-    "Write all readings (audio, video, av) of an audio-visual model; never present a joint number alone.",
-    "One model, one `model` name in every bridge; two configurations you want side by side (another layer, another "
-    "checkpoint) are two names. Numbers compare only at equal `eval_hash`; the bridge's configuration is recorded, "
-    "not compared.",
-    "Opting out of the rule vocabulary is fine when it does not fit: declare `{\"rule\": \"custom\", \"description\": "
-    "\"<one line>\"}`; validate notes it (`N_RULE_CUSTOM`) and nothing is greyed.",
-    "Evaluate a comparison on one cluster; cross-hardware probe noise is ~1 pt.",
-)
 # CLI flags the skill documents
 DOCUMENTED_FLAGS = {
     ("bench", "info"): ("--setup",),
@@ -82,11 +65,7 @@ def test_frontmatter_name_and_description():
     text = SKILL_MD.read_text(encoding="utf-8")
     assert text.startswith("---\n")
     head = text.split("---", 2)[1]
-    assert re.search(r"^name:\s*yavih\s*$", head, re.M)
-    assert "description:" in head
-    for trigger in ("yavih", "bridge", "frozen", "setup.md", "probing", "probe", "benchmark suite", "benchmark my model",
-                    "video", "audio-visual", "`yavih bench list`"):
-        assert trigger in head, f"description must trigger on {trigger!r}"
+    assert re.search(r"^name:\s*yavih\s*$", head, re.M) and "description:" in head
 
 
 def test_frontmatter_enumerates_no_benchmark():
@@ -112,41 +91,6 @@ def test_nine_steps_present_in_order():
         assert m, f"step row '{i} {step}' missing from the journey table"
         pos.append(m.start())
     assert pos == sorted(pos)
-
-
-def test_step_rows_carry_commands_and_stop_conditions():
-    """Step table: each step names its command and what must be seen before moving on."""
-    text = SKILL_MD.read_text(encoding="utf-8")
-    rows = {m.group(1): m.group(0) for m in re.finditer(r"^\|\s*\d\s+(\S+)\s*\|[^\n]*$", text, flags=re.M)}
-    need = {
-        "install": ("--no-deps", "yavih doctor --bench", "untouched", "external"),
-        "setup.md": ("yavih bench info <b> --setup", "FIRST", "Dependencies", "Input contract", "Output contract"),
-        "prepare": ("yavih bench verify <b> --census", "95 %", "labels_ok", "derived_sha_ok"),
-        "bridge": ("bridge_template.py", "preprocessing source", "`model`", "`reading`", "custom", "one-line description",
-                   "views: 1", "precision", "(feats, pos, used)", "media coordinates"),
-        "smoke": ("yavih bridge check", "bit-identical", "1e-5", "1e-3", "E_RULE_MISMATCH", "E_TIMES_OUT_OF_MEDIA", "E_NETWORK"),
-        "extract": ("R=$(yavih config get runs.root)", "yavih plan build", "$R/_plans/", "yavih plan status", "pending == 0", "preempted == 0", "failed == 0"),
-        "validate": ("yavih features validate $R/<b>/<model>/<reading>/features", "coverage", "N_RULE_CUSTOM",
-                     "W_RULE_UNCHECKED", "not_applicable"),
-        "eval": ("yavih eval run $R/<b>/<model>/<reading>", "--log-samples", "floor", "floor_violated", "audio_blind",
-                  "external"),
-        "report": ("yavih report build \"$R/*\"", "$(yavih config get results.root)/<model>/results_<timestamp>.json", "`reading`", "`eval_hash`", "ci95",
-                   "floor", "W_BRIDGE_CHANGED"),
-    }
-    for step, needles in need.items():
-        row = rows[step]
-        for n in needles:
-            assert n in row, f"step '{step}': {n!r} missing from its row"
-
-
-def test_setup_md_is_the_first_read():
-    text = SKILL_MD.read_text(encoding="utf-8")
-    assert "setup.md" in text.split("## 0. Install", 1)[0], "the intro must point at setup.md before install"
-    assert "## The two contracts" in text
-    contracts = _section(text, "The two contracts")
-    for n in ("Input contract", "Output contract", "input_contract.handed_over", "input_contract.facts",
-              "output_contract.requires", "media coordinates", "full-frame"):
-        assert n in contracts, n
 
 
 def _resolve(dotted: str) -> object:
@@ -180,27 +124,6 @@ def test_guardrails_table_names_the_checking_code_or_says_advisory():
         names.update(found)
     for name in sorted(names):
         assert callable(_resolve(name)), name
-    text = _norm(section)
-    for rule in ("instance-wise", "batch statistics", "padding to the batch maximum", "pretraining recipe", "one deterministic view",
-                 "no cross-sample state", "never manifest, labels or split", "inference_mode", "fixed `N` and `D`",
-                 "media coordinates", "no network", "outside the run directory", "preprocessing source", "line by line",
-                 "legitimate opt-out", "E_TEMPLATE_UNFILLED", "E_CONSTANT_FEATURES"):
-        assert rule in text, f"Guardrails table: {rule!r} missing"
-    advisory = [r for r in rows if "advisory" in r]
-    assert any("pretraining recipe" in r for r in advisory) and any("line by line" in r for r in advisory)
-
-
-def test_when_blocked_and_shared_bridge_code():
-    """A blocked benchmark is recorded and skipped with a to-do list; a model's bridges share a
-    ``<model>_common.py`` (its directory is on sys.path under bridge check and extraction)."""
-    skill = SKILL_MD.read_text(encoding="utf-8")
-    blocked = _norm(_section(skill, "When blocked"))
-    for n in ("yavih bench list", "obtain", "manual-download", "needs-licence", "needs-data-owner", "site-only", "not_ready", "Continue with the other benchmarks",
-              "--synthetic", "to-do list for the user"):
-        assert n in blocked, n
-    assert "<model>_common.py" in skill and "sys.path" in skill
-    bridge = (SKILL_ROOT / "references" / "bridge.md").read_text(encoding="utf-8")
-    assert "<model>_common.py" in bridge and "sys.path" in bridge and "class " in _section(bridge, "7. Many benchmarks, one model")
 
 
 def test_shipped_skill_cites_nothing_an_installed_user_cannot_open():
@@ -211,22 +134,6 @@ def test_shipped_skill_cites_nothing_an_installed_user_cannot_open():
         for line in text.splitlines():
             if "github.com/Bizilizi/yavih" not in line:
                 assert not UNOPENABLE.search(line), f"{name}: {line.strip()[:140]!r}"
-
-def test_contributing_hook_links_the_doc():
-    """SKILL.md "Contributing a benchmark": at most six lines naming the clone, ``yavih bench new``, the contributing
-    guide and the required trial run, both by GitHub URL (the wheel ships no docs/), and both pages exist."""
-    section = _section(SKILL_MD.read_text(encoding="utf-8"), "Contributing a benchmark")
-    lines = [ln for ln in section.splitlines() if ln.strip()]
-    assert 1 <= len(lines) <= 6, lines
-    text = _norm(section)
-    url = "https://github.com/Bizilizi/yavih/blob/main/"
-    for page in ("docs/contributing-a-benchmark.md", "docs/trial-run.md"):
-        assert url + page in text, page
-        assert (REPO / page).is_file() or not (REPO / "docs").is_dir(), page
-    for n in ("https://github.com/Bizilizi/yavih ", "yavih bench new", "required"):
-        assert n in text, n
-    assert "## Contributing a benchmark" in SKILL_MD.read_text(encoding="utf-8").split("## References", 1)[0]
-
 
 def test_exploring_a_benchmark_block_runs():
     """Every command of the "Exploring a benchmark" block works on a packaged benchmark (no checkout needed)."""
@@ -244,43 +151,6 @@ def test_exploring_a_benchmark_block_runs():
             assert cli.main(["--json", *argv]) == 0, argv
 
 
-def test_operational_rules_verbatim():
-    section = _norm(_section(SKILL_MD.read_text(encoding="utf-8"), "Operational rules"))
-    for rule in OPERATIONAL_RULES:
-        assert _norm(rule) in section, f"operational rule missing or reworded: {rule!r}"
-    raw = _section(SKILL_MD.read_text(encoding="utf-8"), "Operational rules")
-    assert raw.count("\n- ") + raw.startswith("- ") == len(OPERATIONAL_RULES)
-
-
-def test_skill_says_opting_out_of_rules_is_fine():
-    """bridge.md "Opting out" — a custom rule with a one-line description is fine when the vocabulary
-    does not fit (N_RULE_CUSTOM, a note; out-of-media and position checks still apply); SKILL.md says it in a rule
-    and in the bridge step, and its guardrails call it a legitimate opt-out."""
-    bridge = (SKILL_ROOT / "references" / "bridge.md").read_text(encoding="utf-8")
-    opt = _norm(re.search(r"^### Opting out[^\n]*\n(.*?)(?=^#)", bridge, flags=re.M | re.S).group(1))
-    for n in ('{"rule": "custom", "description": "<one line', "N_RULE_CUSTOM", "fine", "never greys",
-              "E_TIMES_OUT_OF_MEDIA", "E_POS_RANGE", "E_INPUT"):
-        assert n in opt, f"bridge.md Opting out: {n!r} missing"
-    row = next(ln for ln in bridge.splitlines() if ln.startswith("| `custom` |"))
-    assert "OPT-OUT" in row and "N_RULE_CUSTOM" in row and "W_RULE_UNCHECKED" not in row, row
-    skill = SKILL_MD.read_text(encoding="utf-8")
-    assert "legitimate opt-out" in _norm(_section(skill, "Guardrails"))
-    cli_md = (SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8")
-    assert "N_RULE_CUSTOM" in cli_md and "never a warning" in _norm(cli_md)
-
-
-def test_bridge_md_documents_model_and_reading():
-    """``model`` is the name results are filed under (one per model; a layer sweep = several
-    names), ``reading`` names the run subdirectory and the results key; ``describe()`` is recorded, never identity."""
-    text = (SKILL_ROOT / "references" / "bridge.md").read_text(encoding="utf-8")
-    row = next(ln for ln in text.splitlines() if ln.startswith("| `model` |"))
-    for n in ("[A-Za-z0-9_.-]{1,64}", "<runs root>/<b>/<model>/<reading>/", "<results root>/<model>/", "two names", "W_BRIDGE_CHANGED"):
-        assert n in row, f"bridge.md `model` row: {n!r} missing"
-    assert "| key | in `describe_sha256` | content |" in text and "| key | identity |" not in text
-    for n in ("describe_sha256", "E_CONFIG_DRIFT", "--expect-profile", "W_WEIGHTS_UNFINGERPRINTED", "`notes`"):
-        assert n in text, f"bridge.md: {n!r} missing"
-
-
 # ------------------------------------------------------------------------------------------- references
 
 
@@ -291,35 +161,13 @@ def test_reference_files_exist_and_nonempty():
         assert len(p.read_text(encoding="utf-8")) > 500
 
 
-def test_bridge_md_covers_the_contract():
-    """bridge.md: raw input, media coordinates, describe(), used, invariance, worked examples."""
+def test_bridge_md_has_a_row_per_temporal_rule():
+    """The closed temporal vocabulary (``yavih.media.rules.TEMPORAL_RULES``): one row each in references/bridge.md."""
     text = (SKILL_ROOT / "references" / "bridge.md").read_text(encoding="utf-8")
-    for n in ("RawStream", "Sample", "BenchmarkView", "def bytes", "def open", "meta[\"facts\"]",
-              "media coordinates", "ORIGINAL frame", "describe()", "\"input\"", "temporal", "spatial", "front_end",
-              "norm", "decoder", "views", "batch_tolerance", "used", "grid_pos", "t_centres", "region", "crop_region",
-              "per_sample", "MediaUndecodable", "NotApplicable", "E_RERUN_DRIFT", "E_BATCH_INVARIANCE",
-              "E_RULE_MISMATCH", "E_TIMES_OUT_OF_MEDIA", "yavih.media.decode", "invariance", "profile.json"):
-        assert n in text, f"bridge.md: {n!r} missing"
-    # the closed temporal vocabulary (docs/bridge.md), one row each
     from yavih.media.rules import TEMPORAL_RULES
 
     for rule in TEMPORAL_RULES:
         assert re.search(rf"^\| `{rule}` \|", text, flags=re.M), f"bridge.md: temporal rule {rule!r} has no row"
-    # one worked example per media kind
-    examples = _section(text, "5. Worked examples")
-    for kind in ("mp4", "wav", "jpg / png", "audio-visual"):
-        assert kind in examples, f"bridge.md worked examples: {kind!r} missing"
-
-
-def test_readouts_md_covers_readouts_and_results():
-    text = (SKILL_ROOT / "references" / "readouts.md").read_text(encoding="utf-8")
-    for n in ("media coordinates", "T = 10", "t_bins", "min_cell_coverage", "target region", "0.25", "full-frame",
-              "external", "E_EXTERNAL_MISSING", "E_EXTERNAL_VERSION", "vggsounder==1.0", "result.json",
-              "\"schema_version\": 4", "\"eval_hash\"", "\"model\"", "\"reading\"", "results_<timestamp>.json",
-              "samples_<benchmark>_<reading>_<timestamp>.jsonl", "<benchmark>:<reading>", "\"results_version\": 2",
-              "(benchmark, reading, eval_hash)", "W_BRIDGE_CHANGED", "W_FEATURES_DIFFER", "higher_is_better",
-              "--merge-results", "floor_of", "not_applicable"):
-        assert n in text, f"readouts.md: {n!r} missing"
 
 
 def test_cli_md_documents_flags_and_codes():
@@ -452,44 +300,6 @@ def test_skill_install_and_show(tmp_path, capsys):
 # ------------------------------------------------------------------------------------------- data.md sync
 
 
-def test_data_md_rows_match_the_frozen_benchmark_yaml():
-    """``references/data.md`` section 1 has one row per packaged folder and quotes that folder's frozen
-    ``budget.media_gb``, per-split row counts (``budget.clips``, which ``tests/test_packaged_folders.py`` pins to
-    the manifest), readout and aliases. Reads the yaml directly so it does not depend on the loader."""
-    import yaml
-
-    from yavih.benchmarks import packaged_folder, packaged_names
-
-    text = (SKILL_ROOT / "references" / "data.md").read_text(encoding="utf-8")
-    rows = {m.group(1): m.group(0) for m in re.finditer(r"^\| ([a-z0-9_]+)\b[^\n]*$", text, flags=re.M)}
-    names = packaged_names()
-    assert names and set(names) <= set(rows), sorted(set(names) - set(rows))
-    for name in names:
-        y = yaml.safe_load((packaged_folder(name) / "benchmark.yaml").read_text(encoding="utf-8"))
-        row = rows[name]
-        assert isinstance(y["budget"]["media_gb"], (int, float)), f"{name}: budget.media_gb is not a number yet"
-        assert f"{y['budget']['media_gb']:g} GB = `budget.media_gb`" in row, (name, y["budget"]["media_gb"])
-        assert row.split("|")[2].strip().startswith(y["scorer"]), (name, y["scorer"])
-        for split, n_rows in y["budget"]["clips"].items():
-            n = f"{n_rows:,}".replace(",", " ")
-            assert n in row, (name, split, n)
-        for alias in y.get("aliases") or []:
-            assert f"`{alias}`" in row, (name, alias)
-
-
-def test_data_md_points_to_every_setup_md_and_prepare_time_transforms():
-    from yavih.benchmarks import packaged_names
-
-    text = (SKILL_ROOT / "references" / "data.md").read_text(encoding="utf-8")
-    setup = _section(text, "5. Per-benchmark `setup.md`")
-    assert "yavih bench info <b> --setup" in setup
-    for name in packaged_names():
-        assert re.search(rf"\b{name}\b", setup), f"data.md section 5 does not point to {name}'s setup.md"
-    transforms = _section(text, "4. Prepare-time transforms")
-    for n in ("avsync", "recipe", "ALAC", "nyuv2_depth", "PNG"):
-        assert n in transforms, n
-
-
 # ----------------------------------------------------------------------------- documentation examples and gotchas
 
 
@@ -515,37 +325,19 @@ def test_matrix_examples_parse_with_plan_build(tmp_path, doc):
         assert m.entries, doc
 
 
-_NORM_GOTCHA_FOLDERS = ("esc50", "fsd50k", "vggsounder", "ave", "audioset20k")
 
 
-@pytest.mark.parametrize("name", _NORM_GOTCHA_FOLDERS)
-def test_normalization_gotchas_allow_the_models_own_per_clip_recipe(name):
-    """A model pretrained with per-clip standardisation over its padded buffer keeps it; the gotchas say so and
-    point to ``norm``."""
-    from yavih.benchmarks import packaged_folder
-
-    gotchas = _norm(_section((packaged_folder(name) / "setup.md").read_text(encoding="utf-8"), "Gotchas"))
-    low = gotchas.lower()
-    assert "pretrain" in low and ("per clip" in low or "per-clip" in low), name
-    assert re.search(r"(own pretraining recipe|pretrained with per-clip|pretrained with them|model's own pretraining)", gotchas,
-                     flags=re.I), name
-    assert "`norm`" in gotchas, name
-
-
-def test_in1k_image_as_video_gotcha_says_top_level():
+def test_in1k_template_declares_image_as_video_at_the_top_level():
     """``image_as_video`` is a top-level ``describe()`` key (``input.image`` refuses it)."""
     from yavih.benchmarks import packaged_folder
 
-    gotchas = _norm(_section((packaged_folder("in1k") / "setup.md").read_text(encoding="utf-8"), "Gotchas"))
-    assert "TOP-LEVEL `describe()` key" in gotchas and "not inside `input.image`" in gotchas
     template = (packaged_folder("in1k") / "bridge_template.py").read_text(encoding="utf-8")
-    assert re.search(r'^ {12}"image_as_video": \{', template, flags=re.M)  # a sibling of "input" in describe()
+    assert re.search(r'^ {12}"image_as_video": \{', template, flags=re.M)
 
 
 def test_readme_example_reading_uses_the_benchmarks_vocabulary():
     """The quickstart's vggsounder bridge takes ``reading`` as an argument over vggsounder's {a, v, av} (the readings
     ``plan init`` plans), records it in ``describe()``, and its step-4 ``bridge check`` is the one printed for ``v``."""
-    from yavih.benchmarks import packaged_folder
 
     readme = REPO / "docs" / "quickstart.md"
     if not readme.is_file():
@@ -556,7 +348,6 @@ def test_readme_example_reading_uses_the_benchmarks_vocabulary():
     assert '"reading": self.reading' in text
     assert ("yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --arg reading=v "
             "--out yavih-bench/matrices/mymodel.profiles/mymodel-vggsounder-v.profile.json") in text
-    assert "`describe()[\"reading\"]` ∈ {`a`, `v`, `av`}" in (packaged_folder("vggsounder") / "setup.md").read_text(encoding="utf-8")
 
 
 # ------------------------------------------------------------------------------------------- the complete code list
@@ -632,3 +423,14 @@ def test_the_config_show_row_matches_the_envelope_keys(tmp_path, monkeypatch):
     assert _top_level_keys(shape) == set(shown)
     project_shape = re.search(r"project: (\{[^}]*\})", shape).group(1)
     assert _top_level_keys(project_shape) == set(shown["project"])
+
+
+def test_repository_urls_in_the_shipped_skill_resolve():
+    """Every ``https://github.com/Bizilizi/yavih/blob/main/<path>`` the shipped skill names is a file of this
+    repository (the wheel ships no docs/: the skill links them by URL)."""
+    if not (REPO / "docs").is_dir():
+        pytest.skip("not a source checkout")
+    missing = sorted({m for text in _skill_texts().values()
+                      for m in re.findall(r"https://github\.com/Bizilizi/yavih/blob/main/([\w./-]+?)(?:#[\w-]+)?(?=[\s)`'\"]|$)", text)
+                      if not (REPO / m).exists()})
+    assert not missing, missing

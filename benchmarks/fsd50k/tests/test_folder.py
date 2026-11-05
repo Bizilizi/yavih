@@ -58,16 +58,12 @@ def _write_wav(path: Path, seconds: float, sr: int = 44100, seed: int = 0) -> by
     return path.read_bytes()
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 # ----------------------------------------------------------------------------- yaml schema 2
 
 
 def test_schema2_top_level_and_no_removed_keys(spec: dict):
     assert spec["schema_version"] == 3 and spec["name"] == "fsd50k" == HERE.name
-    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "header", "scorer", "protocol_version", "changelog", "source", "obtain",
+    assert list(spec) == ["schema_version", "name", "aliases", "title", "capability", "core", "header", "scorer", "protocol_version", "changelog", "source", "obtain",
                           "budget", "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract",
                           "external", "protocol", "metrics", "readout_params"]
     assert "requires" not in spec  # moved into output_contract.requires
@@ -200,24 +196,6 @@ def test_metric_names_resolve(spec: dict):
 
 
 # ----------------------------------------------------------------------------- README.md / setup.md
-
-
-def test_readme_facts(spec: dict):
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    assert "setup.md" in F.section(text, 2, "In yavih")
-    assert "@article" in F.section(text, 2, "Citation") and "2010.00475" in text.split("\n\n")[1]
-    for needle in ("20 000", "10 231", "map_floor", "0.0189", spec["manifest"]["sha256"]):
-        assert needle in text, needle
-
-
-def test_setup_facts():
-    """Folder facts in setup.md (the setup.md structure and contract copies are ``yavih bench lint``'s)."""
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    # setup facts the bridge author needs
-    for needle in ("c480d119b8f7a7e32fdb58f3ea4d6c5a", "zip -s 0", "18 412 790 687", "51 210", "992b6e11",
-                   "7ad288bbfb6b957ba83579f33feb44bce2fbad932bdd1fa5dc51c36776369c55", "2 515"):
-        assert needle in text, needle
 
 
 def test_prepare_scripts_present():

@@ -653,7 +653,89 @@ def _within(a: Any, b: Any, tol: float) -> bool:
     return abs(fa - fb) <= tol
 
 
-def check(bench: Any) -> ConformanceReport:
+def _core_digest() -> str:
+    """sha256 over the yavih package's Python sources (computed once per process): a verdict cached under it is
+    invalidated by any change to the core's code."""
+    global _CORE_DIGEST
+    if _CORE_DIGEST is None:
+        root = Path(__file__).resolve().parent
+        h = hashlib.sha256()
+        for p in sorted(root.rglob("*.py")):
+            if "__pycache__" in p.parts or p.name == "_version.py":
+                continue
+            h.update(p.relative_to(root).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
+        _CORE_DIGEST = h.hexdigest()
+    return _CORE_DIGEST
+
+
+_CORE_DIGEST: str | None = None
+
+
+def _cache_key(bench: Any) -> str:
+    """What a conformance verdict depends on: the core's sources, the folder's whole content (its git tree id: yaml,
+    ``eval.py``, ``expected.json``, ...), the installed versions of its external packages and of numpy / torch."""
+    from importlib import metadata
+
+    from yavih.catalog import tree_id
+    from yavih.external import installed_version
+
+    def version(dist: str) -> str | None:
+        try:
+            return metadata.version(dist)
+        except metadata.PackageNotFoundError:
+            return None
+
+    payload = {"core": _core_digest(), "tree": tree_id(bench.folder), "generator": GENERATOR_VERSION,
+               "externals": {e.name: installed_version(e.name) for e in bench.spec.external},
+               "numpy": version("numpy"), "torch": version("torch")}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def _cache_path(bench: Any, key: str) -> Path | None:
+    from yavih import config
+
+    try:
+        home = config.load().yavih_home()
+    except config.ConfigError:
+        return None
+    return home / "cache" / "conformance" / f"{bench.name}-{key[:32]}.json"
+
+
+def check(bench: Any, *, cache: bool = False) -> ConformanceReport:
+    """:func:`check_fresh`, or with ``cache`` the verdict an earlier check stored under the same key (the core's
+    sources, the folder's content, the externals' and numpy / torch versions: :func:`_cache_key`) in
+    ``$YAVIH_HOME/cache/conformance/``. ``bench lint`` uses the cache; ``yavih bench conformance`` and the
+    record path never do."""
+    if not cache:
+        return check_fresh(bench)
+    try:
+        key = _cache_key(bench)
+        path = _cache_path(bench, key)
+    except (OSError, ValueError):
+        return check_fresh(bench)
+    if path is not None and path.is_file():
+        try:
+            d = json.loads(path.read_text(encoding="utf-8"))
+            return ConformanceReport(name=d["name"], folder=str(bench.folder), protocol_version=d["protocol_version"],
+                                     expected_version=d["expected_version"], ok=d["ok"], skipped=d["skipped"],
+                                     findings=[Finding(f["severity"], f["code"], f["message"]) for f in d["findings"]],
+                                     compared=d["compared"], drifted=list(d["drifted"]))
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    rep = check_fresh(bench)
+    if path is not None:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_text(json.dumps({**rep.to_dict(), "findings": [{"severity": f.severity, "code": f.code, "message": f.message}
+                                                                     for f in rep.findings]}), encoding="utf-8")
+            tmp.replace(path)
+        except OSError:
+            pass  # a read-only home: no cache, same verdict
+    return rep
+
+
+def check_fresh(bench: Any) -> ConformanceReport:
     """Compare the folder's current numbers with ``conformance/expected.json``.
 
     - no file: ``E_CONFORMANCE_MISSING`` (record one: ``yavih bench conformance <name> --record``);

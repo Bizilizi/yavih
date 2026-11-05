@@ -68,10 +68,6 @@ def png():
 # ----------------------------------------------------------------------------- files and yaml
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_folder_specific_files():
     """The folder layout is ``yavih bench lint``'s; these are the files only this folder ships."""
     for name in ("eval.py", "curation.json", "rgb_png.sha256.csv.gz", "prepare/derive_targets.py", "prepare/recontainer_png.py"):
@@ -199,30 +195,6 @@ def test_external_entry_matches_probe_py(spec):
 
 
 # ----------------------------------------------------------------------------- README.md / setup.md
-
-
-def test_readme_facts():
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    assert "@inproceedings{elbanani2024probing" in text and "@inproceedings{silberman2012indoor" in text
-
-
-def test_setup_facts():
-    """setup.md carries no unfilled placeholder (the setup.md structure and contract copies are lint's)."""
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    assert not re.search(r"PNG_[A-Z_]+|CENSUS_SUMMARY|BENCH_VERIFY_OUTPUT", text)
-
-
-def test_docs_keep_the_facts(spec):
-    """Key facts stay documented in README.md + setup.md (digests, rules, the leakage and corrupt-file exclusions)."""
-    text = ((HERE / "README.md").read_text(encoding="utf-8") + (HERE / "setup.md").read_text(encoding="utf-8")).lower()
-    for t in spec["targets"].values():
-        assert t["sha256"] in text
-    for h in (spec["manifest"]["sha256"], *spec["source"]["sha256"].values(), spec["data"]["derived"]["rgb_png.sha256.csv"]):
-        assert h in text, h
-    for needle in ("rawdepths", "session", "variable_names", "nearest-exact", "0.4403", "6919", "21181",
-                   "bookstore_0001l", "make_manifest.py"):
-        assert needle in text, needle
 
 
 # ----------------------------------------------------------------------------- prepare rules

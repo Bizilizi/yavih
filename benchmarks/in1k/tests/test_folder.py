@@ -32,7 +32,7 @@ _isolated_yavih_home = F.isolated_yavih_home
 spec, manifest_bytes, rows, bench = F.spec, F.manifest_bytes, F.rows, F.bench
 
 TOP_LEVEL = [
-    "schema_version", "name", "aliases", "title", "capability", "header", "scorer", "protocol_version", "changelog", "source", "obtain",
+    "schema_version", "name", "aliases", "title", "capability", "core", "header", "scorer", "protocol_version", "changelog", "source", "obtain",
     "budget", "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract", "external", "protocol",
     "metrics", "readout_params",
 ]
@@ -44,10 +44,6 @@ def _load_module(name: str, path: Path):
 
 
 # ----------------------------------------------------------------------------- files, schema 2, hashes
-
-
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
 
 
 def test_folder_contents():
@@ -188,25 +184,6 @@ def test_yaml_loads_in_core(bench, spec):
 
 
 # ----------------------------------------------------------------------------- README.md / setup.md
-
-
-def test_readme_facts():
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    assert "@article{russakovsky2015imagenet" in F.section(text, 2, "Citation")
-    proto = F.section(text, 2, "In yavih")
-    assert "setup.md" in proto and "make_manifest.py" in proto and "--check" in proto
-
-
-def test_setup_md_keeps_the_facts(spec):
-    """The setup facts in setup.md: upstream sizes and digests, the frozen-subset size, the root variable, pitfalls."""
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    for needle in (
-        *spec["source"]["sha256"].values(), "1d675b47d978889d74fa0da5fadfb00e", "12 432 228 705", "1 331 167",
-        "147 897 477 120", "6 744 924 160", "YAVIH_DATA__IN1K__MEDIA_ROOT", "Empty `val/`", "rsync",
-        "yavih bench verify in1k",
-    ):
-        assert needle in text, needle
 
 
 # ----------------------------------------------------------------------------- no reader.py (generic reader)

@@ -53,15 +53,6 @@ def test_every_deadline_margin_default_clears_the_template_signal_lead() -> None
 # ----------------------------------------------------------------------------- the canary-drift note in the skill
 
 
-def test_skill_cli_reference_names_the_canary_drift_note() -> None:
-    """In-tolerance canary drift is the note ``N_CANARY_DRIFT`` (the code table vs docs/validation.md is
-    ``tests/test_docs.py``)."""
-    from yavih.io.validate import CODES
-
-    assert CODES["N_CANARY_DRIFT"] == "note"
-    assert "N_CANARY_DRIFT" in (REFS / "cli.md").read_text()
-
-
 # ----------------------------------------------------------------------------- the fps rule keys are documented
 
 
@@ -110,40 +101,13 @@ def test_every_shipped_bridge_declares_a_v_or_av(path: Path) -> None:
     assert readings and readings <= allowed, f"{path}: {readings}"
 
 
-def test_reading_vocabulary_is_documented_once() -> None:
-    row = next(line for line in (REFS / "bridge.md").read_text().splitlines() if line.startswith("| `reading` |"))
-    assert '`"a"`, `"v"` or `"av"`' in row and '"video"' not in row
-    docs_row = next(line for line in _doc("bridge.md").splitlines() if line.startswith("| `reading` |"))
-    assert all(f'`"{r}"`' in docs_row for r in ("a", "v", "av")) and '"video"' not in docs_row
-
-
 # ----------------------------------------------------------------------------- `extract --out` is the run dir
-
-
-def test_extract_out_is_the_run_directory_everywhere() -> None:
-    bridge_md = (REFS / "bridge.md").read_text()
-    assert "--out runs/ " not in bridge_md and "Shards land in `runs/" not in bridge_md
-    assert "--out $RUN" in bridge_md and "`--out` is the RUN directory" in bridge_md
-    assert '"--out", "runs/"' not in _doc("execution.md")  # plan passes the run directory runs/<bench>/<model>/<reading>
-    assert "--out $RUN" in (REPO / "docs" / "quickstart.md").read_text()
 
 
 # ----------------------------------------------------------------------------- the live-probe fallback
 
 
-def test_live_probe_fallback_is_documented() -> None:
-    for path in (REFS / "bridge.md", REFS / "data.md"):
-        assert "live header probe" in path.read_text(), path
-
-
 # ----------------------------------------------------------------------------- clip_acc == seg_acc on AVE
-
-
-def test_readouts_example_shows_clip_acc_equal_to_seg_acc_on_ave() -> None:
-    text = (REFS / "readouts.md").read_text()
-    m = re.search(r'"metrics": \{"seg_acc": ([0-9.]+), "clip_acc": ([0-9.]+)', text)
-    assert m and m.group(1) == m.group(2), "the AVE example must not show clip_acc != seg_acc"
-    assert "`clip_acc` equals `seg_acc` by construction" in text
 
 
 # ----------------------------------------------------------------------------- documented budgets == the yamls

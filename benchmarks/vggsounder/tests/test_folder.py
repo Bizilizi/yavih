@@ -48,10 +48,6 @@ def eval_mod():
     return _load("vggsounder_folder_eval", HERE / "eval.py")
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 # ----------------------------------------------------------------------------- yaml
 
 
@@ -214,13 +210,6 @@ def test_metric_names_resolve(spec, eval_mod):
 
 
 # ----------------------------------------------------------------------------- docs
-
-
-def test_readme_facts():
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    cite = F.section(text, 2, "Citation")
-    assert re.search(r"@inproceedings\{\w+2025vggsounder,", cite) and "@inproceedings{chen2020vggsound," in cite
 
 
 def test_bridge_template_describe(spec):

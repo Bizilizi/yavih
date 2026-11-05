@@ -1,13 +1,14 @@
 """Import boundary: no module under ``yavih/`` other than ``probes/``, ``readouts/``,
 ``bridges/examples/`` and ``testing/__init__.py`` (``yavih.testing``) imports torch at module scope.
 
-Each core module is imported in a fresh subprocess with ``sys.modules["torch"] = None`` (so any
+Every core module is imported in one subprocess with ``sys.modules["torch"] = None`` (so any
 ``import torch`` raises ``ImportError``), and the set of modules is discovered from the source tree
 so new files are covered automatically.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -65,11 +66,24 @@ def test_module_discovery_sees_the_package_layout():
         assert required in names, required
 
 
-@pytest.mark.parametrize("module", CORE)
-def test_core_module_imports_without_torch(module):
-    code = BLOCK + f"import importlib; importlib.import_module({module!r}); print('ok')"
-    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert proc.returncode == 0 and proc.stdout.strip() == "ok", f"{module} failed with torch blocked:\n{proc.stderr}"
+def test_core_modules_import_without_torch():
+    """Every core module imports with torch blocked (``sys.modules["torch"] = None``: any ``import torch`` at module
+    scope raises, whatever was imported before), all in one interpreter: one subprocess instead of one per module."""
+    code = BLOCK + (
+        "import importlib, json, traceback\n"
+        f"failed = {{}}\n"
+        f"for m in {CORE!r}:\n"
+        "    try:\n"
+        "        importlib.import_module(m)\n"
+        "    except BaseException:\n"
+        "        failed[m] = traceback.format_exc(limit=3)\n"
+        "print(json.dumps(failed))\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=600)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    failed = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert not failed, "core modules that fail with torch blocked:\n" + "\n".join(f"{m}:\n{tb}" for m, tb in failed.items())
+    assert len(CORE) > 50
 
 
 def test_import_yavih_does_not_load_torch_or_extras():

@@ -29,10 +29,6 @@ def eval_mod():
     return F.load_module(HERE / "eval.py", "epic100_anticipation_stream_folder_eval")
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_yaml_identity(spec):
     assert spec["name"] == "epic100_anticipation_stream" and spec["scorer"] == "stream" and spec["protocol_version"] == 1
     assert spec["protocol"]["anticipation_s"] == 1.0 and spec["output_contract"]["stream"] == {"update_interval_s": 0.5}
@@ -80,13 +76,6 @@ def test_metrics_on_hand_checked_inputs(eval_mod):
     assert m["mt5r_verb_gru"].fn(wrong, tg, {}, meta) == 0.0 and m["mt5r_action_gru"].fn(wrong, tg, {}, meta) == 0.0
 
 
-def test_conformance_fixture_reproduces(bench):
-    from yavih import conformance as C
-
-    rep = C.check(bench)
-    assert rep["ok"] if isinstance(rep, dict) else rep.ok
-
-
 def test_bridge_template_declares_the_stream(bench):
     from yavih.bridge import BenchmarkView, validate_describe
 
@@ -94,13 +83,6 @@ def test_bridge_template_declares_the_stream(bench):
     for reading in ("av", "av-rt"):
         b = tmpl.Epic100StreamBridge(BenchmarkView.from_benchmark(bench), {"reading": reading})
         validate_describe(b.describe(), b, bench)
-
-
-def test_docs_name_the_facts():
-    readme = (HERE / "README.md").read_text(encoding="utf-8")
-    for fact in ("495", "138", "9 668", "mt5r_action_gru", "73b8a00", "tau_a = 1 s"):
-        assert fact in readme
-    assert "yavih bench verify epic100_anticipation_stream" in (HERE / "setup.md").read_text(encoding="utf-8")
 
 
 def test_manifest_rederives_on_site():

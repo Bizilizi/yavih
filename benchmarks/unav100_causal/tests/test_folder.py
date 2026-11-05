@@ -29,10 +29,6 @@ def eval_mod():
     return F.load_module(HERE / "eval.py", "unav100_causal_folder_eval")
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_yaml_identity(spec):
     assert spec["name"] == "unav100_causal" and spec["scorer"] == "stream" and spec["protocol_version"] == 1
     assert spec["output_contract"]["stream"] == {"update_interval_s": 0.5}
@@ -96,13 +92,6 @@ def test_metrics_and_onset(eval_mod):
     assert eval_mod.onset(noisy, rec, times, meta["meta"], theta, 1.0)[2] <= 60
 
 
-def test_conformance_fixture_reproduces(bench):
-    from yavih import conformance as C
-
-    rep = C.check(bench)
-    assert rep["ok"] if isinstance(rep, dict) else rep.ok
-
-
 def test_bridge_template_declares_the_stream(bench):
     from yavih.bridge import BenchmarkView, validate_describe
 
@@ -110,13 +99,6 @@ def test_bridge_template_declares_the_stream(bench):
     for reading in ("av", "av-rt"):
         b = tmpl.Unav100CausalBridge(BenchmarkView.from_benchmark(bench), {"reading": reading})
         validate_describe(b.describe(), b, bench)
-
-
-def test_docs_name_the_facts():
-    readme = (HERE / "README.md").read_text(encoding="utf-8")
-    for fact in ("6 487", "2 166", "map_gru", "unav100_causal_recognition_v1", "60 per hour"):
-        assert fact in readme
-    assert "yavih bench verify unav100_causal" in (HERE / "setup.md").read_text(encoding="utf-8")
 
 
 def test_manifest_rederives_on_site():

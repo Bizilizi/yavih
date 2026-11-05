@@ -62,10 +62,6 @@ def _load_template():
 # ----------------------------------------------------------------------------- yaml + files
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_sha256_matches(spec: dict):
     F.assert_manifest_hashes(HERE, spec)
 
@@ -201,29 +197,6 @@ def test_yaml_parses_via_benchmark_from_dir(isolated: Path):
 
 
 # ----------------------------------------------------------------------------- README.md + setup.md
-
-
-def test_readme_facts(spec: dict):
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    cite = F.section(text, 2, "Citation")
-    assert "```bibtex" in cite and "piczak2015dataset" in cite and "10.1145/2733373.2806390" in cite
-    for needle in ("2 000", "400", "acc_floor", "0.02", "not comparable", "ESC-10", "make_manifest.py", "--check",
-                   spec["manifest"]["sha256"][:12]):
-        assert needle.lower() in text.lower(), needle
-
-
-def test_setup_facts():
-    """Folder facts in setup.md (the setup.md structure and contract copies are ``yavih bench lint``'s)."""
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    assert "--census" in F.section(text, 2, "Prepare & verify")
-    for needle in (
-        "33c8ce9eb2cf0b1c2f8bcf322eb349b6be34dbb6", "ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246",
-        "f6aec3a3283a2efdcbb1feff334adad7ab17c097bdec0cbb4eebdb9e16886074",
-        "52754b9099c1c48a9fec379bd7dd75dbc6d78387faecc2a9318fc0c43332d398", "645 520 453", "CC BY-NC 3.0",
-        "131943", "234879", "e413d9039c94", "pad_to_s", "44.1 kHz",
-    ):
-        assert needle in text, needle
 
 
 def test_prepare_scripts_present():

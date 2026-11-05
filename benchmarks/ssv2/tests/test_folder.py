@@ -54,10 +54,6 @@ def _assert_template_deps() -> None:
 # ----------------------------------------------------------------------------- files, yaml, hashes
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_folder_specific_files():
     """The folder layout is ``yavih bench lint``'s; these are this folder's own choices."""
     assert (HERE / "curation.json").is_file()
@@ -192,23 +188,6 @@ def test_yaml_loads_through_core(spec, bench):
 
 
 # ----------------------------------------------------------------------------- documentation
-
-
-def test_readme_facts():
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    assert "@inproceedings{goyal2017something" in F.section(text, 2, "Citation")
-    proto = F.section(text, 2, "In yavih")
-    assert "class_balanced_subsample" in proto and "labels/train.json" in proto
-
-
-def test_setup_facts(spec):
-    """Folder facts in setup.md (the setup.md structure and contract copies are ``yavih bench lint``'s)."""
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    assert spec["manifest"]["sha256"] in F.section(text, 2, "Prepare & verify")
-    # every upstream sha256 the yaml pins is documented where the agent obtains the data
-    obtain = F.section(text, 2, "Obtain the data")
-    assert all(v in obtain for v in spec["source"]["sha256"].values())
 
 
 # ----------------------------------------------------------------------------- no reader.py / bridge_template.py (static)
@@ -504,9 +483,9 @@ def test_reader_smoke_on_real_data():
     assert abs(st.info["duration_s"] - 5.25) < 1e-6 and st.info["n_frames"] in (None, 63)
 
 
-def test_doc_snippets_are_not_stale():
-    """No retired reader-side vocabulary in the agent-facing files."""
-    for name in ("setup.md", "README.md", "bridge_template.py"):
+def test_bridge_template_uses_no_retired_api():
+    """No retired reader-side vocabulary in the bridge template (code an agent copies)."""
+    for name in ("bridge_template.py",):
         text = (HERE / name).read_text(encoding="utf-8")
         for stale in ("frame_times(", ".frames(N", "decode_plan", "bridge_decode_allowed", "W_PREFETCH_MISS", "Stream.window"):
             assert stale not in text, stale

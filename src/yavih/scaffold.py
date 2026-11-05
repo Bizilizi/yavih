@@ -170,9 +170,10 @@ def _py(obj: Any, indent: int) -> str:
 
 
 def _test_folder(y: dict[str, Any], like: str, *, readings: list[str], has_eval: bool) -> str:
-    """``tests/test_folder.py`` of a scaffold: the shared checks of ``yavih.testing.folder``, pins of the values the
-    scaffold carries (still ``like``'s), and ``pytest.skip("TODO: …")`` for the tests that need the benchmark's own
-    data. Every test passes or skips on the fresh scaffold; ``bench lint`` reports each ``TODO:`` left."""
+    """``tests/test_folder.py`` of a scaffold, in the lean form: the shared checks of ``yavih.testing.folder``, a few
+    identity pins (still ``like``'s), and ``pytest.skip("TODO: …")`` for the tests that need the benchmark's own data.
+    It never re-runs ``bench lint`` (the repository runs it once per folder) and pins no README.md / setup.md wording.
+    Every test passes or skips on the fresh scaffold; ``bench lint`` reports each ``TODO:`` left."""
     name = y["name"]
     streams = {k: (v or {}).get("kind") for k, v in file_fields(y.get("fields")).items()}
     clips = dict((y.get("budget") or {}).get("clips") or {})
@@ -180,10 +181,11 @@ def _test_folder(y: dict[str, Any], like: str, *, readings: list[str], has_eval:
     head = f'''"""Folder tests of {name} (run: ``python -m pytest "$(yavih bench path {name})/tests" -q -p no:cacheprovider``).
 
 Written by ``yavih bench new`` from {like}: the tests run on the scaffold as it is, so every value pinned below is
-still {like}'s. TODO: pin this folder's own facts once its manifest is frozen (columns and charsets, rows and classes
-per split, the curation sums, README.md and setup.md facts, the bridge template's ``describe()``) and write the tests
-that skip with a ``TODO:`` reason; ``tests/test_folder.py`` of a packaged folder (``yavih bench path {like}``) has each
-of them written out. ``yavih bench lint`` reports every ``TODO:`` left in this file.
+still {like}'s. TODO: pin this folder's own facts once its manifest is frozen (rows per split, the targets and metrics
+on hand-checked inputs, the bridge template's ``describe()``) and write the tests that skip with a ``TODO:`` reason.
+Test what nothing else checks: ``yavih bench lint`` (run once per folder by the repository) already checks the
+layout, the yaml, the hashes, the conformance fixture and the README.md / setup.md structure, so never re-run it here
+and never pin documentation wording. ``yavih bench lint`` reports every ``TODO:`` left in this file.
 """
 
 from __future__ import annotations
@@ -203,16 +205,11 @@ HEADLINE = {(y.get("metrics") or {}).get("headline")!r}
 STREAMS = {_py(streams, 10)}
 CLIPS = {_py(clips, 8)}
 READINGS = {_py(readings, 11)}
-OUTPUT_CONTRACT = {_py(y.get("output_contract"), 18)}
 EXTERNAL = {_py(external, 11)}
 '''
     body = '''
 
 # ----------------------------------------------------------------------------- yaml + files
-
-
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
 
 
 def test_sha256_matches(spec: dict):
@@ -229,26 +226,15 @@ def test_metric_names_resolve(spec: dict):
     assert spec["scorer"] == READOUT and spec["metrics"]["headline"] == HEADLINE
 
 
-def test_input_contract(spec: dict):
+def test_yaml_identity(spec: dict):
     ic = spec["input_contract"]
     assert {k: v["kind"] for k, v in spec["fields"].items() if v.get("storage", "file") == "file"} == STREAMS
     assert set(ic["handed_over"]) == set(ic["info"]) == set(STREAMS)
-
-
-def test_output_contract_and_external(spec: dict):
-    assert spec["output_contract"] == OUTPUT_CONTRACT
     assert [e["name"] for e in spec["external"] or []] == EXTERNAL
     assert (HERE / "eval.py").is_file() is HAS_EVAL
 
 
-# ----------------------------------------------------------------------------- README.md + prepare/
-
-
-def test_readme_facts(spec: dict):
-    """Folder facts in README.md (its structure is ``yavih bench lint``'s). TODO: pin the citation key, the counts
-    and the published reference numbers once README.md is written."""
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    assert spec["metrics"]["headline"] in F.section(text, 2, "In yavih") and "make_manifest.py" in text
+# ----------------------------------------------------------------------------- prepare/
 
 
 def test_prepare_scripts_present():

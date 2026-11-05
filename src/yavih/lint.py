@@ -343,13 +343,14 @@ def _c_hashed_prose(c: _Ctx) -> Iterator[Finding]:
 @_check("conformance")
 def _c_conformance(c: _Ctx) -> Iterator[Finding]:
     """``conformance/expected.json`` exists, is at the folder's ``protocol_version`` and the folder's scoring path still
-    reproduces it within tolerance (``yavih.conformance.check``: ``E_CONFORMANCE_MISSING`` / ``_STALE`` / ``_DRIFT``;
+    reproduces it within tolerance (``yavih.conformance.check``, cached under the core's sources, the folder's content
+    and the externals' versions: ``E_CONFORMANCE_MISSING`` / ``_STALE`` / ``_DRIFT``;
     ``W_CONFORMANCE_SKIPPED`` when a pinned external package is absent here)."""
     if c.bench is None:
         return
     from yavih.conformance import check
 
-    rep = check(c.bench)
+    rep = check(c.bench, cache=True)  # a verdict cached under the core's sources and the folder's content
     for f in rep.findings:
         yield (_err if f.severity == "error" else _warn)("conformance", f.code, f.message, "conformance/expected.json")
 

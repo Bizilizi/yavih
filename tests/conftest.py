@@ -31,6 +31,12 @@ def _yavih_testing_env(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest
     home = tmp_path_factory.getbasetemp() / "yavih_home_isolated"
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("YAVIH_HOME", str(home))
+    # CI keeps bench lint's conformance verdicts across runs (keyed on the core's sources and each folder's content)
+    keep = os.environ.get("CONFORMANCE_CACHE_DIR")
+    if keep and not (home / "cache" / "conformance").exists():
+        Path(keep).mkdir(parents=True, exist_ok=True)
+        (home / "cache").mkdir(exist_ok=True)
+        (home / "cache" / "conformance").symlink_to(Path(keep).resolve(), target_is_directory=True)
     monkeypatch.setenv("YAVIH_TESTING", "1")
     monkeypatch.setenv("YAVIH_CONFIG", str(REPO / "tests" / "_no_such_config.toml"))  # no project file, no discovery
     xdg = tmp_path_factory.getbasetemp() / "xdg_isolated"  # no user file (~/.config/yavih/config.toml is never read)

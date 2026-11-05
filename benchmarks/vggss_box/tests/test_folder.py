@@ -48,10 +48,6 @@ def _load_module(name: str, file: str):
     return F.load_module(HERE / file, name)
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 # ----------------------------------------------------------------------------- benchmark.yaml (schema 2)
 
 
@@ -244,17 +240,6 @@ def test_crop_coverage_supports_threshold(spec, manifest_rows, mm):
 
 
 # ----------------------------------------------------------------------------- docs
-
-
-def test_readme_facts():
-    """Folder facts in README.md (the README structure is ``yavih bench lint``'s)."""
-    assert "```bibtex" in F.section((HERE / "README.md").read_text(encoding="utf-8"), 2, "Citation")
-
-
-def test_setup_facts(spec):
-    """Folder facts in setup.md (the setup.md structure and contract copies are ``yavih bench lint``'s)."""
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    assert spec["manifest"]["sha256"] in F.section(text, 2, "Prepare & verify")
 
 
 def test_folder_ships_no_reader_py():
