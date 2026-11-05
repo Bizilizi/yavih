@@ -32,7 +32,6 @@ from yavih.benchmark import (
     NoTargets,
     SchemaError,
     UnknownBenchmark,
-    bench_fetch,
     bench_info,
     bench_verify,
     data_status_path,
@@ -1546,18 +1545,7 @@ def test_bench_verify_and_info_and_fetch(tmp_path, yavih_home, monkeypatch):
     assert info["external"] == [] and info["input_contract"]["facts"] == [] and info["output_contract"]["shape"] == "fixed"
     assert bench_info(str(folder), readme_only=True) == {"name": "synth", "readme": info["readme"]}
     assert bench_info(str(folder), setup=True) == {"name": "synth", "setup": "# synth — setup\n"}
-    out = bench_fetch(str(folder))
-    assert out["folder"] == str(yavih_home / "benchmarks" / "synth") and out["manifest_sha_ok"]
-    assert {"manifest.csv.gz", "setup.md"} <= set(out["copied"])
-    assert Benchmark.load("synth").folder == (yavih_home / "benchmarks" / "synth").resolve()
-    assert Benchmark.load("syn").name == "synth"
-    assert bench_fetch("synth")["copied"] == []
-    assert Benchmark.load("synth", fetch=True).name == "synth"
-    with pytest.raises(UnknownBenchmark):
-        bench_fetch("nope")
-    (yavih_home / "benchmarks" / "synth" / "classes.csv").write_text("index,name\n0,zzz\n1,b\n")
-    with pytest.raises(ManifestError, match="classes sha256"):
-        bench_fetch("synth")
+    # fetching (the catalog) is tests/test_catalog.py; a classes sha256 mismatch is test_manifest_validation_rules
 
 
 def test_bench_verify_derived_sha(tmp_path, yavih_home, monkeypatch):

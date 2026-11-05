@@ -477,18 +477,18 @@ class Benchmark:
 `Benchmark.load(ref)` (and every `yavih bench` command) resolves `ref` to a folder in this order; the first match wins:
 
 1. an existing directory path holding `benchmark.yaml` (a `ref` containing `/` is only tried as a path);
-2. `$YAVIH_HOME/benchmarks/<ref>`;
-3. the packaged folder `yavih/benchmarks/<ref>` (found through `importlib.resources`);
-4. the directories of `$YAVIH_BENCH_PATH` (colon-separated, first wins; each is a benchmark folder or holds
-   benchmark folders);
+2. `$YAVIH_HOME/benchmarks/<ref>` (where `yavih bench fetch` puts a folder outside a project);
+3. the repository folder `benchmarks/<ref>` when yavih runs from a source checkout (an installed wheel ships none);
+4. the project's benchmarks directory (`yavih-bench/benchmarks/`, or `[project] benchmarks`: a project's own folders
+   and the fetched ones), then the directories of `$YAVIH_BENCH_PATH` (colon-separated, first wins; each is a
+   benchmark folder or holds benchmark folders);
 5. pip-installed benchmark packs: entry-point group `yavih.benchmarks`, value `"pkg.module"`, whose package directory
    is a benchmark folder or holds benchmark folders (read as data, never imported);
 6. an alias declared by any of the folders above.
 
-A folder from `$YAVIH_BENCH_PATH` or a pack never shadows a packaged name. A `$YAVIH_HOME/benchmarks` copy of a
-packaged folder carries a `.yavih_fetch.json` stamp; a copy whose source files changed since it was fetched is
-refused (`E_HOME_BENCH_STALE`, a warning under `YAVIH_LENIENT=1`) and an unstamped copy warns
-(`W_HOME_BENCH_UNSTAMPED`); `yavih bench fetch <name> --refresh` re-syncs it.
+A folder from 4 or 5 never shadows a repository folder's name. A name that resolves nowhere is a catalog benchmark not
+fetched yet: `yavih bench fetch <name>` brings it, verified against the index and recorded in the lock
+([catalog](catalog.md)).
 
 ## README.md contract
 

@@ -253,3 +253,28 @@ def test_a_suite_entry_not_here_is_deferred_then_fetched(catrepo, tmp_path, yavi
         load_suite(bad)
     s2, done, failed = fetch_missing(s, source=catrepo["repo"])
     assert [d["name"] for d in done] == ["catx"] and not failed and all(x.fetched for _c, x in s2.entries())
+
+
+def test_load_with_fetch_brings_a_name_that_is_not_here_and_an_edited_copy_warns(catrepo, tmp_path, yavih_home, monkeypatch):
+    from yavih import config
+    from yavih.benchmark import Benchmark, UnknownBenchmark
+
+    with pytest.raises(UnknownBenchmark, match="yavih bench fetch catx"):
+        Benchmark.load("catx")
+    cfg = tmp_path / "config.toml"
+    archives = tmp_path / "archives"
+    archives.mkdir()
+    c = catrepo["c3"]
+    subprocess.run(["git", "-C", str(catrepo["repo"]), "archive", "--format=tar.gz", f"--prefix=yavih-{c}/", "-o",
+                    str(archives / f"{c}.tar.gz"), c], check=True)
+    cfg.write_text(f'[catalog]\nurl = "file://{catrepo["repo"]}/catalog/index.json"\narchive = "file://{archives}/{{commit}}.tar.gz"\n')
+    monkeypatch.setenv("YAVIH_CONFIG", str(cfg))
+    b = Benchmark.load("catx", fetch=True)  # a development build takes the newest revision
+    # YAVIH_CONFIG names a project file: the folder goes to its benchmarks/ directory, the lock next to it
+    assert b.folder == (tmp_path / "benchmarks" / "catx").resolve() and (tmp_path / "benchmarks.lock").is_file()
+    assert b.folder_origin == {"repo": catalog.DEFAULT_REPO, "commit": c, "tree": catalog.tree_id(b.folder)}
+    assert {"repo", "commit", "tree", "eval", "reader"} == set(b.folder_provenance())
+    (b.folder / "README.md").write_text("edited\n")
+    config.drain_warnings()
+    assert Benchmark.load("catx").folder_origin["commit"] == c  # still the locked commit; the tree is the edited one
+    assert any(w["code"] == "W_FETCHED_MODIFIED" for w in config.drain_warnings())

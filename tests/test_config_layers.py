@@ -18,7 +18,7 @@ import pytest
 
 import yavih.cli as cli
 from yavih import config, resources
-from yavih.benchmark import Benchmark, bench_fetch, data_status_path
+from yavih.benchmark import Benchmark, data_status_path
 
 
 @pytest.fixture
@@ -335,42 +335,6 @@ def test_read_only_home_warns_once(xdg, synthetic_benchmark, monkeypatch, tmp_pa
     warned = [w for w in config.drain_warnings() if w["code"] == "W_HOME_READONLY"]
     assert len(warned) == 1 and "YAVIH_HOME" in warned[0]["message"]
     assert capsys.readouterr().err.count("W_HOME_READONLY") <= 1
-
-
-def test_stale_home_copy_is_refused_and_refetch_repairs_it(xdg, yavih_home, monkeypatch):
-    out = bench_fetch("esc50")
-    dest = Path(out["folder"])
-    stamp = json.loads((dest / ".yavih_fetch.json").read_text())
-    assert stamp["protocol_hash"] == Benchmark.load("esc50").protocol_hash and "benchmark.yaml" in stamp["files"]
-    assert Benchmark.load("esc50").folder == dest.resolve()
-    # simulate a yavih upgrade: the packaged folder no longer matches what the copy was synced from
-    stamp["files"]["reader.py"] = "0" * 64
-    (dest / ".yavih_fetch.json").write_text(json.dumps(stamp))
-    import yavih.benchmark as B
-
-    B._HOME_CHECKED.clear()
-    with pytest.raises(config.ConfigError, match="E_HOME_BENCH_STALE|has changed since"):
-        Benchmark.load("esc50")
-    monkeypatch.setenv("YAVIH_LENIENT", "1")
-    config.drain_warnings()
-    Benchmark.load("esc50")
-    assert any(w["code"] == "W_HOME_BENCH_STALE" for w in config.drain_warnings())
-    monkeypatch.delenv("YAVIH_LENIENT")
-    B._HOME_CHECKED.clear()
-    bench_fetch("esc50")  # an unmodified cached file is refreshed; the stamp is rewritten
-    B._HOME_CHECKED.clear()
-    assert Benchmark.load("esc50").folder == dest.resolve()
-
-
-def test_unstamped_home_copy_warns(xdg, yavih_home):
-    bench_fetch("esc50")
-    (yavih_home / "benchmarks" / "esc50" / ".yavih_fetch.json").unlink()
-    import yavih.benchmark as B
-
-    B._HOME_CHECKED.clear()
-    config.drain_warnings()
-    Benchmark.load("esc50")
-    assert any(w["code"] == "W_HOME_BENCH_UNSTAMPED" for w in config.drain_warnings())
 
 
 def test_folder_root_for_scripts(xdg, synthetic_benchmark):

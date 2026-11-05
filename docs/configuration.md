@@ -134,6 +134,16 @@ Notes:
   values alike. `[data] root` itself cannot use a placeholder; a `[datasets]` entry may use
   `${data.root}` but not another `${datasets.*}`.
 
+### `[catalog]`
+
+Where `yavih bench fetch` reads the index and the repository archives ([catalog](catalog.md)); a `[site.<id>]` table
+may set it too (a cluster's mirror).
+
+| key | default | meaning |
+|---|---|---|
+| `url` | `https://raw.githubusercontent.com/Bizilizi/yavih/main/catalog/index.json` | the index (`https://` or `file://`) |
+| `archive` | `https://codeload.github.com/{repo}/tar.gz/{commit}` | the repository archive at one commit; `{repo}` and `{commit}` are substituted |
+
 ## Data roots
 
 Every benchmark declares its data roots in `benchmark.yaml` under `data.roots`, each with a `default`
@@ -253,8 +263,7 @@ list of problems and the hint to run `yavih config show`:
 
 `--lenient` or `YAVIH_LENIENT=1` turns these into warnings (`W_CONFIG_UNKNOWN`, `W_CONFIG_TYPE`,
 `W_CONFIG_UNKNOWN_BENCH`, `W_CONFIG_UNKNOWN_ROOT`, `W_CONFIG_ENV`, `W_CONFIG_UNSET_VAR`,
-`W_CONFIG_SITE`, each suffixed "ignored: lenient"), and also downgrades a stale fetched benchmark copy
-(`E_HOME_BENCH_STALE`) to a warning. It exists for a home directory shared by installs of different
+`W_CONFIG_SITE`, each suffixed "ignored: lenient"). It exists for a home directory shared by installs of different
 yavih versions, where a key a newer version knows must not break an older one. Lenient mode does not
 excuse a malformed TOML file, a missing `--config` file or a malformed `[resources]` value.
 

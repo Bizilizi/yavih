@@ -365,7 +365,7 @@ def test_bench_list(capsys, fake_benchmark_module, yavih_home):
     rc, env = run_json(capsys, ["bench", "list"])
     assert rc == 0 and len(env["data"]) == 1
     row = env["data"][0]
-    assert set(row) == {"name", "aliases", "scorer", "capability", "clips", "media_gb", "source_kind", "obtain", "status"}
+    assert set(row) == {"name", "aliases", "scorer", "capability", "clips", "media_gb", "source_kind", "obtain", "status", "origin"}
     assert row["name"] == "synth_clf" and row["scorer"] == "clf" and row["clips"] == {"train": 8, "val": 4} and row["status"] == "verified"
     assert row["source_kind"] == "derived" and row["aliases"] == ["synth_clf_alias"]
     rc = cli.main(["bench", "list"])
@@ -404,11 +404,6 @@ def test_bench_info(capsys, fake_benchmark_module):
     assert env["paths"]["setup"].endswith("setup.md") and env["paths"]["folder"]
     assert cli.main(["bench", "info", "synth_clf", "--setup", "--readme-only"]) == cli.EXIT_USAGE
     capsys.readouterr()
-
-
-def test_bench_fetch(capsys, fake_benchmark_module):
-    rc, env = run_json(capsys, ["bench", "fetch", "synth_clf"])
-    assert rc == 0 and env["data"]["manifest_sha_ok"] is True and env["data"]["name"] == "synth_clf"
 
 
 def _fake_bench_verify(calls: list, *, present: int = 4, failed: int = 0, unreadable: int = 0, curation_ok: bool | None = True, targets_ok: bool | None = None):
