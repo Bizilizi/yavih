@@ -1090,8 +1090,37 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
     ob = data["obtain"] if isinstance(data["obtain"], dict) else {}
     obtain_line = f"obtain: {ob.get('tier')} — {ob.get('how')}\n" if ob else ""
     cap_line = f"capability: {', '.join(data['capability'])}\n" if data["capability"] else ""
+    from yavih.extensions import extends_line, folder_extensions
+
+    data["extends"] = folder_extensions(bench)
+    ext_line = extends_line(data["extends"], scorer=str(raw.get("scorer"))) + "\n"
     return Envelope(data=data, paths={"folder": str(bench.folder)},
-                    text=readme + ("\n" if readme and not readme.endswith("\n") else "") + cap_line + obtain_line + summary + "\n")
+                    text=readme + ("\n" if readme and not readme.endswith("\n") else "") + cap_line + obtain_line + ext_line + summary + "\n")
+
+
+def cmd_bench_extensions(ns: argparse.Namespace) -> Envelope:
+    """``yavih bench extensions [<name>...] [--all]``: what each benchmark folder extends (its own scorer, metrics,
+    hooks, codecs, bridge-check gates, eligibility rule, stand-in, reader, readings, capability tags, label kind), the
+    parts of a protocol a folder owns instead of the core. Without names, the folders that extend anything (``--all``:
+    every folder)."""
+    from yavih.benchmark import resolve_folder
+    from yavih.benchmarks import external_folders, packaged_names
+    from yavih.extensions import DOC_URL, EXTENSION_POINTS, extends_line, folder_extensions
+
+    names = list(ns.names or []) or sorted({*packaged_names(), *external_folders()})
+    rows: dict[str, Any] = {}
+    lines = []
+    for n in names:
+        if resolve_folder(n) is None:
+            raise CliError("E_NOT_FOUND", f"unknown benchmark {n!r} (`yavih bench list`)", EXIT_USAGE)
+        bench = _load_bench(n)
+        ext = folder_extensions(bench)
+        if not ext and not ns.all and not ns.names:
+            continue
+        rows[bench.name] = ext
+        lines.append(f"{bench.name}: {extends_line(ext, scorer=bench.spec.readout)}")
+    text = "\n".join(lines) + ("\n" if lines else "") + f"(extension points: {', '.join(EXTENSION_POINTS)}; {DOC_URL})\n"
+    return Envelope(data={"benchmarks": rows, "points": list(EXTENSION_POINTS), "doc": DOC_URL}, text=text)
 
 
 def cmd_bench_path(ns: argparse.Namespace) -> Envelope:
@@ -1443,8 +1472,10 @@ def cmd_bench_new(ns: argparse.Namespace) -> Envelope:
 def cmd_bench_trial(ns: argparse.Namespace) -> Envelope:
     """``yavih bench trial <name|folder> --synthetic [--readout-fast] [--keep DIR]``: the whole pipeline of one folder on a
     tiny synthetic stand-in, in process (``yavih.trial.run_trial``): per-stage status, the headline against its floor
-    and, with ``--keep``, the paths. Exit 2 when a stage fails a contract, 3 when the stand-in cannot be built (or a
-    stage is not ready); without ``--synthetic`` a usage error (the trial on real data is the fresh-agent trial run)."""
+    and, with ``--keep``, the paths. Exit 2 when a stage fails a contract, 3 when a stage is not ready (the stand-in's
+    media writers missing); a folder no stand-in covers (no core fixture, no ``testing.py``) runs the conformance stage
+    and records the others as ``not_applicable`` (exit 0); without ``--synthetic`` a usage error (the trial on real data
+    is the fresh-agent trial run)."""
     from yavih.trial import TRIAL_DOC, format_trial, run_trial
 
     if not ns.synthetic:
@@ -2135,6 +2166,11 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--readme-only", action="store_true")
     g.add_argument("--setup", action="store_true", help="print setup.md, the agent's first read")
     s.set_defaults(func=cmd_bench_info)
+    s = bsub.add_parser("extensions", parents=[common_r], help="what each benchmark folder extends: its own scorer, metrics, hooks, codecs, "
+                        "bridge-check gates, eligibility, stand-in, reader, readings, capability tags, label kind")
+    s.add_argument("names", nargs="*", help="benchmarks (default: every folder that extends something)")
+    s.add_argument("--all", action="store_true", help="list every folder, including those that extend nothing")
+    s.set_defaults(func=cmd_bench_extensions)
     s = bsub.add_parser("path", parents=[common_r], help="print the benchmark folder (FOLDER=$(yavih bench path <name>)) or one shipped file's path")
     s.add_argument("name")
     s.add_argument("what", nargs="?", default=None, help="optional: a short name or a path inside the folder (as bench show)")

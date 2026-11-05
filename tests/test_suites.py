@@ -99,7 +99,7 @@ def test_unknown_key_is_E_SUITE(tmp_path):
     ({"name": "Bad Name"}, "name"),
     ({"description": ""}, "description"),
     ({"groups": []}, "groups"),
-    ({"groups": [{"capability": "smell", "entries": [{"benchmark": "esc50", "readings": ["a"]}]}]}, "capability"),
+    ({"groups": [{"capability": "Smell!", "entries": [{"benchmark": "esc50", "readings": ["a"]}]}]}, "capability"),  # a folder may add a tag; a malformed one is refused
     ({"groups": [{"capability": "audio", "entries": [{"benchmark": "esc50", "readings": ["v"]}]}]}, "not readings"),
     ({"groups": [{"capability": "audio", "entries": [{"benchmark": "esc50", "readings": ["a"], "join": True}]}]}, "join"),
     ({"groups": [{"capability": "audio", "entries": [{"benchmark": "nope_bench", "readings": ["a"]}]}]}, "does not resolve"),

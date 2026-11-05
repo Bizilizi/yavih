@@ -1783,6 +1783,19 @@ def _median_min(values: list[float] | list[int], as_int: bool = False) -> dict |
     return {"median": round(med, 6), "min": round(mn, 6)}
 
 
+def _folder_eligible(view: _BenchView) -> Any | None:
+    """The folder's ``eval.py`` ``eligible(view) -> missing | (missing, reasons)``: an eligibility rule of its own on the
+    measured facts (``EligibilityView``; its thresholds live in ``protocol`` keys the folder declares in ``PROTOCOL_KEYS``),
+    applied after the scorer's verdict. ``None`` when the folder declares none."""
+    getter = getattr(view.bench, "eval_module", None)
+    try:
+        mod = getter() if callable(getter) else None
+    except Exception:  # noqa: BLE001 - a folder whose eval.py does not import fails its load, not validate
+        mod = None
+    fn = getattr(mod, "eligible", None) if mod is not None else None
+    return fn if callable(fn) else None
+
+
 def _eligibility(
     *,
     view: _BenchView | None,
@@ -1834,6 +1847,10 @@ def _eligibility(
     )
     hook = getattr(scorer, "eligibility", None) if scorer is not None else None
     missing, reasons = normalize_verdict(hook(ev)) if hook is not None else requires_missing(ev)
+    own = _folder_eligible(view)  # the folder's own rule (eval.py ``eligible``), on top of the scorer's
+    if own is not None:
+        m2, r2 = normalize_verdict(own(ev))
+        missing, reasons = [*missing, *m2], [*reasons, *r2]
     for key in sorted(getattr(scorer, "output_keys", ()) or ()):  # the scorer's declared output keys must be present
         if key not in present_keys:
             missing.append(f"schema:{key}")

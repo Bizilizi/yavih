@@ -84,7 +84,19 @@ _FIXTURE_OF: dict[str, str] = {"knn": "clf"}
 
 
 def _fixture(readout: str) -> str:
-    return _FIXTURE_OF.get(readout, readout)
+    """The fixture a scorer's synthetic data and oracle follow: its own when built in, else that of the family it
+    declares (a folder scorer of family ``clf`` trials on the ``clf`` oracle), else its own name."""
+    if readout in _FIXTURE_OF:
+        return _FIXTURE_OF[readout]
+    if readout in READOUTS:
+        return readout
+    try:
+        from yavih.readouts import registry
+
+        family = registry.get(readout).family
+    except Exception:  # noqa: BLE001 - an unknown scorer keeps its name; the caller refuses it
+        return readout
+    return _fixture(family) if family and family != readout else readout
 MEDIA_MODES: frozenset[str] = frozenset({"none", "tiny"})
 
 #: Tiny media geometry (``media="tiny"``): 10 s mp4 at 2 fps 16×16, 10 s wav at 8 kHz, a 48×32 png

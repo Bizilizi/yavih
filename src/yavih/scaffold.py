@@ -299,6 +299,38 @@ def _dest(dir_: str | os.PathLike | None) -> Path:
     return Path(bp[0]).expanduser() if bp else Path.cwd()
 
 
+def _first_folder_of(scorer: str) -> str | None:
+    """The first resolvable folder (by name) whose ``benchmark.yaml`` names ``scorer``: the default ``--like`` of a
+    scorer without an entry in :data:`DEFAULT_LIKE` (``stream``, a package's scorer)."""
+    from yavih.benchmarks import external_folders, packaged_folder, packaged_names
+
+    folders = {n: packaged_folder(n) for n in packaged_names()}
+    folders.update({n: f for n, f in external_folders().items() if n not in folders})
+    for n in sorted(folders):
+        try:
+            y = yaml.safe_load((Path(folders[n]) / "benchmark.yaml").read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        if y.get("scorer") == scorer:
+            return n
+    return None
+
+
+def _rename_folder_scorer(dest: Path, y: dict[str, Any], like_name: str, name: str) -> None:
+    """A folder scorer is named after its folder: in the copied ``eval.py`` every quoted ``like_name`` (``SCORER.name``,
+    ``MetricSpec.readouts``) becomes ``name``, and the yaml's ``scorer`` and ``budget.probe_minutes_ref`` follow."""
+    import re
+
+    ev = dest / "eval.py"
+    if ev.is_file():
+        text = ev.read_text(encoding="utf-8")
+        ev.write_text(re.sub(rf"""(["']){re.escape(like_name)}\1""", lambda m: f"{m.group(1)}{name}{m.group(1)}", text), encoding="utf-8")
+    y["scorer"] = name
+    pmr = (y.get("budget") or {}).get("probe_minutes_ref")
+    if isinstance(pmr, dict) and like_name in pmr:
+        y["budget"]["probe_minutes_ref"] = {(name if k == like_name else k): v for k, v in pmr.items()}
+
+
 def new_benchmark(name: str, *, scorer: str | None = None, like: str | None = None, dir: str | os.PathLike | None = None) -> Path:
     """Write the scaffold of benchmark ``name`` and return its folder."""
     import re
@@ -314,9 +346,9 @@ def new_benchmark(name: str, *, scorer: str | None = None, like: str | None = No
     if like is None:
         if scorer is None:
             raise ScaffoldError("give --scorer (clf, seq, grid, box, …) or --like <benchmark>")
-        like = DEFAULT_LIKE.get(scorer)
+        like = DEFAULT_LIKE.get(scorer) or _first_folder_of(scorer)
         if like is None:
-            raise ScaffoldError(f"scorer {scorer!r} has no default folder to copy; give --like <benchmark>")
+            raise ScaffoldError(f"no folder uses scorer {scorer!r} yet; give --like <benchmark> (the folder closest to yours)")
     src = resolve_folder(like)
     if src is None:
         raise ScaffoldError(f"--like {like!r} is not a benchmark folder (name, alias or path)")
@@ -340,6 +372,8 @@ def new_benchmark(name: str, *, scorer: str | None = None, like: str | None = No
             (dest / p.name).write_text(_banner(p.name, like_name) + p.read_text(encoding="utf-8"), encoding="utf-8")
         else:
             shutil.copy2(p, dest / p.name)
+    if y.get("scorer") == like_name:  # --like owns its scorer (eval.py SCORER, named after its folder): the copy owns it under the new name
+        _rename_folder_scorer(dest, y, like_name, name)
     today = _dt.date.today().isoformat()
     y["name"] = name
     y["aliases"] = []

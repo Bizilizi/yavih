@@ -20,6 +20,14 @@ The chain is the one a real run takes, stage by stage:
 8. ``headline`` — the headline metric against its floor: the oracle must clear it under ``readout_fast`` (the pinned
    schedule may underfit a few dozen synthetic rows, so without it a miss is a ``warning``).
 
+Stand-ins: a folder that ships ``testing.py`` with ``make_stand_in(work, real, *, n_eval, n_train) -> folder`` builds its
+own stand-in (a folder with the real folder's name, its ``eval.py`` and scorer included, over generated media), and may
+ship ``write_bridge(path, kind, *, D, bench_folder) -> path`` for its own oracle/random bridge (else the core test
+bridge is used). Without one, the core fixtures build the stand-in for the scorers they cover
+(``yavih.testing.READOUTS``); for any other scorer the trial runs the ``conformance`` stage and records every later
+stage as ``not_applicable`` (exit 0): the folder's own scorer is exercised by its conformance fixture and by the
+fresh-agent trial on real data.
+
 Limits: the ``conformance`` stage (first) runs the real folder's scoring path, ``eval.py`` hooks and pinned ``external``
 package included, on the fixture's generated population; every later stage runs on the stand-in, which never reads
 the real data and is single-label, so a ``multi`` / ``multi_sets`` folder's ``probe`` stage trials as single-label
@@ -119,6 +127,10 @@ class _Stages:
         self.records: list[dict[str, Any]] = []
         self.failed: dict[str, Any] | None = None
 
+    def not_applicable(self, name: str, reason: str) -> None:
+        """Record ``name`` as ``not_applicable`` (no stand-in for this folder: nothing to run, nothing failed)."""
+        self.records.append({"stage": name, "status": "not_applicable", "seconds": 0.0, "detail": {"reason": reason}, "error": None})
+
     def run(self, name: str, fn) -> Any:
         if self.failed is not None:
             self.records.append({"stage": name, "status": "skipped", "seconds": 0.0, "detail": None, "error": None})
@@ -150,19 +162,38 @@ class _Stages:
         return detail
 
 
-def _check_buildable(real: Any) -> None:
-    """``E_TRIAL_NOT_READY`` (exit 3) unless the synthetic fixtures cover the folder's readout and stream kinds."""
+#: The folder file that supplies a folder's own stand-in (``make_stand_in``) and test bridge (``write_bridge``).
+FOLDER_TESTING = "testing.py"
+
+
+def folder_testing(real: Any) -> Any | None:
+    """The folder's ``testing.py`` module (imported by path, like ``eval.py``), or ``None``."""
+    from yavih.benchmark import _load_module
+
+    path = Path(real.folder) / FOLDER_TESTING
+    if not path.is_file():
+        return None
+    return _load_module(path, "yavih_benchmark_testing")
+
+
+def stand_in_source(real: Any) -> tuple[str, str | None]:
+    """Who builds the stand-in: ``("folder", None)`` (its ``testing.py`` ``make_stand_in``), ``("core", None)`` (the
+    synthetic fixtures cover its scorer and stream kinds) or ``("none", reason)``."""
     from yavih import testing
 
+    mod = folder_testing(real)
+    if mod is not None and callable(getattr(mod, "make_stand_in", None)):
+        return "folder", None
     readout = real.spec.readout
     if readout not in testing.READOUTS:
-        raise TrialError(E_TRIAL_NOT_READY, f"{real.name}: readout {readout!r} has no synthetic stand-in (the fixtures cover "
-                         f"{', '.join(testing.READOUTS)}); trial it on real data ({TRIAL_DOC})", 3)
+        return "none", (f"scorer {readout!r} has no synthetic stand-in (the core fixtures cover {', '.join(testing.READOUTS)}; a folder adds "
+                        f"its own with {FOLDER_TESTING} make_stand_in)")
     kinds = {s: st.kind for s, st in real.spec.streams.items()}
     bad = sorted(s for s, k in kinds.items() if k not in ("video", "audio", "image"))
     if bad:
-        raise TrialError(E_TRIAL_NOT_READY, f"{real.name}: stream(s) {bad} of kind(s) {[kinds[s] for s in bad]} have no synthetic "
-                         f"stand-in (video, audio and image do); trial it on real data ({TRIAL_DOC})", 3)
+        return "none", (f"stream(s) {bad} of kind(s) {[kinds[s] for s in bad]} have no synthetic stand-in (video, audio and image do; a "
+                        f"folder adds its own with {FOLDER_TESTING} make_stand_in)")
+    return "core", None
 
 
 def _headline(bench: Any, result: dict, *, readout_fast: bool) -> dict:
@@ -203,20 +234,20 @@ def run_trial(
 ) -> dict:
     """Trial benchmark folder ``ref`` (a name or a folder path) on a synthetic stand-in, in process (module
     docstring). Returns ``{benchmark, folder, readout, synthetic, readout_fast, bridge, ok, exit_code, stages, headline,
-    failed, paths, limits}``: ``stages`` one record per :data:`STAGES` entry (``status`` ``ok`` | ``warning`` | ``failed``
-    | ``skipped``, ``seconds``, ``detail``, ``error``), ``headline`` ``{metric, value, floor_name, floor, ci95,
+    failed, paths, limits, stand_in}``: ``stages`` one record per :data:`STAGES` entry (``status`` ``ok`` | ``warning`` |
+    ``failed`` | ``skipped`` | ``not_applicable``, ``seconds``, ``detail``, ``error``), ``stand_in`` ``folder`` | ``core`` | ``none``, ``headline`` ``{metric, value, floor_name, floor, ci95,
     clears_floor, standard}``, ``exit_code`` 0, 2 (a stage failed a contract) or 3 (a stage was not ready), ``paths``
     the kept files (``keep`` only). The real folder is loaded first, in the caller's environment; then the
     trial runs isolated (no user root, store, home or config is read or written).
 
-    Raises ``TrialError``: ``E_TRIAL_NOT_READY`` (exit 3) when the stand-in cannot be built, ``E_EXISTS`` (exit 1)
-    when ``keep`` is a non-empty directory."""
+    Raises ``TrialError``: ``E_TRIAL_NOT_READY`` (exit 3) when the stand-in's media cannot be written here,
+    ``E_EXISTS`` (exit 1) when ``keep`` is a non-empty directory. A folder no stand-in covers is not an error: its later
+    stages are ``not_applicable``."""
     from yavih.benchmark import Benchmark
 
     if bridge not in ("oracle", "random"):
         raise TrialError("E_USAGE", f"bridge must be 'oracle' or 'random', got {bridge!r}", 1)
     real = Benchmark.load(os.fspath(ref))
-    _check_buildable(real)
     if keep is not None:
         work = Path(keep).expanduser().absolute()
         if work.exists() and (not work.is_dir() or any(work.iterdir())):
@@ -243,10 +274,15 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
     st = _Stages()
     state: dict[str, Any] = {}
     runs = work / "runs"
+    source, why_not = stand_in_source(real)
+    own = folder_testing(real) if source == "folder" else None
 
     def stand_in() -> dict:
         try:
-            folder = testing.make_synthetic_like(work / "bench", real, n_eval=n_eval, n_train=n_train)
+            if own is not None:
+                folder = Path(own.make_stand_in(work / "bench", real, n_eval=n_eval, n_train=n_train))
+            else:
+                folder = testing.make_synthetic_like(work / "bench", real, n_eval=n_eval, n_train=n_train)
         except ImportError as e:
             raise TrialError(E_TRIAL_NOT_READY, f"the stand-in's tiny media are written with PyAV, soundfile and pillow: {e}; "
                              "pip install av soundfile pillow (or yavih[media])", 3) from e
@@ -258,10 +294,15 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
         state.update(folder=folder, bench=Benchmark.load(str(folder)))
         roles = state["bench"].roles()
         return {"folder": str(folder), "splits": {s: state["bench"].n_rows(s) for s in _role_splits(roles)},
-                "label_kind": _label_kind(real)}
+                "label_kind": _label_kind(real), "source": source}
 
     def write_bridge() -> dict:
-        path = testing.write_bridge_file(work / "bridges" / f"{bridge}_bridge.py", bridge, D=_D, bench_folder=state["folder"])
+        target = work / "bridges" / f"{bridge}_bridge.py"
+        if own is not None and callable(getattr(own, "write_bridge", None)):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            path = Path(own.write_bridge(target, bridge, D=_D, bench_folder=state["folder"]))
+        else:
+            path = testing.write_bridge_file(target, bridge, D=_D, bench_folder=state["folder"])
         state["bridge"] = path
         return {"path": str(path), "kind": bridge}
 
@@ -337,14 +378,19 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
         return out
 
     st.run("conformance", conformance)
-    st.run("stand_in", stand_in)
-    st.run("bridge", write_bridge)
-    st.run("bridge_check", check)
-    st.run("extract", extract)
-    st.run("validate", validate)
-    st.run("probe", run_probe)
-    st.run("report", run_report)
-    head = st.run("headline", lambda: _headline(state["bench"], state["result"], readout_fast=readout_fast))
+    head = None
+    if source == "none":
+        for name in STAGES[1:]:
+            st.not_applicable(name, why_not or "no stand-in")
+    else:
+        st.run("stand_in", stand_in)
+        st.run("bridge", write_bridge)
+        st.run("bridge_check", check)
+        st.run("extract", extract)
+        st.run("validate", validate)
+        st.run("probe", run_probe)
+        st.run("report", run_report)
+        head = st.run("headline", lambda: _headline(state["bench"], state["result"], readout_fast=readout_fast))
 
     failed = st.failed
     exit_code = 0 if failed is None else (3 if failed.get("exit_code") == 3 else 2)
@@ -365,7 +411,8 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
         "headline": headline,
         "failed": failed,
         "paths": paths,
-        "limits": _limits(real),
+        "limits": _limits(real, source=source, why_not=why_not),
+        "stand_in": source,
     }
 
 
@@ -383,9 +430,15 @@ def _label_kind(real: Any) -> str | None:
     return ((raw.get("manifest") or {}).get("label") or {}).get("kind")
 
 
-def _limits(real: Any) -> list[str]:
+def _limits(real: Any, *, source: str = "core", why_not: str | None = None) -> list[str]:
+    if source == "none":
+        return [f"no synthetic stand-in: {why_not}; only the conformance stage ran, the fresh-agent trial on real data covers the rest "
+                f"({TRIAL_DOC})"]
     out = ["synthetic stand-in: speed and numbers carry over to nothing; the fresh-agent trial on real data covers the rest "
            f"({TRIAL_DOC})"]
+    if source == "folder":
+        out.append(f"the stand-in is the folder's own ({FOLDER_TESTING} make_stand_in): its eval.py and scorer run in every stage")
+        return out
     kind = _label_kind(real)
     if kind not in (None, "single", "none"):
         out.append(f"label kind {kind!r}: the stand-in is single-label, so the readout trials as single-label acc")
@@ -407,6 +460,8 @@ def format_trial(rec: dict) -> str:
             note = f"  {s['error']['code']}: {s['error']['message']}"
         elif isinstance(s.get("detail"), dict) and s["detail"].get("note"):
             note = f"  {s['detail']['note']}"
+        elif s.get("status") == "not_applicable" and s["stage"] == "stand_in":
+            note = f"  {s['detail']['reason']}"
         lines.append(f"  {s['stage']:<13} {s['status']:<8} {s['seconds']:>7.1f}s{note}")
     h = rec.get("headline") or {}
     if h.get("metric"):

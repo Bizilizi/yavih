@@ -130,8 +130,18 @@ def _part_lines(part: Mapping[str, Any], *, readout: str, seed: int, protocol: M
 
 
 def sample_lines(parts: Sequence[Mapping[str, Any]], *, readout: str, seed: int, protocol: Mapping[str, Any] | None = None) -> list[dict]:
-    """Every part's rows as sample lines, in part order then row order."""
+    """Every part's rows as sample lines, in part order then row order. A scorer that declares ``sample_lines``
+    (a folder scorer, a package's) writes its own parts' lines."""
+    from yavih.readouts import registry
+
+    try:
+        own = registry.get(readout).sample_lines
+    except registry.UnknownScorer:
+        own = None
     out: list[dict] = []
     for part in parts:
-        out.extend(_part_lines(part, readout=readout, seed=seed, protocol=dict(protocol or {})))
+        if own is not None and "values" not in part:
+            out.extend(own(part, seed=seed, protocol=dict(protocol or {})))
+        else:
+            out.extend(_part_lines(part, readout=readout, seed=seed, protocol=dict(protocol or {})))
     return out

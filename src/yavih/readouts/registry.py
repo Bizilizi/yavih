@@ -108,7 +108,16 @@ class Scorer:
     ``config_hash(cfg)`` / ``pinned(bench)`` override the per-kind defaults (:meth:`hash_config`,
     :meth:`pinned_config`); ``conformance_population(ctx, tag)`` builds the fixture population
     (``yavih.conformance``); ``needs_gpu`` whether its unit asks the scheduler for a GPU (``None`` = probes do).
-    ``module`` is the module that declares it."""
+    ``module`` is the module that declares it.
+
+    Own training parts (a scorer outside core, typically a benchmark folder's ``eval.py``): ``build_head(cfg,
+    visual_tag=, conditioning_tag=) -> build(dim) -> module`` builds the heads of the families in ``head_families`` that
+    the core trainer does not implement (``yavih.probes.trainer.build_head_for`` asks it); ``loss_fn(name) -> (pred,
+    target) -> [B]`` returns the per-sample loss for a name in ``losses`` the core does not implement
+    (``yavih.probes.losses.per_sample_loss`` asks it). Both import torch when called, never at module scope. A
+    driver may also train with its own loop entirely (``score``); the core trainer is a library, not a requirement.
+    ``sample_lines(part, seed=, protocol=) -> [line]`` writes the samples-file lines of a part this scorer's driver
+    returns (``eval run --log-samples``; ``None`` = the family's built-in lines)."""
 
     name: str
     version: int
@@ -140,6 +149,9 @@ class Scorer:
     pinned: Callable[[Any], Any] | None = None
     conformance_population: Callable[..., Any] | None = None
     needs_gpu: bool | None = None
+    build_head: Callable[..., Callable[[int], Any]] | None = None
+    loss_fn: Callable[[str], Callable[[Any, Any], Any]] | None = None
+    sample_lines: Callable[..., list[dict]] | None = None
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.replace("_", "").isalnum() or not self.name.islower():

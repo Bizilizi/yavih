@@ -12,7 +12,7 @@ import pytest
 
 from yavih import cli, config
 from yavih import testing as T
-from yavih.benchmarks import packaged_names
+from yavih.benchmarks import packaged_folder, packaged_names
 from yavih.scaffold import DEFAULT_LIKE
 from yavih.trial import STAGES, TRIAL_DOC, TrialError, run_trial
 
@@ -56,9 +56,17 @@ def test_bench_trial_synthetic(name, capsys, yavih_home, runs_dir, monkeypatch):
     root stay untouched and the environment comes back exactly as it was."""
     monkeypatch.setenv("YAVIH_RESULTS", str(runs_dir.parent / "results"))
     home_before, env_before, cli_before = _tree(yavih_home), _yavih_env(), config.cli_overrides()
+    no_stand_in = _yaml_scorer(name) not in T.READOUTS and not (packaged_folder(name) / "testing.py").is_file()
+    if no_stand_in:  # the conformance stage is the folder's own check (tests/test_conformance.py); here: what the trial does without a stand-in
+        import yavih.conformance as C
+
+        monkeypatch.setattr(C, "check", lambda bench: C.ConformanceReport(name=bench.name, folder=str(bench.folder), protocol_version=1, expected_version=1, ok=True, skipped=False))
     rc, env = _json(capsys, ["bench", "trial", name, "--synthetic", "--readout-fast"])
-    if _yaml_scorer(name) not in T.READOUTS:  # a folder-owned scorer (the generation beacons): no synthetic stand-in
-        assert rc == 3 and env["errors"][0]["code"] == "E_TRIAL_NOT_READY" and "trial it on real data" in env["errors"][0]["message"]
+    if no_stand_in:  # a scorer no stand-in covers (stream, the generation beacons' own): conformance, then not_applicable
+        rec = env["data"]
+        assert rc == 0 and env["status"] == "ok" and rec["stand_in"] == "none", env["errors"]
+        assert [s["status"] for s in rec["stages"]] == ["ok"] + ["not_applicable"] * (len(STAGES) - 1)
+        assert any("no synthetic stand-in" in lim for lim in rec["limits"])
         assert _tree(yavih_home) == home_before and _tree(runs_dir) == []
         return
     rec = env["data"]
@@ -94,11 +102,12 @@ def test_bench_trial_keep_returns_paths_and_refuses_a_used_directory(tmp_path, c
 
 
 def test_bench_trial_not_ready_when_no_stand_in_exists(capsys, monkeypatch):
-    """A readout or stream kind the synthetic fixtures do not cover, or no media writer: exit 3, a message, no
-    traceback."""
+    """A readout or stream kind the synthetic fixtures do not cover: the conformance stage, then ``not_applicable``
+    (exit 0); no media writer: exit 3, a message, no traceback."""
     monkeypatch.setattr(T, "READOUTS", ("seq", "grid", "box"))
     rc, env = _json(capsys, ["bench", "trial", "esc50", "--synthetic"])
-    assert rc == 3 and env["errors"][0]["code"] == "E_TRIAL_NOT_READY" and "no synthetic stand-in" in env["errors"][0]["message"]
+    assert rc == 0 and env["data"]["stand_in"] == "none" and env["data"]["stages"][1]["status"] == "not_applicable"
+    assert "no synthetic stand-in" in env["data"]["stages"][1]["detail"]["reason"]
     monkeypatch.undo()
 
     def no_writer(*a, **k):
