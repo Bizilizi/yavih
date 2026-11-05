@@ -1,0 +1,536 @@
+{
+ "benchmarks": {
+  "audiocaps_t2a": {
+   "aliases": [],
+   "capability": [
+    "audio",
+    "generation"
+   ],
+   "clips": {
+    "test": 776
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Text-to-audio generation on the AudioCaps test captions",
+   "media_gb": 0.9,
+   "name": "audiocaps_t2a",
+   "obtain": "auto",
+   "path": "benchmarks/audiocaps_t2a",
+   "protocol_hash": "22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/audiocaps_t2a",
+     "protocol_hash": "22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552",
+     "protocol_version": 1,
+     "tree": "d2b265a3ce82b6d919f8eb49bed37abe978765e5"
+    }
+   ],
+   "scorer": "audiocaps_t2a",
+   "title": "AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark)"
+  },
+  "audioset20k": {
+   "aliases": [],
+   "capability": [
+    "audio-visual"
+   ],
+   "clips": {
+    "eval": 16223,
+    "train": 17726
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Audio Set: An ontology and human-labeled dataset for audio events",
+   "media_gb": 66.0,
+   "name": "audioset20k",
+   "obtain": "auto",
+   "path": "benchmarks/audioset20k",
+   "protocol_hash": "5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/audioset20k",
+     "protocol_hash": "5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7",
+     "protocol_version": 1,
+     "tree": "85353e9352b653145bb217e2d2774870b9abac9b"
+    }
+   ],
+   "scorer": "clf",
+   "title": "AudioSet-20K (balanced) 527-class multi-label audio-visual tagging, published raw clips (macro mAP)"
+  },
+  "ave": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "temporal"
+   ],
+   "clips": {
+    "test": 316,
+    "train": 2624
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Audio-Visual Event Localization in Unconstrained Videos",
+   "media_gb": 4.02,
+   "name": "ave",
+   "obtain": "auto",
+   "path": "benchmarks/ave",
+   "protocol_hash": "df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/ave",
+     "protocol_hash": "df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27",
+     "protocol_version": 1,
+     "tree": "d5e2946df9bdd3bba5c4906bada7245fa092b0c3"
+    }
+   ],
+   "scorer": "seq",
+   "title": "AVE audio-visual event localization (28 events + background, per-second labels)"
+  },
+  "ave_causal": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "temporal",
+    "streaming"
+   ],
+   "clips": {
+    "test": 316,
+    "train": 2592
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Audio-Visual Event Localization in Unconstrained Videos — causal streaming adaptation",
+   "media_gb": 4.02,
+   "name": "ave_causal",
+   "obtain": "auto",
+   "path": "benchmarks/ave_causal",
+   "protocol_hash": "73c3a319ef75ae381f2cf1482a38c4b96168345a25f196aabae0b4b95bf7c89a",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/ave_causal",
+     "protocol_hash": "73c3a319ef75ae381f2cf1482a38c4b96168345a25f196aabae0b4b95bf7c89a",
+     "protocol_version": 1,
+     "tree": "fd9daf47b542326bc6a40ed5e4e47eb0d43058a2"
+    }
+   ],
+   "scorer": "stream",
+   "title": "AVE causal per-second event recognition (streaming; 28 events + background)"
+  },
+  "avsync": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "temporal"
+   ],
+   "clips": {
+    "stationary": 5997,
+    "test": 3000,
+    "train": 24000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "VGGSound: A Large-scale Audio-Visual Dataset",
+   "media_gb": 74.4,
+   "name": "avsync",
+   "obtain": "needs-data-owner",
+   "path": "benchmarks/avsync",
+   "protocol_hash": "90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/avsync",
+     "protocol_hash": "90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1",
+     "protocol_version": 1,
+     "tree": "d5e569854e76a075d9d56a163b5ec2f238c568d3"
+    }
+   ],
+   "scorer": "clf",
+   "title": "AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor)"
+  },
+  "epic100_anticipation_stream": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "temporal",
+    "streaming"
+   ],
+   "clips": {
+    "train": 495,
+    "validation": 138
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Rescaling Egocentric Vision — action anticipation on the stream",
+   "media_gb": 740.0,
+   "name": "epic100_anticipation_stream",
+   "obtain": "auto",
+   "path": "benchmarks/epic100_anticipation_stream",
+   "protocol_hash": "8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/epic100_anticipation_stream",
+     "protocol_hash": "8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de",
+     "protocol_version": 1,
+     "tree": "f8c5781c4fe0c1f57fc9e9a32dab49964915d662"
+    }
+   ],
+   "scorer": "stream",
+   "title": "EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall)"
+  },
+  "esc50": {
+   "aliases": [],
+   "capability": [
+    "audio"
+   ],
+   "clips": {
+    "1": 400,
+    "2": 400,
+    "3": 400,
+    "4": 400,
+    "5": 400
+   },
+   "core": ">=1.1,<2",
+   "header_title": "ESC: Dataset for Environmental Sound Classification",
+   "media_gb": 0.88,
+   "name": "esc50",
+   "obtain": "auto",
+   "path": "benchmarks/esc50",
+   "protocol_hash": "0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/esc50",
+     "protocol_hash": "0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e",
+     "protocol_version": 1,
+     "tree": "ad3624fb2fd8ece9cf504f6fc8d0ac8476f78705"
+    }
+   ],
+   "scorer": "clf",
+   "title": "ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy)"
+  },
+  "fsd50k": {
+   "aliases": [],
+   "capability": [
+    "audio"
+   ],
+   "clips": {
+    "eval": 10231,
+    "train": 20000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "FSD50K: An Open Dataset of Human-Labeled Sound Events",
+   "media_gb": 22.9,
+   "name": "fsd50k",
+   "obtain": "auto",
+   "path": "benchmarks/fsd50k",
+   "protocol_hash": "2e59e335f433b107e9f5f37436a21c89d177a0ee2e6bb5425c9740ef8bf2e6b7",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/fsd50k",
+     "protocol_hash": "2e59e335f433b107e9f5f37436a21c89d177a0ee2e6bb5425c9740ef8bf2e6b7",
+     "protocol_version": 1,
+     "tree": "63b259639e92927f14be006fc4adbc7d3f88a851"
+    }
+   ],
+   "scorer": "clf",
+   "title": "FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP)"
+  },
+  "in1k": {
+   "aliases": [
+    "imagenet1k",
+    "imagenet"
+   ],
+   "capability": [
+    "visual"
+   ],
+   "clips": {
+    "train": 50000,
+    "val": 50000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "ImageNet Large Scale Visual Recognition Challenge",
+   "media_gb": 12.43,
+   "name": "in1k",
+   "obtain": "needs-licence",
+   "path": "benchmarks/in1k",
+   "protocol_hash": "c8814a905192a566ac3b70814cc70fa237c34a39028b8037e39e0ab9404d6dc4",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/in1k",
+     "protocol_hash": "c8814a905192a566ac3b70814cc70fa237c34a39028b8037e39e0ab9404d6dc4",
+     "protocol_version": 1,
+     "tree": "b973a26f39f22605a515d70934444be0b24781d1"
+    }
+   ],
+   "scorer": "clf",
+   "title": "ImageNet-1K image classification (frozen 50/class train draw, full 50k val)"
+  },
+  "k400": {
+   "aliases": [],
+   "capability": [
+    "visual"
+   ],
+   "clips": {
+    "train": 20000,
+    "val": 13492
+   },
+   "core": ">=1.1,<2",
+   "header_title": "The Kinetics Human Action Video Dataset",
+   "media_gb": 20.2,
+   "name": "k400",
+   "obtain": "auto",
+   "path": "benchmarks/k400",
+   "protocol_hash": "62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/k400",
+     "protocol_hash": "62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470",
+     "protocol_version": 1,
+     "tree": "200caa947a07d31667c28dc23bd984b36c89b786"
+    }
+   ],
+   "scorer": "clf",
+   "title": "Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe)"
+  },
+  "nyuv2_depth": {
+   "aliases": [],
+   "capability": [
+    "visual",
+    "spatial"
+   ],
+   "clips": {
+    "eval": 654,
+    "train": 12000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Indoor Segmentation and Support Inference from RGBD Images",
+   "media_gb": 8.2,
+   "name": "nyuv2_depth",
+   "obtain": "manual-download",
+   "path": "benchmarks/nyuv2_depth",
+   "protocol_hash": "4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/nyuv2_depth",
+     "protocol_hash": "4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4",
+     "protocol_version": 1,
+     "tree": "52c87b747c48440807f231eeb1ba994e53865679"
+    }
+   ],
+   "scorer": "grid",
+   "title": "NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid)"
+  },
+  "ssv2": {
+   "aliases": [],
+   "capability": [
+    "visual"
+   ],
+   "clips": {
+    "train": 20000,
+    "val": 24777
+   },
+   "core": ">=1.1,<2",
+   "header_title": "The \"Something Something\" Video Database for Learning and Evaluating Visual Common Sense",
+   "media_gb": 4.02,
+   "name": "ssv2",
+   "obtain": "needs-licence",
+   "path": "benchmarks/ssv2",
+   "protocol_hash": "641928e796bd0eda4ac0df9bdac78e77b0b7b115bb91466bf72dec2d79c0d9c7",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/ssv2",
+     "protocol_hash": "641928e796bd0eda4ac0df9bdac78e77b0b7b115bb91466bf72dec2d79c0d9c7",
+     "protocol_version": 1,
+     "tree": "3d349c5d1faa3546f0faddf67efd08ccdbcaf074"
+    }
+   ],
+   "scorer": "clf",
+   "title": "Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val)"
+  },
+  "thumos14_oad": {
+   "aliases": [],
+   "capability": [
+    "visual",
+    "temporal",
+    "streaming"
+   ],
+   "clips": {
+    "test": 213,
+    "validation": 200
+   },
+   "core": ">=1.1,<2",
+   "header_title": "THUMOS Challenge 2014 — online action detection",
+   "media_gb": 34.8,
+   "name": "thumos14_oad",
+   "obtain": "auto",
+   "path": "benchmarks/thumos14_oad",
+   "protocol_hash": "284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/thumos14_oad",
+     "protocol_hash": "284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912",
+     "protocol_version": 1,
+     "tree": "b01b64c8a60b51f1ebec8463041548090079ec42"
+    }
+   ],
+   "scorer": "stream",
+   "title": "THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps)"
+  },
+  "unav100_causal": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "temporal",
+    "streaming"
+   ],
+   "clips": {
+    "test": 2166,
+    "train": 6487
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Dense-Localizing Audio-Visual Events in Untrimmed Videos — causal streaming recognition",
+   "media_gb": 66.1,
+   "name": "unav100_causal",
+   "obtain": "auto",
+   "path": "benchmarks/unav100_causal",
+   "protocol_hash": "ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/unav100_causal",
+     "protocol_hash": "ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438",
+     "protocol_version": 1,
+     "tree": "178ee9f778fe8e1763e3c361ece461c184b78821"
+    }
+   ],
+   "scorer": "stream",
+   "title": "UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel)"
+  },
+  "vggsounder": {
+   "aliases": [],
+   "capability": [
+    "audio-visual"
+   ],
+   "clips": {
+    "test": 12008,
+    "train": 20000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "VGGSounder: Audio-Visual Evaluations for Foundation Models",
+   "media_gb": 67.0,
+   "name": "vggsounder",
+   "obtain": "needs-data-owner",
+   "path": "benchmarks/vggsounder",
+   "protocol_hash": "89c057ccce207b4627b6e5f43394a2cd7f34f892375b087510e22e6e63519530",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/vggsounder",
+     "protocol_hash": "89c057ccce207b4627b6e5f43394a2cd7f34f892375b087510e22e6e63519530",
+     "protocol_version": 1,
+     "tree": "e37652a8e3838272131b431fd87cfadf28751e82"
+    }
+   ],
+   "scorer": "clf",
+   "title": "VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes)"
+  },
+  "vggsounder_v2a": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "generation"
+   ],
+   "clips": {
+    "test": 3000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Video-to-audio generation on VGGSounder's audible clips",
+   "media_gb": 4.5,
+   "name": "vggsounder_v2a",
+   "obtain": "needs-data-owner",
+   "path": "benchmarks/vggsounder_v2a",
+   "protocol_hash": "cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/vggsounder_v2a",
+     "protocol_hash": "cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0",
+     "protocol_version": 1,
+     "tree": "7f5a36324365be7ef729d53ae164d531e70ef9d1"
+    }
+   ],
+   "scorer": "vggsounder_v2a",
+   "title": "VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark)"
+  },
+  "vggss_box": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "spatial"
+   ],
+   "clips": {
+    "eval": 914,
+    "train": 3700
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Localizing Visual Sounds the Hard Way",
+   "media_gb": 9.35,
+   "name": "vggss_box",
+   "obtain": "needs-data-owner",
+   "path": "benchmarks/vggss_box",
+   "protocol_hash": "f108458e24156e0d49c873b3abb7101f61e077abf664a5282aa43d54b36a7799",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/vggss_box",
+     "protocol_hash": "f108458e24156e0d49c873b3abb7101f61e077abf664a5282aa43d54b36a7799",
+     "protocol_version": 1,
+     "tree": "baa181836da7aba304dfc8db4fbcd35ec71e6cd3"
+    }
+   ],
+   "scorer": "box",
+   "title": "VGG-SS audio-conditioned single-box regression"
+  }
+ },
+ "catalog_version": 1,
+ "commit": "c82922e5ac9f57afca508914bacbed2f1a9d6d9e",
+ "repo": "Bizilizi/yavih"
+}
