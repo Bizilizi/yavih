@@ -124,7 +124,7 @@ Tell your agent:
 
 It follows [contributing a benchmark](https://github.com/Bizilizi/yavih/blob/main/docs/contributing-a-benchmark.md)
 step by step — scaffold the folder, freeze the manifest from the public release, write the data recipe and the
-tests, render the header — then runs a synthetic trial and a fresh-agent
+tests — then runs a synthetic trial and a fresh-agent
 [trial run](https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md) before opening the pull request.
 
 <p align="center"><img src="https://raw.githubusercontent.com/Bizilizi/yavih/main/assets/readme/contribute.gif" alt="An agent adds a new benchmark folder and opens a pull request" width="100%"></p>
