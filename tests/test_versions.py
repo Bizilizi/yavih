@@ -14,8 +14,8 @@ def test_pinned_values():
     """The pinned version constants."""
     assert versions.FEATURE_FORMAT_VERSION == 5 and versions.READABLE_FEATURE_FORMATS == (4, 5)
     assert versions.BENCHMARK_SCHEMA_VERSION == 3
-    assert versions.RESULT_SCHEMA_VERSION == 5
-    assert versions.RESULTS_FILE_VERSION == 3 and versions.REGISTRY_ENTRY_VERSION == 2
+    assert versions.RESULT_SCHEMA_VERSION == 6
+    assert versions.RESULTS_FILE_VERSION == 4 and versions.REGISTRY_ENTRY_VERSION == 3
     assert versions.PLAN_SCHEMA_VERSION == 3
     # the built-ins (a folder's eval.py SCORER registers when its folder loads, so later entries depend on test order)
     assert {k: versions.READOUT_VERSION[k] for k in ("clf", "seq", "grid", "box")} == {"clf": 1, "seq": 2, "grid": 2, "box": 2}

@@ -107,7 +107,7 @@ def test_write_invocation_without_a_benchmark_object(tmp_path):
     assert paths["results_file"] == tmp_path / "m" / "results_2026-10-08T14-00-00.123456.json"
     assert paths["samples_file"] == tmp_path / "m" / "samples_k400_v_2026-10-08T14-00-00.123456.jsonl"
     doc = json.loads(paths["results_file"].read_text())
-    assert doc["results_version"] == store.RESULTS_FILE_VERSION == 3
+    assert doc["results_version"] == store.RESULTS_FILE_VERSION == 4
     assert set(doc["results"]) == {"k400:v"}
     r = doc["results"]["k400:v"]
     assert r["acc"] == 0.5 and r["acc_floor"] == 0.1 and r["n_seeds"] == 2 and r["headline"] == "acc"  # NaN ignored in the mean

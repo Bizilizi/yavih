@@ -96,8 +96,28 @@ def _v4_to_v5(record: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+#: ``folder_source`` keys that say where the folder came from (schema 6); ``null`` = not recorded.
+ORIGIN_KEYS: tuple[str, ...] = ("repo", "commit", "tree")
+
+
+def with_origin(fs: Any) -> Any:
+    """A ``folder_source`` dict with the schema-6 origin keys (``null`` when absent); anything else as is."""
+    if isinstance(fs, dict):
+        return {**fs, **{k: fs.get(k) for k in ORIGIN_KEYS}}
+    return fs
+
+
+def _v5_to_v6(record: dict[str, Any]) -> dict[str, Any]:
+    """Schema 6 records where the folder came from in ``benchmark.folder_source``: ``repo`` / ``commit`` (a fetched
+    folder's lock) and ``tree`` (its content's git tree id). A schema-5 record did not: ``null`` (unknown)."""
+    bench = record.get("benchmark")
+    if isinstance(bench, dict):
+        bench["folder_source"] = with_origin(bench.get("folder_source"))
+    return record
+
+
 #: ``{from_version: upgrade}``; each step produces ``from_version + 1``. Schemas 1 and 2 are not read.
-_UPGRADES: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {3: _v3_to_v4, 4: _v4_to_v5}
+_UPGRADES: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6}
 
 
 def migrate(result: dict) -> dict:

@@ -397,9 +397,11 @@ def upgrade_entry(entry: Any) -> Any:
     ``scorer_hash``, ``provenance.probe_config`` to ``scorer_config`` and ``folder_source.probe`` to ``.eval``; the
     id, the path and every hash are unchanged."""
     rv = entry.get("registry_version") if isinstance(entry, dict) else None
-    if not isinstance(rv, int) or isinstance(rv, bool) or rv != 1:
+    if not isinstance(rv, int) or isinstance(rv, bool) or rv not in (1, 2):
         return entry
     e = json.loads(json.dumps(entry))
+    if rv == 2:
+        return _v2_to_v3(e)
     i = e.get("identity")
     if isinstance(i, dict):
         for old, new in (("readout", "scorer"), ("readout_version", "scorer_version"), ("probe_hash", "scorer_hash")):
@@ -413,6 +415,17 @@ def upgrade_entry(entry: Any) -> Any:
         if isinstance(fs, dict) and "probe" in fs:
             prov["folder_source"] = {"eval": fs.get("probe"), **{k: v for k, v in fs.items() if k != "probe"}}
     e["registry_version"] = 2
+    return _v2_to_v3(e)
+
+
+def _v2_to_v3(e: dict[str, Any]) -> dict[str, Any]:
+    """Version 3: ``provenance.folder_source`` carries ``repo`` / ``commit`` / ``tree`` (``null``: not recorded)."""
+    from yavih.report.migrate import with_origin
+
+    prov = e.get("provenance")
+    if isinstance(prov, dict) and "folder_source" in prov:
+        prov["folder_source"] = with_origin(prov["folder_source"])
+    e["registry_version"] = 3
     return e
 
 

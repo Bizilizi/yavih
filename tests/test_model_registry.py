@@ -32,7 +32,7 @@ def world(tmp_path, monkeypatch):
                            probe_hash=qh, protocol_version=bench.spec.protocol_version, created=f"2026-10-0{s + 1}T00:00:00Z")
                for s in (0, 1)]
     for r in results:
-        r["benchmark"]["folder_source"] = dict(bench.folder_source)
+        r["benchmark"]["folder_source"] = bench.folder_provenance()
         r["benchmark"]["scorer_version"] = 1
     paths = [write_result(runs, r) for r in results]
     results_root = tmp_path / "results"
@@ -58,7 +58,7 @@ def test_export_writes_entries_and_protocol_payloads(world, tmp_path):
     assert s["seeds"][0]["metrics"]["acc"] == 0.60 and s["seeds"][1]["metrics"]["acc"] == 0.62  # per-seed numbers from the unit results
     assert s["floors"]["acc"] == pytest.approx(0.1) and "acc_floor" in s["floor_names"]
     assert entry["conformance"]["passed"] is True and entry["conformance"]["tolerance"]["acc"] == C.DEFAULT_TOLERANCE
-    assert entry["provenance"]["folder_source"] == bench.folder_source and entry["provenance"]["results_file"].endswith(".json")
+    assert entry["provenance"]["folder_source"] == bench.folder_provenance() and entry["provenance"]["results_file"].endswith(".json")
     assert entry["population"]["coverage"]["eval"]["ids_sha256"] == "e" * 64
     payload = json.loads(Path(out["protocols"][0]).read_text())
     assert payload["protocol_hash"] == bench.protocol_hash and payload["expected"]["protocol_version"] == bench.spec.protocol_version
@@ -81,7 +81,13 @@ def test_a_version_1_entry_is_checked_and_read_under_the_scorer_names(world, tmp
     i["readout"], i["readout_version"], i["probe_hash"] = i.pop("scorer"), i.pop("scorer_version"), i.pop("scorer_hash")
     prov["probe_config"] = prov.pop("scorer_config")
     prov["folder_source"] = {"probe": prov["folder_source"]["eval"], "reader": prov["folder_source"]["reader"]}
-    assert R.upgrade_entry(old) == cur and old["registry_version"] == 1
+    want = json.loads(json.dumps(cur))
+    want["provenance"]["folder_source"].update(repo=None, commit=None, tree=None)  # an old entry recorded no origin
+    assert R.upgrade_entry(old) == want and old["registry_version"] == 1
+    v2 = json.loads(json.dumps(cur))
+    v2["registry_version"] = 2
+    v2["provenance"]["folder_source"] = {k: cur["provenance"]["folder_source"][k] for k in ("eval", "reader")}
+    assert R.upgrade_entry(v2) == want
     path.write_text(json.dumps(old))
     assert R.check(reg).findings == []
     assert [r["result"]["scorer"]["hash"] for r in R.records(reg)] == [world["qh"]] * 2
@@ -159,7 +165,7 @@ def test_report_build_compares_local_rows_with_the_registry(world, tmp_path, mon
     bench = world["bench"]
     other = [make_result(bench=bench.name, model="mine", reading="v", seed=0, acc=0.7, protocol_hash=bench.protocol_hash, probe_hash=world["qh"],
                          protocol_version=bench.spec.protocol_version)]
-    other[0]["benchmark"]["folder_source"] = dict(bench.folder_source)
+    other[0]["benchmark"]["folder_source"] = bench.folder_provenance()
     runs2 = tmp_path / "runs2"
     write_result(runs2, other[0])
     rep = report([str(runs2 / "*")], registry=reg, write=False)
@@ -302,7 +308,7 @@ def test_report_flags_a_registry_entry_with_only_a_coverage_fraction(world, tmp_
     bench = world["bench"]
     other = make_result(bench=bench.name, model="mine", reading="v", seed=0, acc=0.61, protocol_hash=bench.protocol_hash,
                         probe_hash=world["qh"], protocol_version=bench.spec.protocol_version)
-    other["benchmark"]["folder_source"] = dict(bench.folder_source)
+    other["benchmark"]["folder_source"] = bench.folder_provenance()
     runs2 = tmp_path / "runs2"
     write_result(runs2, other)
     path = next((reg / "entries").rglob("*.json"))

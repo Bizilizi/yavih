@@ -1142,6 +1142,15 @@ def _agree(metas: Mapping[str, dict], path: Sequence[str], code: str) -> Any:
     return next(iter(values.values()))
 
 
+def _folder_provenance(bench: Any) -> dict:
+    """``folder_source`` of a result: the folder's ``eval.py`` / ``reader.py`` digests and where it came from (``repo``,
+    ``commit``, ``tree``: ``Benchmark.folder_provenance``)."""
+    prov = getattr(bench, "folder_provenance", None)
+    if callable(prov):
+        return dict(prov())
+    return {**(getattr(bench, "folder_source", None) or {"eval": None, "reader": None}), "repo": None, "commit": None, "tree": None}
+
+
 def _benchmark_block(bench: Any) -> dict:
     return {
         "name": bench.name,
@@ -1151,7 +1160,7 @@ def _benchmark_block(bench: Any) -> dict:
         "manifest_hash": bench.manifest_hash,
         "protocol_hash": bench.protocol_hash,
         # provenance: the folder's eval.py / reader.py normalized-source digests (never identity)
-        "folder_source": dict(getattr(bench, "folder_source", None) or {"eval": None, "reader": None}),
+        "folder_source": _folder_provenance(bench),
     }
 
 

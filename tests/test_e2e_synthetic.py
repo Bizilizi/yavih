@@ -189,7 +189,9 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
         assert len(res) == 1 and res[0].status == "ok", (kind, res[0].status, res[0].reason)
         results[kind] = res[0]
         rj = res[0].result
-        assert rj["standard"] is False and rj["schema_version"] == 5 and rj["benchmark"]["scorer"] == readout and rj["external"] == {}
+        assert rj["standard"] is False and rj["schema_version"] == 6 and rj["benchmark"]["scorer"] == readout and rj["external"] == {}
+        fs = rj["benchmark"]["folder_source"]  # schema 6: where the folder came from (not fetched here: no repo / commit)
+        assert (fs["repo"], fs["commit"]) == (None, None) and len(fs["tree"]) == 40
         assert rj["features"]["rules_checked"] and rj["features"]["batch_tolerance"] == 1e-5
         # model and reading recorded; eval_hash = sha256(canon({protocol_hash, probe_hash}))
         assert (rj["model"], rj["reading"]) == (profiles[kind]["model"], profiles[kind]["reading"])
@@ -209,7 +211,7 @@ def test_end_to_end_synthetic(readout, integration_env, yavih_home, runs_dir, tm
         doc = json.loads(res[0].results_file.read_text())
         key = f"{name}:{rj['reading']}"
         assert res[0].results_file.parent.name == rj["model"] and res[0].results_file.parent.parent == runs_dir.parent / "results"
-        assert doc["results_version"] == 3 and doc["versions"] == {key: 1}
+        assert doc["results_version"] == 4 and doc["versions"] == {key: 1}
         assert doc["results"][key][headline] == rj["metrics"][headline] and doc["config"]["model"] == rj["model"]
         c = doc["configs"][key]
         assert (c["benchmark"], c["reading"], c["eval_hash"]) == (name, rj["reading"], rj["eval_hash"])
@@ -498,7 +500,7 @@ def test_one_model_two_readings_two_configurations(integration_env, yavih_home, 
     docs = {k: json.loads(res[k].results_file.read_text()) for k in res}
     for k, doc in docs.items():
         key = f"{name}:{profiles[k]['reading']}"
-        assert doc["results_version"] == 3 and set(doc["results"]) == {key} and doc["config"]["model"] == "m1"
+        assert doc["results_version"] == 4 and set(doc["results"]) == {key} and doc["config"]["model"] == "m1"
         c = doc["configs"][key]
         assert (c["benchmark"], c["reading"], c["eval_hash"]) == (name, profiles[k]["reading"], eh)
         assert c["bridge"]["describe_sha256"] == profiles[k]["describe_sha256"]

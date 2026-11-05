@@ -48,18 +48,21 @@ BENCHMARK_SCHEMA_VERSION: Final[int] = 3
 
 #: Bumped when the ``result.json`` schema changes (``eval_hash``, ``model``, ``reading``, ...). 4: ``benchmark.folder_source``.
 #: 5: the ``scorer`` block and ``benchmark.scorer`` / ``scorer_version`` (were ``probe``, ``readout``, ``readout_version``).
-RESULT_SCHEMA_VERSION: Final[int] = 5
+#: 6: ``benchmark.folder_source`` also records where the folder came from: ``repo`` and ``commit`` (a fetched folder's
+#: lock; ``null`` otherwise) and ``tree`` (the git tree id of its content); a schema-5 record reads them as ``null``.
+RESULT_SCHEMA_VERSION: Final[int] = 6
 
 #: Bumped when the results-store file schema changes (``results_<timestamp>.json``): one directory per ``model``,
 #: entries keyed ``<benchmark>:<reading>``. 3: ``scorer`` / ``scorer_version`` / ``scorer_hash`` (were ``readout``,
 #: ``readout_version``, ``probe_hash``) and the ``scoring`` provenance blocks (were ``probe``); a version-2 file is
-#: upgraded in memory.
-RESULTS_FILE_VERSION: Final[int] = 3
+#: upgraded in memory. 4: ``configs[key].folder_source`` carries ``repo`` / ``commit`` / ``tree`` (``null`` in a version-3 file).
+RESULTS_FILE_VERSION: Final[int] = 4
 
 #: Bumped when the registry entry schema changes (``yavih.registry``: ``entries/<benchmark>/<eval_hash12>/<org>/<model>/<reading>.json``).
 #: 2: ``identity.scorer`` / ``scorer_version`` / ``scorer_hash`` and ``provenance.scorer_config`` (were ``readout``,
-#: ``readout_version``, ``probe_hash``, ``probe_config``); a version-1 entry is upgraded in memory.
-REGISTRY_ENTRY_VERSION: Final[int] = 2
+#: ``readout_version``, ``probe_hash``, ``probe_config``); a version-1 entry is upgraded in memory. 3:
+#: ``provenance.folder_source`` carries ``repo`` / ``commit`` / ``tree`` (``null`` in an older entry).
+REGISTRY_ENTRY_VERSION: Final[int] = 3
 #: Absolute tolerance per metric on its reported scale when a folder's ``metrics.tolerance`` names none: a tenth of a
 #: point. Bounds what the conformance fixture accepts as "same protocol" (``yavih.conformance``) and what the report
 #: shows as a tie (``yavih.report.compare``); not hashed (it changes no number).

@@ -89,13 +89,14 @@ def make_result(
     ok = status == "ok"
     ci = [acc - 0.05, acc + 0.05] if ci is None else ci
     return {
-        "schema_version": 5,
+        "schema_version": 6,
         "status": status,
         "reason": None if ok else "eligibility: missing pos",
         "standard": standard,
         "eval_hash": hashing.eval_hash(protocol_hash, probe_hash),
         "benchmark": {"name": bench, "protocol_version": protocol_version, "scorer": readout, "scorer_version": 1 if readout == "clf" else 2,
-                      "manifest_hash": "9" * 64, "protocol_hash": protocol_hash, "folder_source": {"eval": None, "reader": None}},
+                      "manifest_hash": "9" * 64, "protocol_hash": protocol_hash,
+                      "folder_source": {"eval": None, "reader": None, "repo": None, "commit": None, "tree": None}},
         "model": model,
         "reading": reading,
         "bridge": {"name": bridge_name, "describe": describe, "describe_sha256": hashing.describe_sha256(describe), "source_sha256": "7" * 64},
@@ -167,7 +168,18 @@ def test_migrate_identity_for_current_schema():
     r = make_result()
     out = migrate(r)
     assert out == r and out is not r
-    assert out["schema_version"] == RESULT_SCHEMA_VERSION == 5
+    assert out["schema_version"] == RESULT_SCHEMA_VERSION == 6
+
+
+def test_a_schema_5_result_reads_with_an_unknown_origin():
+    """Schema 6 records where the folder came from (``folder_source.repo`` / ``commit`` / ``tree``); a schema-5 record
+    reads them as ``null`` (unknown), nothing else moves."""
+    cur = make_result()
+    cur["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None, "repo": None, "commit": None, "tree": None}
+    old = json.loads(json.dumps(cur))
+    old["schema_version"] = 5
+    old["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None}
+    assert migrate(old) == cur
 
 
 def test_a_schema_4_result_reads_under_the_scorer_names():
@@ -183,7 +195,7 @@ def test_a_schema_4_result_reads_under_the_scorer_names():
     up = migrate(old)
     assert "probe" in old and "readout" in old["benchmark"]  # in memory only
     want = json.loads(json.dumps(cur))
-    want["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None}
+    want["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None, "repo": None, "commit": None, "tree": None}
     assert up == want
 
 
@@ -372,7 +384,7 @@ def test_a_schema_3_result_loads_and_reports(runs: Path):
     old["probe"] = old.pop("scorer")
     old["benchmark"]["readout"], old["benchmark"]["readout_version"] = old["benchmark"].pop("scorer"), old["benchmark"].pop("scorer_version")
     up = migrate(old)
-    assert up["schema_version"] == RESULT_SCHEMA_VERSION == 5 and up["benchmark"]["folder_source"] is None
+    assert up["schema_version"] == RESULT_SCHEMA_VERSION == 6 and up["benchmark"]["folder_source"] is None
     assert "folder_source" not in old["benchmark"] and "probe" in old  # in memory only
     cur = make_result(model="m2", acc=0.6)
     cur["benchmark"]["folder_source"] = {"eval": "1" * 64, "reader": None}

@@ -494,6 +494,20 @@ def _v2_to_v3(doc: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
+def _v3_to_v4(doc: dict[str, Any]) -> dict[str, Any]:
+    """Version 4: ``folder_source`` carries ``repo`` / ``commit`` / ``tree`` (``null``: not recorded)."""
+    from yavih.report.migrate import with_origin
+
+    blocks = [c for c in (doc.get("configs") or {}).values() if isinstance(c, dict)]
+    if isinstance(doc.get("config"), dict):
+        blocks.append(doc["config"])
+    for c in blocks:
+        if "folder_source" in c:
+            c["folder_source"] = with_origin(c["folder_source"])
+    doc["results_version"] = 4
+    return doc
+
+
 def upgrade_results_file(doc: Mapping[str, Any]) -> dict[str, Any]:
     """A results file of ``RESULTS_FILE_VERSION`` (a deep copy; a version-2 file is upgraded in memory). A file of
     another version raises ``ValueError``: a newer one needs a newer yavih, an older one is re-written by ``yavih report`` from its ``result.json``
@@ -505,6 +519,9 @@ def upgrade_results_file(doc: Mapping[str, Any]) -> dict[str, Any]:
     if version == 2:
         out = _v2_to_v3(out)
         version = 3
+    if version == 3:
+        out = _v3_to_v4(out)
+        version = 4
     if version < RESULTS_FILE_VERSION:
         raise ValueError(f"results_version {version} is older than this yavih reads ({RESULTS_FILE_VERSION}); "
                          "re-run `yavih report` over its result.json records")
