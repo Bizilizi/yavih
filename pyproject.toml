@@ -56,27 +56,18 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["yavih*"]
-# a folder's maintainer notes/ and README header image (assets/) never ship
-exclude = ["yavih.benchmarks.*.assets*", "yavih.benchmarks.*.notes*"]
 
+# The wheel ships the core only. The benchmark folders live in the repository's benchmarks/ directory (outside the
+# package) and reach a user through the catalog: `yavih bench fetch <name>` (yavih.catalog).
 [tool.setuptools.package-data]
 yavih = [
-  "benchmarks/README.md",          # the generated benchmark index
-  "benchmarks/*/*",
-  "benchmarks/*/prepare/*",
-  "benchmarks/*/tests/*",
-  "benchmarks/*/conformance/*",    # expected.json: the folder's conformance fixture
   "skill/yavih/*",
   "skill/yavih/references/*",
   "suites/*.yaml",                 # the shipped suites (yavih suite list)
 ]
 
 [tool.setuptools.exclude-package-data]
-# the key is global because setuptools attributes benchmarks/__pycache__/* to the sub-package yavih.benchmarks;
-# a folder's maintainer notes/ never ships (`yavih bench lint` E_NOTES_LINK), nor its README header image
-# (assets/, rendered by `python -m yavih.headers` for the repository's README pages); each folder is a namespace
-# package, so the patterns are relative to it
-"*" = ["*.pyc", "__pycache__/*", "**/__pycache__/*", "notes/*", "notes/**/*", "assets/*", "assets/**/*"]
+"*" = ["*.pyc", "__pycache__/*", "**/__pycache__/*"]
 
 [tool.setuptools_scm]
 # version = the nearest tag vX.Y.Z (X.Y.Z on the tag itself, X.Y.(Z+1).devN+g<commit> after it); the version file
@@ -92,8 +83,8 @@ fallback_version = "0.0.0"          # a build without git metadata (a tarball of
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# One convention for every test directory: importlib import mode, so the eleven
-# benchmarks/<name>/tests/test_folder.py files share a basename without __init__.py files (a benchmark
+# One convention for every test directory: importlib import mode, so the
+# benchmarks/<name>/tests/test_folder.py files (repository root) share a basename without __init__.py files (a benchmark
 # folder is data + scripts, never an importable package). `pythonpath` keeps the
 # tests/ helper modules (test_plan_helpers, test_extract_fixtures, …) importable by their siblings.
 addopts = "-q --import-mode=importlib"

@@ -176,8 +176,9 @@ def test_installed_metadata_has_no_author_package_extra():
 
 @pytest.mark.integration
 def test_wheel_imports_without_torch_and_hashes_match(tmp_path):
-    """The built wheel imports with torch blocked and every packaged protocol_hash (11 folders + 3
-    aliases) equals the source tree's (parity across envs)."""
+    """The built wheel imports with torch blocked, ships no benchmark folder, and every repository folder's
+    protocol_hash read by the installed core (through ``$YAVIH_BENCH_PATH``, as a fetched folder is read) equals the
+    source tree's (parity across envs)."""
     import importlib.util
     import json
     import shutil
@@ -206,9 +207,10 @@ def test_wheel_imports_without_torch_and_hashes_match(tmp_path):
     with zipfile.ZipFile(wheels[-1]) as zf:
         names = zf.namelist()
         assert not any(n.endswith(".pyc") for n in names)
-        # a folder's maintainer notes/ never ships; setuptools-scm writes the version file (its fallback version
-        # and no commit here: the copied tree is no git checkout)
-        assert not [n for n in names if n.startswith("yavih/benchmarks/") and "/notes/" in n]
+        # the wheel ships the core only: no benchmark folder (they reach users through `yavih bench fetch`);
+        # setuptools-scm writes the version file (its fallback version and no commit here: the copied tree is no git
+        # checkout)
+        assert [n for n in names if n.startswith("yavih/benchmarks/")] == ["yavih/benchmarks/__init__.py"]
         assert "yavih/_version.py" in names
         # the shipped suites sit next to yavih/suites.py (the module wins the import; the directory is data)
         assert {"yavih/suites.py", "yavih/suites/minimal.yaml", "yavih/suites/default.yaml"} <= set(names)
@@ -225,9 +227,11 @@ def test_wheel_imports_without_torch_and_hashes_match(tmp_path):
         "import yavih; from yavih.benchmark import Benchmark\n"
         f"assert yavih.__file__.startswith({str(unpacked)!r}), yavih.__file__\n"
         "from yavih.suites import load_suite; assert load_suite('default').origin == 'shipped'\n"
+        "from yavih.benchmarks import packaged_names, checkout_root; assert packaged_names() == [] and checkout_root() is None\n"
         f"print(json.dumps({{r: Benchmark.load(r).protocol_hash for r in {refs!r}}}))\n"
     )
     proc = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=300,
-                          env={"PATH": "/usr/bin:/bin", "YAVIH_CONFIG": str(tmp_path / "none.toml"), "HOME": str(tmp_path)})
+                          env={"PATH": "/usr/bin:/bin", "YAVIH_CONFIG": str(tmp_path / "none.toml"), "HOME": str(tmp_path),
+                               "YAVIH_BENCH_PATH": str(repo / "benchmarks")})
     assert proc.returncode == 0, proc.stderr[-2000:]
     assert json.loads(proc.stdout.strip().splitlines()[-1]) == src_hashes

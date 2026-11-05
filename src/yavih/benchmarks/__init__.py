@@ -1,10 +1,13 @@
-"""Packaged benchmark folders: ``yavih/benchmarks/<name>/`` with ``README.md``,
-``benchmark.yaml``, ``manifest.csv.gz``, ``classes.csv``, an optional ``eval.py``, ``bridge_template.py``,
-``make_manifest.py``, ``prepare/``, ``tests/``.
+"""The repository's benchmark folders: ``benchmarks/<name>/`` at the root of a yavih source checkout, with
+``README.md``, ``benchmark.yaml``, ``manifest.csv.gz``, ``classes.csv``, an optional ``eval.py``,
+``bridge_template.py``, ``make_manifest.py``, ``prepare/``, ``tests/``.
 
-``Benchmark.load`` finds them through ``importlib.resources`` (the wheel test: every
-``benchmark.yaml`` must be reachable this way). The helpers here are stdlib-only and never parse
-a yaml; a folder counts as a benchmark iff it holds a ``benchmark.yaml``.
+The wheel ships the core only: an installed yavih finds no folder here and fetches the ones it needs from the
+catalog (``yavih bench fetch``, ``yavih.catalog``) into the project's ``yavih-bench/benchmarks/`` (or
+``$YAVIH_HOME/benchmarks``). In a source checkout (development, the repository's tests and CI, the catalog
+generator) the folders are read in place from ``<repo>/benchmarks``. The historical names (``packaged_*``) are kept:
+"packaged" now means "the repository's own folders, read from a checkout". The helpers are stdlib-only and never
+parse a yaml; a folder counts as a benchmark iff it holds a ``benchmark.yaml``.
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
-__all__ = ["packaged_root", "packaged_names", "packaged_folder", "external_folders", "BENCHMARK_YAML", "BENCH_PATH_ENV",
+__all__ = ["packaged_root", "checkout_root", "packaged_names", "packaged_folder", "external_folders", "BENCHMARK_YAML", "BENCH_PATH_ENV",
            "ENTRY_POINT_GROUP"]
 
 BENCHMARK_YAML = "benchmark.yaml"
@@ -23,19 +26,28 @@ BENCH_PATH_ENV = "YAVIH_BENCH_PATH"
 ENTRY_POINT_GROUP = "yavih.benchmarks"
 
 
+def checkout_root() -> Path | None:
+    """The root of the yavih source checkout this module was imported from (``<root>/src/yavih/benchmarks``, with a
+    ``pyproject.toml`` and a ``benchmarks/`` directory at ``<root>``), or ``None`` for an installed wheel."""
+    here = Path(__file__).resolve().parent
+    if here.parent.name != "yavih" or here.parent.parent.name != "src":
+        return None
+    root = here.parent.parent.parent
+    return root if (root / "pyproject.toml").is_file() and (root / "benchmarks").is_dir() else None
+
+
 def packaged_root() -> Path:
-    """Filesystem path of ``yavih/benchmarks``. The wheel is installed as directories (never
-    imported from a zip), so the ``importlib.resources`` traversable is a real path; a zip
-    import would need ``as_file`` staging, which the packaging does not need."""
-    root = resources.files(__name__)
-    path = Path(str(root))
-    if not path.is_dir():
-        raise FileNotFoundError(f"packaged benchmarks root is not a directory: {root!r} (zip import unsupported)")
-    return path
+    """``<checkout>/benchmarks``: the directory holding the repository's benchmark folders. ``FileNotFoundError`` for
+    an installed wheel, which ships no folder (an installed yavih reads a checkout's folders through
+    ``$YAVIH_BENCH_PATH=<checkout>/benchmarks``)."""
+    root = checkout_root()
+    if root is None:
+        raise FileNotFoundError("an installed yavih ships no benchmark folder: fetch one with `yavih bench fetch <name>`")
+    return root / "benchmarks"
 
 
 def packaged_names() -> list[str]:
-    """Sorted names of the shipped folders that hold a ``benchmark.yaml``."""
+    """Sorted names of the repository folders (a source checkout) that hold a ``benchmark.yaml``; ``[]`` for a wheel."""
     try:
         root = packaged_root()
     except FileNotFoundError:
@@ -44,8 +56,8 @@ def packaged_names() -> list[str]:
 
 
 def packaged_folder(name: str) -> Path | None:
-    """The shipped folder for ``name`` or ``None``; a name is matched only as a plain folder name
-    (no path separators, so a ref like ``../x`` can never escape the package)."""
+    """The repository folder for ``name`` (a source checkout) or ``None``; a name is matched only as a plain folder
+    name (no path separators, so a ref like ``../x`` can never escape the directory)."""
     if not name or "/" in name or "\\" in name or name in {".", ".."}:
         return None
     try:

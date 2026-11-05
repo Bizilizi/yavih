@@ -19,7 +19,7 @@ import yavih
 from yavih.bridge import Bridge, preprocessing_source, preprocessing_source_check
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATES = sorted((ROOT / "src" / "yavih" / "benchmarks").glob("*/bridge_template.py"))
+TEMPLATES = sorted((ROOT / "benchmarks").glob("*/bridge_template.py"))
 
 
 def _bridge_from_docs(cls_doc: str | None, mod_doc: str | None, name: str = "PreprocProbe") -> type:

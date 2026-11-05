@@ -16,7 +16,7 @@ PKG = Path(yavih.__file__).resolve().parent
 REPO = PKG.parents[1]
 DOCS = REPO / "docs"
 REFS = PKG / "skill" / "yavih" / "references"
-BENCH = PKG / "benchmarks"
+BENCH = PKG.parents[1] / "benchmarks"  # the repository folders (a source checkout)
 
 
 def _doc(page: str) -> str:

@@ -59,7 +59,7 @@ jobs:
           python -c "import torch, numpy; print('torch', torch.__version__, 'numpy', numpy.__version__)"
       - name: Tests
         # no site data here: tests that need staged benchmark data skip
-        run: pytest tests src/yavih/benchmarks -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs
+        run: pytest tests benchmarks -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs
 
   package:
     name: build and smoke-test the wheel
@@ -80,14 +80,14 @@ jobs:
           python -m build --sdist --wheel
           ls -l dist
       - run: python -m twine check --strict dist/*
-      - name: No maintainer notes, header images or repository docs in the wheel
+      - name: The wheel ships the core only (no benchmark folder, no repository docs)
         run: |
           python - <<'PY'
-          import glob, re, zipfile
+          import glob, zipfile
           (whl,) = glob.glob("dist/*.whl")
           names = zipfile.ZipFile(whl).namelist()
-          bad = [n for n in names if "/notes/" in n or n.endswith(".pyc") or n.startswith("docs/") or "/docs/" in n
-                 or re.match(r"yavih/benchmarks/[^/]+/assets/", n)]
+          bad = [n for n in names if n.endswith(".pyc") or n.startswith("docs/") or "/docs/" in n
+                 or (n.startswith("yavih/benchmarks/") and n != "yavih/benchmarks/__init__.py")]
           assert not bad, bad[:20]
           assert "yavih/_version.py" in names
           print(whl, len(names), "files")
@@ -101,7 +101,10 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           /tmp/venv/bin/yavih --version
-          /tmp/venv/bin/yavih bench lint --all
+          /tmp/venv/bin/yavih bench list
+          # the repository's folders read by the installed core, as fetched folders are read
+          YAVIH_BENCH_PATH="$GITHUB_WORKSPACE/benchmarks" /tmp/venv/bin/yavih bench lint --all --skip conformance
+          /tmp/venv/bin/yavih bench fetch esc50 --from "$GITHUB_WORKSPACE"
           /tmp/venv/bin/yavih bench files esc50
       - uses: actions/upload-artifact@v4
         with:

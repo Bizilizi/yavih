@@ -7,7 +7,7 @@ repeating it, and spells out only what the code checks without a reference page 
 the rules are in [design](design.md).
 
 Throughout, `<name>` is the new benchmark's name (`[a-z][a-z0-9_]*`, the folder name, the `name:` in
-`benchmark.yaml`) and `F=src/yavih/benchmarks/<name>` is its folder.
+`benchmark.yaml`) and `F=benchmarks/<name>` is its folder.
 
 ## 0. Fork, clone, install
 
@@ -28,8 +28,8 @@ The version comes from git tags, so clone with history (no `--depth`). The `dev`
 ## 1. Scaffold
 
 ```bash
-yavih bench new <name> --scorer clf --dir src/yavih/benchmarks                # copies the scorer's default folder
-yavih bench new <name> --like vggsounder --dir src/yavih/benchmarks            # or the folder closest to yours
+yavih bench new <name> --scorer clf --dir benchmarks                # copies the scorer's default folder
+yavih bench new <name> --like vggsounder --dir benchmarks            # or the folder closest to yours
 ```
 
 `--like` picks the folder whose machinery is copied; without it the readout's default is used (`clf` esc50, `seq`
@@ -103,7 +103,7 @@ Every key is described in the [schema](benchmark-folder.md#benchmarkyaml). Decid
 ## 3. Freeze the manifest: `make_manifest.py`
 
 `make_manifest.py` re-derives `manifest.csv.gz` and `classes.csv` from the public upstream files, byte for byte.
-Follow the conventions of `src/yavih/benchmarks/esc50/make_manifest.py`:
+Follow the conventions of `benchmarks/esc50/make_manifest.py`:
 
 - **Docstring.** Names every input (upstream file, commit, sha256), the outputs, the curation applied, and a
   `Usage::` block with the commands below.
@@ -253,7 +253,7 @@ Tests that need staged media skip when no data root is configured (`yavih.testin
 ```bash
 python -m yavih.doctables --write            # the benchmark tables in README.md, docs/ and the skill references
 yavih bench lint <name>
-python -m pytest tests src/yavih/benchmarks -q -p no:cacheprovider -o addopts="--import-mode=importlib"
+python -m pytest tests benchmarks -q -p no:cacheprovider -o addopts="--import-mode=importlib"
 ruff check src tests
 ```
 
@@ -278,7 +278,7 @@ python -m yavih.headers <name> --html-only   # writes assets/header.src.sha256 (
 ```
 
 then, once the pull request is open, download the `headers` artifact of its `headers` workflow run, copy
-`src/yavih/benchmarks/<name>/assets/header.png` from it into the folder and commit it
+`benchmarks/<name>/assets/header.png` from it into the folder and commit it
 ([header image](benchmark-folder.md#header-image)).
 
 **Done when:** `assets/header.png` and `assets/header.src.sha256` are committed together and `yavih bench lint
@@ -354,9 +354,9 @@ Splits and frozen rows: <train n / eval n>. Scaffolded from `<like>`.
 | workflow | check | what it runs |
 |---|---|---|
 | `ci.yml` | ruff | `ruff check src tests` on Python 3.12 |
-| `ci.yml` | pytest (Python 3.10 to 3.13) | `pytest tests src/yavih/benchmarks` with CPU torch, ffmpeg and `.[media,dev]` and no benchmark data (tests that need staged media skip): every folder's lint and tests, the recorded hashes, the generated tables, the docs links |
+| `ci.yml` | pytest (Python 3.10 to 3.13) | `pytest tests benchmarks` with CPU torch, ffmpeg and `.[media,dev]` and no benchmark data (tests that need staged media skip): every folder's lint and tests, the recorded hashes, the generated tables, the docs links |
 | `ci.yml` | build and smoke-test the wheel | builds the sdist and wheel, checks that no `notes/`, `assets/` or `docs/` entered the wheel, installs it into a clean venv without torch and runs `yavih bench lint --all` and `yavih bench files esc50` there |
-| `headers.yml` | render the header images | on pull requests touching `src/yavih/benchmarks/**`: renders every header and a contact sheet into the `headers` artifact, and fails when a committed `assets/header.src.sha256` is not current |
+| `headers.yml` | render the header images | on pull requests touching `benchmarks/**`: renders every header and a contact sheet into the `headers` artifact, and fails when a committed `assets/header.src.sha256` is not current |
 
 **Done when:** every check of the pull request is green.
 

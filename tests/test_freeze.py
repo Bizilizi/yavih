@@ -19,7 +19,7 @@ import pytest
 from yavih import freeze
 
 ALL_FOLDERS = ("audioset20k", "ave", "avsync", "esc50", "fsd50k", "in1k", "k400", "nyuv2_depth", "ssv2", "vggsounder", "vggss_box")
-BENCHMARKS = Path(freeze.__file__).resolve().parent / "benchmarks"
+BENCHMARKS = Path(freeze.__file__).resolve().parents[2] / "benchmarks"  # the repository folders
 
 
 def test_make_manifests_use_yavih_freeze():

@@ -367,7 +367,7 @@ def test_lint_notes_rule_spares_non_paths_and_repo_urls(esc50_copy):
     not links into an unshipped notes/ dir; files under notes/ itself are not read (they do not ship)."""
     rel = "prepare/09_extra.sh"
     (esc50_copy / rel).write_text("# notes: kept\n# writes notes.txt\n# my_notes/x\n"
-                                  "# https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks/esc50/notes/decisions.md\n",
+                                  "# https://github.com/Bizilizi/yavih/blob/main/benchmarks/esc50/notes/decisions.md\n",
                                   encoding="utf-8")
     (esc50_copy / "notes").mkdir(exist_ok=True)
     (esc50_copy / "notes" / "extra.md").write_text("see notes/decisions.md\n", encoding="utf-8")

@@ -27,14 +27,14 @@ number. Releases follow semantic versioning for the Python API, the CLI and the 
 
 - **ruff** on `src` and `tests`;
 - **pytest** on Python 3.10 through 3.14 with CPU torch and ffmpeg, without benchmark data
-  (tests that need staged media skip): `pytest tests src/yavih/benchmarks -p no:cacheprovider -o
+  (tests that need staged media skip): `pytest tests benchmarks -p no:cacheprovider -o
   addopts="--import-mode=importlib"`;
 - **package**: builds the sdist and wheel, runs `twine check --strict`, asserts that the wheel carries no
   maintainer `notes/` and no `.pyc` but does carry `_version.py`, installs it into a clean venv without
   torch, and runs `yavih --version`, `yavih bench lint --all` and `yavih bench files esc50` from an empty
   directory.
 
-`.github/workflows/headers.yml` runs on pull requests that touch `src/yavih/benchmarks/`,
+`.github/workflows/headers.yml` runs on pull requests that touch `benchmarks/`,
 `assets/benchmark-header/` or `src/yavih/headers.py`, and on demand, with read-only permissions: it installs
 `.[media]` and `imagequant`, renders every folder's header image with the runner's Chrome
 (`python -m yavih.headers --all --contact-sheet headers-contact-sheet.png`), uploads the images and the contact sheet

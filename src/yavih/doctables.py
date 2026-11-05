@@ -1,9 +1,9 @@
 """Benchmark tables generated from the folders: the folder is the single source of truth.
 
-Every list of the packaged benchmarks is generated: in the repo ``README.md`` (the capability table), the controls
+Every list of the repository's benchmarks is generated: in the repo ``README.md`` (the capability table), the controls
 bullet of https://github.com/Bizilizi/yavih/blob/main/docs/quickstart.md, the
 "Packaged benchmarks" table of https://github.com/Bizilizi/yavih/blob/main/docs/benchmark-folder.md, the index
-``yavih/benchmarks/README.md`` (the tables per capability, the ``setup.md`` links) and the skill's
+``benchmarks/README.md`` at the repository root (the tables per capability, the ``setup.md`` links) and the skill's
 ``references/data.md`` (the obtainability table, the ``prepare_only`` roots) and ``references/readouts.md`` (the
 benchmarks per readout). The ``capabilities`` kind (one row per capability with a few linked examples and a link to
 the index) is written for the repo README and links by GitHub URL. Each holds its block between two marker
@@ -42,7 +42,7 @@ _END = "<!-- yavih:bench-table {kind} end -->"
 UNTAGGED = "untagged"
 #: Where the ``capabilities`` kind links: the packaged folders on GitHub (it is written for the repo README, which
 #: PyPI renders too, so relative links would not resolve).
-_BENCH_URL = "https://github.com/Bizilizi/yavih/blob/main/src/yavih/benchmarks"
+_BENCH_URL = "https://github.com/Bizilizi/yavih/blob/main/benchmarks"
 #: How many example benchmarks a ``capabilities`` row names.
 _EXAMPLES = 4
 
@@ -306,14 +306,15 @@ def replace_blocks(text: str, folders: Mapping[str, Path] | None = None) -> str:
 
 
 def repo_documents() -> list[Path]:
-    """The documents with generated blocks: the packaged index and skill references, plus the repo README, the
-    quickstart and the benchmark-folder page of the repository's docs when the package runs from a source checkout."""
+    """The documents with generated blocks: the skill references, plus, when the package runs from a source checkout,
+    the repo README, the quickstart, the benchmark-folder page and the benchmarks index (``benchmarks/README.md``)."""
     pkg = Path(__file__).resolve().parent
     refs = pkg / "skill" / "yavih" / "references"
-    docs = [pkg / "benchmarks" / "README.md", refs / "data.md", refs / "readouts.md"]
+    docs = [refs / "data.md", refs / "readouts.md"]
     repo = pkg.parent.parent
     if (repo / "pyproject.toml").is_file():
-        docs = [p for p in (repo / "README.md", repo / "docs" / "quickstart.md", repo / "docs" / "benchmark-folder.md") if p.is_file()] + docs
+        docs = [p for p in (repo / "README.md", repo / "docs" / "quickstart.md", repo / "docs" / "benchmark-folder.md",
+                            repo / "benchmarks" / "README.md") if p.is_file()] + docs
     return docs
 
 

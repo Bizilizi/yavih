@@ -132,7 +132,7 @@ def test_epic_anticipation_matches_the_official_evaluator():
     import importlib.util
     from pathlib import Path
 
-    p = Path(__file__).resolve().parents[1] / "src" / "yavih" / "benchmarks" / "epic100_anticipation_stream" / "eval.py"
+    p = Path(__file__).resolve().parents[1] / "benchmarks" / "epic100_anticipation_stream" / "eval.py"
     spec = importlib.util.spec_from_file_location("epic_eval_ref_test", p)
     E = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(E)

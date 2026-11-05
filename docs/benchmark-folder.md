@@ -547,7 +547,7 @@ maintainer commands.
 
 ## The benchmarks index
 
-`src/yavih/benchmarks/README.md` lists the packaged folders, grouped by capability. Its tables sit between
+`benchmarks/README.md` lists the packaged folders, grouped by capability. Its tables sit between
 `<!-- yavih:bench-table index begin ... -->` and `<!-- yavih:bench-table index end -->` markers and are generated
 from each folder's `benchmark.yaml` by `python -m yavih.doctables --write`. The same command regenerates every other
 list of the packaged benchmarks, each between `<!-- yavih:bench-table <kind> begin ... -->` / `end` markers: the repo
@@ -573,7 +573,7 @@ derived). Below the tables: the folder layout in one paragraph and a link to eac
 
 The `capabilities` kind is the short overview for the repo README: one row per capability with the number of
 benchmarks and the first four names (sorted, each linked to its folder README by GitHub URL, `+ N more` after
-them), then a link "All N benchmarks → the index" to `src/yavih/benchmarks/README.md`.
+them), then a link "All N benchmarks → the index" to `benchmarks/README.md`.
 
 ### Capability
 
@@ -631,7 +631,7 @@ A path without `benchmark.yaml` yields `E_LAYOUT`; an unknown name or check is a
 
 ## Packaged benchmarks
 
-The full index with descriptions, media and sources is [src/yavih/benchmarks/README.md](../src/yavih/benchmarks/README.md);
+The full index with descriptions, media and sources is [benchmarks/README.md](../benchmarks/README.md);
 `yavih bench list` shows the same set with sizes and site status.
 
 <!-- yavih:bench-table folder begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->

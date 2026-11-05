@@ -1112,7 +1112,7 @@ def _materialize() -> dict[str, Any]:
 
 
 #: avsync's offset metrics and floor-arm controls are its eval.py METRICS, not registry names.
-AVSYNC_PROBE = (Path(bm.__file__).parent / "benchmarks" / "avsync" / "eval.py").read_text(encoding="utf-8")
+AVSYNC_PROBE = (Path(bm.__file__).resolve().parents[2] / "benchmarks" / "avsync" / "eval.py").read_text(encoding="utf-8")
 
 
 def _avsync_mutate(s: dict[str, Any]) -> None:

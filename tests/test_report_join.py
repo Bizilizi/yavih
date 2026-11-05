@@ -31,7 +31,7 @@ from yavih import hashing
 from yavih.report.join import JoinError, locate_result_dir, run_join
 
 ROUTINGS = ("a", "v", "av")
-VGGSOUNDER_FOLDER = Path(__file__).resolve().parents[1] / "src" / "yavih" / "benchmarks" / "vggsounder"
+VGGSOUNDER_FOLDER = Path(__file__).resolve().parents[1] / "benchmarks" / "vggsounder"
 _READS = {"a": ["audio"], "v": ["video"], "av": ["audio", "video"]}
 
 C = 4

@@ -663,8 +663,8 @@ def test_fields_view_of_every_migrated_packaged_folder_is_its_schema2_streams_bl
 
     root = Path(__file__).resolve().parents[1]
     for name in packaged_benchmarks():
-        rel = f"src/yavih/benchmarks/{name}/benchmark.yaml"
-        old = subprocess.run(["git", "show", f"fa7ac59:{rel}"], cwd=root, capture_output=True, text=True)
+        rel = f"benchmarks/{name}/benchmark.yaml"  # the 1.0 tree held the folders under src/yavih/benchmarks
+        old = subprocess.run(["git", "show", f"fa7ac59:src/yavih/{rel}"], cwd=root, capture_output=True, text=True)
         if old.returncode != 0:
             pytest.skip("the 1.0 tree is not available in this checkout")
         raw2 = yaml.safe_load(old.stdout)

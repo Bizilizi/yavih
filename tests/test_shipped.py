@@ -18,8 +18,8 @@ from yavih import cli, shipped
 from yavih.benchmarks import packaged_folder
 
 ESC50 = packaged_folder("esc50")
-PACKAGED = sorted(p.name for p in Path(yavih.__file__).resolve().parent.joinpath("benchmarks").iterdir()
-                  if (p / "benchmark.yaml").is_file())
+PACKAGED = sorted(p.name for p in Path(yavih.__file__).resolve().parents[2].joinpath("benchmarks").iterdir()
+                  if (p / "benchmark.yaml").is_file())  # the repository folders (a source checkout)
 
 
 def _json(capsys, argv: list[str]) -> tuple[int, dict]:
