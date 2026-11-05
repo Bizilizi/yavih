@@ -522,7 +522,8 @@ file is missing or differs from the current HTML (an edited `header:` block, a c
 bridge template's readings, an edited template). Pixels differ between machines, the HTML does not, so the HTML is what
 is compared. `--html-only` writes `assets/header.html` (not committed) and the sha file without rendering. On a pull
 request that touches a folder, the `headers` workflow renders every header and a contact sheet as the `headers`
-artifact, and fails when a committed sha file is not current.
+artifact; it never fails on a stale or missing image. A new folder may come without an image: rendering it is CI's
+job, committing it a maintainer's.
 
 ## setup.md contract
 
@@ -590,10 +591,11 @@ They are not hashed: retagging a folder changes no hash and needs no changelog e
   the same `protocol_hash`, that the index lists every packaged folder under each of its capabilities with correct
   rows and links that resolve, that the generated tables are current, that every folder's capability tags agree with
   the shipped suites, and that the lint catches what it claims on a mutated copy of `esc50`.
-- Each folder's `tests/test_folder.py` pins that folder's facts: the yaml parses and loads, the sha256s match and the
-  gzip header is reproducible, splits are assigned once, classes are contiguous, the curation sums hold, a reader
-  smoke on synthetic media, and the README / setup.md sections (helpers in `yavih.testing.folder`, including
-  `assert_lint_clean`).
+- Each folder's `tests/test_folder.py` pins what nothing else checks: the sha256s match and the gzip header is
+  reproducible, splits are assigned once, classes are contiguous, the curation sums hold, targets and metrics on
+  hand-checked inputs, the bridge template, a reader smoke on synthetic media (helpers in `yavih.testing.folder`). It
+  never runs `bench lint` (the test above does, once per folder, on a conformance verdict cached under the core's
+  sources and the folder's content) and never pins README.md / setup.md wording: the lint checks their structure.
 - `tests/test_extensibility.py` checks that a `yavih bench new` scaffold of every readout loads and passes the lint
   with only `W_TODO` warnings (plus `W_CONFORMANCE_SKIPPED` where the copied protocol's external package is absent),
   that its generated `tests/test_folder.py` passes (the tests that need the benchmark's

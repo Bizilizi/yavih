@@ -1,0 +1,51 @@
+name: catalog
+
+# After every push to main: regenerate catalog/index.json (the index `yavih bench fetch` reads, from the git history:
+# python -m yavih.catalog --write) and the generated benchmark tables (python -m yavih.doctables --write), and commit
+# them when they changed. Contributors never edit either. A commit pushed with the workflow token starts no other
+# workflow, so this never loops.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  index:
+    name: regenerate the catalog index and the tables
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the index is built from the whole history of every folder
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "setuptools>=77" "setuptools-scm>=10" wheel
+          python -m pip install -e .
+      - name: Regenerate
+        run: |
+          python -m yavih.doctables --write
+          python -m yavih.catalog --write
+          python -m yavih.catalog --check
+      - name: Commit when changed
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A catalog README.md docs benchmarks/README.md src/yavih/skill
+            git commit -m "catalog: regenerate the index and the benchmark tables"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi

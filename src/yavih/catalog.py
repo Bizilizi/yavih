@@ -67,6 +67,7 @@ __all__ = [
     "origin",
     "fetch",
     "update",
+    "export",
     "main",
 ]
 
@@ -710,6 +711,42 @@ def update(names: Sequence[str] | None = None, *, yes: bool = False, source: str
     return out
 
 
+# ----------------------------------------------------------------------------- export (an offline catalog)
+
+
+def export(repo: str | os.PathLike, out: str | os.PathLike, *, names: Sequence[str] | None = None, commit: str = "HEAD") -> dict[str, Any]:
+    """Write an offline catalog into ``out``: ``catalog/index.json`` listing the newest revision of each folder (or of
+    ``names``) and those folders at their ``path``, read from git at that revision. ``yavih bench fetch <name> --from
+    <out>`` reads it like the published catalog (a cluster mirror, or the trial run's worker, which never sees the
+    checkout)."""
+    repo, out = Path(repo), Path(out)
+    index = build_index(repo, commit=commit)
+    benches = index["benchmarks"]
+    wanted = list(names) if names else sorted(benches)
+    unknown = [n for n in wanted if n not in benches]
+    if unknown:
+        raise CatalogError("E_CATALOG_UNKNOWN", f"not in the index of {repo} at {commit}: {unknown} (a folder needs a committed core:)")
+    kept: dict[str, Any] = {}
+    for n in wanted:
+        e = dict(benches[n])
+        rev = e["revisions"][0]
+        e["revisions"] = [rev]
+        dest = out / rev["path"]
+        if dest.exists():
+            shutil.rmtree(dest)
+        dest.mkdir(parents=True)
+        data = _git(repo, "archive", "--format=tar", rev["commit"], rev["path"], binary=True)
+        with tarfile.open(fileobj=io.BytesIO(data)) as tf:
+            _extract(tf, rev["path"], dest, strip=False)
+        if tree_id(dest) != rev["tree"]:  # pragma: no cover - git archive is exact
+            raise CatalogError("E_CATALOG_TREE", f"{n}: exported tree differs from {rev['tree']}", exit_code=2)
+        kept[n] = e
+    target = out / INDEX_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(_dumps({**index, "benchmarks": kept}), encoding="utf-8")
+    return {"out": str(out), "index": str(target), "benchmarks": sorted(kept), "commit": index["commit"]}
+
+
 # ----------------------------------------------------------------------------- generator CLI
 
 
@@ -730,10 +767,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--write", action="store_true", help="write catalog/index.json for HEAD")
     g.add_argument("--check", action="store_true", help="exit 1 when catalog/index.json differs from a regeneration at the commit it names")
+    g.add_argument("--export", metavar="DIR", default=None, help="write an offline catalog (index + the folders at their newest "
+                   "revision) into DIR, for `yavih bench fetch <name> --from DIR`")
+    ap.add_argument("names", nargs="*", help="--export: only these folders (default: all)")
     ap.add_argument("--repo", default=None, help="the repository (default: this source checkout)")
     ap.add_argument("--commit", default="HEAD", help="the commit to index (--write; default HEAD)")
     ns = ap.parse_args(argv)
     repo = _repo_root(ns.repo)
+    if ns.export:
+        rec = export(repo, ns.export, names=ns.names or None, commit=ns.commit)
+        print(f"exported {len(rec['benchmarks'])} folder(s) at {rec['commit'][:12]} into {rec['out']}: {', '.join(rec['benchmarks'])}")
+        return 0
     target = repo / INDEX_PATH
     if ns.check:
         try:

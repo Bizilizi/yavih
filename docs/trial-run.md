@@ -1,7 +1,8 @@
 # Trial run
 
 Before a benchmark pull request is opened ([contributing a benchmark](contributing-a-benchmark.md), step 13), a
-fresh agent sets the new benchmark up from the built wheel and the shipped skill alone, connects a toy model to
+fresh agent sets the new benchmark up from the built wheel, the shipped skill and the folder as the catalog serves it
+(the wheel ships the core only), connects a toy model to
 it and runs the whole chain on a small sample of the real data. It is the check nothing else makes: `bench lint`
 and the folder tests read the files, `yavih bench trial --synthetic` runs a generated stand-in, and only an agent
 that has never seen the folder finds where `setup.md`, the bridge template or the skill make it guess. It also
@@ -27,7 +28,11 @@ obtaining the data costs (point the worker at data that is already staged to ski
    ```bash
    TRIAL=$(mktemp -d)
    pip wheel --no-deps . -w "$TRIAL/wheel"          # -> $TRIAL/wheel/yavih-<version>-py3-none-any.whl
+   python -m yavih.catalog --export "$TRIAL/catalog" <name>   # the folder at that commit + its index, as fetch reads them
    ```
+
+   The published catalog lists the folder only after the merge, so the worker fetches it from this export
+   (`yavih bench fetch <name> --from $TRIAL/catalog`), exactly as a user fetches it from the published one.
 
 2. **Prepare an empty workspace**, `mkdir "$TRIAL/work"`, outside the checkout and with nothing copied from it.
    When the data is already staged, note its root (`yavih config get <name>.media_root` in the checkout) for the
@@ -42,14 +47,16 @@ obtaining the data costs (point the worker at data that is already staged to ski
 
 ## Worker prompt
 
-Placeholders: `<BENCH>` the benchmark's name; `<WHEEL>` the absolute path of the wheel; `<WORK>` the workspace;
+Placeholders: `<BENCH>` the benchmark's name; `<WHEEL>` the absolute path of the wheel; `<CATALOG>` the exported
+catalog (`$TRIAL/catalog`); `<WORK>` the workspace;
 `<PYTHON>` a Python 3.10+ interpreter to build the venv from; `<DATA>` either `the data is staged at <path>: use
 it as the <root> data root` or `no data is staged: obtain it as setup.md says`; `<N>` the sample size (32 to 64).
 
 ```text
 You are checking whether a new benchmark of yavih (a frozen-feature benchmark harness) can be set up by an agent
-that has never seen it. Work only inside <WORK>. You have the yavih wheel <WHEEL>, the network for pip and for the
-benchmark's public downloads, and: <DATA>. You do not have the yavih source repository: do not look for it, and do
+that has never seen it. Work only inside <WORK>. You have the yavih wheel <WHEEL>, the benchmark's folder as an offline
+catalog <CATALOG> (the published catalog does not list it yet: where the skill fetches a benchmark, use
+`yavih bench fetch <BENCH> --from <CATALOG>`), the network for pip and for the benchmark's public downloads, and: <DATA>. You do not have the yavih source repository: do not look for it, and do
 not read files out of site-packages. Reach every shipped file through `yavih` commands, as the skill says. Do not
 edit anything yavih ships; when something does not work, work around it if you can and record it.
 

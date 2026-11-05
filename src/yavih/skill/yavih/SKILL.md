@@ -52,15 +52,17 @@ scripts; yavih never reads them). Clusters are site tables, never separate folde
 them on scratch) and results to `yavih-bench/results` (small text, committed). Fine outside the folder: a bridge in a
 model package (`script: pkg.mod:Class`), a deliverable benchmark folder (`[project] benchmarks`), job scripts.
 
-**Hard rule — shipped files.** Everything yavih ships (setup.md, README.md, benchmark.yaml, `bridge_template.py`,
-`prepare/` scripts, this skill's references) is reached ONLY through `yavih bench files <b>` (list, absolute paths),
-`yavih bench show <b> setup|readme|yaml|template|eval|classes|conformance|prepare/<file>`, `yavih bench prepare <b> [<step>]`,
-`yavih bridge new <b> --model <name>` and `yavih skill show --ref <name>`. Never search site-packages or a repository
-checkout for them: a wheel install has no checkout, and these commands answer the same everywhere. Exploring a benchmark:
+**Benchmarks are fetched.** The wheel ships the core only: `yavih bench fetch <b>` brings a folder from the catalog
+(the newest revision this yavih can load; none fits: the pip line, never an automatic upgrade) into
+`yavih-bench/benchmarks/<b>` and records it in `yavih-bench/benchmarks.lock` (commit it); `plan init` fetches a suite's.
+**Hard rule — shipped files.** A folder's files (setup.md, README.md, benchmark.yaml, `bridge_template.py`, `prepare/`)
+and this skill's references are reached ONLY through `yavih bench files|show|prepare <b>`, `yavih bridge new <b> --model
+<name>` and `yavih skill show --ref <name>`; never search site-packages or a checkout. Exploring a benchmark:
 
 ```bash
 yavih suite list                          # benchmark sets: default, minimal (`suite show <s>`, `suite new <s>`)
-yavih bench list                          # all benchmarks: readout, capability, clips, obtain tier, data status
+yavih bench list [--catalog]              # all benchmarks: readout, capability, clips, obtain tier, data status, origin
+yavih bench fetch <b>                     # bring the folder from the catalog (bench update: newer revisions)
 yavih bench files <b>                     # every shipped file, absolute path + kind (--json)
 yavih bench show <b> setup                # contracts, data, gotchas: read first
 yavih bench show <b> readme|yaml|eval     # paper/protocol, machine spec, extra metrics (eval.py: only some benchmarks)
@@ -81,7 +83,7 @@ bridge on a synthetic audio benchmark (an environment check).
 | step | command | continue only when you have seen |
 |---|---|---|
 | 1 install | `pip install --no-deps yavih` (model env); `yavih init` (once per repository); `yavih doctor --bench <b>` | `torch.untouched == true`; `project` line present, no `W_PROJECT_*`; every data root `exists`; `media_read … ok`; the `external` packages listed (probe env, step 2) |
-| 2 setup.md | `yavih suite show default` names the benchmarks (the default set; `minimal` = a smoke pass); per benchmark `yavih bench info <b> --setup` (= `yavih bench show <b> setup`) FIRST, then `yavih bench list` (the `obtain` column), `yavih bench info <b>`, `yavih bench files <b>` | source obtainable here (else "When blocked"); budget fits; every "## Dependencies" package installed and `ok` in `yavih doctor --bench <b>` (probe env); "## Input contract" and "## Output contract" read |
+| 2 setup.md | `yavih suite show default --fetch` names the benchmarks and fetches them (the default set; `minimal` = a smoke pass); per benchmark `yavih bench info <b> --setup` (= `yavih bench show <b> setup`) FIRST, then `yavih bench list` (the `obtain` column), `yavih bench info <b>`, `yavih bench files <b>` | source obtainable here (else "When blocked"); budget fits; every "## Dependencies" package installed and `ok` in `yavih doctor --bench <b>` (probe env); "## Input contract" and "## Output contract" read |
 | 3 prepare | setup.md "## Obtain the data" and "## Prepare & verify": `yavih bench prepare <b>` lists the steps, `yavih bench prepare <b> <step> [-- args]` runs one; `yavih bench verify <b> --census` | eval coverage ≥ 95 %; `labels_ok`; `read` sample ok; media-info table written; `derived_sha_ok` (nyuv2_depth) true where not null |
 | 4 bridge | from the repository root (every path in this table is relative to it): `yavih plan init --suite default --model <name>` writes `yavih-bench/matrices/<name>.yaml` and one bridge stub per benchmark, `yavih-bench/bridges/<name>_<b>.py` (a copy of that benchmark's `bridge_template.py`; existing bridges are kept; `--launcher <python>` unless `yavih.toml` names one per site), and prints the step-5 and step-6 commands; one benchmark only: `yavih bridge new <b> --model <name>`. Per bridge: paste the model's preprocessing source into its docstring; fill `describe()`: `model`, `reading`, the `input` rules (a `custom` rule with a one-line description where none fits), `views: 1`, explicit `precision`; decode in `prepare()` (it overlaps the forward pass; `encode()` reads `sample.prepared`); `encode()` returns `(feats, pos, used)`, pos in media coordinates | `describe()` matches the pasted source line by line; `model` is the same string in every bridge of the model |
 | 5 smoke | per matrix entry `<name>-<b>-<r>`: `yavih bridge check yavih-bench/bridges/<name>_<b>.py --bench <b> [--arg reading=<r>] --out yavih-bench/matrices/<name>.profiles/<name>-<b>-<r>.profile.json` (the profile path the matrix names; `plan init` printed each command; `--synthetic` before data is staged, no profile) | rerun bit-identical; batch/order invariance within `1e-5` (or a declared ≤ `1e-3` with a reason); no `E_RULE_MISMATCH`, `E_TIMES_OUT_OF_MEDIA`, `E_NETWORK`, `E_TEMPLATE_UNFILLED`; profile written |
@@ -222,7 +224,6 @@ The run directory is `$R/<b>/<model>/<reading>/` with `features/<split>/shard-NN
 store is `<results root>/<model>/results_<timestamp>.json` (entries keyed `<b>:<reading>`; +
 `samples_<b>_<reading>_<timestamp>.jsonl` with `--log-samples`); `yavih config get results.root` prints that root
 (`[results] root`, `YAVIH_RESULTS` or `--results DIR`, else `yavih-bench/results` in a project, else `<runs root>/../results`).
-
 The matrix (`yavih plan init` writes `yavih-bench/matrices/<model>.yaml`, one per model): its keys, an example and when `plan
 build` refuses a profile are in references/slurm.md "matrix.yaml".
 
@@ -230,12 +231,10 @@ build` refuses a profile are in references/slurm.md "matrix.yaml".
 
 Adding a benchmark to yavih itself: clone https://github.com/Bizilizi/yavih and follow
 https://github.com/Bizilizi/yavih/blob/main/docs/contributing-a-benchmark.md step by step (`yavih bench new`
-scaffolds the folder; every step ends with a "Done when" check). The fresh-agent trial run of
+scaffolds the folder in `benchmarks/<name>`; every step ends with a "Done when" check). The fresh-agent trial run of
 https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md is required before the pull request.
 
 ## References
-
-Print one with `yavih skill show --ref <name>` (bridge, data, readouts, slurm, cli).
 
 - `references/bridge.md` — RawStream/Sample/BenchmarkView; `describe()["input"]` rules with a worked
   example per media kind; `used`; `grid_pos`; invariance checks; shared `<model>_common.py`; template walkthrough.

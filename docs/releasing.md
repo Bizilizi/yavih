@@ -23,23 +23,32 @@ number. Releases follow semantic versioning for the Python API, the CLI and the 
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push to `main`, every pull request and on demand:
+`.github/workflows/ci.yml`:
 
-- **ruff** on `src` and `tests`;
-- **pytest** on Python 3.10 through 3.14 with CPU torch and ffmpeg, without benchmark data
-  (tests that need staged media skip): `pytest tests benchmarks -p no:cacheprovider -o
-  addopts="--import-mode=importlib"`;
-- **package**: builds the sdist and wheel, runs `twine check --strict`, asserts that the wheel carries no
-  maintainer `notes/` and no `.pyc` but does carry `_version.py`, installs it into a clean venv without
-  torch, and runs `yavih --version`, `yavih bench lint --all` and `yavih bench files esc50` from an empty
-  directory.
+- **ruff** on `src`, `tests` and `benchmarks`;
+- **pytest**, with CPU torch and ffmpeg, without benchmark data (tests that need staged media skip), after
+  `python -m yavih.doctables --write` (CI writes the generated tables; a contributor never does). A pull request runs
+  Python 3.12 only: the whole suite (`pytest tests benchmarks`) when anything outside `benchmarks/` changed, else
+  `yavih bench lint` and the tests of the changed folders plus the repository checks that read every folder
+  (`tests/test_packaged_folders.py`, `tests/test_docs.py`, `tests/test_catalog.py`). A push to `main` runs the whole
+  suite on 3.12; tags, the nightly schedule and a manual run use Python 3.10 through 3.14. The conformance verdicts
+  `bench lint` computes are kept across runs (`CONFORMANCE_CACHE_DIR`, keyed on the core's sources and each folder's
+  content), so an unchanged folder costs no scoring;
+- **package**: builds the sdist and wheel, runs `twine check --strict`, asserts that the wheel ships the core only
+  (no benchmark folder, no `.pyc`, but `_version.py`), installs it into a clean venv without torch and, from an empty
+  directory, runs `yavih --version`, `yavih bench list`, `yavih bench lint --all` on the repository folders through
+  `YAVIH_BENCH_PATH`, `yavih bench fetch esc50 --from <checkout>` and `yavih bench files esc50`.
 
-`.github/workflows/headers.yml` runs on pull requests that touch `benchmarks/`,
-`assets/benchmark-header/` or `src/yavih/headers.py`, and on demand, with read-only permissions: it installs
-`.[media]` and `imagequant`, renders every folder's header image with the runner's Chrome
-(`python -m yavih.headers --all --contact-sheet headers-contact-sheet.png`), uploads the images and the contact sheet
-as the `headers` artifact for review, and fails when a committed `assets/header.src.sha256` is missing or differs
-from the current header HTML (render the image and commit it with its sha file).
+`.github/workflows/catalog.yml` runs after every push to `main`: it regenerates `catalog/index.json`
+(`python -m yavih.catalog --write`, then `--check`) and the generated tables, and commits them when they changed
+([catalog](catalog.md)).
+
+`.github/workflows/headers.yml` runs on pull requests that touch `benchmarks/`, `assets/benchmark-header/` or
+`src/yavih/headers.py`, and on demand, with read-only permissions: it renders every folder's header image with the
+runner's Chrome (`python -m yavih.headers --all --contact-sheet headers-contact-sheet.png`) and uploads the images and
+the contact sheet as the `headers` artifact. It never fails on a stale or missing image: the committed PNGs are a
+maintainer's choice (take one from the artifact and write its sha file with `python -m yavih.headers <name>
+--html-only`).
 
 ## Cutting a release
 

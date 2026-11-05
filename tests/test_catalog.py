@@ -278,3 +278,12 @@ def test_load_with_fetch_brings_a_name_that_is_not_here_and_an_edited_copy_warns
     config.drain_warnings()
     assert Benchmark.load("catx").folder_origin["commit"] == c  # still the locked commit; the tree is the edited one
     assert any(w["code"] == "W_FETCHED_MODIFIED" for w in config.drain_warnings())
+
+
+def test_an_exported_catalog_serves_fetch_without_the_checkout(catrepo, tmp_path, yavih_home):
+    out = tmp_path / "mirror"
+    assert catalog.main(["--repo", str(catrepo["repo"]), "--export", str(out), "catx"]) == 0
+    idx = json.loads((out / "catalog" / "index.json").read_text())
+    assert [r["commit"] for r in idx["benchmarks"]["catx"]["revisions"]] == [catrepo["c3"]]
+    rec = catalog.fetch("catx", source=out, dest_dir=tmp_path / "w" / "benchmarks", version="9.0.0")
+    assert rec["commit"] == catrepo["c3"] and rec["tree"] == catalog.tree_id(out / "benchmarks" / "catx")

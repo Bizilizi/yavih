@@ -94,7 +94,10 @@ nowhere.
 - a repository archive (`.tar.gz`, as `https://codeload.github.com/Bizilizi/yavih/tar.gz/<commit>` serves it): the
   revision is the one whose tree id the archive's folder has.
 
-`[catalog] url` and `archive` also accept `file://` URLs, e.g. a mirror on a cluster without internet:
+`python -m yavih.catalog --export DIR [<name>...]` writes such a directory from a checkout: `catalog/index.json`
+listing the newest revision of each folder, and those folders at their path (a mirror, or the trial run's worker that
+never sees the checkout). `[catalog] url` and `archive` also accept `file://` URLs, e.g. a mirror on a cluster without
+internet:
 
 ```toml
 [catalog]

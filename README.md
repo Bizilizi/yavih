@@ -28,7 +28,7 @@ Then tell your agent:
 
 > **Benchmark my model with yavih.**
 
-That's it. The agent picks the default suite, prepares each benchmark's data, writes the small adapter that feeds
+That's it. The agent picks the default suite, fetches each benchmark from the catalog and prepares its data, writes the small adapter that feeds
 your model, checks it, extracts features, trains the standard probes and hands you a report. What it cannot do on
 its own — a licence you have to accept, a download only a person can make — it lists for you at the end, while the
 rest runs.

@@ -27,7 +27,7 @@ src/yavih/            the package (everything below ships in the wheel)
 tests/                repo tests: contract, integration, golden, docs and import-boundary tests
 docs/                 this documentation (not shipped in the wheel)
 assets/               header.html → header.png (the README header), benchmark-header/ (the folder header template)
-.github/workflows/    ci.yml (ruff, pytest on 3.10–3.14, wheel smoke test), release.yml (PyPI + GitHub Release)
+.github/workflows/    ci.yml (ruff, pytest: 3.12 on pull requests, 3.10–3.14 nightly and on tags, wheel smoke test), catalog.yml (index and tables on main), headers.yml, release.yml (PyPI + GitHub Release)
 pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and ruff settings
 ```
 
@@ -68,7 +68,7 @@ pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and
 | `shipped.py` | one command surface for shipped files (`bench files/show/prepare`, `bridge new`, `skill show`) |
 | `cli.py` | argparse mirror of the API, the `--json` envelope, exit-code mapping |
 | `testing/` | shipped fixtures: synthetic benchmarks, `random_bridge`, `oracle_bridge`; `folder.py` helps folder tests |
-| `benchmarks/<name>/` | one folder per packaged benchmark (see [benchmark folder](benchmark-folder.md)); `benchmarks/README.md` is the generated index |
+| `benchmarks/__init__.py` | the helpers that find the repository's folders from a source checkout (the wheel ships none) |
 | `skill/yavih/` | the agent skill: `SKILL.md` and `references/{bridge,cli,data,readouts,slurm}.md` |
 
 ## Invariants
@@ -144,7 +144,8 @@ that wrote it (`versions.writer_stamp()`).
 .venv/bin/python -m pytest tests benchmarks -q -p no:cacheprovider -o addopts="--import-mode=importlib"
 ```
 
-The second line is what CI runs (Python 3.10–3.14, CPU torch, ffmpeg installed, no benchmark data). It
+The second line is what CI runs on a push to `main` (Python 3.12; 3.10–3.14 nightly and on tags; CPU torch, ffmpeg
+installed, no benchmark data; a pull request that changes only folders runs their lint and tests). It
 covers the repo tests and every folder's `tests/test_folder.py`; all benchmark folders share the test file
 basename, hence importlib import mode.
 
@@ -167,7 +168,7 @@ root is configured.
 |---|---|---|
 | contract tests | `tests/test_<module>*.py` | each module against its documented behaviour, on synthetic data |
 | end to end | `tests/test_e2e_synthetic.py`, `test_readouts_integration.py` | extract → validate → probe → report on `yavih.testing` synthetic benchmarks; the oracle bridge clears every floor, the random bridge does not |
-| folder tests | `benchmarks/<name>/tests/test_folder.py` | manifest hashes and curation sums, split assignment, docs pinned to the yaml, lint clean, metric names resolve; real-media smoke when data is present |
+| folder tests | `benchmarks/<name>/tests/test_folder.py` | what nothing else checks: manifest rows and curation, targets and metrics on hand-checked inputs, the bridge template, `make_manifest.py --check`; real-media smoke when data is present. Never `bench lint` again (`tests/test_packaged_folders.py` runs it once per folder) and never documentation wording |
 | golden tests | `tests/test_hashing.py`, `tests/data/avsync_metrics_golden.json`, `tests/test_freeze.py` | pinned hashes and payloads, metric values, the seeded train draw |
 | boundary tests | `tests/test_import_boundary.py`, `tests/test_extensibility.py` | torch-free core, registry and entry points |
 | docs tests | `tests/test_docs.py`, `tests/test_skill.py`, `tests/test_packaged_folders.py` | docs tables match code constants, every relative link resolves, the skill's commands parse, shipped docs cite nothing unopenable |
@@ -218,7 +219,8 @@ without `--json`; progress goes to stderr. See [cli](cli.md).
 | normative reference | `docs/*.md` (see [the index](README.md)) | by hand; tables of codes, env vars and commands are checked against the code by `tests/test_docs.py` |
 | per-benchmark docs | each folder's `README.md`, `setup.md` | by hand; pinned to `benchmark.yaml` by folder tests and `bench lint` |
 | benchmark lists | `README.md` (table, controls), `docs/benchmark-folder.md` (packaged benchmarks), `benchmarks/README.md` (index, setup links), `references/data.md` (obtainability, `prepare_only` roots), `references/readouts.md` (benchmarks per readout) | generated between `yavih:bench-table` markers: `python -m yavih.doctables --write` (`--check` in the tests) |
-| header images | `assets/header.png`, each folder's `assets/header.png` + `assets/header.src.sha256` | rendered: `python -m yavih.headers` (below); checked by the `headers` workflow |
+| header images | `assets/header.png`, each folder's `assets/header.png` + `assets/header.src.sha256` | rendered: `python -m yavih.headers` (below); the `headers` workflow renders them as an artifact |
+| catalog index | `catalog/index.json` | generated from git history on `main` by the `catalog` workflow (`python -m yavih.catalog --write`); never edited by hand |
 | agent-facing docs | `src/yavih/skill/yavih/` | by hand; shipped, so links go to GitHub URLs |
 | user-facing overview | `README.md` | by hand (do not regenerate it) |
 
@@ -235,7 +237,8 @@ repository files and are not shipped in the wheel.
 
 Each folder render also writes `assets/header.src.sha256`, the sha256 of the HTML the image was rendered from;
 commit it with the image. `bench lint` warns `W_HEADER_STALE` when a folder's image has no or another sha (a changed
-`header:` block, chip or template), and the `headers` workflow (`.github/workflows/headers.yml`) fails a pull request
-whose committed sha files are not current. Without Chrome, take the PNG from the workflow's `headers` artifact and
-write the sha file with `python -m yavih.headers <name> --html-only` (the `assets/header.html` it also writes is not
-committed).
+`header:` block, chip or template); the `headers` workflow (`.github/workflows/headers.yml`) renders every header of a
+pull request into its `headers` artifact and never fails on one. Contributors do not render headers: a maintainer
+commits a PNG when wanted, taken from the artifact, with the sha file from `python -m yavih.headers <name> --html-only`
+(the `assets/header.html` it also writes is not committed). Where the images should live once folders number in the
+hundreds (committed, or published elsewhere) is an open decision.
