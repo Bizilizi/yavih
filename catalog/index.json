@@ -176,12 +176,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "fc67b68db9f0e7d9af4253ed64187b47f70953b4",
+     "commit": "2c79140e5fac7a098c8d80417d59f39c3481cb7d",
      "core": ">=1.1,<2",
      "path": "benchmarks/epic100_anticipation_stream",
      "protocol_hash": "8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de",
      "protocol_version": 1,
-     "tree": "f8c5781c4fe0c1f57fc9e9a32dab49964915d662"
+     "tree": "0158b341a46615d9b88e38155f7bb540ce20aa4c"
     }
    ],
    "scorer": "stream",
@@ -209,7 +209,7 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "0b7b5c36e9922b813b7af208aee2895b84c73a68",
+     "commit": "45d259b54899a10b1b8a8cbd14020cfd5c24241f",
      "core": ">=1.1,<2",
      "path": "benchmarks/epic_sounds_det",
      "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
@@ -398,7 +398,7 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "0b7b5c36e9922b813b7af208aee2895b84c73a68",
+     "commit": "45d259b54899a10b1b8a8cbd14020cfd5c24241f",
      "core": ">=1.1,<2",
      "path": "benchmarks/perception_test_action_loc",
      "protocol_hash": "19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3",
@@ -430,7 +430,7 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "0b7b5c36e9922b813b7af208aee2895b84c73a68",
+     "commit": "45d259b54899a10b1b8a8cbd14020cfd5c24241f",
      "core": ">=1.1,<2",
      "path": "benchmarks/perception_test_sound_loc",
      "protocol_hash": "c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7",
@@ -523,7 +523,7 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "0b7b5c36e9922b813b7af208aee2895b84c73a68",
+     "commit": "45d259b54899a10b1b8a8cbd14020cfd5c24241f",
      "core": ">=1.1,<2",
      "path": "benchmarks/unav100",
      "protocol_hash": "59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e",
@@ -565,6 +565,36 @@
    ],
    "scorer": "stream",
    "title": "UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel)"
+  },
+  "vggsound_retrieval": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "retrieval"
+   ],
+   "clips": {
+    "test": 15440
+   },
+   "core": ">=1.1,<2",
+   "header_title": "VGGSound: A Large-scale Audio-Visual Dataset",
+   "media_gb": 31.12,
+   "name": "vggsound_retrieval",
+   "obtain": "needs-data-owner",
+   "path": "benchmarks/vggsound_retrieval",
+   "protocol_hash": "9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "3c65305b0462b5d9acfd21e7d6f45bdc801c843d",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/vggsound_retrieval",
+     "protocol_hash": "9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49",
+     "protocol_version": 1,
+     "tree": "1d78a9d596bb3a5369b03941fa5611ecf791b9db"
+    }
+   ],
+   "scorer": "vggsound_retrieval",
+   "title": "VGGSound test-set audio–video retrieval (A→V and V→A R@1 over 15 440 clips; the CAV-MAE Sync 1 545-clip subset alongside)"
   },
   "vggsounder": {
    "aliases": [],
@@ -656,9 +686,39 @@
    ],
    "scorer": "box",
    "title": "VGG-SS audio-conditioned single-box regression"
+  },
+  "vggss_loc": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "spatial"
+   ],
+   "clips": {
+    "test": 5154
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Localizing Visual Sounds the Hard Way",
+   "media_gb": 10.53,
+   "name": "vggss_loc",
+   "obtain": "needs-data-owner",
+   "path": "benchmarks/vggss_loc",
+   "protocol_hash": "3e58261a9a2ed7a8194c96349b5356f25fcf3d1cf747e5f239f933ea5f657c04",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "3c65305b0462b5d9acfd21e7d6f45bdc801c843d",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/vggss_loc",
+     "protocol_hash": "3e58261a9a2ed7a8194c96349b5356f25fcf3d1cf747e5f239f933ea5f657c04",
+     "protocol_version": 1,
+     "tree": "17f68f367a2b8e18636129e8d5dd883edeceecfa"
+    }
+   ],
+   "scorer": "vggss_loc",
+   "title": "VGG-SS training-free sound-source localization (cIoU@0.5, AUC on heatmaps)"
   }
  },
  "catalog_version": 1,
- "commit": "7b6c1ebf47c459dbd515bb11c2429cd80c0adad4",
+ "commit": "d0aa3e39acb53aaa2ce7da6ff0cf1689f3e73be2",
  "repo": "Bizilizi/yavih"
 }
