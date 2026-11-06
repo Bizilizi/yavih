@@ -1,0 +1,88 @@
+/* yavih components (docs/design-system.md): the page background, the header pieces and the figure pieces. Needs tokens.css. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body.ds {
+  font-family: var(--sans);
+  color: var(--ink);
+  background:
+    radial-gradient(900px 420px at 18% 10%, rgba(34, 211, 238, 0.16), transparent 60%),
+    radial-gradient(800px 420px at 85% 95%, rgba(167, 139, 250, 0.18), transparent 60%),
+    linear-gradient(135deg, var(--bg0), var(--bg1));
+  position: relative;
+}
+body.ds::before {
+  content: ""; position: absolute; inset: 0;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: var(--grid) var(--grid);
+  mask-image: radial-gradient(1200px 500px at 50% 50%, #000 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(1200px 500px at 50% 50%, #000 40%, transparent 100%);
+}
+
+/* ---- header pieces (README header images) */
+.grad { background: linear-gradient(90deg, #ffffff 0%, var(--a) 45%, var(--b) 80%, var(--c) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.kicker { font-family: var(--mono); font-size: 16px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.kicker b { color: var(--a); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px 10px; font-size: 15px; color: var(--muted); }
+.chip { padding: 5px 12px; border-radius: 999px; background: var(--pill); border: 1px solid rgba(255,255,255,0.12); font-family: var(--mono); }
+.chip b { color: var(--ink); font-weight: 600; }
+.chip.a { border-color: rgba(34, 211, 238, 0.45); }
+.chip.b { border-color: rgba(167, 139, 250, 0.55); }
+.card { border: 1px solid rgba(255,255,255,0.10); border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+.abstract { color: #cbd5e1; line-height: 1.55; }
+.abstract .lab { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--b); display: block; margin-bottom: 8px; }
+.venue { color: var(--muted); font-size: 18px; }
+
+/* ---- figure pieces (assets/preview*.png, clip.gif / clip.mp4) */
+.fig { position: relative; height: 100%; padding: 34px 48px 40px; display: flex; flex-direction: column; gap: 24px; }
+.figbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; }
+.figbar > div:first-child { min-width: 0; }
+.figbar .kicker { font-size: 14px; }
+.figtitle { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin-top: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.figbar .chips { flex-wrap: nowrap; white-space: nowrap; font-size: 14px; gap: 8px; }
+.figbar .chip { padding: 5px 11px; }
+.figbody { position: relative; flex: 1 1 0; min-height: 0; }
+.lab { font-family: var(--mono); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.lab b { color: var(--ink); font-weight: 600; }
+
+.tile, .frame { position: relative; overflow: hidden; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12);
+  background: var(--bg0); box-shadow: 0 14px 40px rgba(0,0,0,0.35); }
+.tile img, .frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 12px 9px; font-size: 15px; font-weight: 600;
+  background: linear-gradient(180deg, transparent, rgba(7, 10, 18, 0.88)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 12px; }
+.ts { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.frame .ts { position: absolute; left: 8px; bottom: 7px; padding: 2px 7px; border-radius: 6px; color: var(--ink);
+  background: rgba(7, 10, 18, 0.72); }
+
+.box { position: absolute; border: 3px solid var(--a); border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(7, 10, 18, 0.65), 0 0 28px rgba(34, 211, 238, 0.45); }
+.box .lab { position: absolute; left: -3px; bottom: 100%; margin-bottom: 6px; padding: 3px 8px; border-radius: 6px;
+  background: var(--a); color: var(--bg0); font-weight: 600; white-space: nowrap; }
+
+.wave { display: block; width: 100%; overflow: visible; }
+.wave path { fill: var(--a); }
+.wave line { stroke: var(--line); stroke-width: 1; }
+.spec { display: block; width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); }
+
+.timeline { position: relative; height: 34px; border-radius: 8px; background: var(--pill); border: 1px solid var(--line); overflow: hidden; }
+.band { position: absolute; top: 0; bottom: 0; background: rgba(34, 211, 238, 0.20); border-left: 2px solid var(--a);
+  border-right: 2px solid var(--a); overflow: hidden; }
+.band .lab { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--ink); white-space: nowrap; letter-spacing: 0.02em; text-transform: none; }
+.band.b { background: rgba(167, 139, 250, 0.22); border-color: var(--b); }
+.band.c { background: rgba(244, 114, 182, 0.22); border-color: var(--c); }
+.band.span { top: -6px; bottom: -6px; border-radius: 6px; background: rgba(34, 211, 238, 0.10); }
+.ticks { position: relative; height: 18px; }
+.ticks span { position: absolute; top: 2px; transform: translateX(-50%); font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ticks span.first { transform: none; }
+.ticks span.last { transform: translateX(-100%); }
+
+.pair { display: flex; align-items: center; gap: 12px; }
+.arrow { color: var(--muted); font-size: 28px; line-height: 1; }
+.gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+.hit { border-color: var(--a); box-shadow: 0 0 0 3px var(--a), 0 0 40px rgba(34, 211, 238, 0.40); }
+.badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-family: var(--mono); font-size: 12px; font-weight: 600;
+  background: var(--a); color: var(--bg0); }
+.badge.muted { background: var(--pill); color: var(--muted); border: 1px solid rgba(255,255,255,0.12); }

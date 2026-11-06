@@ -1,0 +1,11 @@
+/* yavih design tokens (docs/design-system.md). Every committed image (README headers, figures) is drawn from these. */
+:root {
+  --bg0: #070a12; --bg1: #0f172a; --ink: #e5e7eb; --muted: #94a3b8;
+  --line: rgba(148, 163, 184, 0.16); --a: #22d3ee; --b: #a78bfa; --c: #f472b6;
+  --pill: rgba(255, 255, 255, 0.05);
+  --ok: #4ade80; --warn: #fbbf24;
+  --sans: Inter, "Segoe UI", Roboto, "Helvetica Neue", "Liberation Sans", "DejaVu Sans", Arial, sans-serif;
+  --mono: "JetBrains Mono", "Fira Mono", "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --r-pill: 999px; --r-card: 18px; --r-tile: 12px; --r-chip: 8px;
+  --grid: 40px;
+}

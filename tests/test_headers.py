@@ -8,7 +8,7 @@ import html
 
 import pytest
 
-from yavih import headers
+from yavih import design, headers
 from yavih.benchmark import Benchmark
 
 pytestmark = pytest.mark.skipif(not (headers.TEMPLATE_DIR / "template.html").is_file(),
@@ -41,6 +41,8 @@ def test_header_html_fills_every_field():
     assert "$" not in page  # every placeholder substituted
     for text in (h.name, h.title, h.venue, h.abstract):
         assert html.escape(text) in page
+    assert design.base_css() in page and design.page_css(headers.WIDTH, headers.HEIGHT) in page  # the design system
+    assert 'url("fonts/inter/' in page and str(design.DESIGN_DIR) not in page  # fonts by relative url: no machine path
 
 
 def test_header_html_needs_the_header_block(tmp_path):
@@ -123,6 +125,23 @@ def test_html_only_writes_sha(tmp_path):
     sha = (dst / "assets" / headers.SOURCE_SHA_FILE).read_text(encoding="utf-8")
     assert sha == hashlib.sha256(page).hexdigest() + "\n" == headers.header_source_sha256(Benchmark.load(str(dst))) + "\n"
     assert not (dst / "assets" / "header.png").exists()
+
+
+def test_check_prints_ok_missing_stale(tmp_path, capsys):
+    """``--check`` renders nothing: ``missing`` without a PNG, ``stale`` when the sha file names another HTML, ``ok``
+    otherwise; exit 1 unless every folder is ok."""
+    import yaml
+
+    dst = _esc50_copy(tmp_path)
+    assert headers.main([str(dst), "--check"]) == 1 and capsys.readouterr().out.startswith("missing")
+    assert headers.main([str(dst), "--html-only"]) == 0
+    (dst / "assets" / "header.png").write_bytes(b"png")
+    capsys.readouterr()
+    assert headers.main([str(dst), "--check"]) == 0 and capsys.readouterr().out.startswith("ok")
+    y = yaml.safe_load((dst / "benchmark.yaml").read_text(encoding="utf-8"))
+    y["header"]["venue"] = "Another venue"
+    (dst / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    assert headers.main([str(dst), "--check"]) == 1 and capsys.readouterr().out.startswith("stale")
 
 
 def test_render_writes_sha_after_the_png(tmp_path, monkeypatch):

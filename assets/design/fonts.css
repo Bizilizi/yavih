@@ -1,0 +1,8 @@
+/* Inter and JetBrains Mono (SIL Open Font License 1.1, fonts/<family>/OFL.txt), Latin + Greek + symbols subsets as woff2.
+   The urls are relative: a filled page sits next to a `fonts/` link (yavih.design.stage_fonts). */
+@font-face { font-family: Inter; font-style: normal; font-weight: 400; font-display: block; src: url("fonts/inter/Inter-Regular-latin.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 500; font-display: block; src: url("fonts/inter/Inter-Medium-latin.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 600; font-display: block; src: url("fonts/inter/Inter-SemiBold-latin.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 800; font-display: block; src: url("fonts/inter/Inter-ExtraBold-latin.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: block; src: url("fonts/jetbrains-mono/JetBrainsMono-Regular-latin.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: block; src: url("fonts/jetbrains-mono/JetBrainsMono-SemiBold-latin.woff2") format("woff2"); }

@@ -4,15 +4,17 @@ Each folder's ``README.md`` opens with ``assets/header.png``, a 1600 x 500 (CSS 
 from the folder's ``benchmark.yaml`` ``header:`` block (``name``, paper ``title``, ``venue``, a short ``abstract``)
 and chips derived from the yaml: the stream kinds, the readout (multi-label when the labels are), the clip and class
 counts, the folds or readings or train/eval sizes, and the headline metric by its readable name (``metric_label``).
-The template (``template.html`` and ``base.css``) lives in the source repository under ``assets/benchmark-header/``; rendering needs a headless Chrome or
+The template (``assets/benchmark-header/template.html``) lives in the source repository and draws on the design system
+(``yavih.design``: ``assets/design/`` tokens, components and the bundled fonts); rendering needs a headless Chrome or
 Chromium. Both are maintainer tools: the images are for the repository's README pages and are not shipped in the
 wheel, and ``bench lint`` requires the ``header:`` block, not the image.
 
 Provenance: every render also writes ``assets/header.src.sha256``, the sha256 of the filled HTML
-(``header_source_sha256``), so ``bench lint`` can tell a PNG rendered from an older ``header:`` block, chip set or
-template (``W_HEADER_STALE``, a warning: the pixels are machine-dependent, the HTML is not). The PNG and the sha file
-are committed together; the repository's ``headers`` CI workflow renders every header of a pull request as an
-artifact and fails when a committed sha file differs from the current HTML.
+(``header_source_sha256``), so ``bench lint`` can tell a PNG rendered from an older ``header:`` block, chip set,
+template or design (``W_HEADER_STALE``, a warning: the pixels are machine-dependent, the HTML is not). The PNG and the
+sha file are committed together; the repository's ``render`` CI workflow renders every header of a pull request as an
+artifact and reports (never fails on) the sha files that are not current. ``--check`` prints ``ok``, ``missing`` or
+``stale`` per folder and exits 1 when any is not ``ok``.
 
 ``--main`` re-renders the repository's own ``assets/header.png`` from ``assets/header.html`` with the same command.
 ``--html-only`` writes the filled HTML and the sha file next to the image instead of rendering it;
@@ -24,16 +26,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import html
-import os
-import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from string import Template
 
-__all__ = ["CHROME_ARGS", "METRIC_LABELS", "SOURCE_SHA_FILE", "TEMPLATE_DIR", "chips", "contact_sheet", "header_html",
-           "header_source_sha256", "metric_label", "render_folder", "render_html"]
+from yavih import design
+from yavih.design import RenderError, compress_png, contact_sheet
+
+__all__ = ["CHROME_ARGS", "METRIC_LABELS", "SOURCE_SHA_FILE", "TEMPLATE_DIR", "HeaderError", "check_folder", "chips",
+           "compress_png", "contact_sheet", "header_html", "header_source_sha256", "metric_label", "render_folder",
+           "render_html"]
 
 #: ``assets/benchmark-header/`` of the source checkout (not shipped).
 TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "assets" / "benchmark-header"
@@ -41,10 +44,7 @@ TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "assets" / "benchmark-heade
 WIDTH, HEIGHT, SCALE = 1600, 500, 2
 #: ``<folder>/assets/header.src.sha256``: ``header_source_sha256`` of the HTML the committed PNG was rendered from.
 SOURCE_SHA_FILE = "header.src.sha256"
-CHROME_ARGS: tuple[str, ...] = ("--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
-                                f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
-                                "--default-background-color=00000000")
-_CHROMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome")
+CHROME_ARGS: tuple[str, ...] = design.chrome_args(WIDTH, HEIGHT, SCALE)
 _KIND_ORDER = ("video", "image", "audio")
 #: The media kind an output codec carries, for the "given → generated" chip of a generation benchmark.
 _CODEC_KIND = {"wav": "audio"}
@@ -59,7 +59,7 @@ METRIC_LABELS: dict[str, str] = {
 }
 
 
-class HeaderError(RuntimeError):
+class HeaderError(RenderError):
     """A header cannot be built or rendered (no ``header:`` block, no template, no Chrome)."""
 
 
@@ -143,12 +143,13 @@ def header_html(bench) -> str:
     h = bench.spec.header
     if h is None:
         raise HeaderError(f"{bench.name}: benchmark.yaml has no header: block")
-    tpl, css = TEMPLATE_DIR / "template.html", TEMPLATE_DIR / "base.css"
-    if not tpl.is_file() or not css.is_file():
-        raise HeaderError(f"{TEMPLATE_DIR} not found: header rendering runs from a source checkout of yavih")
+    tpl = TEMPLATE_DIR / "template.html"
+    if not tpl.is_file() or not design.available():
+        raise HeaderError(f"{TEMPLATE_DIR} or {design.DESIGN_DIR} not found: header rendering runs from a source checkout of yavih")
     chip_html = "".join(f'<span class="chip {cls}">{inner}</span>' for cls, inner in chips(bench))
     return Template(tpl.read_text(encoding="utf-8")).substitute(
-        base_css=css.read_text(encoding="utf-8"),
+        base_css=design.base_css(),
+        page_css=design.page_css(WIDTH, HEIGHT),
         bench=html.escape(bench.name),
         name=html.escape(h.name),
         name_px=_size(h.name, ((8, "110px"), (11, "96px"), (14, "82px")), "68px"),
@@ -167,39 +168,9 @@ def header_source_sha256(bench) -> str:
     return hashlib.sha256(header_html(bench).encode("utf-8")).hexdigest()
 
 
-def _chrome(explicit: str | None = None) -> str:
-    for c in ([explicit] if explicit else []) + [os.environ.get("CHROME", "")] + list(_CHROMES):
-        if c and shutil.which(c):
-            return shutil.which(c)  # type: ignore[return-value]
-    raise HeaderError("no Chrome/Chromium found (give --chrome PATH or set CHROME)")
-
-
 def render_html(html_path: Path, png_path: Path, *, chrome: str | None = None) -> Path:
-    """Screenshot ``html_path`` into ``png_path`` with headless Chrome (``CHROME_ARGS``)."""
-    png_path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as profile:
-        cmd = [_chrome(chrome), *CHROME_ARGS, f"--user-data-dir={profile}", f"--screenshot={png_path.resolve()}",
-               html_path.resolve().as_uri()]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    if proc.returncode != 0 or not png_path.is_file():
-        raise HeaderError(f"chrome failed ({proc.returncode}): {(proc.stderr or '').strip()[-500:]}")
-    compress_png(png_path)
-    return png_path
-
-
-def compress_png(path: Path) -> Path:
-    """Re-save ``path`` as a 256-colour palette PNG with libimagequant (``pip install imagequant``,
-    a maintainer-only tool): ~3.5x smaller with no visible change, gradients and accent colours kept. Without it the
-    screenshot is kept as is (Pillow's own quantizers band the background or drop the accent colours)."""
-    try:
-        import imagequant
-        from PIL import Image
-    except ImportError:
-        return path
-    with Image.open(path) as im:
-        q = imagequant.quantize_pil_image(im.convert("RGBA"), dithering_level=1.0, max_colors=256)
-    q.save(path, optimize=True)
-    return path
+    """Screenshot ``html_path`` (a 1600 x 500 page) into ``png_path`` with headless Chrome (``design.render_html``)."""
+    return design.render_html(html_path, png_path, size=(WIDTH, HEIGHT), scale=SCALE, chrome=chrome)
 
 
 def render_folder(name: str, *, chrome: str | None = None, html_only: bool = False) -> Path:
@@ -219,26 +190,22 @@ def render_folder(name: str, *, chrome: str | None = None, html_only: bool = Fal
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "header.html"
             src.write_text(page, encoding="utf-8")
+            design.stage_fonts(tmp)
             target = render_html(src, out_dir / "header.png", chrome=chrome)
     (out_dir / SOURCE_SHA_FILE).write_text(sha, encoding="utf-8")
     return target
 
 
-def contact_sheet(images: list[Path], out: Path, *, columns: int = 2, width: int = 1600, gap: int = 24) -> Path:
-    """Tile ``images`` (scaled to ``width`` px each) into one PNG at ``out``."""
-    from PIL import Image
-
-    tiles = [Image.open(p).convert("RGB") for p in images]
-    tiles = [t.resize((width, round(t.height * width / t.width))) for t in tiles]
-    th = max(t.height for t in tiles)
-    rows = (len(tiles) + columns - 1) // columns
-    sheet = Image.new("RGB", (columns * width + (columns + 1) * gap, rows * th + (rows + 1) * gap), (24, 24, 27))
-    for i, t in enumerate(tiles):
-        r, c = divmod(i, columns)
-        sheet.paste(t, (gap + c * (width + gap), gap + r * (th + gap)))
-    out.parent.mkdir(parents=True, exist_ok=True)
-    sheet.save(out)
-    return out
+def check_folder(folder: Path, bench) -> str:
+    """``ok`` (the PNG exists and its sha file names the current header HTML), ``missing`` (no PNG) or ``stale``."""
+    folder = Path(folder)
+    if not (folder / "assets" / "header.png").is_file():
+        return "missing"
+    try:
+        sha = (folder / "assets" / SOURCE_SHA_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return "stale"
+    return "ok" if sha == header_source_sha256(bench) else "stale"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -249,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--html-only", action="store_true", help="write <folder>/assets/header.html (and the sha file) instead of the PNG")
     ap.add_argument("--chrome", help="Chrome/Chromium executable (default: $CHROME or the first on PATH)")
     ap.add_argument("--contact-sheet", type=Path, help="also tile the rendered images into this PNG")
+    ap.add_argument("--check", action="store_true", help="render nothing: print ok / missing / stale per folder, exit 1 unless all ok")
     a = ap.parse_args(argv)
     names = list(a.names)
     if a.all:
@@ -257,10 +225,24 @@ def main(argv: list[str] | None = None) -> int:
         names = list(packaged_names())
     if not names and not a.main:
         ap.error("give benchmark names, --all or --main")
+    if a.check:
+        from yavih.benchmark import Benchmark
+
+        bad = 0
+        for n in names:
+            b = Benchmark.load(n)
+            try:
+                state = check_folder(Path(b.folder), b)
+            except RenderError as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
+            bad += state != "ok"
+            print(f"{state:8s} {b.name}")
+        return 1 if bad else 0
     done: list[Path] = []
     try:
         if a.main:
-            root = TEMPLATE_DIR.parent
+            root = TEMPLATE_DIR.parent  # assets/: header.html links design/*.css by relative url
             print(render_html(root / "header.html", root / "header.png", chrome=a.chrome))
         for n in names:
             p = render_folder(n, chrome=a.chrome, html_only=a.html_only)
@@ -268,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
             print(p)
         if a.contact_sheet and done and not a.html_only:
             print(contact_sheet(done, a.contact_sheet))
-    except HeaderError as e:
+    except RenderError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     return 0
