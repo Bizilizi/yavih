@@ -46,12 +46,11 @@ ship (a scorer, a trained head or loss, metrics, an output type, a bridge-check 
 stand-in, a reader, readings, capability tags, label kinds) goes into your folder through the extension points of
 docs/extending-through-a-folder.md. `yavih bench extensions` lists the folders that already do this; read the closest
 one and scaffold from it (`yavih bench new <NAME> --like <that folder> --dir benchmarks`). Whatever your folder
-implements that the core might one day absorb, list in benchmarks/<NAME>/notes/UNIFY.md: one bullet per item (what it
-is, which file, which other folders might share it). A checkout's local excludes may ignore `notes/` directories:
-add your notes with `git add benchmarks/<NAME>/notes` and check `git ls-files benchmarks/<NAME>/notes` lists them
-(use `git add -f` only if `git status` does not show them; `-f` also adds files .gitignore excludes).
-If the protocol truly cannot be expressed through the folder,
-stop, describe the gap in benchmarks/<NAME>/notes/CORE_REQUEST.md, and report the entry blocked; never edit the core.
+implements that the core might one day absorb goes into your report's "unification candidates" (what it is, which
+file, which other folders might share it); `yavih bench info <NAME>` shows the `extends:` line the integrator checks it
+against. Do not write folder notes: benchmarks/*/notes/ is ignored by git and never reaches the integrator.
+If the protocol truly cannot be expressed through the folder, stop, describe the gap in your report's "core request",
+put the one-line unblocking action in `blocked_by`, and report the entry blocked; never edit the core.
 
 WHAT TO DO. Follow docs/contributing-a-benchmark.md, which is the contract, with these differences for a fleet
 worker:
@@ -108,6 +107,7 @@ run the footprint check, and end with this report, filled in exactly:
 - synthetic trial: <verdict, exit code, stages not ok and why>
 - fresh-agent trial run: <pass | fail | not run> with the TRIAL_REPORT.md path; friction found and fixed
 - budgets: media_gb, extract_min_per_1k_clips_ref, probe_minutes_ref: value and measured | derived (how) | not measured (why)
-- UNIFY items: <bullets from notes/UNIFY.md, or none>
+- unification candidates: <one bullet per item: what, which file, which other folders might share it; or none>
+- core request: <the gap the folder cannot express, if blocked for that reason; or none>
 - open questions for the integrator: <or none>
 ```

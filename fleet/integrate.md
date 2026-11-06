@@ -29,16 +29,11 @@ One worktree and branch per entry, created from `<BASE>`, and one worker started
 ```bash
 "$PY" fleet/check.py footprint bench/<name> --base <BASE> --name <name>      # must print `footprint ok`
 git -C <worktree> status --short                                               # nothing left uncommitted
-git ls-tree -r --name-only bench/<name> -- benchmarks/<name>/notes             # UNIFY.md (and CORE_REQUEST.md) committed
 ```
 
-A checkout's local excludes may ignore `notes/` directories, in which case a worker's notes exist on disk but not on
-its branch; the brief tells workers to check `git ls-files` and to use `git add -f` only when `git status` hides
-them, and the `ls-tree` line above shows whether the notes arrived.
-
 A branch that fails the footprint check is returned to its worker with the offending paths: a change outside the
-folder is never merged, whatever it fixes. A change to the core that the benchmark really needs arrives as a
-`notes/CORE_REQUEST.md` in the folder and goes to the maintainer as its own core change.
+folder is never merged, whatever it fixes. A change to the core that the benchmark really needs arrives as the
+"core request" of the worker's report (the entry is `blocked`) and goes to the maintainer as its own core change.
 
 ## 4. The batch review gate
 
@@ -59,7 +54,7 @@ this list; it runs everything itself:
   run it from the branch (`docs/trial-run.md`) and it passed; one not run because the data is blocked keeps its entry
   `blocked` and is merged only when the maintainer accepts a folder that has not met real data yet;
 - every budget is measured, or marked derived (how) or not measured (why); nothing is invented;
-- `notes/UNIFY.md` lists what the folder implements that the core might absorb.
+- `yavih bench info <name>` prints an `extends:` line that matches the report's unification candidates.
 
 A branch that fails goes back with the reviewer's findings, to the same worker or to a fresh one started on the same
 branch with the findings appended to its brief (a fresh agent is required again for the trial run). It stays
@@ -99,7 +94,7 @@ For every entry of the batch, on `batch/<n>`:
 On `main` the `catalog` workflow runs the same `ship` after every push, so a single benchmark pull request (which may
 not touch `fleet/`) still leaves the queue truthful.
 
-Collect the batch's `notes/UNIFY.md` bullets into the running list of unification candidates; when several folders
+Collect the batch's unification candidates from `yavih bench extensions` and the workers' reports; when several folders
 implement the same thing, unifying it is a core change of its own (moving a folder's scorer into the core bumps that
 folder's `protocol_version`, see `docs/hashing.md`).
 

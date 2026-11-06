@@ -423,7 +423,7 @@ def test_the_detection_folders_own_one_scorer_implementation():
     from yavih.extensions import folder_extensions
 
     copies = {n: (packaged_folder(n) / "detection.py").read_bytes() for n in DETECTION_FOLDERS}
-    assert len(set(copies.values())) == 1, "detection.py differs between folders: keep the copies identical (notes/UNIFY.md)"
+    assert len(set(copies.values())) == 1, "detection.py differs between folders: keep the copies identical (a unification candidate: `yavih bench extensions`)"
     for n in DETECTION_FOLDERS:
         ext = folder_extensions(Benchmark.load(n))
         assert ext["scorer"]["name"] == n and ext["scorer"]["kind"] == "probe" and ext["scorer"]["losses"] == [f"{n}_focal_giou"]

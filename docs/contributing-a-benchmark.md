@@ -185,8 +185,8 @@ Write both against their contracts: [README.md](benchmark-folder.md#readmemd-con
 links line, `## Description`, `## Citation`, `## In yavih`) and [setup.md](benchmark-folder.md#setupmd-contract)
 (for the agent that sets the benchmark up: the six sections in order, ending the contract sections with a copy of
 the yaml blocks). Both are shipped in the wheel: link only what a pip install can open (a public dataset page, a
-`https://github.com/Bizilizi/yavih/blob/main/docs/<page>.md` URL, a `yavih …` command). Maintainer notes may live
-in the folder's `notes/`, which is never shipped and never linked.
+`https://github.com/Bizilizi/yavih/blob/main/docs/<page>.md` URL, a `yavih …` command). Local maintainer notes may
+live in the folder's `notes/`, which git ignores: it is never committed, shipped or linked.
 
 **Done when:** `yavih bench lint <name>` reports no `E_README`, `E_SETUP`, `E_CITATION` or `E_NOTES_LINK`.
 

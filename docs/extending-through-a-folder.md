@@ -6,7 +6,8 @@ capability tag, a label kind) is written inside the benchmark folder, through th
 core runs it. This is the intended way to add a benchmark, not a workaround: yavih is a collection of community
 benchmark implementations with shared primitives a folder may use and is never obliged to. Logic that many folders
 end up sharing is moved into the core later, deliberately, as a `protocol_version` bump of each folder that adopts
-it (record the candidates in the folder's `notes/UNIFY.md`).
+it. The inventory of candidates is `yavih bench extensions` itself: it lists what every folder implements beyond the
+core.
 
 `yavih bench info <name>` prints what a folder extends on its `extends:` line; `yavih bench extensions` lists every
 folder that extends anything (`--all`: every folder).

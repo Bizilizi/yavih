@@ -30,3 +30,6 @@ benchmarks/*/assets/header.html
 .idea/
 .vscode/
 .claude/
+
+# local maintainer notes inside a benchmark folder: never committed, so never in a folder's tree or a fetch
+benchmarks/*/notes/
