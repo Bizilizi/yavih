@@ -29,6 +29,7 @@ import json
 import math
 import os
 import platform
+import re
 import signal
 import socket
 import sys
@@ -1331,6 +1332,74 @@ def _stream_gates(make_engine: Callable[[], _Engine], smoke: list[Any], pass_a: 
     return block
 
 
+@dataclass
+class GateContext:
+    """What a bridge-check gate is handed: a library gate (:data:`LIBRARY_GATES`) or a folder's own (``eval.py``
+    ``BRIDGE_CHECKS``). ``outputs`` is pass A per smoke index (``(feat [N, D], pos, used)``, or ``({key: value}, None,
+    used)`` for a declared output schema); :meth:`encode` runs the bridge again (a fresh engine, batch size 1) on
+    samples the gate builds (perturbed copies: ``yavih.sample.with_files``); :meth:`fail` raises the gate's error code
+    (exit 2) or records it as waived when ``describe()["waive"]`` names it."""
+
+    bench: Any
+    describe: Mapping[str, Any]
+    smoke: list[Any]
+    outputs: dict[int, tuple[Any, Any, dict]]
+    tol: float
+    deterministic: bool
+    missing: list[dict[str, Any]]
+    _make_engine: Callable[[], Any]
+    _waive_or_raise: Callable[[str, str, str], None]
+    _pass_a: Any = None
+    name: str = ""
+
+    def encode(self, samples: Sequence[Any]) -> list[tuple[Any, Any, dict] | None]:
+        res = _run_pass(self._make_engine(), list(samples), list(range(len(samples))), 1)
+        return [res.by_index.get(i) for i in range(len(samples))]
+
+    def fail(self, code: str, message: str) -> None:
+        if not re.match(r"^E_[A-Z0-9_]+$", str(code)):
+            raise ExtractError("E_FOLDER_CHECK", f"gate {self.name!r}: error code {code!r} must match E_[A-Z0-9_]+", exit_code=2)
+        self._waive_or_raise(str(code), str(message), self.name or "gate")
+
+
+def _gate_stream(gc: GateContext) -> dict[str, Any]:
+    """The streaming gates (future invariance, real-time smoke): ``_stream_gates`` on the bench's update interval."""
+    spec = _stream_of(gc.bench)
+    if spec is None:
+        raise ExtractError("E_FOLDER_CHECK", "the library gate 'stream' needs output_contract.stream (a streaming benchmark)", exit_code=2)
+    return _stream_gates(gc._make_engine, gc.smoke, gc._pass_a, gc.describe, spec.update_interval_s, gc.tol, gc.deterministic,
+                         gc._waive_or_raise, gc.missing)
+
+
+#: Bridge-check gates the core ships as a library: a folder lists them by name in ``eval.py`` ``BRIDGE_CHECKS``
+#: (``stream``: future invariance and the real-time smoke of a streaming bridge).
+LIBRARY_GATES: dict[str, Callable[[GateContext], Any]] = {"stream": _gate_stream}
+
+
+def folder_gates(bench: Any) -> list[tuple[str, Callable[[GateContext], Any]]]:
+    """The gates ``bridge check`` runs after its hard checks: the folder's ``eval.py`` ``BRIDGE_CHECKS`` when it declares
+    them (exactly that list: names of :data:`LIBRARY_GATES` and the folder's own callables), else the default for its
+    output contract (``stream`` for a streaming benchmark, none otherwise)."""
+    getter = getattr(bench, "eval_module", None)
+    mod = getter() if callable(getter) else None
+    declared = getattr(mod, "BRIDGE_CHECKS", None) if mod is not None else None
+    if declared is None:
+        return [("stream", _gate_stream)] if _stream_of(bench) is not None else []
+    if isinstance(declared, (str, bytes)) or not isinstance(declared, (list, tuple)):
+        raise ExtractError("E_FOLDER_CHECK", "eval.py BRIDGE_CHECKS must be a tuple of library gate names and callables", exit_code=2)
+    out: list[tuple[str, Callable[[GateContext], Any]]] = []
+    for g in declared:
+        if isinstance(g, str):
+            if g not in LIBRARY_GATES:
+                raise ExtractError("E_FOLDER_CHECK", f"eval.py BRIDGE_CHECKS names {g!r}, not a library gate ({sorted(LIBRARY_GATES)})", exit_code=2)
+            out.append((g, LIBRARY_GATES[g]))
+        elif callable(g):
+            out.append((str(getattr(g, "__name__", "gate")), g))
+        else:
+            raise ExtractError("E_FOLDER_CHECK", f"eval.py BRIDGE_CHECKS entry {g!r} is neither a library gate name nor a callable", exit_code=2)
+    return out
+
+
 def _stream_of(bench: Any) -> Any | None:
     """``output_contract.stream`` of a streaming benchmark, else ``None``."""
     oc = getattr(getattr(bench, "spec", None), "output_contract", None)
@@ -2222,8 +2291,15 @@ def _bridge_check(
                        "ignores its input (an unfilled template's zeros, a constant fallback, a model that never ran); validate would "
                        "refuse the extracted set (E_DEAD_ROWS)", "encode")
     stream_block = None
-    if stream_spec is not None:
-        stream_block = _stream_gates(engine, smoke, pass_a, d, stream_spec.update_interval_s, tol, deterministic, waive_or_raise, missing)
+    gate_blocks: dict[str, Any] = {}
+    for gname, gate in folder_gates(prep.bench):
+        gc = GateContext(bench=prep.bench, describe=d, smoke=smoke, outputs=dict(pass_a.by_index), tol=tol, deterministic=deterministic,
+                         missing=missing, _make_engine=engine, _waive_or_raise=waive_or_raise, _pass_a=pass_a, name=gname)
+        block = gate(gc)
+        if gname == "stream":
+            stream_block = block
+        elif block is not None:
+            gate_blocks[gname] = json.loads(hashing.canon(block)) if isinstance(block, Mapping) else block
 
     # ---- per-member validation checks on pass A
     class _Collect:
@@ -2336,6 +2412,7 @@ def _bridge_check(
         },
         "rules_checked": rc,
         **({"stream": stream_block} if stream_block is not None else {}),
+        **({"gates": gate_blocks} if gate_blocks else {}),
         "clips_per_s": clips_per_s,
         "decode_workers": workers,
         "peak_gpu_gb": _peak_gpu_gb(prep.torch, prep.bridge),

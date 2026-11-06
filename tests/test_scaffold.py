@@ -81,7 +81,7 @@ def test_cli_help_lists_the_full_command_tree(capsys):
 
     assert subs("skill") == {"install", "show"}
     # files / show / prepare and bridge new: one command surface for shipped files
-    assert subs("bench") == {"list", "info", "path", "fetch", "update", "verify", "lint", "new", "files", "show", "prepare", "trial", "conformance", "hash", "migrate", "snapshot"}
+    assert subs("bench") == {"list", "info", "extensions", "path", "fetch", "update", "verify", "lint", "new", "files", "show", "prepare", "trial", "conformance", "hash", "migrate", "snapshot"}
     assert subs("bridge") == {"check", "new"}
     assert subs("features") == {"validate", "inspect", "diff", "stage"}
     assert subs("eval") == {"run"}

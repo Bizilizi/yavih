@@ -37,6 +37,8 @@ from typing import Any
 
 __all__ = [
     "CAPABILITIES",
+    "CAPABILITY_RE",
+    "is_capability",
     "ENTRY_STATUSES",
     "COMPLETENESS",
     "SUITE_SCHEMA_VERSION",
@@ -60,6 +62,14 @@ __all__ = [
 
 #: The capability groups a suite may use, in display order.
 CAPABILITIES: tuple[str, ...] = ("audio", "visual", "audio-visual", "temporal", "spatial", "retrieval", "generation", "streaming")
+#: A capability tag: one of :data:`CAPABILITIES` (the core vocabulary, listed first everywhere) or a tag a benchmark folder
+#: declares for itself (``bench lint`` notes it with ``W_CAPABILITY_UNKNOWN``; indexes and suites group by it like any other).
+CAPABILITY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+
+
+def is_capability(tag: object) -> bool:
+    """``tag`` is a well-formed capability tag (core or folder-declared)."""
+    return isinstance(tag, str) and bool(CAPABILITY_RE.match(tag))
 #: ``status`` of a suite entry: ``packaged`` (a resolvable benchmark folder) or ``pending`` (none yet).
 ENTRY_STATUSES: tuple[str, ...] = ("packaged", "pending")
 #: Completeness of one ``(benchmark, reading, model)``: a DONE-marked result exists (``done``), it does not
@@ -339,8 +349,9 @@ def validate_suite(raw: Any, *, where: str = "suite") -> Suite:
         gwhere = f"{where}: groups[{gi}]"
         g = _check_keys(graw, _GROUP_KEYS, gwhere)
         cap = g.get("capability")
-        if cap not in CAPABILITIES:
-            raise SuiteError(f"{gwhere}.capability {cap!r} must be one of {', '.join(CAPABILITIES)}")
+        if not is_capability(cap):
+            raise SuiteError(f"{gwhere}.capability {cap!r} must be a capability tag ([a-z][a-z0-9-]*: {', '.join(CAPABILITIES)} or a "
+                             "tag a benchmark folder declares)")
         if cap in seen_caps:
             raise SuiteError(f"{gwhere}: capability {cap!r} appears in two groups")
         seen_caps.add(cap)

@@ -1,0 +1,58 @@
+{
+ "benchmark": "epic_sounds_det",
+ "generator": 1,
+ "population": {
+  "eval": 64,
+  "floor": 0,
+  "folds": 0,
+  "train": 64
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "16b772aedc4612ff1ebc5486c72a3dcd809f1a11+dirty",
+  "externals": {},
+  "folder_source": {
+   "eval": "54e3199b207197c661d1b7ea924d9dd1b267b8ade264688cfe5fe0496157353a",
+   "reader": null
+  },
+  "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
+  "scorer": {
+   "kind": "probe",
+   "name": "epic_sounds_det",
+   "version": 1
+  },
+  "scoring_hash": "a0558bb8944a522441d5231f5cd49a0bbb65b703442059f7dd3eb46d4953be76",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "map@0.1": 0.001,
+  "map@0.2": 0.001,
+  "map@0.3": 0.001,
+  "map@0.4": 0.001,
+  "map@0.5": 0.001,
+  "map_avg": 0.001,
+  "map_avg_floor": 0.001,
+  "map_avg_paper": 0.001,
+  "n_eval": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {},
+   "controls": {},
+   "floors": {
+    "map_avg_floor": 0.03277568949354664
+   },
+   "metrics": {
+    "map@0.1": 0.17277049230936467,
+    "map@0.2": 0.012024986196460046,
+    "map@0.3": 0.007843393063699645,
+    "map@0.4": 0.004130911479498569,
+    "map@0.5": 0.0010809487650270087,
+    "map_avg": 0.039570146362809984,
+    "map_avg_paper": 0.03864991040088418,
+    "n_eval": 64
+   }
+  }
+ }
+}

@@ -83,9 +83,21 @@ def chips(bench) -> list[tuple[str, str]]:
     from yavih.lint import template_readings
 
     spec = bench.spec
+    if spec.header is not None and spec.header.chips:  # the folder says what its task is (its own scorer, readings)
+        own = [html.escape(c) for c in spec.header.chips]
+        return [("a", own[0]), *(("b" if i == 1 else "", c) for i, c in enumerate(own[1:], start=1))]
     kinds = {s.kind for s in spec.streams.values()}
     modality = " + ".join(k for k in _KIND_ORDER if k in kinds) or "+".join(sorted(kinds))
-    readout = spec.readout + (" · multi-label" if spec.manifest.label.kind in ("multi", "multi_sets") else "")
+    scorer_label = spec.readout
+    if spec.readout == bench.name:  # the folder's own scorer: name the family it belongs to, else its kind
+        try:
+            from yavih.readouts import registry
+
+            sc = registry.get(spec.readout)
+            scorer_label = sc.family or f"{sc.kind} (own)"
+        except Exception:  # noqa: BLE001 - a header still renders
+            pass
+    readout = scorer_label + (" · multi-label" if spec.manifest.label.kind in ("multi", "multi_sets") else "")
     if "generation" in spec.capability:  # what the model is given and what it generates; the readout is its scorer
         given = [k for k in _KIND_ORDER if k in kinds] + (["text"] if any(c.kind == "text" for c in (spec.cells or {}).values()) else [])
         made = sorted({_CODEC_KIND.get(str(o.get("type")), name) for name, o in spec.output_contract.schema.items()})
@@ -106,7 +118,10 @@ def chips(bench) -> list[tuple[str, str]]:
     if folds:
         out.append(("", f"<b>{len(folds)}</b> folds"))
     if len(readings) > 1:
-        out.append(("", " / ".join(r for r in ("a", "v", "av") if r in readings)))
+        from yavih.lint import folder_readings
+
+        own = sorted((readings & folder_readings(Path(bench.folder))) - {"a", "v", "av"})  # the folder's declared readings
+        out.append(("", html.escape(" / ".join([r for r in ("a", "v", "av") if r in readings] + own))))
     elif not folds:
         roles = {"train": 0, "eval": 0}
         for split, n in spec.budget.clips.items():

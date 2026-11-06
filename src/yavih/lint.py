@@ -38,10 +38,12 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
 - ``codecs``: every folder or entry-point codec the output schema names passes ``yavih.codecs.self_test``
   (``E_CODEC_SELFTEST``).
 - ``obtain``: the ``obtain: {tier, how}`` block.
-- ``capability``: a non-empty ``capability:`` list of ``yavih.suites.CAPABILITIES`` ids (``E_CAPABILITY``; optional for
-  the loader); a shipped suite that lists the benchmark under a capability it does not carry is a warning
-  (``W_SUITE_CAPABILITY``).
-- ``template``: ``bridge_template.py`` declares a literal ``describe()["model"]`` and a ``reading`` in a/v/av.
+- ``capability``: a non-empty ``capability:`` list of capability tags (``E_CAPABILITY``; optional for the loader); a tag
+  outside the core ``yavih.suites.CAPABILITIES`` is the folder's own (``W_CAPABILITY_UNKNOWN``); a shipped suite that
+  lists the benchmark under a capability it does not carry is a warning (``W_SUITE_CAPABILITY``).
+- ``template``: ``bridge_template.py`` declares a literal ``describe()["model"]`` and a ``reading``; a reading outside
+  a/v/av/t (and the real-time ``-rt`` ones of a stream folder) that the folder's ``eval.py`` ``READINGS`` does not
+  declare is a warning (``W_READING_UNKNOWN``).
 - ``citations``: the shipped docs cite nothing a pip-installed user cannot open (the repository's docs/ pages by
   relative path, the retired SPEC / DESIGN documents, repo notes,
   the source tree); a ``https://github.com/Bizilizi/yavih`` URL is the exception. No shipped text file of the folder
@@ -621,10 +623,17 @@ def _c_capability(c: _Ctx) -> Iterator[Finding]:
         yield _err("capability", "E_CAPABILITY", "benchmark.yaml needs `capability: [...]`, one or more of "
                    f"{', '.join(CAPABILITIES)} (the README and the benchmarks index group benchmarks by it)", "benchmark.yaml")
         return
-    bad = [x for x in caps if x not in CAPABILITIES]
+    from yavih.suites import is_capability
+
+    bad = [x for x in caps if not is_capability(x)]
     if bad:
-        yield _err("capability", "E_CAPABILITY", f"capability {bad} not in the vocabulary {', '.join(CAPABILITIES)}", "benchmark.yaml")
+        yield _err("capability", "E_CAPABILITY", f"capability {bad} are not capability tags ([a-z][a-z0-9-]*; the core vocabulary is "
+                   f"{', '.join(CAPABILITIES)})", "benchmark.yaml")
         return
+    own = [x for x in caps if x not in CAPABILITIES]
+    if own:
+        yield _warn("capability", "W_CAPABILITY_UNKNOWN", f"capability {own} is the folder's own tag (not in the core vocabulary "
+                    f"{', '.join(CAPABILITIES)}): indexes list it under its own heading; fine when no core tag fits", "benchmark.yaml")
     names = {c.name, *map(str, c.raw.get("aliases") or [])}
     for suite, cap, benches in _shipped_suite_groups():
         if names & set(benches) and cap not in caps:
@@ -643,6 +652,30 @@ def template_readings(src: str) -> set[str]:
     return readings
 
 
+def folder_readings(folder: Path) -> frozenset[str]:
+    """The readings a folder declares for itself: ``eval.py`` ``READINGS`` (a tuple of reading tags), read without
+    importing the module."""
+    import ast
+
+    path = Path(folder) / "eval.py"
+    if not path.is_file():
+        return frozenset()
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return frozenset()
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(t, ast.Name) and t.id == "READINGS" for t in targets) and node.value is not None:
+                try:
+                    value = ast.literal_eval(node.value)
+                except ValueError:
+                    return frozenset()
+                return frozenset(str(v) for v in value) if isinstance(value, (tuple, list, set, frozenset)) else frozenset()
+    return frozenset()
+
+
 @_check("template")
 def _c_template(c: _Ctx) -> Iterator[Finding]:
     src, f = c.text("bridge_template.py"), "bridge_template.py"
@@ -651,9 +684,12 @@ def _c_template(c: _Ctx) -> Iterator[Finding]:
     if not re.search(r'^\s+"model": "[A-Za-z0-9_.-]{1,64}",', src, flags=re.M):
         yield _err("template", "E_TEMPLATE", 'describe() lacks a literal "model" (the name results are filed under)', f)
     readings = template_readings(src)
-    allowed = READINGS | (REALTIME_READINGS if c.yaml_shape() == "sequence" else frozenset())
-    if not readings or not readings <= allowed:
-        yield _err("template", "E_TEMPLATE", f"describe()['reading'] {sorted(readings)} must be in {sorted(allowed)}", f)
+    allowed = READINGS | (REALTIME_READINGS if c.yaml_shape() == "sequence" else frozenset()) | folder_readings(c.folder)
+    if not readings:
+        yield _err("template", "E_TEMPLATE", "describe()['reading'] is neither a literal nor the choices of a reading ArgSpec", f)
+    elif not readings <= allowed:
+        yield _warn("template", "W_READING_UNKNOWN", f"describe()['reading'] {sorted(readings - allowed)} are not core readings "
+                    f"{sorted(READINGS)}: declare them in eval.py READINGS (the folder's own readings) or use a core one", f)
 
 
 def _shipped_texts(folder: Path) -> list[str]:

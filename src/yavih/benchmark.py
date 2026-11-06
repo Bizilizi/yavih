@@ -98,6 +98,7 @@ __all__ = [
     "home_benchmarks_dir",
     "READOUTS",
     "LABEL_KINDS",
+    "LABEL_KIND_RE",
     "SOURCE_KINDS",
     "OBTAIN_TIERS",
     "ObtainSpec",
@@ -168,6 +169,9 @@ def _scorer_families(name: str) -> frozenset[str]:
 READOUTS: Mapping[str, Any] = _RegistryView("name")
 #: How ``manifest.label`` is parsed: the core's manifest vocabulary; each readout names the kinds it scores.
 LABEL_KINDS: frozenset[str] = frozenset({"single", "multi", "multi_sets", "box", "segments", "none"})
+#: A label kind outside :data:`LABEL_KINDS` is the scorer's own (a folder's ``eval.py`` ``SCORER`` that lists it in
+#: ``label_kinds``): the core keeps the label cell as its string, unparsed, and the scorer (its ``targets``) reads it.
+LABEL_KIND_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 SOURCE_KINDS: frozenset[str] = frozenset({"public_url", "torrent", "manual_portal", "private_mirror", "derived"})
 #: ``obtain.tier``: who must act before the data can be staged. ``auto`` = a script/agent can fetch it unattended;
 #: ``manual-download`` = a person downloads the files by hand from an official portal or the authors' links
@@ -295,18 +299,24 @@ class ObtainSpec:
 HEADER_KEYS: tuple[str, ...] = ("name", "title", "venue", "abstract")
 #: The longest ``header.abstract`` (words) that fits the header card.
 HEADER_ABSTRACT_MAX_WORDS = 60
+#: The most chips an explicit ``header.chips`` may list (what fits the header's chip row).
+HEADER_MAX_CHIPS = 6
 
 
 @dataclass(frozen=True)
 class HeaderSpec:
     """``benchmark.yaml`` ``header`` (optional in the schema, required by ``bench lint``): what the README header
     image shows. ``name`` is the benchmark's display name, ``title`` the paper title, ``venue`` "authors · venue
-    year" and ``abstract`` a short neutral summary of the dataset and task. Outside every hash."""
+    year" and ``abstract`` a short neutral summary of the dataset and task. Outside every hash. ``chips`` (optional)
+    replaces the chips derived from the yaml (stream kinds, scorer, sizes, readings, headline): a folder whose task the
+    derived chips do not describe (its own scorer, its own readings) says it in up to :data:`HEADER_MAX_CHIPS` short
+    strings."""
 
     name: str
     title: str
     venue: str
     abstract: str
+    chips: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -843,7 +853,7 @@ def _parse_header(v: Any, path: str) -> HeaderSpec | None:
     if v is None:
         return None
     d = _expect_mapping(v, path)
-    _check_keys(d, path, list(HEADER_KEYS))
+    _check_keys(d, path, list(HEADER_KEYS), ["chips"])
     vals = {k: _str(d[k], f"{path}.{k}") for k in HEADER_KEYS}
     for k, x in vals.items():
         if not x.strip():
@@ -851,21 +861,29 @@ def _parse_header(v: Any, path: str) -> HeaderSpec | None:
     n = len(vals["abstract"].split())
     if n > HEADER_ABSTRACT_MAX_WORDS:
         raise SchemaError(f"{path}.abstract: {n} words, at most {HEADER_ABSTRACT_MAX_WORDS} fit the header")
-    return HeaderSpec(**vals)
+    chips = None
+    if d.get("chips") is not None:
+        chips = _str_list(d["chips"], f"{path}.chips")
+        if not 1 <= len(chips) <= HEADER_MAX_CHIPS or any(not c.strip() or len(c) > 40 for c in chips):
+            raise SchemaError(f"{path}.chips: 1 to {HEADER_MAX_CHIPS} non-empty strings of at most 40 characters")
+    return HeaderSpec(**vals, chips=chips)
 
 
 def _parse_capability(v: Any, path: str) -> tuple[str, ...]:
-    """``capability``: absent or a non-empty list of distinct ids of :data:`yavih.suites.CAPABILITIES` (the one
-    vocabulary suites group by); ``()`` when absent (``bench lint`` requires it)."""
+    """``capability``: absent or a non-empty list of distinct capability tags: ids of :data:`yavih.suites.CAPABILITIES`
+    (the core vocabulary) or tags the folder declares for itself (``[a-z][a-z0-9-]*``; ``bench lint`` notes them);
+    ``()`` when absent (``bench lint`` requires it)."""
+    from yavih.suites import is_capability
+
     if v is None:
         return ()
     caps = _str_list(v, path)
     if not caps:
         raise SchemaError(f"{path}: must be a non-empty list of capability ids ({', '.join(CAPABILITIES)})")
     for c in caps:
-        if c not in CAPABILITIES:
-            raise SchemaError(f"{path}: {c!r} is not a capability; the vocabulary is {', '.join(CAPABILITIES)} "
-                              "(yavih.suites.CAPABILITIES)")
+        if not is_capability(c):
+            raise SchemaError(f"{path}: {c!r} is not a capability tag ([a-z][a-z0-9-]*; the core vocabulary is "
+                              f"{', '.join(CAPABILITIES)}, yavih.suites.CAPABILITIES)")
     return caps
 
 
@@ -929,7 +947,9 @@ def _parse_budget(v: Any, path: str, readout: str) -> BudgetSpec:
 def _parse_label(v: Any, path: str) -> LabelSpec:
     d = _expect_mapping(v, path)
     _check_keys(d, path, ["column", "kind"], ["sep", "class_key", "sets", "train_set", "allow_unknown", "empty_ok"])
-    kind = _enum(d["kind"], f"{path}.kind", LABEL_KINDS)
+    kind = _str(d["kind"], f"{path}.kind")
+    if kind not in LABEL_KINDS and not LABEL_KIND_RE.match(kind):
+        raise SchemaError(f"{path}.kind: {kind!r} must be one of {sorted(LABEL_KINDS)} or a kind a scorer declares ([a-z][a-z0-9_]*)")
     column = _str(d["column"], f"{path}.column", nullable=True)
     sep = _str(d.get("sep", ";"), f"{path}.sep")
     if not sep:
@@ -1861,7 +1881,8 @@ def parse_spec(raw: Any, *, origin: str = "benchmark.yaml", hooks: FolderHooks |
     if rdesc.is_probe and not splits.train and not splits.folds:
         raise SchemaError(f"splits.train: scorer {readout!r} trains a probe and needs at least one train split value (or use `folds`)")
     if manifest.label.kind not in rdesc.label_kinds:
-        raise SchemaError(f"manifest.label.kind: readout {readout} needs kind {' or '.join(sorted(rdesc.label_kinds))}, got {manifest.label.kind!r}")
+        own = "" if manifest.label.kind in LABEL_KINDS else " (a kind outside the core vocabulary is valid only for a scorer that lists it in label_kinds)"
+        raise SchemaError(f"manifest.label.kind: readout {readout} needs kind {' or '.join(sorted(rdesc.label_kinds))}, got {manifest.label.kind!r}{own}")
     proto = _expect_mapping(d["protocol"], "protocol")
     _check_protocol(proto, "protocol")
     input_contract = _parse_input_contract(d["input_contract"], "input_contract", streams, proto, manifest.columns, cells)
@@ -2296,6 +2317,8 @@ class _Table:
         kind = label.kind
         if kind == "none":
             return None, None, None, None
+        if kind not in LABEL_KINDS:  # the scorer's own kind: the cell as stored, read by the scorer
+            return (r[col[label.column]] if label.column is not None else None), None, None, None
         assert label.column is not None or kind == "multi_sets"
         if kind == "box":
             cell = r[col[label.column]]  # type: ignore[index]

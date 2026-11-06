@@ -700,4 +700,9 @@ def build_head_for(cfg: ProbeConfig, *, visual_tag: int | None = None,
         v = 0 if visual_tag is None else int(visual_tag)
         c = 1 if conditioning_tag is None else int(conditioning_tag)
         return lambda dim: build_dense_av_head(dim, head, visual_tag=v, conditioning_tag=c)
-    raise ValueError(f"unknown head.family {fam!r}")
+    from yavih.readouts import registry
+
+    for scorer in registry.all_scorers().values():  # a family the core does not build: the scorer that declares it
+        if fam in scorer.head_families and scorer.build_head is not None:
+            return scorer.build_head(cfg, visual_tag=visual_tag, conditioning_tag=conditioning_tag)
+    raise ValueError(f"unknown head.family {fam!r} (no registered scorer declares it with a build_head)")

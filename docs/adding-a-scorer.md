@@ -10,7 +10,9 @@ conformance population, `plan` and the metric table all ask the registry instead
 
 Use an existing scorer when one scores the task. A benchmark that is a classification, per-second labelling,
 dense map or box task uses the shipped probe. A benchmark whose protocol is its own (an authors' scorer, a set-level
-distance, a generation metric) owns its scorer in the folder's `eval.py`, under the folder's name.
+distance, a generation metric, a detection head with its own loss) owns its scorer in the folder's `eval.py`, under the
+folder's name, of any kind; that is how a benchmark contribution adds a task type, with no core edit
+([extending through a folder](extending-through-a-folder.md)).
 
 ## The two parts
 
@@ -27,7 +29,7 @@ inside the driver (the built-in scorers use `yavih.readouts.base.lazy_module`).
 
 | kind | trains | configuration (second slot of `eval_hash`) | driver |
 |---|---|---|---|
-| `probe` | the shared pinned head (`train`, `head`, `loss`, `head_families` required) | `probe_hash` of the pinned `ProbeConfig` | `run_<name>(ctx)` |
+| `probe` | a pinned head (`train`, `head`, `loss`, `head_families` required): a core head family, or its own through `build_head` / `loss_fn` | `probe_hash` of the pinned `ProbeConfig` | `run_<name>(ctx)` or `score(ctx)` |
 | `stateless` | nothing: scores stored arrays as they are | the constant `scorer_config_hash(name, version)` (`ScorerConfig`) | `score(ctx)` |
 | `direct` | nothing: scores stored predictions, through the folder's metrics or an authors' package | the same constant | `score(ctx)` |
 
@@ -66,6 +68,7 @@ The fields, grouped by who reads them:
 | identity | `version` (scoring side), `input_keys` (extra `readout_params` / `protocol` keys that eligibility reads; they enter `input_hash`) | hashing |
 | kind | `kind`, `family` (the scorer whose metrics, targets and conformance population this one shares, e.g. a kNN scorer of family `clf`), `needs_gpu` | load, `plan` |
 | probe | `train` (the pinned training block), `head(...)`, `loss(label_kind)`, `task_sizes(bench)`, `geometry(cfg)`, `head_families`, `losses` | `ProbeConfig.pinned`, `probe_hash` |
+| own training parts | `build_head(cfg, visual_tag=, conditioning_tag=)` (a builder `build(dim) -> module` for a family in `head_families` the core does not build), `loss_fn(name)` (a per-sample loss for a name in `losses` the core lacks), `sample_lines(part, seed=, protocol=)` (its samples-file lines) | trainer, `eval run --log-samples` |
 | scoring | `score(ctx)`, `floor_outputs(...)` (`None` = the scorer declares no floors and the folder's `metrics.floors` must be `[]`), `dense`, `eligibility(view)`, `config_hash(cfg)`, `pinned(bench)`, `conformance_population(ctx, tag)` | eval, validate, plan, conformance |
 
 Metrics are allowed for a scorer when their `readouts` name it or its `family` (`Scorer.families()`).

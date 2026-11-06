@@ -142,7 +142,13 @@ LOSSES: tuple[str, ...] = tuple(_LOSSES)
 
 
 def per_sample_loss(name: str) -> Callable[[Tensor, Tensor], Tensor]:
-    """``(pred, target) -> [B]`` for a pinned loss name."""
-    if name not in _LOSSES:
-        raise ValueError(f"unknown loss {name!r}; expected one of {LOSSES}")
-    return _LOSSES[name]
+    """``(pred, target) -> [B]`` for a pinned loss name: a core loss, else the ``loss_fn`` of the registered scorer
+    (a package or a benchmark folder's ``eval.py``) that declares ``name`` in its ``losses``."""
+    if name in _LOSSES:
+        return _LOSSES[name]
+    from yavih.readouts import registry
+
+    for scorer in registry.all_scorers().values():
+        if name in scorer.losses and scorer.loss_fn is not None:
+            return scorer.loss_fn(name)
+    raise ValueError(f"unknown loss {name!r}; expected one of {LOSSES} or a loss a registered scorer declares with a loss_fn")

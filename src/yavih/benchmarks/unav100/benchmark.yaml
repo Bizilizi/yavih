@@ -1,0 +1,220 @@
+schema_version: 3
+name: unav100
+aliases: []
+title: UnAV-100 dense audio-visual event localization in untrimmed videos
+capability: [audio-visual, temporal]
+scorer: unav100
+protocol_version: 1
+changelog:
+- version: 1
+  date: '2026-10-29'
+  invalidates: false
+  reason: First version, frozen from the official UnAV-100 annotations (HF ttgeng233/UnAV-100 @ daeb88bc).
+  protocol_hash: 59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e
+  input_hash: 8e272c58aa350d1e04f0982bd85717b19239eb0ed4a108276a6819606578e089
+header:
+  name: UnAV-100
+  title: 'Dense-Localizing Audio-Visual Events in Untrimmed Videos: A Large-Scale Benchmark and Baseline'
+  venue: Geng et al. · CVPR 2023
+  abstract: 10 790 untrimmed YouTube videos (10 to 60 s, 42 s on average) with 30 059 annotated audio-visual events
+    of 100 classes; events overlap and recur within a video. The task is to find every event's class, start and end;
+    it is scored by detection mAP at temporal IoU thresholds 0.1 to 0.9.
+  chips: ["video + audio", "temporal detection", "8 656 videos", "100 classes", "a / v / av", "mAP, tIoU 0.1–0.9"]
+source:
+  kind: public_url
+  urls:
+  - https://huggingface.co/datasets/ttgeng233/UnAV-100
+  - https://github.com/ttgeng233/UnAV
+  - https://unav100.github.io/
+  licence: The HF dataset card (ttgeng233/UnAV-100) declares CC BY-NC-SA 4.0 (non-commercial, share-alike); the project
+    page shows a CC BY 4.0 badge; the code repository is MIT. The media are YouTube videos (VGGSound sources) subject to
+    YouTube's terms. Research use; cite Geng et al., CVPR 2023.
+  revision: daeb88bc14eeff48f8a4ac2836b67f6c350f847b
+  bytes: 65776160133
+  sha256:
+    data/train.parquet: d8b1302fc12dc22a62ca23b592392cb000d00d2a487a70aa40876dde52742d55
+    data/validation.parquet: 551e1781c8a8fd77cb7a1daf0ad9b71346c615864de7bba6fb5dba3565dadc6b
+    data/test.parquet: 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
+    unav_raw_videos.tar.gz.part_00: aa8dc6798fc8b99d69533b4ebd068a0f659532d13ff82a21a527db5fbdd37f65
+    unav_raw_videos.tar.gz.part_01: d549709123379d9c9f3b63d2aabd31a09f72c0004c50178e0a8b509896122af0
+    unav_raw_videos.tar.gz.part_02: 2f1fae736a5d567519bb6edfa2c79f97571923a6dbb679fb0350adf8df59aeb0
+    unav_raw_videos.tar.gz.part_03: 021ef07d239e735af94a76e46421350788850b2a3b5bfb44b8124b1205cfd6ba
+    unav_raw_videos.tar.gz.part_04: 89c2097a6bab34441302d2f2db65d4e504468a9f7ade713bef4698c6d6223546
+    unav_raw_videos.tar.gz.part_05: f56ad30d4e4bee762f8c9577689a909e93a267785f7e4452fafe5d987e106a1a
+    unav_raw_videos.tar.gz.part_06: 25cea1db67f92036241fcb84a4da430be3b79d9a49a620252cab20f18d141d37
+    unav_raw_videos.tar.gz.part_07: feb5c3f1268c8125d3d9012ef0c37f4e8dc6ddff0493922e3d6dbbc71d7c7677
+    unav_raw_videos.tar.gz.part_08: 064ca3707ed4b234ae935413d4f95dc7bc9e55d716df8f39a00576f40dd142d1
+    unav_raw_videos.tar.gz.part_09: 6b5f72f5892e36aa808c357a365cabe826bafa28438cd308e7596977265f0a9a
+    unav_raw_videos.tar.gz.part_10: 5ddca8ddc839cdf71a6f0d0c8e67bc14400bf8aaf1e9a8f646f7bfba9eefcc69
+    unav_raw_videos.tar.gz.part_11: 815520a0b00649d77f22e6a4abc18b1e971691d6da355ba7bd951e6cbc45c600
+    unav_raw_videos.tar.gz.part_12: d38371218b5f1dcf2babd039b882608ecf4cd24a6863b4f6c6a39dc03eb788d3
+  notes: The authors' HF release holds the annotations (three parquets, one row per event) and the raw videos as one
+    gzip tar split into 13 parts (65.78 GB). The same annotations are the authors' unav100_annotations.json (Google Drive,
+    linked from the project page); I3D/VGGish features and a Baidu mirror exist but are not used.
+obtain:
+  tier: auto
+  how: Nobody acts by hand. `yavih bench prepare unav100 01` downloads the parquets and the 13 tar.gz parts from the public,
+    ungated HF dataset (65.8 GB, sha256-checked); 02 decompresses them into one tar, 03 indexes it in place.
+budget:
+  clips:
+    train: 6489
+    test: 2167
+  media_gb: 52.8
+  extract_min_per_1k_clips_ref: 6.0
+  probe_minutes_ref:
+    unav100: 30
+manifest:
+  file: manifest.csv.gz
+  sha256: b1e2c33ba85d1185f792878bb379533e9b1163cf5bc4e960cc9e18c58d921a19
+  classes: classes.csv
+  classes_sha256: 536278a0a3e1f880d369ad7faf7b6e933b5d48d025a6d0bd5e2727389bfaf6a9
+  key: clip_id
+  label:
+    column: labels
+    kind: multi
+    sep: ;
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media:
+      type: str
+      role: media
+      stream:
+      - video
+      - audio
+    duration_s:
+      type: float
+      role: label_aux
+    events:
+      type: str
+      role: label_aux
+  upstream:
+    source: HF ttgeng233/UnAV-100 @ daeb88bc data/{train,validation,test}.parquet (= the authors' unav100_annotations.json)
+    sha256: 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
+    rows: 10790
+    note: One row per video (10 790 videos, 30 059 events, 100 classes; train 6 489 / validation 2 134 / test 2 167 videos,
+      18 123 / 6 036 / 5 900 events). No curation, no train draw. Every video is a VGGSound video (1 661 test videos in VGGSound
+      train and 506 in VGGSound test, train videos 5 028 and 1 461), so a model pretrained on VGGSound has seen 10 s of most of them;
+      the official splits are kept and the overlap is disclosed, not filtered.
+    upstream_files:
+      ttgeng233/UnAV-100@daeb88bc/data/train.parquet: d8b1302fc12dc22a62ca23b592392cb000d00d2a487a70aa40876dde52742d55
+      ttgeng233/UnAV-100@daeb88bc/data/validation.parquet: 551e1781c8a8fd77cb7a1daf0ad9b71346c615864de7bba6fb5dba3565dadc6b
+      ttgeng233/UnAV-100@daeb88bc/data/test.parquet: 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
+      unav100_annotations.json (authors' Google Drive file): 2fdfc587ad36fc405496b5520d967b5df54b2d82027d16d69e968b5cf04d3dba
+    curation:
+      total_upstream: 10790
+      per_split:
+        train:
+          listed: 6489
+          staged: 6489
+          missing: 0
+        validation:
+          listed: 2134
+          staged: 2134
+          missing: 0
+        test:
+          listed: 2167
+          staged: 2167
+          missing: 0
+      excluded: {}
+splits:
+  train:
+  - train
+  eval:
+  - test
+  floor: []
+  folds: null
+  unused:
+  - validation
+  min_eval_coverage: 0.95
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: tar_index
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_media
+    root: media_root
+    layout: tar_index
+    layout_params: {}
+    required: true
+targets: null
+data:
+  roots:
+    media_root:
+      default: ${data.root}/unav100
+      description: unav_raw_videos.tar (one tar, never extracted) + index.json (members video/<ytid>.mp4 → [shard, offset,
+        size]) + upstream/data/{train,validation,test}.parquet
+  tar_index: index.json
+  derived: {}
+input_contract:
+  handed_over:
+    video: the UnAV-100 mp4 (tar member video/<ytid>.mp4 of unav_raw_videos.tar) exactly as stored, read in place; its H.264
+      track (10-60 s, about 12-30 fps, up to 1280x720) is described by info; nothing decoded, cut, resized or padded
+    audio: the same mp4 bytes as video (one tar member, read once); its AAC track (44.1 kHz, mono or stereo) is described by
+      info; nothing decoded, resampled, cut or padded
+  info:
+    video:
+    - duration_s
+    - fps
+    - width
+    - height
+    - container
+    - bytes
+    audio:
+    - duration_s
+    - sample_rate
+    - n_samples
+    - channels
+    - container
+    - bytes
+  facts: []
+  materialize: null
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos:
+    - t
+    streams: []
+    grid: null
+    t_bins: null
+external: []
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+  tiou_thresholds: [0.1, 0.2, 0.30000000000000004, 0.4, 0.5, 0.6, 0.7000000000000001, 0.8, 0.9]
+metrics:
+  headline: map_avg
+  list:
+  - map_avg
+  - map@0.5
+  - map_tiou
+  - n_events
+  - n_eval
+  table:
+  - map_avg
+  - map@0.5
+  floors:
+  - map_avg_floor
+  controls: []
+  chance: {}
+  ci:
+    map_avg: bootstrap_clip
+  bootstrap:
+    samples: 2000
+    seed: 0
+  aggregation: null
+readout_params:
+  T: 128

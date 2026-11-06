@@ -36,6 +36,11 @@ VERSION: int = 1
 
 
 def _build_head(ctx: ReadoutContext, num_classes: int):
+    if ctx.cfg.head.get("family") != "attentive_probe_v1":  # a scorer of the clf family with its own head (Scorer.build_head)
+        from yavih.probes.trainer import build_head_for
+
+        return build_head_for(ctx.cfg)
+
     def build(dim: int | None = None):
         from yavih.probes.attentive import build_attentive_probe
 

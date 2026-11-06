@@ -1,0 +1,12 @@
+index,name
+0,Human:Speech
+1,Animal:sound
+2,Animal:walking
+3,Human:Sound(clapping)
+4,Interaction: fluid
+5,Interaction:dropping
+6,Interaction:hitting
+7,Interaction:rolling
+8,Object:breaking of something
+9,Object:opening/closing of something
+10,Object:sound

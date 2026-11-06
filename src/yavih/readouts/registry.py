@@ -108,7 +108,16 @@ class Scorer:
     ``config_hash(cfg)`` / ``pinned(bench)`` override the per-kind defaults (:meth:`hash_config`,
     :meth:`pinned_config`); ``conformance_population(ctx, tag)`` builds the fixture population
     (``yavih.conformance``); ``needs_gpu`` whether its unit asks the scheduler for a GPU (``None`` = probes do).
-    ``module`` is the module that declares it."""
+    ``module`` is the module that declares it.
+
+    Own training parts (a scorer outside core, typically a benchmark folder's ``eval.py``): ``build_head(cfg,
+    visual_tag=, conditioning_tag=) -> build(dim) -> module`` builds the heads of the families in ``head_families`` that
+    the core trainer does not implement (``yavih.probes.trainer.build_head_for`` asks it); ``loss_fn(name) -> (pred,
+    target) -> [B]`` returns the per-sample loss for a name in ``losses`` the core does not implement
+    (``yavih.probes.losses.per_sample_loss`` asks it). Both import torch when called, never at module scope. A
+    driver may also train with its own loop entirely (``score``); the core trainer is a library, not a requirement.
+    ``sample_lines(part, seed=, protocol=) -> [line]`` writes the samples-file lines of a part this scorer's driver
+    returns (``eval run --log-samples``; ``None`` = the family's built-in lines)."""
 
     name: str
     version: int
@@ -140,6 +149,9 @@ class Scorer:
     pinned: Callable[[Any], Any] | None = None
     conformance_population: Callable[..., Any] | None = None
     needs_gpu: bool | None = None
+    build_head: Callable[..., Callable[[int], Any]] | None = None
+    loss_fn: Callable[[str], Callable[[Any, Any], Any]] | None = None
+    sample_lines: Callable[..., list[dict]] | None = None
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.replace("_", "").isalnum() or not self.name.islower():
@@ -278,6 +290,21 @@ def register_folder(scorer: Scorer) -> Scorer:
         reg = _load()
         if scorer.name in reg and scorer.name not in _FOLDER:
             raise ValueError(f"scorer {scorer.name!r} is already a registered scorer; a folder scorer must carry the folder's own name")
+        from yavih.probes.config import HEAD_FAMILIES, LOSSES  # torch-free
+
+        core = sorted((scorer.losses & LOSSES if scorer.loss_fn is not None else set())
+                      | (scorer.head_families & HEAD_FAMILIES if scorer.build_head is not None else set()))
+        if core:  # the core builds these names first: the folder's loss_fn / build_head would never be asked for them
+            raise ValueError(f"scorer {scorer.name!r} builds {core} itself, but the core builds those names: declare a core loss or head "
+                             f"family without loss_fn / build_head, and name the folder's own ones after the folder ('{scorer.name}_...')")
+        for other in reg.values():  # a loss or head family resolves to ONE scorer (per_sample_loss, build_head_for)
+            if other.name == scorer.name:
+                continue
+            clash = sorted((scorer.losses & other.losses) if scorer.loss_fn is not None and other.loss_fn is not None else set())
+            clash += sorted((scorer.head_families & other.head_families) if scorer.build_head is not None and other.build_head is not None else set())
+            if clash:
+                raise ValueError(f"scorer {scorer.name!r} declares {clash}, which scorer {other.name!r} already builds: name a folder's own "
+                                 f"losses and head families after the folder ('{scorer.name}_...')")
         reg[scorer.name] = scorer
         _FOLDER[scorer.name] = scorer
         return scorer

@@ -69,14 +69,19 @@ current directory, with `FOLDER=<folder>` and `YAVIH_BENCH=<name>` set. Helper s
 ### eval.py hooks
 
 All hooks are optional. Module scope imports only the standard library, numpy and yavih core (`yavih bench lint`
-imports it with torch and the folder's `external` packages blocked). It reuses the shared heads, trainer and
-`ProbeConfig`; it never defines a head, loss or training loop. Its source never enters a hash: the digest of its
+imports it with torch and the folder's `external` packages blocked); torch and the authors' packages are imported
+inside functions. It may reuse the shared heads, trainer and `ProbeConfig`, or bring its own head, loss and training
+loop through its `SCORER` ([extending through a folder](extending-through-a-folder.md)). Its source never enters a hash: the digest of its
 normalized source is recorded as provenance (`folder_source.eval`), and its behaviour is pinned by
 `protocol_version` and the folder's conformance fixture (`conformance/expected.json`, [conformance](conformance.md)).
 An edit that moves the fixture's numbers is `E_CONFORMANCE_DRIFT` until `protocol_version` is bumped.
 
 ```python
-SCORER: Scorer                      # the folder's own scorer (kind stateless or direct), named after the folder; benchmark.yaml then says `scorer: <name>`
+SCORER: Scorer                      # the folder's own scorer (probe, stateless or direct; build_head / loss_fn for its own heads and losses), named after the folder; benchmark.yaml then says `scorer: <name>`
+CODECS: dict[str, Codec]            # output types of the folder's own
+READINGS: tuple[str, ...]           # readings of the folder's own (beyond a, v, av, t); also the readings a reading-routed score is checked under
+BRIDGE_CHECKS: tuple[str | Callable, ...]  # bridge-check gates: library gate names (yavih.extract.LIBRARY_GATES) and gate(gc) callables
+def eligible(view) -> list[str] | tuple[list[str], list[str]]           # an eligibility rule of its own, after the scorer's
 METRICS: dict[str, MetricSpec]      # folder metrics; may replace a registry metric only with the same readouts/shape/kind
 PROTOCOL_KEYS: frozenset[str]       # protocol keys this file consumes (must be present in `protocol`)
 def targets(bench, split: str, rows: np.ndarray) -> np.ndarray            # replaces the readout's target construction
@@ -95,6 +100,13 @@ prints in md instead of every key (the rest under `--detail`).
 Every call into an original-author package goes through `yavih.external.require(name, pip, version_pin)` with the
 matching `benchmark.yaml` `external` entry. A `eval.py` that re-implements the authors' code instead (because it is
 not importable) says so in README "## In yavih" and setup.md "## Dependencies".
+
+### testing.py
+
+An optional `testing.py` (imported like `eval.py`, torch-free at module scope) gives `yavih bench trial --synthetic` a
+stand-in of the folder's own: `make_stand_in(work, real, *, n_eval, n_train) -> folder` and, when the core test bridges
+cannot encode its labels, `write_bridge(path, kind, *, D, bench_folder) -> path`
+([extending through a folder](extending-through-a-folder.md#a-stand-in-of-the-folders-own)).
 
 ### reader.py
 
@@ -130,6 +142,7 @@ header:                            # optional for the loader, required by bench 
   title: The Kinetics Human Action Video Dataset   # the paper title
   venue: "Kay et al. · arXiv 2017"  # "authors · venue year"
   abstract: "..."                   # two or three neutral sentences on the data and the task, at most 60 words
+  chips: [...]                      # optional: 1 to 6 strings of at most 40 characters that replace the derived chips
 scorer: clf                        # a registered scorer: clf | seq | grid | box, or the folder's own (eval.py SCORER; yavih.readouts.registry)
 protocol_version: 1                # int >= 1, == the newest changelog entry's version
 changelog:                         # non-empty, newest last, strictly increasing versions; the version record
@@ -513,7 +526,9 @@ There is no changelog, history or checklist section: the `benchmark.yaml` `chang
 `assets/header.png` is a 1600 x 500 (CSS px) banner at device scale 2, rendered by `python -m yavih.headers <name>`
 (`--all` for every packaged folder) from the `header:` block and chips derived from the yaml: the stream kinds, the
 readout (multi-label when the labels are), the clip and class counts, the folds, the readings of the bridge template
-or the train/eval sizes, and the headline metric. The template is `assets/benchmark-header/` in the source
+or the train/eval sizes, and the headline metric. A folder whose task the derived chips do not describe (its own scorer,
+its own readings) lists its chips in `header.chips` (1 to 6 strings of at most 40 characters, the first styled as the
+media chip, the second as the task chip); they replace the derived ones. The template is `assets/benchmark-header/` in the source
 repository; rendering needs a headless Chrome or Chromium (`--chrome PATH` or `$CHROME`). The image is a maintainer
 artefact for the repository's README pages: the wheel does not ship it and `bench lint` does not require it.
 
@@ -624,8 +639,8 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `codecs` | `E_CODEC_SELFTEST` | Every folder or entry-point codec the output schema names passes `yavih.codecs.self_test` ([codecs](codecs.md#writing-a-codec)). |
 | `obtain` | `E_OBTAIN` | `obtain` is exactly `{tier, how}`, a known tier and a non-empty `how`. |
 | `core` | `E_CORE` | `core` names the yavih core releases that can load the folder (a PEP 440 specifier; its syntax is the loader's, `E_SCHEMA`). Loading a folder under a release outside it is refused with `E_CORE_VERSION` (exit 3, the pip line in the message); a development build is never refused. |
-| `capability` | `E_CAPABILITY`, `W_SUITE_CAPABILITY` (warning) | `capability` is a non-empty list of `yavih.suites.CAPABILITIES` ids. A shipped suite that lists the benchmark (by name or alias) in a group whose capability is not among its tags is a warning (`W_SUITE_CAPABILITY`). |
-| `template` | `E_TEMPLATE` | `bridge_template.py` has a literal `describe()["model"]` and a `reading` within `a`/`v`/`av`/`t` (`t`: the model is given text). |
+| `capability` | `E_CAPABILITY`, `W_CAPABILITY_UNKNOWN` (warning), `W_SUITE_CAPABILITY` (warning) | `capability` is a non-empty list of capability tags (`[a-z][a-z0-9-]*`); a tag outside `yavih.suites.CAPABILITIES` is the folder's own (`W_CAPABILITY_UNKNOWN`). A shipped suite that lists the benchmark (by name or alias) in a group whose capability is not among its tags is a warning (`W_SUITE_CAPABILITY`). |
+| `template` | `E_TEMPLATE`, `W_READING_UNKNOWN` (warning) | `bridge_template.py` has a literal `describe()["model"]` and a `reading`; a reading outside `a`/`v`/`av`/`t` (`t`: the model is given text) that the folder's `eval.py` `READINGS` does not declare is a warning. |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |
 | `imports` | `E_IMPORT` | `reader.py` / `eval.py` import in a fresh interpreter with torch and the `external` packages blocked. |
 | `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `eval.py`, `make_manifest.py`, `classes.csv`, and `TODO:` markers in `tests/*.py` and `prepare/*` (a folder test may name the bridge template's own `TODO` slots without the colon). |
@@ -646,13 +661,17 @@ The full index with descriptions, media and sources is [benchmarks/README.md](..
 | ave_causal | stream | none | video, audio | `sec_acc_gru` | yes |
 | avsync | clf | single | video, audio (materialized) | `acc` | yes |
 | epic100_anticipation_stream | stream | none | video, audio | `mt5r_action_gru` | yes |
+| epic_sounds_det (alias `epic_sounds_detection`) | epic_sounds_det | multi | audio | `map_avg` | yes |
 | esc50 | clf (5 folds) | single | audio | `acc_mean` |  |
 | fsd50k | clf | multi | audio | `map` |  |
 | in1k (aliases `imagenet1k`, `imagenet`) | clf | single | image | `acc` |  |
 | k400 | clf | single | video | `acc` |  |
 | nyuv2_depth | grid | none (targets) | image | `d1` | yes, `external` |
+| perception_test_action_loc | perception_test_action_loc | multi | video, audio | `tmap` | yes |
+| perception_test_sound_loc | perception_test_sound_loc | multi | video, audio | `tmap` | yes |
 | ssv2 | clf | single | video | `acc` |  |
 | thumos14_oad | stream | none | video, audio | `frame_map_gru` | yes |
+| unav100 | unav100 | multi | video, audio | `map_avg` | yes |
 | unav100_causal | stream | none | video, audio | `map_gru` | yes |
 | vggsounder | clf | multi_sets | video, audio | `auc_pr` | yes, `external` |
 | vggsounder_v2a | vggsounder_v2a | none | video (materialized) | `fd_passt` | yes, `external` |

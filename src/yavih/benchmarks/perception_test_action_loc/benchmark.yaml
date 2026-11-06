@@ -1,0 +1,211 @@
+schema_version: 3
+name: perception_test_action_loc
+aliases: []
+title: Perception Test temporal action localisation (challenge train / valid)
+capability:
+- visual
+- audio-visual
+- temporal
+header:
+  name: PT · action loc
+  title: 'Perception Test: A Diagnostic Benchmark for Multimodal Video Models'
+  venue: Pătrăucean et al. · NeurIPS 2023 Datasets and Benchmarks
+  abstract: Real-world videos of about 23 seconds filmed by crowd-sourced participants to probe perception. The temporal
+    action localisation task asks for every action in a video, its class among 63 templated actions and its start and
+    end, scored by detection mAP over tIoU thresholds 0.1 to 0.5.
+  chips: ["video + audio", "temporal detection", "7 368 videos", "63 classes", "a / v / av", "mAP, tIoU 0.1–0.5"]
+scorer: perception_test_action_loc
+protocol_version: 1
+changelog:
+- version: 1
+  date: '2026-10-29'
+  invalidates: false
+  reason: First version, frozen from the public challenge_action_localisation train and valid annotation files.
+  protocol_hash: 19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3
+  input_hash: 4d011a60364f9fe5eff946993a4f0215b8007e0c110790f74b4cfd0f23ea57c6
+source:
+  kind: public_url
+  urls:
+  - https://github.com/google-deepmind/perception_test
+  - https://storage.googleapis.com/dm-perception-test/zip_data/challenge_action_localisation_train_annotations.zip
+  - https://storage.googleapis.com/dm-perception-test/zip_data/challenge_action_localisation_valid_annotations.zip
+  - https://storage.googleapis.com/dm-perception-test/zip_data/train_videos.zip
+  - https://storage.googleapis.com/dm-perception-test/zip_data/valid_videos.zip
+  - https://storage.googleapis.com/dm-perception-test/zip_data/train_audios.zip
+  - https://storage.googleapis.com/dm-perception-test/zip_data/valid_audios.zip
+  licence: CC-BY 4.0 (videos, audio and annotations; Copyright 2022 DeepMind Technologies Limited); the code of the
+    repository is Apache 2.0. Cite Pătrăucean et al., NeurIPS 2023.
+  revision: google-deepmind/perception_test@3938d2f1ba3a6b502025741cea4cd73c7b3bdfaf
+  bytes: 152508605196
+  sha256:
+    challenge_action_localisation_train_annotations.zip: 61304d4a2577c9fac449cdcffaa9060cc8d9985063c9aeae72776f605f0785ea
+    challenge_action_localisation_valid_annotations.zip: 93235a985bc9f47aa9c6d4e6ae52332424e6a4514d49ffc9de7c0dde7a1b3d85
+  notes: The four media zips (train/valid videos and audios, 152.5 GB) publish no sha256; the prepare step fetches only
+    the members the manifest needs through HTTP range requests and checks each against the size and CRC-32 of the zip's
+    central directory, whose listing is pinned by sha256 in prepare/01_fetch.py.
+obtain:
+  tier: auto
+  how: Nobody; `yavih bench prepare perception_test_action_loc 01` fetches the annotations and the 7 368 videos and wavs
+    the manifest needs (149 GB) from the public Google Cloud Storage bucket, unattended and resumable.
+budget:
+  clips:
+    train: 2009
+    valid: 5359
+  media_gb: 149.01
+  extract_min_per_1k_clips_ref: 5.5
+  probe_minutes_ref:
+    perception_test_action_loc: 30
+manifest:
+  file: manifest.csv.gz
+  sha256: f0e56b01a7eda4cbec0cfadb357fbbef94077b87ede1564e7ccb4dc137420787
+  classes: classes.csv
+  classes_sha256: cafecb73a7b1871bde6b482ad9d53371c448d90e159e75d0333e560d28d53f87
+  key: clip_id
+  label:
+    column: label
+    kind: multi
+    sep: ;
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    events:
+      type: str
+      role: label_aux
+    duration_s:
+      type: float
+      role: extra
+    rel_video:
+      type: str
+      role: media
+      stream: video
+    rel_audio:
+      type: str
+      role: media
+      stream: audio
+  upstream:
+    source: Perception Test challenge_action_localisation_{train,valid}_annotations.zip (storage.googleapis.com/dm-perception-test)
+    sha256: 93235a985bc9f47aa9c6d4e6ae52332424e6a4514d49ffc9de7c0dde7a1b3d85
+    rows: 7368
+    note: 'Upstream = the Perception Test challenge annotation files for temporal action localisation: train (2 009 videos,
+      13 097 events) and valid (5 359 videos, 35 440 events); the challenge test labels are hidden. One row per video, every
+      event kept. The freeze read no media (--no-media), so staged counts equal listed.'
+    upstream_files:
+      challenge_action_localisation_train_annotations.zip: 61304d4a2577c9fac449cdcffaa9060cc8d9985063c9aeae72776f605f0785ea
+      challenge_action_localisation_valid_annotations.zip: 93235a985bc9f47aa9c6d4e6ae52332424e6a4514d49ffc9de7c0dde7a1b3d85
+    curation:
+      total_upstream: 7368
+      per_split:
+        train:
+          listed: 2009
+          staged: 2009
+          missing: 0
+        valid:
+          listed: 5359
+          staged: 5359
+          missing: 0
+      excluded: {}
+      short_clips: 0
+      leakage_audit: null
+
+splits:
+  train:
+  - train
+  eval:
+  - valid
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_video
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_audio
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+targets: null
+data:
+  roots:
+    media_root:
+      default: ${datasets.perception_test}
+      description: videos/<video_id>.mp4 and audios/<video_id>.wav (members of the official train/valid zips), annotations/
+        (the challenge annotation zips); shared with perception_test_sound_loc
+  tar_index: null
+  derived: {}
+input_contract:
+  handed_over:
+    video: the Perception Test mp4 exactly as stored (videos/<video_id>.mp4, H.264 with its own audio track, 6.7-36 s,
+      up to 1920x1080, about 30 fps); nothing decoded, cut or resized
+    audio: the official wav exactly as stored (audios/<video_id>.wav, 32-bit PCM, 44.1 or 48 kHz, mono or stereo); nothing
+      decoded, resampled, cut or padded
+  info:
+    video:
+    - duration_s
+    - fps
+    - width
+    - height
+    - container
+    - bytes
+    audio:
+    - duration_s
+    - sample_rate
+    - n_samples
+    - channels
+    - container
+    - bytes
+  facts: []
+  materialize: null
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos:
+    - t
+    streams:
+    - video
+    grid: null
+    t_bins: null
+external: []
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+  tiou_thresholds:
+  - 0.1
+  - 0.2
+  - 0.3
+  - 0.4
+  - 0.5
+metrics:
+  headline: tmap
+  list:
+  - tmap
+  - tmap_per_tiou
+  - n_events
+  - n_eval
+  floors:
+  - tmap_floor
+  controls: []
+  chance: {}
+  ci:
+    tmap: bootstrap_clip
+  bootstrap:
+    samples: 1000
+    seed: 0
+  aggregation: null
+readout_params:
+  T: 128

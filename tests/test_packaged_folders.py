@@ -248,7 +248,8 @@ def test_capability_is_declared_shown_and_matches_the_suites(name, capsys):
 
 
 def test_capability_is_strict_and_outside_every_hash(tmp_path, esc50_copy):
-    """An unknown capability is a schema error naming the vocabulary; editing or dropping the tags changes no hash;
+    """A malformed capability tag is a schema error naming the vocabulary (a well-formed tag outside it is the folder's own,
+    W_CAPABILITY_UNKNOWN); editing or dropping the tags changes no hash;
     a shipped suite group the tags do not cover is a lint warning."""
     from yavih.benchmark import SchemaError
 
@@ -260,7 +261,7 @@ def test_capability_is_strict_and_outside_every_hash(tmp_path, esc50_copy):
     _edit_yaml(esc50_copy, lambda y: y.update({"capability": ["visual", "temporal"]}))
     found = lint.lint_folder(esc50_copy, checks=["capability"]).findings
     assert [(f.code, f.severity) for f in found] == [("W_SUITE_CAPABILITY", "warning")] * 2  # minimal + default: audio
-    for bad, word in ((["smell"], "vocabulary is audio, visual"), ([], "non-empty"), ("audio", r"list\[str\]"),
+    for bad, word in ((["Smell!"], "not a capability tag"), ([], "non-empty"), ("audio", r"list\[str\]"),
                       (["audio", "audio"], "duplicate")):
         _edit_yaml(esc50_copy, lambda y, bad=bad: y.update({"capability": bad}))
         with pytest.raises(SchemaError, match=word):
@@ -295,7 +296,7 @@ def test_lint_copy_is_clean(esc50_copy):
     (lambda d: (d / "setup.md").write_text((d / "setup.md").read_text(encoding="utf-8") + "\nsee notes/decisions/x.md\n", encoding="utf-8"), "E_NOTES_LINK"),
     (lambda d: (d / "__init__.py").write_text("", encoding="utf-8"), "E_LAYOUT"),
     (lambda d: (d / "make_manifest.py").unlink(), "E_LAYOUT"),
-    (lambda d: (d / "bridge_template.py").write_text(re.sub(r'"reading": "[a-z]+"', '"reading": "x"', (d / "bridge_template.py").read_text(encoding="utf-8")), encoding="utf-8"), "E_TEMPLATE"),
+    (lambda d: (d / "bridge_template.py").write_text(re.sub(r'\s+"reading": "[a-z]+",', "", (d / "bridge_template.py").read_text(encoding="utf-8")), encoding="utf-8"), "E_TEMPLATE"),  # no reading at all (an undeclared one is W_READING_UNKNOWN)
     # the README opens with the header image and carries no changelog / checklist / history section
     (lambda d: (d / "README.md").write_text("# ESC-50\n\n" + (d / "README.md").read_text(encoding="utf-8"), encoding="utf-8"), "E_README"),
     (lambda d: (d / "README.md").write_text((d / "README.md").read_text(encoding="utf-8") + "\n### Changelog\n- v1\n", encoding="utf-8"), "E_README"),

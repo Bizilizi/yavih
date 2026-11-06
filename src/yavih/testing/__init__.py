@@ -84,7 +84,19 @@ _FIXTURE_OF: dict[str, str] = {"knn": "clf"}
 
 
 def _fixture(readout: str) -> str:
-    return _FIXTURE_OF.get(readout, readout)
+    """The fixture a scorer's synthetic data and oracle follow: its own when built in, else that of the family it
+    declares (a folder scorer of family ``clf`` trials on the ``clf`` oracle), else its own name."""
+    if readout in _FIXTURE_OF:
+        return _FIXTURE_OF[readout]
+    if readout in READOUTS:
+        return readout
+    try:
+        from yavih.readouts import registry
+
+        family = registry.get(readout).family
+    except Exception:  # noqa: BLE001 - an unknown scorer keeps its name; the caller refuses it
+        return readout
+    return _fixture(family) if family and family != readout else readout
 MEDIA_MODES: frozenset[str] = frozenset({"none", "tiny"})
 
 #: Tiny media geometry (``media="tiny"``): 10 s mp4 at 2 fps 16×16, 10 s wav at 8 kHz, a 48×32 png
@@ -689,9 +701,12 @@ def make_synthetic_benchmark(
     table under ``$YAVIH_HOME/media_info``, as ``yavih bench verify --census`` would. ``streams``
     (``{name: kind}``, kinds video / audio / image) replaces a ``clf`` fixture's single ``video`` stream; the other
     readouts accept only their own streams. Returns the folder. Re-running with the same arguments is
-    byte-identical (a re-freeze changes nothing)."""
+    byte-identical (a re-freeze changes nothing). A registered scorer of a core family (a folder scorer of family
+    ``clf``) gets that family's fixture; :func:`make_synthetic_like` then makes the folder scorer itself score it."""
     if readout not in READOUTS:
-        raise ValueError(f"readout must be one of {READOUTS}, got {readout!r}")
+        if _fixture(readout) not in READOUTS:
+            raise ValueError(f"readout must be one of {READOUTS} or a registered scorer of their families, got {readout!r}")
+        readout = _fixture(readout)
     if media not in MEDIA_MODES:
         raise ValueError(f"media must be one of {sorted(MEDIA_MODES)}, got {media!r}")
     if n_train < 1 or n_eval < 1:
@@ -817,8 +832,46 @@ def make_synthetic_like(tmp: str | os.PathLike, bench: Any, *, n_eval: int = 32,
         if key in real.spec.protocol and type(real.spec.protocol[key]) is type(spec["protocol"].get(key)):
             spec["protocol"][key] = real.spec.protocol[key]
     spec["title"] = f"Synthetic stand-in for {real.name} (yavih bridge check --synthetic)"
+    if real.spec.readout not in READOUTS:  # a folder scorer of a core family: it scores its own stand-in
+        _own_scorer(folder, spec, real)
     path.write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    if real.spec.readout not in READOUTS:
+        from yavih.benchmark import Benchmark
+
+        try:
+            Benchmark.load(str(folder))
+        except Exception as e:  # noqa: BLE001 - name what does not fit, and the way out
+            raise ValueError(f"{real.name}: its eval.py does not fit the {_fixture(real.spec.readout)} family's synthetic stand-in "
+                             f"({type(e).__name__}: {e}); ship testing.py make_stand_in for a stand-in of the folder's own") from e
     return folder
+
+
+#: Folder files that never enter a stand-in: they describe the real folder's manifest, data or test bridge.
+_NOT_FOR_STAND_IN = frozenset({"make_manifest.py", "bridge_template.py", "reader.py", "testing.py"})
+
+
+def _own_scorer(folder: Path, spec: dict, real: Any) -> None:
+    """Make a stand-in built from a core family's fixture run the real folder's scorer: its ``eval.py`` and sibling
+    modules (``detection.py``, ...) are copied in, ``scorer`` and ``budget.probe_minutes_ref`` name it, and the
+    protocol and readout_params keys its scorer and ``eval.py`` consume take the real folder's values."""
+    import shutil
+
+    from yavih.readouts import registry
+
+    for src in sorted(Path(real.folder).glob("*.py")):
+        if src.name not in _NOT_FOR_STAND_IN:
+            shutil.copy2(src, folder / src.name)
+    name = real.spec.readout
+    spec["scorer"] = name
+    spec["budget"]["probe_minutes_ref"] = {name: 1}
+    sc = registry.get(name)
+    eval_mod = real.eval_module()
+    keys = set(sc.protocol_keys) | set(getattr(eval_mod, "PROTOCOL_KEYS", ()) or ())
+    for k in sorted(keys):
+        if k not in spec["protocol"] and k in real.spec.protocol:
+            spec["protocol"][k] = real.spec.protocol[k]
+    if sc.param_keys:
+        spec["readout_params"] = {k: real.spec.readout_params[k] for k in sc.param_keys if k in real.spec.readout_params}
 
 
 # ============================================================================= bridges
