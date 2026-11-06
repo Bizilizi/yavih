@@ -18,7 +18,7 @@ from typing import Any
 
 import numpy as np
 
-__all__ = ["future_pair"]
+__all__ = ["future_pair", "track_pair"]
 
 
 def _av() -> Any:
@@ -35,18 +35,44 @@ def future_pair(data: bytes, out_dir: str | os.PathLike, cutoffs: Sequence[float
     """Write ``A`` and one ``B_c`` per cutoff under ``out_dir``; returns ``{"A": path, "<c>": path, ...}`` (keys of
     the cutoffs formatted ``f"{c:.6f}"``). Video frames and audio samples at times ``> c`` are blanked in ``B_c``;
     everything at or after ``until_s`` is dropped from every copy."""
+    cut = [float(c) for c in cutoffs]
+    names = {"A": f"{name}.A.mkv", **{f"{c:.6f}": f"{name}.B{k}.mkv" for k, c in enumerate(cut)}}
+    blank = {"A": (None, None), **{f"{c:.6f}": (c, c) for c in cut}}
+    return _write_copies(data, out_dir, names, blank, until_s=until_s)
+
+
+def track_pair(data: bytes, out_dir: str | os.PathLike, *, blank: str, name: str = "rec") -> dict[str, str] | None:
+    """Write ``A`` (the lossless copy) and ``B`` (the same with its whole ``blank`` track, ``"video"`` or
+    ``"audio"``, black or silent) under ``out_dir``; ``None`` when the recording holds no track of that kind (nothing
+    to blank). ``bridge check``'s modality-isolation gate hands a bridge the two: an output that may depend on the
+    other track only must be equal on both."""
+    if blank not in ("video", "audio"):
+        raise ValueError(f"track_pair: blank must be 'video' or 'audio', got {blank!r}")
+    av = _av()
+    with av.open(io.BytesIO(data)) as src:
+        tracks = src.streams.video if blank == "video" else src.streams.audio
+        if next(iter(tracks), None) is None:
+            return None
+    names = {"A": f"{name}.A.mkv", "B": f"{name}.no-{blank}.mkv"}
+    everything = -1.0  # every time t >= 0 is after this cutoff
+    blank_c = {"A": (None, None), "B": ((everything, None) if blank == "video" else (None, everything))}
+    return _write_copies(data, out_dir, names, blank_c, until_s=float("inf"))
+
+
+def _write_copies(data: bytes, out_dir: str | os.PathLike, names: dict[str, str], blank_after: dict[str, tuple[float | None, float | None]],
+                  *, until_s: float) -> dict[str, str]:
+    """Decode ``data`` once and write one Matroska copy per key of ``names`` (file names under ``out_dir``):
+    ``blank_after[key] = (video_cutoff, audio_cutoff)``, each ``None`` (never blanked) or the time after which that
+    track's frames are black / samples silent. Everything at or after ``until_s`` is dropped from every copy."""
     av = _av()
     os.makedirs(out_dir, exist_ok=True)
-    cut = [float(c) for c in cutoffs]
-    names = {"A": os.path.join(os.fspath(out_dir), f"{name}.A.mkv")}
-    names.update({f"{c:.6f}": os.path.join(os.fspath(out_dir), f"{name}.B{k}.mkv") for k, c in enumerate(cut)})
-    blank_after = {"A": None, **{f"{c:.6f}": c for c in cut}}
+    names = {k: os.path.join(os.fspath(out_dir), v) for k, v in names.items()}
     src = av.open(io.BytesIO(data))
     try:
         vin = next(iter(src.streams.video), None)
         ain = next(iter(src.streams.audio), None)
         if vin is None and ain is None:
-            raise ValueError("future_pair: the recording has neither a video nor an audio stream")
+            raise ValueError("perturb: the recording has neither a video nor an audio stream")
         outs = {k: av.open(p, mode="w", format="matroska") for k, p in names.items()}
         vouts: dict[str, Any] = {}
         aouts: dict[str, Any] = {}
@@ -75,7 +101,7 @@ def future_pair(data: bytes, out_dir: str | os.PathLike, cutoffs: Sequence[float
                 if frame.__class__.__name__ == "VideoFrame":
                     rgb = frame.to_ndarray(format="rgb24")
                     for k, o in outs.items():
-                        c = blank_after[k]
+                        c = blank_after[k][0]
                         img = np.zeros_like(rgb) if c is not None and t > c + 1e-9 else rgb
                         vf = av.VideoFrame.from_ndarray(img, format="rgb24")
                         vf.pts, vf.time_base = frame.pts, frame.time_base
@@ -93,7 +119,7 @@ def future_pair(data: bytes, out_dir: str | os.PathLike, cutoffs: Sequence[float
                         if not keep.any():
                             continue
                         for k, o in outs.items():
-                            c = blank_after[k]
+                            c = blank_after[k][1]
                             x = pcm.copy()
                             if c is not None:
                                 mute = times > c + 1e-9

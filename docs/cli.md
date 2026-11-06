@@ -80,7 +80,8 @@ label facts over tiny generated media), with the oracle test bridge, whose featu
 results-store file), `report`, `headline`. `data.stages` holds one record per stage (`ok`, `warning`, `failed`,
 `skipped` after a failure or, for `conformance`, when a package its scoring path needs is missing here, with
 `detail.reason`; `not_applicable` without a stand-in; `seconds`; `detail`; `error`), `data.headline` the headline metric, its CI and floor and
-`clears_floor`. Under `--readout-fast` the oracle must clear the floor; without it a miss is the warning
+`clears_floor` (the floor whose `floor_of` names the headline, else the name-stem floor; a headline without a floor
+is held to its `metrics.chance` level, `floor_name: "chance"`). Under `--readout-fast` the oracle must clear the floor; without it a miss is the warning
 `W_TRIAL_HEADLINE`, since the pinned schedule may underfit the stand-in's few dozen rows.
 
 The trial never reads or writes the user's runs root, results store, `$YAVIH_HOME` or configuration: while it

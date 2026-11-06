@@ -147,6 +147,7 @@ E_BRIDGE = "E_BRIDGE"  # the bridge raised inside encode or prepare: a bridge bu
 E_FUTURE_SUPPORT = "E_FUTURE_SUPPORT"  # a streaming update's support ends after its cutoff or exceeds the declared window (exit 2)
 E_REPLAY_LOG = "E_REPLAY_LOG"  # a real-time replay log inconsistent with the scheduler (exit 2)
 E_FUTURE_LEAK = "E_FUTURE_LEAK"  # an update changed when only input after its cutoff changed (bridge check, exit 2)
+E_MODALITY_LEAK = "E_MODALITY_LEAK"  # an isolated output changed when only a stream outside its declared streams changed (bridge check, exit 2)
 E_FEATURES = "E_FEATURES"  # encode() returned a wrong shape / pos for the declared pos_mode (exit 2)
 E_PRECISION_DRIFT = "E_PRECISION_DRIFT"  # torch precision flags differ after encode from the enforced declaration (exit 2)
 E_WRITE = "E_WRITE"  # the writer could not serialize a row's provenance/features (exit 5)
@@ -1238,6 +1239,91 @@ class _Engine:
 FUTURE_GATE_RECORDINGS = 2
 
 
+#: smoke rows the modality-isolation gate perturbs (each with the next present row as its donor)
+ISOLATION_GATE_ROWS = 2
+
+
+def _isolation_gates(make_engine: Callable[[], _Engine], smoke: list[Any], pass_a: _PassResult, isolation: Mapping[str, Sequence[str]], tol: float,
+                     deterministic: bool, waive_or_raise: Callable[[str, str, str], None], missing: list[dict[str, Any]]) -> dict[str, Any]:
+    """The modality-isolation gate (``E_MODALITY_LEAK``) of a folder whose ``output_contract.isolation`` says which
+    file streams each output key may depend on. For up to :data:`ISOLATION_GATE_ROWS` smoke rows, each with the next
+    present row as its donor, the bridge encodes perturbed copies: per stream, the row with that stream's file
+    swapped for the donor's (``swap``), and, for a file that also holds a track of the other kind (an mp4 with an
+    audio track handed over as the video stream), a lossless copy with that track blanked (``blank``,
+    ``yavih.media.perturb.track_pair``). Every key whose declared streams are untouched by a copy must be equal to
+    the unperturbed pass (bit-identical when ``precision.deterministic``, else within the tolerance); a difference is
+    the leak. Returns the profile's ``isolation`` block."""
+    import tempfile
+
+    from yavih.media.perturb import track_pair
+
+    present = sorted(pass_a.by_index)
+    if len(present) < 2:
+        waive_or_raise(E_MODALITY_LEAK, "the modality-isolation gate needs two present smoke rows (one is the donor of the other's streams)", "isolation")
+        return {"keys": {k: list(v) for k, v in isolation.items()}, "checks": [], "max_rel_l2": 0.0}
+    checks: list[dict[str, Any]] = []
+    worst = 0.0
+    with tempfile.TemporaryDirectory(prefix="yavih-isolation-") as tmp:
+        variants: list[tuple[Any, int, set[str], str]] = []  # (sample, original index, altered streams, label)
+        for n, j in enumerate(present[:ISOLATION_GATE_ROWS]):
+            s, donor = smoke[j], smoke[present[(n + 1) % len(present)]]
+            own = {name: _sample.stored_file(st, tmp) for name, st in s.streams.items()}
+            exts = {path: (st._ext or os.path.splitext(path)[1].lstrip(".")) for name, st in s.streams.items() for path in [own[name]]}
+            for name, st in s.streams.items():
+                loc = st._src.loc
+                sharing = {m for m, o in s.streams.items() if o._src.loc == loc}
+                # swap: this stream's file for the donor's (a shared file carries its other streams along)
+                dpath = _sample.stored_file(donor.streams[name], tmp)
+                files = {s.streams[m]._src.loc: own[m] for m in s.streams}
+                files[loc] = dpath
+                dext = donor.streams[name]._ext or os.path.splitext(dpath)[1].lstrip(".")
+                variants.append((_sample.with_files(s, f"bridge-check-isolation-swap-{name}", files, {**exts, dpath: dext}), j, sharing, f"swap:{name}"))
+                # blank: the other kind's track of this stream's file, when the file holds one
+                for other in ("video", "audio"):
+                    if other == st.kind or st.kind not in ("video", "audio"):
+                        continue
+                    try:
+                        pair = track_pair(st.bytes(), os.path.join(tmp, f"r{j}-{name}"), blank=other, name=f"{name}")
+                    except Exception as e:  # noqa: BLE001 - the gate could not run: say so, never pass silently
+                        waive_or_raise(E_MODALITY_LEAK, f"{s.clip_id}: the isolation gate could not write a lossless copy of stream {name!r} "
+                                       f"without its {other} track: {type(e).__name__}: {e}", "isolation")
+                        continue
+                    if pair is None:
+                        continue
+                    altered = {m for m in sharing if s.streams[m].kind == other}
+                    files = {s.streams[m]._src.loc: own[m] for m in s.streams}
+                    files[loc] = pair["B"]
+                    variants.append((_sample.with_files(s, f"bridge-check-isolation-blank-{name}-{other}", files, {**exts, pair["B"]: "mkv"}), j, altered,
+                                     f"blank:{other}-track-of:{name}"))
+        if not variants:
+            return {"keys": {k: list(v) for k, v in isolation.items()}, "checks": [], "max_rel_l2": 0.0}
+        res = _run_pass(make_engine(), [v[0] for v in variants], list(range(len(variants))), 1)
+        for i, (_v, j, altered, label) in enumerate(variants):
+            keys = [k for k, lst in isolation.items() if not (set(lst) & altered)]
+            if not keys:
+                continue
+            if i not in res.by_index:
+                why = "; ".join(str(m.get("reason")) for m in missing[-1:]) or "no reason recorded"
+                waive_or_raise(E_MODALITY_LEAK, f"{smoke[j].clip_id}: the {label} copy was reported missing ({why})", "isolation")
+                continue
+            a, b = pass_a.by_index[j][0], res.by_index[i][0]
+            for key in keys:
+                spec, codec = pass_a.schema[key]
+                if codec.is_volatile(spec) or key not in a or key not in b:
+                    continue
+                r = float(codec.distance(b[key], a[key], spec))
+                must_equal = deterministic or codec.is_exact(spec)
+                if not codec.is_exact(spec):
+                    worst = max(worst, r)
+                if (must_equal and r != 0.0) or (not must_equal and r > tol):
+                    changed = label.split(":")[1] if label.startswith("swap:") else label.split("-track-of:")[0].split(":")[1] + " track"
+                    waive_or_raise(E_MODALITY_LEAK, f"{smoke[j].clip_id}: output {key!r} (declared to read only {list(isolation[key])}) changed "
+                                   f"when only the {changed} changed ({label}; distance {r:.3e}): the bridge reads a stream outside the key's "
+                                   "declaration (a fused forward, a shared normalization, the other track of the same file)", "isolation")
+            checks.append({"clip_id": smoke[j].clip_id, "variant": label, "keys": keys})
+    return {"keys": {k: list(v) for k, v in isolation.items()}, "checks": checks, "max_rel_l2": worst}
+
+
 def _stream_gates(make_engine: Callable[[], _Engine], smoke: list[Any], pass_a: _PassResult, d: Mapping[str, Any], dt: float, tol: float,
                   deterministic: bool, waive_or_raise: Callable[[str, str, str], None], missing: list[dict[str, Any]]) -> dict[str, Any]:
     """A streaming bridge's own gates. **Future invariance** (``E_FUTURE_LEAK``): for up to
@@ -1371,20 +1457,42 @@ def _gate_stream(gc: GateContext) -> dict[str, Any]:
                          gc._waive_or_raise, gc.missing)
 
 
+def _isolation_of(bench: Any) -> Mapping[str, Sequence[str]] | None:
+    """``output_contract.isolation`` (schema key -> the file streams it may depend on), else ``None``."""
+    oc = getattr(getattr(bench, "spec", None), "output_contract", None)
+    return getattr(oc, "isolation", None) or None
+
+
+def _gate_isolation(gc: GateContext) -> dict[str, Any]:
+    """The modality-isolation gate (``E_MODALITY_LEAK``) on the folder's ``output_contract.isolation``: each declared
+    output key must not change when only a stream outside its declaration changes (:func:`_isolation_gates`)."""
+    isolation = _isolation_of(gc.bench)
+    if not isolation:
+        raise ExtractError("E_FOLDER_CHECK", "the library gate 'isolation' needs output_contract.isolation", exit_code=2)
+    from yavih import stream as _stream
+
+    ctx = _stream.forced_causal() if _stream_of(gc.bench) is not None else contextlib.nullcontext()
+    with ctx:
+        return _isolation_gates(gc._make_engine, gc.smoke, gc._pass_a, isolation, gc.tol, gc.deterministic, gc._waive_or_raise, gc.missing)
+
+
 #: Bridge-check gates the core ships as a library: a folder lists them by name in ``eval.py`` ``BRIDGE_CHECKS``
-#: (``stream``: future invariance and the real-time smoke of a streaming bridge).
-LIBRARY_GATES: dict[str, Callable[[GateContext], Any]] = {"stream": _gate_stream}
+#: (``stream``: future invariance and the real-time smoke of a streaming bridge; ``isolation``: the
+#: modality-isolation gate of ``output_contract.isolation``).
+LIBRARY_GATES: dict[str, Callable[[GateContext], Any]] = {"stream": _gate_stream, "isolation": _gate_isolation}
 
 
 def folder_gates(bench: Any) -> list[tuple[str, Callable[[GateContext], Any]]]:
     """The gates ``bridge check`` runs after its hard checks: the folder's ``eval.py`` ``BRIDGE_CHECKS`` when it declares
-    them (exactly that list: names of :data:`LIBRARY_GATES` and the folder's own callables), else the default for its
-    output contract (``stream`` for a streaming benchmark, none otherwise)."""
+    them (exactly that list: names of :data:`LIBRARY_GATES` and the folder's own callables), else the defaults of its
+    output contract: ``stream`` for a streaming benchmark, ``isolation`` when it declares ``output_contract.isolation``,
+    none otherwise."""
     getter = getattr(bench, "eval_module", None)
     mod = getter() if callable(getter) else None
     declared = getattr(mod, "BRIDGE_CHECKS", None) if mod is not None else None
     if declared is None:
-        return [("stream", _gate_stream)] if _stream_of(bench) is not None else []
+        return ([("stream", _gate_stream)] if _stream_of(bench) is not None else []) + (
+            [("isolation", _gate_isolation)] if _isolation_of(bench) else [])
     if isinstance(declared, (str, bytes)) or not isinstance(declared, (list, tuple)):
         raise ExtractError("E_FOLDER_CHECK", "eval.py BRIDGE_CHECKS must be a tuple of library gate names and callables", exit_code=2)
     out: list[tuple[str, Callable[[GateContext], Any]]] = []

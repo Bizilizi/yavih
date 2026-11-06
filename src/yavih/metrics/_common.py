@@ -102,6 +102,8 @@ def count_rows(targets: Any, split_meta: Any, key: str = "n_eval") -> int:
     if isinstance(targets, Mapping):
         for v in targets.values():
             return int(as_array(v).shape[0])
+    elif isinstance(targets, (list, tuple)):  # one ragged target per row (the loc scorer's box lists)
+        return len(targets)
     elif targets is not None:
         return int(as_array(targets).shape[0])
     folds = meta(split_meta, "folds")

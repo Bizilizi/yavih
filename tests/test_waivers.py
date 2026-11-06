@@ -42,7 +42,7 @@ from yavih.waivers import (
 
 
 def test_waivable_and_never_waivable_sets():
-    assert set(WAIVABLE) == {"E_TIMES_OUT_OF_MEDIA", "E_RULE_MISMATCH", "E_POS_RANGE", "E_BATCH_INVARIANCE", "E_RERUN_DRIFT",
+    assert set(WAIVABLE) == {"E_TIMES_OUT_OF_MEDIA", "E_RULE_MISMATCH", "E_POS_RANGE", "E_BATCH_INVARIANCE", "E_RERUN_DRIFT", "E_MODALITY_LEAK",
                              "E_CONSTANT_FEATURES", "E_DEAD_ROWS", "E_DUPLICATE_CLIPS", "E_ARGS_UNCONSUMED"}
     for code in ("E_FORMAT", "E_SHARD_SET", "E_RANGE_TILING", "E_MEMBERS", "E_ROWS", "E_TAR_SHA", "E_POS_SHAPE", "E_FINITE",
                  "E_NA_AND_SHARDS", "E_HASH_MANIFEST", "E_HASH_INPUT", "E_DESCRIBE_MISMATCH", "E_TEMPLATE_UNFILLED"):

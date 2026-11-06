@@ -78,8 +78,11 @@ def folder_extensions(bench: Any) -> dict[str, Any]:
             out["checks"] = [g if isinstance(g, str) else str(getattr(g, "__name__", "gate")) for g in checks]
         if callable(getattr(mod, "eligible", None)):
             out["eligible"] = True
-    if "checks" not in out and getattr(spec.output_contract, "stream", None) is not None:
-        out["checks"] = ["stream (default)"]
+    if "checks" not in out:
+        defaults = [g for g, on in (("stream", getattr(spec.output_contract, "stream", None) is not None),
+                                    ("isolation", bool(getattr(spec.output_contract, "isolation", None)))) if on]
+        if defaults:
+            out["checks"] = [f"{g} (default)" for g in defaults]
     tmod = folder_testing(bench)
     if tmod is not None and callable(getattr(tmod, "make_stand_in", None)):
         out["stand_in"] = ["make_stand_in"] + (["write_bridge"] if callable(getattr(tmod, "write_bridge", None)) else [])

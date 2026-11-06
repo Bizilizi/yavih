@@ -85,12 +85,14 @@ shares that family's metrics, floors and conformance population and may reuse it
 ## Bridge-check gates
 
 `BRIDGE_CHECKS` is a tuple of library gate names (`yavih.extract.LIBRARY_GATES`: `stream`, the future-invariance and
-real-time gates of a streaming bridge) and callables `gate(gc) -> dict | None`. `gc` is a `yavih.extract.GateContext`:
+real-time gates of a streaming bridge; `isolation`, the modality-isolation gate of `output_contract.isolation`,
+`E_MODALITY_LEAK`) and callables `gate(gc) -> dict | None`. `gc` is a `yavih.extract.GateContext`:
 `bench`, `describe`, `smoke` (the smoke samples), `outputs` (pass A per smoke index), `tol`, `deterministic`,
 `encode(samples)` (the bridge again, on samples the gate builds, e.g. perturbed copies through
 `yavih.sample.with_files`) and `fail(code, message)` (an `E_*` code of the folder's own; exit 2). The returned dict is
 recorded in the profile under `gates.<name>`. Without `BRIDGE_CHECKS` the defaults of the output contract run (`stream`
-for a streaming benchmark); with it, exactly the listed gates run.
+for a streaming benchmark, `isolation` for one that declares `output_contract.isolation`); with it, exactly the listed
+gates run.
 
 ## Eligibility
 
@@ -124,9 +126,18 @@ How the extension points draw their lines, and why:
 - **A label kind outside the core vocabulary is valid only when the folder's scorer lists it in `label_kinds`.** A
   `targets` hook alone does not admit one: a core scorer would still be handed cells it cannot read. A folder that
   needs its own label kind declares a scorer (of family `clf` when it reuses the clf driver) that lists the kind.
-- **Without `BRIDGE_CHECKS` the output contract's default gates run** (`stream` for a streaming benchmark, none
-  otherwise), so a folder that declares nothing keeps the gates its contract implies; `BRIDGE_CHECKS = ()` opts out,
+- **Without `BRIDGE_CHECKS` the output contract's default gates run** (`stream` for a streaming benchmark,
+  `isolation` where `output_contract.isolation` is declared, none otherwise), so a folder that declares nothing keeps the gates its contract implies; `BRIDGE_CHECKS = ()` opts out,
   and a declared tuple is exactly what runs.
+- **A folder metric may take a registry metric's name only when that registry metric does not apply to the
+  folder's scorer, or keeps its `readouts`, `shape` and `kind`.** A folder scorer of its own (no family) is outside
+  every registry metric's readouts, so it may name its control `audio_blind` (which the report voids on by name)
+  with its own definition; a folder scored by a core scorer that replaces a registry metric still keeps its
+  readouts, shape and kind.
+- **The trial's headline stage pairs the headline with a floor through the floor's declared `floor_of`, then by
+  name stem; a headline with no floor is held to its `metrics.chance` level.** A training-free retrieval scorer
+  has no floor (chance is `k / n`): the oracle's lower CI bound must clear `metrics.chance[headline]`; with
+  neither a floor nor a chance level the stage fails.
 - **A folder's eligibility thresholds are `protocol` keys** listed in `PROTOCOL_KEYS`, read by `eligible(view)`:
   `output_contract.requires` keeps its fixed keys (an unknown one is a schema error), so its hashing stays as it is.
 - **`yavih bench new --scorer` stays** until the benchmark catalog can find the closest folder: it now falls back to

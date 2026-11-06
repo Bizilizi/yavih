@@ -244,9 +244,11 @@ twice on one sample differs · `E_ORACLE` (bridge check) the test oracle bridge 
 rows with missing or undecodable media. Streaming benchmarks: `E_FUTURE_SUPPORT` an update's support ends after its
 cutoff or spans more than the declared window · `E_REPLAY_LOG` a real-time replay log inconsistent with the scheduler
 (or, in bridge check, a replay whose updates before its first skip differ from the causal run) · `E_FUTURE_LEAK`
-(bridge check) an update changed when only the input after its cutoff changed. Folder gates (bridge check, exit 2):
+(bridge check) an update changed when only the input after its cutoff changed · `E_MODALITY_LEAK` (bridge check,
+folders with `output_contract.isolation`: the `isolation` gate) an output key changed when only a stream outside its
+declared streams changed (a swapped stream or the blanked other track of the same file). Folder gates (bridge check, exit 2):
 `E_FOLDER_CHECK` the folder's `eval.py` `BRIDGE_CHECKS` names no library gate, is not a tuple of names and callables, a
-library gate does not fit the folder (`stream` without `output_contract.stream`), or a gate's own code is not `E_*`;
+library gate does not fit the folder (`stream` without `output_contract.stream`, `isolation` without `output_contract.isolation`), or a gate's own code is not `E_*`;
 a gate of the folder's own fails with the `E_*` code it names. Probe (exit 2 unless noted): `E_READOUT` (exit 1) a `--readout` other than
 the benchmark's · `E_EVAL_PY` (exit 1) the folder's `eval.py` does not import · `E_SPLIT_MISSING` a role split
 without features · `E_META_STALE` a shard written by another configuration than `_meta.json` describes: re-run

@@ -583,6 +583,9 @@ class OutputContractSpec:
     schema: Mapping[str, Any] | None = None
     sampling: str = "optional"
     stream: StreamContractSpec | None = None
+    #: ``isolation``: schema key -> the file streams it may depend on (``bridge check``'s modality-isolation gate,
+    #: ``E_MODALITY_LEAK``); ``None`` = no isolation declared.
+    isolation: Mapping[str, tuple[str, ...]] | None = None
 
     @property
     def resolved_schema(self) -> dict[str, dict[str, Any]]:
@@ -1469,7 +1472,7 @@ SAMPLING_MODES: frozenset[str] = frozenset({"optional", "required"})
 
 def _parse_output_contract(v: Any, path: str, readout: str, streams: Mapping[str, StreamSpec], codecs: Mapping[str, Any] | None = None) -> OutputContractSpec:
     d = _expect_mapping(v, path)
-    _check_keys(d, path, ["shape", "coordinates", "target_frame", "requires"], ["schema", "sampling", "stream"])
+    _check_keys(d, path, ["shape", "coordinates", "target_frame", "requires"], ["schema", "sampling", "stream", "isolation"])
     if d["shape"] not in ("fixed", "sequence"):
         raise SchemaError(f"{path}.shape: 'fixed' (one value per row under the schema) or 'sequence' (a streaming benchmark)")
     if d["coordinates"] != "media":
@@ -1502,8 +1505,37 @@ def _parse_output_contract(v: Any, path: str, readout: str, streams: Mapping[str
     if sampling not in SAMPLING_MODES:
         raise SchemaError(f"{path}.sampling: one of {sorted(SAMPLING_MODES)}")
     stream = _parse_stream_contract(d, path, schema)
+    isolation = _parse_isolation(d.get("isolation"), f"{path}.isolation", schema, streams)
     return OutputContractSpec(shape=str(d["shape"]), coordinates="media", target_frame=tf, requires=requires, schema=schema,
-                              sampling=str(sampling), stream=stream)
+                              sampling=str(sampling), stream=stream, isolation=isolation)
+
+
+def _parse_isolation(v: Any, path: str, schema: Mapping[str, Any] | None, streams: Mapping[str, StreamSpec]) -> dict[str, tuple[str, ...]] | None:
+    """``isolation: {key: [stream, ...]}``: each named schema key may depend on the listed file streams only (a
+    retrieval embedding of one modality, say). Keys of the declared schema; streams of the benchmark; at least one
+    stream per key, none repeated, and a key that lists every stream declares nothing."""
+    if v is None:
+        return None
+    d = _expect_mapping(v, path)
+    if not d:
+        raise SchemaError(f"{path}: an empty block declares nothing; omit it")
+    if schema is None:
+        raise SchemaError(f"{path}: names keys of output_contract.schema, which is not declared")
+    out: dict[str, tuple[str, ...]] = {}
+    for key, lst in d.items():
+        if key not in schema:
+            raise SchemaError(f"{path}.{key}: not a key of output_contract.schema ({sorted(schema)})")
+        if not isinstance(lst, list) or not lst or any(not isinstance(x, str) for x in lst):
+            raise SchemaError(f"{path}.{key}: a non-empty list of stream names")
+        if len(set(lst)) != len(lst):
+            raise SchemaError(f"{path}.{key}: a stream is listed twice")
+        unknown = [x for x in lst if x not in streams]
+        if unknown:
+            raise SchemaError(f"{path}.{key}: unknown stream(s) {unknown}; the benchmark's streams are {sorted(streams)}")
+        if set(lst) == set(streams):
+            raise SchemaError(f"{path}.{key}: lists every stream, which isolates nothing; omit the key")
+        out[str(key)] = tuple(str(x) for x in lst)
+    return out
 
 
 def _parse_stream_contract(d: Mapping[str, Any], path: str, schema: Mapping[str, Any] | None) -> StreamContractSpec | None:
@@ -1580,8 +1612,10 @@ def eval_path(folder: str | os.PathLike) -> Path | None:
 
 def _resolve_metric_names(names: Sequence[str], readout: str, *, sets: Sequence[str] | None, kinds: Sequence[str], folder: Mapping[str, Any]) -> dict[str, Any]:
     """``REGISTRY`` overlaid by the folder's ``METRICS``: a folder metric may replace a registry
-    entry of the same name only if it keeps its ``readouts``, ``shape`` and ``kind``. A metric is allowed when it is
-    declared for the scorer or for the scorer's family (``Scorer.families()``)."""
+    entry of the same name that applies to this scorer (or its family) only if it keeps its ``readouts``, ``shape``
+    and ``kind``; a registry entry that does not apply to this scorer (a folder's own scorer naming its control
+    ``audio_blind``, say) leaves the name free for the folder's own metric. A metric is allowed when it is declared
+    for the scorer or for the scorer's family (``Scorer.families()``)."""
     families = _scorer_families(readout)
     out: dict[str, Any] = {}
     for name in names:
@@ -1591,7 +1625,8 @@ def _resolve_metric_names(names: Sequence[str], readout: str, *, sets: Sequence[
                 base = _registry.resolve(name, sets=sets)
             except _registry.UnknownMetric:
                 base = None
-            if base is not None and (frozenset(spec.readouts) != frozenset(base.readouts) or spec.shape != base.shape or spec.kind != base.kind):
+            if base is not None and _registry.allows(base, families) and (
+                    frozenset(spec.readouts) != frozenset(base.readouts) or spec.shape != base.shape or spec.kind != base.kind):
                 raise _registry.MetricNotAllowed(f"eval.py METRICS[{name!r}] replaces a registry metric but changes its readouts/shape/kind")
             if not _registry.allows(spec, families):
                 raise _registry.MetricNotAllowed(f"metric {name!r} (eval.py) is not allowed for scorer {readout!r} (allowed: {sorted(spec.readouts)})")
@@ -1761,8 +1796,9 @@ def _check_readout_params(rp: Any, path: str, readout: str, streams: Mapping[str
             _bool(x, f"{path}.{k}")
         elif k == "groups":  # the stream readout's label groups (its validate_spec checks the entries)
             _expect_mapping(x, f"{path}.{k}")
-        else:
+        elif k == "shuffle_seed" or _readout(readout).kind == "probe":
             _int(x, f"{path}.{k}", minimum=0 if k == "shuffle_seed" else 1)
+        # any other key of a non-probe scorer is typed by its validate_spec below
     try:  # the readout's own cross-checks (a message starts with the key it names, e.g. ".T: ...")
         _readout(readout).validate_spec(dict(d), requires, proto or {})
     except ValueError as e:

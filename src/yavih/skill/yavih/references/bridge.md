@@ -297,7 +297,10 @@ shifted audio is already inside the mp4.
 `yavih bridge check` encodes 32 present rows four times at your `batch_size`: **A** (row order),
 **rerun** (A again: feats, pos and `used` bit-identical, else `E_RERUN_DRIFT`), **alone** (every
 clip in a batch of one with `row`, `clip_id`, `split` scrambled: `rel_l2 ≤ 1e-5` against A, else
-`E_BATCH_INVARIANCE`), **shuffled** (permuted and re-batched: same bound). Typical failures and
+`E_BATCH_INVARIANCE`), **shuffled** (permuted and re-batched: same bound); a folder with
+`output_contract.isolation` adds copies with one stream swapped for another clip's or the other track of the
+same file blanked: a key that changes when only a stream outside its declared streams changed is
+`E_MODALITY_LEAK`. Typical failures and
 fixes: batch statistics or BatchNorm in train mode → per-clip normalization from the model's
 recipe, `.eval()`; padding to the batch maximum → fixed-length padding plus an attention mask;
 a cache keyed on clip id → none; dropout or random crops → off (`views: 1`); non-deterministic

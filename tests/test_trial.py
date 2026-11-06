@@ -207,3 +207,26 @@ def test_a_trial_whose_stages_ran_ends_trial_ok(capsys, yavih_home, runs_dir, mo
     assert all(line.split()[1] == "ok" for line in out[1:1 + len(STAGES)]), out
     rec = run_trial("esc50", readout_fast=True)
     assert rec["verdict"] == "ok" and rec["exit_code"] == 0 and rec["unverified"] is None
+
+
+def test_a_headline_without_a_floor_is_held_to_its_chance_level():
+    """A training-free scorer may have no floor (retrieval: chance is k / n): the headline stage then compares the
+    oracle's lower CI bound with ``metrics.chance[headline]``; without a floor or a chance level it fails. A floor is
+    paired with the headline through its declared ``floor_of`` before the name stem."""
+    from types import SimpleNamespace
+
+    from yavih.trial import _headline
+
+    def bench(chance):
+        return SimpleNamespace(spec=SimpleNamespace(metrics=SimpleNamespace(headline="r@1", chance=chance)))
+
+    ok = _headline(bench({"r@1": 0.03}), {"metrics": {"r@1": 0.97}, "floors": {}, "ci95": {"r@1": [0.9, 1.0]}}, readout_fast=True)
+    assert ok["floor_name"] == "chance" and ok["floor"] == 0.03 and ok["clears_floor"] is True and "_status" not in ok
+    low = _headline(bench({"r@1": 0.03}), {"metrics": {"r@1": 0.04}, "floors": {}, "ci95": {"r@1": [0.0, 0.1]}}, readout_fast=True)
+    assert low["_status"] == "failed" and low["clears_floor"] is False
+    none = _headline(bench({}), {"metrics": {"r@1": 0.97}, "floors": {}}, readout_fast=True)
+    assert none["_status"] == "failed" and none["floor"] is None
+    declared = SimpleNamespace(spec=SimpleNamespace(metrics=SimpleNamespace(headline="ciou@0.5", chance={})),
+                               metric_specs={"ciou_floor": SimpleNamespace(floor_of=("ciou@0.5",))})
+    h = _headline(declared, {"metrics": {"ciou@0.5": 0.9}, "floors": {"ciou_floor": 0.2}, "ci95": {"ciou@0.5": [0.8, 1.0]}}, readout_fast=True)
+    assert h["floor_name"] == "ciou_floor" and h["clears_floor"] is True  # a floor named off-stem pairs through its floor_of

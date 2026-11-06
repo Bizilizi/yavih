@@ -568,6 +568,14 @@ yavih bridge check bridges/mymodel_k400.py --bench k400 [--n 32] [--arg k=v]... 
    opaque paths, so a cache keyed on the path, the stream object or the clip id cannot replay pass A.
 4. **Constant features.** Every smoke clip encoding to the same features is `E_CONSTANT_FEATURES` (the bridge
    ignores its input).
+   **Modality isolation** (the library gate `isolation`, run by default for a folder whose
+   `output_contract.isolation` says which file streams each output key may depend on, e.g.
+   `{audio_emb: [audio], video_emb: [video]}`): for two smoke rows, each with the next present row as its donor, the
+   bridge encodes copies with one stream's file swapped for the donor's and, for a file that also holds a track of
+   the other kind (an mp4 with an audio track handed over as the video stream), a lossless copy with that track
+   blanked (`yavih.media.perturb.track_pair`). Every key whose declared streams the copy left untouched must equal
+   pass A (bit-identical when `precision.deterministic`, else within `tol`), else `E_MODALITY_LEAK` (waivable). The
+   profile records the copies checked under `gates.isolation`.
 5. **Per-member checks** of validate on pass A: `E_TIMES_OUT_OF_MEDIA`, `E_RULE_MISMATCH`,
    `E_POS_SHAPE` / `E_POS_RANGE`, fixed `N` / `D` (`E_MEMBERS`), `E_FINITE`, the float16 range; plus
    `E_NETWORK`, `W_SIDE_EFFECT`, `W_NO_PREPROCESSING_SOURCE`, `W_WEIGHTS_UNFINGERPRINTED`, `W_RULE_UNCHECKED`,

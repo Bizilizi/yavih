@@ -57,6 +57,8 @@ WAIVABLE: dict[str, str] = {
     "E_RERUN_DRIFT": "bridge check: encoding the same batches twice differs (feature drift; a second instance that describes itself "
                      "differently is never waivable)",
     "E_CONSTANT_FEATURES": "bridge check: every smoke clip encodes to the same features",
+    "E_MODALITY_LEAK": "bridge check, folders with output_contract.isolation: an output changed when only a stream outside its declared "
+                       "streams changed",
     "E_DEAD_ROWS": "token positions constant across the sampled clips (e.g. padding or register tokens)",
     "E_DUPLICATE_CLIPS": "byte-identical features for different media (e.g. digitally silent audio the model's input cannot tell apart)",
     "E_ARGS_UNCONSUMED": "a --arg not echoed in describe()['args'] (e.g. a device or cache path that cannot change the features)",

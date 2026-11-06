@@ -17,7 +17,8 @@ The chain is the one a real run takes, stage by stage:
 6. ``probe`` — ``yavih.readouts.probe`` with ``write_results=False`` (the pinned ``ProbeConfig``, or its test-only
    ``fast()`` variant with ``readout_fast``);
 7. ``report`` — ``yavih.report.report`` over the stand-in's run directory;
-8. ``headline`` — the headline metric against its floor: the oracle must clear it under ``readout_fast`` (the pinned
+8. ``headline`` — the headline metric against its floor (a headline without a floor, such as a training-free
+   retrieval R@1, against its ``metrics.chance`` level): the oracle must clear it under ``readout_fast`` (the pinned
    schedule may underfit a few dozen synthetic rows, so without it a miss is a ``warning``).
 
 Stand-ins: a folder that ships ``testing.py`` with ``make_stand_in(work, real, *, n_eval, n_train) -> folder`` builds its
@@ -222,13 +223,19 @@ def _headline(bench: Any, result: dict, *, readout_fast: bool) -> dict:
 
     metrics = dict(result.get("metrics") or {})
     floors = dict(result.get("floors") or {})
+    chance = dict(getattr(bench.spec.metrics, "chance", None) or {})
     name = getattr(bench.spec.metrics, "headline", None)
     if name not in metrics:
         name = next((m for m in metrics if floor_name_for(m, list(metrics), list(floors))), None)
     if name is None:
         return {"_status": "failed", "_message": f"the result names no headline metric with a floor: {sorted(metrics)}"}
-    floor_name = floor_name_for(name, list(metrics), list(floors))
+    specs = getattr(bench, "metric_specs", None) or {}
+    declared = next((f for f in floors if name in tuple(getattr(specs.get(f), "floor_of", ()) or ())), None)  # the floor's floor_of first
+    floor_name = declared or floor_name_for(name, list(metrics), list(floors))
     value, floor = metrics.get(name), floors.get(floor_name) if floor_name else None
+    if floor is None and isinstance(chance.get(name), (int, float)):
+        # a headline without a floor (a training-free retrieval scorer: chance is k / n) is held to its chance level
+        floor_name, floor = "chance", float(chance[name])
     ci = (result.get("ci95") or {}).get(name)
     lower = ci[0] if isinstance(ci, list) and len(ci) == 2 else value
     clears = isinstance(lower, (int, float)) and isinstance(floor, (int, float)) and lower > floor

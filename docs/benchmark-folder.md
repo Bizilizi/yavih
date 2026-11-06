@@ -82,7 +82,7 @@ CODECS: dict[str, Codec]            # output types of the folder's own
 READINGS: tuple[str, ...]           # readings of the folder's own (beyond a, v, av, t); also the readings a reading-routed score is checked under
 BRIDGE_CHECKS: tuple[str | Callable, ...]  # bridge-check gates: library gate names (yavih.extract.LIBRARY_GATES) and gate(gc) callables
 def eligible(view) -> list[str] | tuple[list[str], list[str]]           # an eligibility rule of its own, after the scorer's
-METRICS: dict[str, MetricSpec]      # folder metrics; may replace a registry metric only with the same readouts/shape/kind
+METRICS: dict[str, MetricSpec]      # folder metrics; replacing a registry metric that applies to the scorer keeps its readouts/shape/kind (a name whose registry metric does not apply is free)
 PROTOCOL_KEYS: frozenset[str]       # protocol keys this file consumes (must be present in `protocol`)
 def targets(bench, split: str, rows: np.ndarray) -> np.ndarray            # replaces the readout's target construction
 def score(bench, split: str, rows: np.ndarray, outputs, targets) -> dict  # the external scorer for its METRICS
@@ -280,6 +280,8 @@ output_contract:                   # checked by validate (validation.md); setup.
                                    # `sequence` for a streaming benchmark (one recording per row; streaming.md)
   coordinates: media               # pinned: pos (t, y, x) in media coordinates
   target_frame: null               # "full_frame" iff the readout is grid or box, else null
+                                   # optional `isolation: {key: [stream, ...]}` with a declared schema: each key may
+                                   # depend on the listed file streams only (bridge check's `isolation` gate, E_MODALITY_LEAK)
   requires:
     pos: []                        # subset of [t, y, x]
     streams: []                    # declared stream names that must appear as tags among tokens with pos
@@ -361,7 +363,8 @@ From the yaml (`SchemaError`, exit 1):
   envelope;
 - `output_contract`: `shape: fixed` (or `sequence` with a `stream` block and exactly `yavih.codecs.STREAM_SCHEMA`:
   [streaming benchmarks](streaming.md)), `coordinates: media`, `target_frame: full_frame` iff the readout is `grid` or
-  `box`, the `requires` rules the readout declares, `annotated_frame` cross-references;
+  `box`, the `requires` rules the readout declares, `annotated_frame` cross-references; an optional `isolation`
+  (keys of the declared `schema`, each with a non-empty list of the benchmark's streams, never all of them);
 - `external`: four non-empty strings per entry, unique names, a non-empty list requires `eval.py`, and every metric
   computed by an external package names a declared entry;
 - `metrics`: every name resolves (registry or `eval.py` `METRICS`) with the right kind and is allowed for the

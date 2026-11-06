@@ -747,10 +747,11 @@ def rehandle(sample: Sample, salt: str, **identity: Any) -> Sample:
     return clone
 
 
-def with_files(sample: Sample, salt: str, files: Mapping[tuple, str], ext: str) -> Sample:
+def with_files(sample: Sample, salt: str, files: Mapping[tuple, str], ext: str | Mapping[str, str]) -> Sample:
     """A copy of ``sample`` whose streams read replacement files: ``files`` maps a stream's original byte location
-    (``RawStream._src.loc``) to a path; streams that shared a stored file share its replacement. Facts are probed
-    from the new file. ``bridge check``'s future-invariance gate hands a bridge lossless copies this way."""
+    (``RawStream._src.loc``) to a path; streams that shared a stored file share its replacement. ``ext`` is the
+    replacements' container extension (one for all, or per path). Facts are probed from the new file. ``bridge
+    check``'s future-invariance and modality-isolation gates hand a bridge copies this way."""
     import dataclasses
 
     sources: dict[str, _Source] = {}
@@ -760,9 +761,22 @@ def with_files(sample: Sample, salt: str, files: Mapping[tuple, str], ext: str) 
         src = sources.setdefault(path, _Source(("file", path)))
         # the copy's facts are probed as available, never required: a lossless re-encode may not carry every header
         # fact the stored file does (Matroska FLAC has no sample count)
-        streams[name] = RawStream(name, st.kind, src=src, clip_id=sample.clip_id, required_info=(), ext=ext,
+        streams[name] = RawStream(name, st.kind, src=src, clip_id=sample.clip_id, required_info=(), ext=ext if isinstance(ext, str) else ext[path],
                                   handle=f"{salt}:{st._handle}")
     return dataclasses.replace(sample, streams=streams)
+
+
+def stored_file(stream: Any, tmp_dir: str | os.PathLike) -> str:
+    """A path holding the stream's stored bytes: the stored file itself when it is one, else the bytes written under
+    ``tmp_dir`` (a tar or parquet member) with the stream's extension."""
+    path = getattr(stream, "path", None)
+    if path:
+        return os.fspath(path)
+    out = os.path.join(os.fspath(tmp_dir), f"{hashlib.sha256(stream._handle.encode()).hexdigest()[:16]}.{stream._ext or 'bin'}")
+    if not os.path.exists(out):
+        with open(out, "wb") as f:
+            f.write(stream.bytes())
+    return out
 
 
 def _media_info_of(bench: Any) -> MediaInfoTable | None:

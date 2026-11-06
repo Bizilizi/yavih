@@ -322,7 +322,7 @@ it again.
 
 **Done when:** it exits 0 with `trial ok` (`data.verdict` `ok`), every stage in `data.stages` is `ok` (or, for a scorer
 no stand-in covers, `conformance` is `ok` and the rest `not_applicable`; better, ship a `testing.py` stand-in), and the
-headline clears its floor. `trial UNVERIFIED` is never done.
+headline clears its floor (or, for a headline without a floor, its `metrics.chance` level). `trial UNVERIFIED` is never done.
 
 ## 13. Trial run with a fresh agent (required)
 

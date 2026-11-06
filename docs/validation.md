@@ -225,6 +225,7 @@ the checks below; `yavih extract` raises the run-time ones. Errors end the comma
 | `E_RERUN_DRIFT` | error | yes | bridge check: encoding the same batches twice is not bit-identical (or, with `precision.deterministic: false`, differs beyond the tolerance); exit 2. A second bridge instance whose `describe()` differs is also `E_RERUN_DRIFT` and is never waivable. |
 | `E_PREPARE_NONDETERMINISTIC` | error | no | bridge check: `Bridge.prepare` called twice on fresh copies of one smoke sample returned different payloads (prepare must be a pure, deterministic function of the sample); exit 2 |
 | `E_CONSTANT_FEATURES` | error | yes | bridge check: every smoke clip encodes to the same features (the bridge ignores its input); exit 2 |
+| `E_MODALITY_LEAK` | error | yes | bridge check, folders with `output_contract.isolation` (the `isolation` gate): an output key changed when only a stream outside its declared streams changed (one stream swapped for another clip's, or the other track of the same file blanked); the bridge reads a modality the key may not depend on; exit 2 |
 | `E_CONFIG_DRIFT` | error | no | extract with `--expect-profile`: the live `model`, `reading` or `describe_sha256` differs from the profile's; the message lists the `describe()` keys that differ; nothing written; exit 2 |
 | `E_TEMPLATE_UNFILLED` | error | no | bridge check: `TODO` left in `model`, `weights_ref` or a stream's `norm.source`, or a null `norm`; exit 2 |
 | `E_TRAIN_MODE` | error | no | a torch module is still in training mode after the bridge's `__init__`; exit 2 |
