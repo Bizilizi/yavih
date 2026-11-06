@@ -187,6 +187,39 @@
    "scorer": "stream",
    "title": "EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall)"
   },
+  "epic_sounds_det": {
+   "aliases": [
+    "epic_sounds_detection"
+   ],
+   "capability": [
+    "audio",
+    "temporal"
+   ],
+   "clips": {
+    "train": 495,
+    "validation": 137
+   },
+   "core": ">=1.1,<2",
+   "header_title": "EPIC-SOUNDS: A Large-Scale Dataset of Actions that Sound",
+   "media_gb": 6.3,
+   "name": "epic_sounds_det",
+   "obtain": "auto",
+   "path": "benchmarks/epic_sounds_det",
+   "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "0b7b5c36e9922b813b7af208aee2895b84c73a68",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/epic_sounds_det",
+     "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
+     "protocol_version": 1,
+     "tree": "7790320867b823fc97803b41880fc97a2af887c2"
+    }
+   ],
+   "scorer": "epic_sounds_det",
+   "title": "EPIC-SOUNDS audio-based interaction detection (untrimmed kitchen recordings, 44 classes)"
+  },
   "esc50": {
    "aliases": [],
    "capability": [
@@ -344,6 +377,70 @@
    "scorer": "grid",
    "title": "NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid)"
   },
+  "perception_test_action_loc": {
+   "aliases": [],
+   "capability": [
+    "visual",
+    "audio-visual",
+    "temporal"
+   ],
+   "clips": {
+    "train": 2009,
+    "valid": 5359
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Perception Test: A Diagnostic Benchmark for Multimodal Video Models",
+   "media_gb": 149.01,
+   "name": "perception_test_action_loc",
+   "obtain": "auto",
+   "path": "benchmarks/perception_test_action_loc",
+   "protocol_hash": "19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "0b7b5c36e9922b813b7af208aee2895b84c73a68",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/perception_test_action_loc",
+     "protocol_hash": "19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3",
+     "protocol_version": 1,
+     "tree": "08118a9ebb2866b32db6aa4a75cdc605fac0989b"
+    }
+   ],
+   "scorer": "perception_test_action_loc",
+   "title": "Perception Test temporal action localisation (challenge train / valid)"
+  },
+  "perception_test_sound_loc": {
+   "aliases": [],
+   "capability": [
+    "audio",
+    "audio-visual",
+    "temporal"
+   ],
+   "clips": {
+    "train": 2009,
+    "valid": 5359
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Perception Test: A Diagnostic Benchmark for Multimodal Video Models",
+   "media_gb": 149.01,
+   "name": "perception_test_sound_loc",
+   "obtain": "auto",
+   "path": "benchmarks/perception_test_sound_loc",
+   "protocol_hash": "c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "0b7b5c36e9922b813b7af208aee2895b84c73a68",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/perception_test_sound_loc",
+     "protocol_hash": "c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7",
+     "protocol_version": 1,
+     "tree": "c7c2a66074ea82910838ce06174dea244c78377f"
+    }
+   ],
+   "scorer": "perception_test_sound_loc",
+   "title": "Perception Test temporal sound localisation (challenge train / valid)"
+  },
   "ssv2": {
    "aliases": [],
    "capability": [
@@ -405,6 +502,37 @@
    ],
    "scorer": "stream",
    "title": "THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps)"
+  },
+  "unav100": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "temporal"
+   ],
+   "clips": {
+    "test": 2167,
+    "train": 6489
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Dense-Localizing Audio-Visual Events in Untrimmed Videos: A Large-Scale Benchmark and Baseline",
+   "media_gb": 52.8,
+   "name": "unav100",
+   "obtain": "auto",
+   "path": "benchmarks/unav100",
+   "protocol_hash": "59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "0b7b5c36e9922b813b7af208aee2895b84c73a68",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/unav100",
+     "protocol_hash": "59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e",
+     "protocol_version": 1,
+     "tree": "a46e617f22625598094106456a6c1d055a705e35"
+    }
+   ],
+   "scorer": "unav100",
+   "title": "UnAV-100 dense audio-visual event localization in untrimmed videos"
   },
   "unav100_causal": {
    "aliases": [],
@@ -531,6 +659,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "c82922e5ac9f57afca508914bacbed2f1a9d6d9e",
+ "commit": "7b6c1ebf47c459dbd515bb11c2429cd80c0adad4",
  "repo": "Bizilizi/yavih"
 }
