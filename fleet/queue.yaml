@@ -4608,9 +4608,9 @@ entries:
   route: folder-stateless
   text_fields: false
   parents: []
-  survey_note: being built in another session
-  status: in_flight
-  obtain: null
+  survey_note: shared-space scorer of its own (folder-stateless); isolation gate
+  status: shipped
+  obtain: needs-data-owner
   blocked_by: null
   branch: null
 - name: vggsound_retrieval
@@ -4621,8 +4621,8 @@ entries:
   route: folder-stateless
   text_fields: false
   parents: []
-  survey_note: being built in another session
-  status: in_flight
-  obtain: null
+  survey_note: shared-space scorer of its own (folder-stateless); isolation gate
+  status: shipped
+  obtain: needs-data-owner
   blocked_by: null
   branch: null
