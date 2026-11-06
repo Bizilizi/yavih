@@ -44,5 +44,7 @@ Normative descriptions of current behaviour.
 - [Extending through a folder](extending-through-a-folder.md): every extension point a benchmark folder owns (scorer, heads, losses,
   metrics, codecs, bridge-check gates, eligibility, stand-in, reader, readings, capability tags, label kinds); the core
   is read-only for a benchmark contribution.
+- [The fleet](../fleet/README.md): adding many benchmarks in parallel, one agent per folder: the worker brief, the
+  work queue with every reserved folder name, the footprint and queue checks, the integrator's batch recipe.
 - [Adding a scorer](adding-a-scorer.md): the readout registry, drivers, metrics, entry points.
 - [Releasing](releasing.md): versions from git tags, CI, the release workflow, PyPI trusted publishing.

@@ -1,0 +1,4628 @@
+# The fleet's work queue: one entry per candidate benchmark, seeded from a survey of video, audio and audio-visual
+# encoder benchmarks (October 2026, papers through 2026-09). It reserves each folder's name, says how the benchmark
+# would be scored, and records who is doing what. `python fleet/check.py queue` validates it.
+#
+# Entry keys:
+#   name          the reserved folder name, [a-z][a-z0-9_]*, unique; `<dataset>_<task>` where a dataset has several tasks
+#   title         the benchmark as the survey names it
+#   kind          benchmark (one folder) | suite (a set of other entries, listed in `components`; a suite file, not a folder)
+#   survey_class  A    fits a core scorer as is
+#                 B1   needs a trained head no core scorer has (tracking, detection, segmentation, regression, ...)
+#                 B2   needs a text side (i), a training-free scorer (ii) or the model's own predictions (iii)
+#                 null not in the survey (an existing folder or one built elsewhere)
+#   survey_reasons  B2 only: the subset of [i, ii, iii]
+#   route         how to build it: core-clf | core-seq | core-grid | core-box | core-knn | core-stream (a core scorer as
+#                 is); folder-probe | folder-stateless | folder-direct (the folder's own eval.py scorer of that kind,
+#                 docs/extending-through-a-folder.md); suite. A worker may pick a better route and says why.
+#   text_fields   the protocol hands the model text (B2 reason i)
+#   parents       the suite entries that list this benchmark
+#   components    suites only: the entries the suite lists
+#   survey_note   the survey's one-line reason and caveats (subsets, borderline cases)
+#   status        todo | claimed | in_flight | blocked | review | shipped | dropped
+#                 shipped and in_flight entries name a folder that exists or is being built elsewhere
+#   obtain        filled by the worker: the obtain tier (auto | manual-download | needs-licence | needs-data-owner | site-only)
+#   blocked_by    filled by the worker when blocked: the exact action that unblocks it
+#   branch        filled when claimed: bench/<name>
+schema_version: 1
+entries:
+- name: afd101
+  title: AFD101 / AFD5
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Appearance-free action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: animal_kingdom_action
+  title: Animal Kingdom
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: Multi-label animal action clf; grounding B2 i; pose B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: aotbench
+  title: AoTBench
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Forward/reverse binary direction clf; caption-matching and VQA parts are B2
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: audioset20k
+  title: AudioSet
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - av_superb
+  survey_note: 527-class tagging; audioset20k shipped
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: av_superb
+  title: AV-SUPERB
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Layer-weighted probe on clf tasks; LRS3 ASR needs B1; VoxCeleb2 verification is B2 ii
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - audioset20k
+  - iemocap_emotion
+  - kinetics_sounds
+  - lrs3_asr
+  - ucf101
+  - vggsound
+  - voxceleb2_verification
+- name: ave
+  title: AVE
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-seq
+  text_fields: false
+  parents:
+  - mveb
+  survey_note: Per-second AV event localization; ave shipped
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: avrobustbench
+  title: AVROBUSTBENCH
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Corrupted AV clf, probe on clean train; needs prepare-time corruption; zero-shot variants B2
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: bear
+  title: BEAR
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: 18 action-clf datasets, probe feasible; zero-shot/UDA settings not needed
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - charades_ego
+  - coin_task
+  - finegym_element
+  - hacs_clips
+  - inhard
+  - jester
+  - meccano_action
+  - mini_sports1m
+  - misaw
+  - mod20
+  - mpii_cooking
+  - muvim_fall
+  - petraw
+  - toyota_smarthome
+  - uav_human_gesture
+  - ucf101
+  - ucf_crime
+  - wlasl100
+  - xd_violence
+- name: breakfast_activity
+  title: Breakfast
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - mveb
+  - twlv_i
+  - videoeval
+  survey_note: 10-way activity clf; action segmentation needs B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: cater_action
+  title: CATER
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Atomic/compositional action clf; snitch as 36-way clf; snitch localization = cell classification
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: charades
+  title: Charades
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - severe
+  - severe_pp
+  - videoglue
+  survey_note: 157-class multi-label clf (mAP); localization/captioning not needed
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: charades_ego
+  title: Charades-Ego
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: 157-class multi-label clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: coin_task
+  title: COIN
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: 180-way task clf; step localization/segmentation need B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: diving48
+  title: Diving48
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - mveb
+  - twlv_i
+  - videoglue
+  survey_note: 48-class dive clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego_exo4d
+  title: Ego-Exo4D
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Keystep and proficiency clf; relations (correspondence masks) need B1; proficiency clf/regress mix
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - ego_exo4d_keystep
+  - ego_exo4d_proficiency
+  - ego_exo4d_relations
+- name: egtea_gaze
+  title: EGTEA Gaze+
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: 106-class fine-grained action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: epic100_action
+  title: EPIC-KITCHENS (55/100)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - twlv_i
+  survey_note: Verb/noun/action recognition; anticipation/detection/retrieval not needed
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: epic_sounds_clf
+  title: EPIC-SOUNDS
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: 44-class sound clf; detection subset B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: esc50
+  title: ESC-50
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - maeb
+  - x_ares
+  survey_note: 50-class sound clf; esc50 shipped
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: finegym_element
+  title: FineGym
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  - severe
+  - severe_pp
+  survey_note: Gym99/288 element clf; TAL needs B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: flickr_soundnet_box
+  title: Flickr-SoundNet localization
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-box
+  text_fields: false
+  parents: []
+  survey_note: One-box audio-conditioned localization (like vggss_box)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fsd50k
+  title: FSD50K
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - x_ares
+  survey_note: 200-class multi-label; fsd50k shipped
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: hacs_clips
+  title: HACS
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: HACS Clips 200-class clf; Segments TAL needs B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: hear
+  title: HEAR
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Frozen emb + MLP; 17/19 tasks clf; DCASE16 SED and MAESTRO need B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - beehive_states
+  - beijing_opera
+  - crema_d
+  - dcase2016_sed
+  - esc50
+  - fsd50k
+  - gtzan_genre
+  - gtzan_music_speech
+  - gunshot_triangulation
+  - libricount
+  - maestro_transcription
+  - mridangam
+  - nsynth
+  - speech_commands
+  - vocal_imitations
+  - voxlingua107
+- name: icme2025_audio
+  title: ICME 2025 Audio Encoder Challenge
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Frozen emb + linear on audio clf tasks; speechocean762 regression B1; Clotho B2 i; DESED B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - asv2015_spoof
+  - clotho_retrieval
+  - crema_d
+  - desed_sed
+  - esc50
+  - fluent_speech_commands
+  - fma_small_genre
+  - fsd18_kaggle
+  - fsd50k
+  - gtzan_genre
+  - icme_hidden_industrial
+  - libricount
+  - librispeech_asr
+  - maestro_transcription
+  - nsynth
+  - speech_commands
+  - speechocean762
+  - urbansound8k
+  - vocalsound
+  - voxceleb1_speaker_id
+  - voxlingua107
+- name: jester
+  title: Jester
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  - twlv_i
+  survey_note: 27-class gesture clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: k400
+  title: Kinetics (400/600/700)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - fourds
+  - mveb
+  - twlv_i
+  - videoglue
+  survey_note: Action clf; K400 shipped; K400 shipped as k400; K600/K700 are versions
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: kinetics_sounds
+  title: Kinetics-Sounds
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - av_superb
+  survey_note: 34-class AV action clf; AVC binary correspondence is B2 ii
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: lvu_clf
+  title: LVU
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Content/metadata clf tasks; engagement regression needs B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ma52
+  title: MA-52
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Micro-action clf (52 classes)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mimetics
+  title: Mimetics
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Test-only mimed actions; probe trained on K400 classes
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: moments_in_time
+  title: Moments in Time
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - twlv_i
+  - videoglue
+  survey_note: 339-class event clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: nearly_symmetric_splits
+  title: Nearly symmetric action splits
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Linear/attentive probe on action clf splits
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - hri30_ikea_driveact
+- name: nsynth
+  title: NSynth
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - x_ares
+  survey_note: Pitch/instrument clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: physion_ocp
+  title: Physion
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Contact prediction, logistic readout (binary clf)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: physion_pp_ocp
+  title: Physion++
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: OCP with latent properties, logistic readout
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: scannet_depth
+  title: ScanNet
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-grid
+  text_fields: false
+  parents:
+  - fourds
+  survey_note: Monocular depth readout on frames (grid); needs depth targets in manifest
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: scuba_scufo
+  title: SCUBA / SCUFO
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: OOD action clf, probe trained on source set; needs prepare-time background replacement
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: severe
+  title: SEVERE
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Action clf across domains/low-sample; UCF-RC counting needs B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - charades
+  - finegym_element
+  - finegym_fx_ub
+  - ssv2
+  - ucf101
+  - ucf_rc_counting
+- name: severe_pp
+  title: SEVERE++
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Action clf + linear probe on frozen features; detection/TAL/counting subsets need B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - charades
+  - finegym_element
+  - finegym_fx_ub
+  - ucf_rc_counting
+- name: ssv2
+  title: Something-Something (v1/v2)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - fourds
+  - mveb
+  - severe
+  - twlv_i
+  - videoglue
+  survey_note: 174-class temporal clf; SSv2 shipped; v1 row merged with v2 (shipped as ssv2)
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: speech_commands
+  title: Speech Commands
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - maeb
+  - x_ares
+  survey_note: Keyword clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: temporal50_static50
+  title: Temporal-50 / Static-50
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Subset of K400/SSv2 classes, clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: twlv_i
+  title: TWLV-I framework
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Linear/attentive/kNN probes on action clf; TAL/TAS/STAL need B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - activitynet_tad
+  - ava_stad
+  - breakfast_activity
+  - diving48
+  - epic100_action
+  - gtea_seg
+  - jester
+  - k400
+  - moments_in_time
+  - salads50_seg
+  - ssv2
+  - thumos14_tad
+- name: ucf101
+  title: UCF101
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - av_superb
+  - bear
+  - mveb
+  - severe
+  survey_note: 101-class action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ucf5_afd5
+  title: UCF5 -> AFD5/AFF5
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: 5-way clf with linear probe, RGB-to-appearance-free
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: utd_debiased
+  title: UTD (debiased splits)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Object-debiased clf test splits, attentive probe; UTD-descriptions retrieval part is B2 i
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vggss_box
+  title: VGG-SS
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-box
+  text_fields: false
+  parents: []
+  survey_note: Audio-conditioned box; vggss_box shipped
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vggsound
+  title: VGGSound
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - av_superb
+  - mveb
+  survey_note: 309-class AV clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vggsound_sparse_offset
+  title: VGGSound-Sparse (SparseSync/Synchformer)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: 21-way offset clf; avsync is the shipped analogue; Synchformer row merged; needs materialised offsets
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vggsounder
+  title: VGGSounder
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Multi-label per-modality; vggsounder shipped
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: video_time_arrow
+  title: Video time properties (arrow of time etc.)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: 'Forward/reverse binary + SSv2 template clf; future-frame selection is a 5-way candidate task: fits only loosely'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: videoeval
+  title: VideoEval (VidTAB + VidEB)
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: 'VidTAB: attentive-probe few-shot clf; VidEB retrieval/copy detection is B2 ii'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - animal_kingdom_action
+  - arid
+  - breakfast_activity
+  - caer_emotion
+  - dover_quality
+  - dvsc23_copy
+  - faceforensics_pp
+  - fivr5k
+  - mob_harmful
+  - surgical_actions160
+- name: videoglue
+  title: VideoGLUE
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Frozen pooler clf on K400/MiT/SSv2/Div48/Charades; TAL and STAL (ActivityNet, AVA) need B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - activitynet_tad
+  - ava_kinetics_stad
+  - ava_stad
+  - charades
+  - diving48
+  - k400
+  - moments_in_time
+  - ssv2
+- name: x_ares
+  title: X-ARES
+  kind: suite
+  survey_class: A
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Frozen enc + MLP, mostly clip clf; ASR, DESED SED B1; Clotho retrieval B2 i
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - asv2015_spoof
+  - clotho_retrieval
+  - crema_d
+  - desed_sed
+  - esc50
+  - fluent_speech_commands
+  - fma_small_genre
+  - fsd18_kaggle
+  - fsd50k
+  - gtzan_genre
+  - libricount
+  - librispeech_asr
+  - maestro_transcription
+  - nsynth
+  - ravdess_emotion
+  - speech_commands
+  - urbansound8k
+  - vocal_imitations
+  - vocalsound
+  - voxceleb1_speaker_id
+  - voxlingua107
+- name: youtube8m
+  title: YouTube-8M
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: 'Multi-label video clf; raw videos not public (features only): feasibility caveat'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: arid
+  title: ARID
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: 11-class dark-scene action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: asv2015_spoof
+  title: ASV2015 (spoofing)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - x_ares
+  survey_note: Binary spoof clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: avmeme_clf
+  title: AVMeme / AVMeme Exam
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - mveb
+  survey_note: Meme AV clf; exam QA/retrieval part is B2 i,iii
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: beehive_states
+  title: Beehive States
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  survey_note: Binary clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: beijing_opera
+  title: Beijing Opera Percussion
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - maeb
+  survey_note: 6-class clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: birdset
+  title: BirdSet / BirdCLEF
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Bioacoustic multi-label/few-shot clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: caer_emotion
+  title: CAER (emotion)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: 7-class emotion clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: calms21_behaviour
+  title: CalMS21
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - scivid
+  survey_note: Mouse social behaviour clf; per-frame labels; clip clf assumed
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: commonlanguage_attr
+  title: CommonLanguage (age/gender/language)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Speaker attribute clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: crema_d
+  title: CREMA-D
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - maeb
+  - x_ares
+  survey_note: Speech emotion clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: dover_quality
+  title: DOVER (quality assessment)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: Low/high quality clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego_exo4d_keystep
+  title: Ego-Exo4D keystep recognition
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - ego_exo4d
+  survey_note: Fine-grained keystep clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego_exo4d_proficiency
+  title: Ego-Exo4D proficiency estimation
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - ego_exo4d
+  survey_note: Proficiency clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego4d_state_change
+  title: Ego4D PNR / state-change
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - ego4d
+  survey_note: State-change clf; temporal PNR localization part is B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: faceforensics_pp
+  title: FaceForensics++
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: Real/fake face clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fluent_speech_commands
+  title: Fluent Speech Commands
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - x_ares
+  survey_note: Intent clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: flyvsfly_behaviour
+  title: FlyVsFly
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - scivid
+  survey_note: Fly behaviour clf; per-frame labels; clip clf assumed
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fma_small_genre
+  title: FMA Small
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - x_ares
+  survey_note: 8-class genre clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fsd18_kaggle
+  title: FSD18-Kaggle
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - x_ares
+  survey_note: 41-class tagging
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fsd2019_kaggle
+  title: FSD2019-Kaggle
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Multi-label tagging
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: finegym_fx_ub
+  title: FX-S1 / UB-S1 (FineGym subsets)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - severe
+  - severe_pp
+  survey_note: Fine-grained sub-event clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: gtzan_genre
+  title: GTZAN Genre
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - maeb
+  - x_ares
+  survey_note: Music genre clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: gtzan_music_speech
+  title: GTZAN Music/Speech
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  survey_note: Binary clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: gunshot_triangulation
+  title: Gunshot Triangulation
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  survey_note: Mic-location clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: hmdb51
+  title: HMDB51
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - mveb
+  survey_note: 51-class action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: hri30_ikea_driveact
+  title: HRI-30 / IKEA-ASM / Drive&Act
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - nearly_symmetric_splits
+  survey_note: Symmetric-split action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: human_animal_cartoon
+  title: HumanAnimalCartoon
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - mveb
+  survey_note: 7-class domain action clf (test-only)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: icme_hidden_industrial
+  title: ICME hidden industrial datasets (5-6)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - icme2025_audio
+  survey_note: Hidden audio clf/tagging sets; not obtainable; classification assumed
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: iemocap_emotion
+  title: IEMOCAP
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - av_superb
+  - maeb
+  survey_note: Emotion clf (audio/AV)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: inhard
+  title: InHARD
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Industrial action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: kitti_depth
+  title: KITTI
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-grid
+  text_fields: false
+  parents: []
+  survey_note: Depth readout (grid)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: libricount
+  title: LibriCount
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - x_ares
+  survey_note: Speaker-count clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: meccano_action
+  title: MECCANO
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Egocentric industrial action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: meld_emotion
+  title: MELD
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - mveb
+  survey_note: Emotion clf on video+audio
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: minds14_intent
+  title: MInDS14
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Multilingual intent clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: misaw
+  title: MISAW
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Surgical action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mob_harmful
+  title: MOB (harmful content)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: 3-level harmful content clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mod20
+  title: MOD20
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: 20-class action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mpii_cooking
+  title: MPII Cooking
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: 67-class cooking activity clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mridangam
+  title: Mridangam (stroke, tonic)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - maeb
+  survey_note: Stroke/tonic clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: muvim_fall
+  title: MUVIM
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Fall detection binary clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: nyuv2_depth
+  title: NYUv2
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-grid
+  text_fields: false
+  parents: []
+  survey_note: Dense depth (grid); nyuv2_depth shipped
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: petraw
+  title: PETRAW
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Surgical action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ravdess_emotion
+  title: RAVDESS
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - maeb
+  - mveb
+  - x_ares
+  survey_note: Emotion clf (audio/AV)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: sib_fleurs_topic
+  title: SIB-FLEURS
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Topic clf from speech
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: spass
+  title: SPASS
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: Soundscape multi-label tagging
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mini_sports1m
+  title: Sports-1M (Mini-Sports1M)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Sports action clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: surgical_actions160
+  title: SurgicalActions160
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: 16-class surgical clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: toyota_smarthome
+  title: Toyota Smarthome
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Daily-activity clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: uav_human_gesture
+  title: UAV-Human
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Gesture clf from drone view
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ucf_crime
+  title: UCF-Crime
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: 12-class anomaly clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: urbansound8k
+  title: UrbanSound8K
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - maeb
+  - x_ares
+  survey_note: 10-class clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vocal_imitations
+  title: Vocal Imitations
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - x_ares
+  survey_note: Imitation-to-sound-class clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vocalsound
+  title: VocalSound
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - maeb
+  - x_ares
+  survey_note: Non-speech vocal clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: voxceleb_sentiment
+  title: VoxCeleb-SA
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Speech sentiment clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: voxceleb1_speaker_id
+  title: VoxCeleb1
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - x_ares
+  survey_note: 1251-way speaker identification
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: voxlingua107
+  title: VoxLingua107
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - maeb
+  - x_ares
+  survey_note: Language-ID clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: voxpopuli_attr
+  title: VoxPopuli (language/accent/gender)
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Speech attribute clf; clustering/pair variants B2 ii
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: wlasl100
+  title: WLASL100
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: Sign-language clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: xd_violence
+  title: XD-Violence
+  kind: benchmark
+  survey_class: A
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents:
+  - bear
+  survey_note: 5-class anomaly clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fourds
+  title: 4DS evaluation suite
+  kind: suite
+  survey_class: B1
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Camera pose, point/box tracking readouts; depth + SSv2/K700 subset fit A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - k400
+  - perception_test
+  - perception_test_point_track
+  - realestate10k_pose
+  - scannet_depth
+  - ssv2
+  - waymo_box_tracking
+- name: activitynet_tad
+  title: ActivityNet
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - twlv_i
+  - videoglue
+  survey_note: Temporal action detection (multi-instance); untrimmed video clf subset fits A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: assembly101
+  title: Assembly101
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Action segmentation, anticipation, mistake detection; fine-grained action recognition subset fits A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: av_deepfake1m_loc
+  title: AV-Deepfake1M
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Temporal deepfake localization; video-level detection subset fits A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ava_stad
+  title: AVA
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - twlv_i
+  - videoglue
+  survey_note: Spatio-temporal action detection
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ava_kinetics_stad
+  title: AVA-Kinetics
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - videoglue
+  survey_note: Spatio-temporal action detection
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: avatar_loc
+  title: AVATAR
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Multi-entity AV localization incl. off-screen; single-sound subset fits box (A)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: avsbench_seg
+  title: AVSBench
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Audio-conditioned pixel segmentation
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: countix
+  title: Countix
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Repetition counting regression
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: crosstask_step
+  title: CrossTask
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Step localization, weak supervision; needs step-list labels; borderline
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: drivetrack_points
+  title: DriveTrack
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Long-range point tracking
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego4d
+  title: Ego4D
+  kind: suite
+  survey_class: B1
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: 'Mixed: hands/objects, forecasting, memory heads; NLQ B2 i; state-change clf A; many tasks unscorable'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - ego4d_forecasting_social
+  - ego4d_mq
+  - ego4d_nlq
+  - ego4d_state_change
+  - ego4d_vq
+- name: egoper_error
+  title: EgoPER
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Procedural error detection via segmentation/prototypes; borderline B2 ii (one-class scorer)
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: finediving_aqa
+  title: FineDiving
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Action quality score regression; step segmentation
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: kubric_movi
+  title: Kubric (MOVi)
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Point tracking / dense synthetic probes
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: lfav_loc
+  title: LFAV
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Long-form multi-event AV localization
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: llp_avvp
+  title: LLP (AVVP)
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Segment-level multi-label AV parsing
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: lrs3_asr
+  title: LRS3-TED
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - av_superb
+  survey_note: Lip-reading/ASR transcription head; text-output head; borderline B2 iii
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: multisports_stad
+  title: MultiSports
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Spatio-temporal action detection tubes
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: music_sop
+  title: MUSIC (Sound of Pixels)
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Source separation / localization heads; borderline
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ovr_counting
+  title: OVR
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Counting/segment localization over features; optional text conditioning
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: pointodyssey
+  title: PointOdyssey
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Long-term point tracking
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: realestate10k_pose
+  title: RealEstate10K
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - fourds
+  survey_note: Camera pose regression readout
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: repcount
+  title: RepCount
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Repetition counting density regression
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: scivid
+  title: SciVid
+  kind: suite
+  survey_class: B1
+  survey_reasons: []
+  route: suite
+  text_fields: false
+  parents: []
+  survey_note: Tracking, forecasting, regression readouts; FlyVsFly/CalMS21 clf subset fits A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - calms21_behaviour
+  - digital_typhoon
+  - flyvsfly_behaviour
+  - stir_points
+  - weatherbench2
+- name: starss23_seld
+  title: STARSS23
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: 'SELD: DOA regression + detection'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tao_tracking
+  title: TAO
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Multi-object box tracking
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tapvid
+  title: TAP-Vid
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Point tracking readout
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tapvid3d
+  title: TAPVid-3D
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: 3D point tracking readout
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: unav100
+  title: UnAV-100
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Multi-instance overlapping AV event localization
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: waymo_box_tracking
+  title: Waymo Open
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - fourds
+  survey_note: Per-frame box tracking readout
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: salads50_seg
+  title: 50Salads
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - twlv_i
+  survey_note: Temporal action segmentation
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: dcase2016_sed
+  title: DCASE 2016 Task 2 (office SED)
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - hear
+  survey_note: Multi-event timestamp detection
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: desed_sed
+  title: DESED
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - x_ares
+  survey_note: Multi-event SED, segment-F1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: digital_typhoon
+  title: Digital Typhoon
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - scivid
+  survey_note: Typhoon pressure regression
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego_exo4d_relations
+  title: Ego-Exo4D ego-exo relations
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - ego_exo4d
+  survey_note: Object correspondence masks
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego4d_forecasting_social
+  title: Ego4D hands/forecasting/social/diarization
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - ego4d
+  survey_note: Forecasting, AV diarization, social heads
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego4d_mq
+  title: Ego4D moment queries
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - ego4d
+  survey_note: Multi-instance moment detection
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego4d_vq
+  title: Ego4D visual queries
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - ego4d
+  survey_note: Query-image object localization
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fineaction_tad
+  title: FineAction
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: Temporal action detection
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: gtea_seg
+  title: GTEA
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - twlv_i
+  survey_note: Temporal action segmentation
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: librispeech_asr
+  title: LibriSpeech (ASR, gender)
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - icme2025_audio
+  - x_ares
+  survey_note: ASR transcription head (gender clf subset A); gender clf subset fits A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: maestro_transcription
+  title: MAESTRO
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - hear
+  - icme2025_audio
+  - x_ares
+  survey_note: Frame-level multi-label note transcription
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: perception_test_box_track
+  title: Perception Test object tracking
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - perception_test
+  survey_note: Box tracking
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: perception_test_point_track
+  title: Perception Test point tracking
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - fourds
+  - perception_test
+  survey_note: Point tracking readout
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: perception_test_action_loc
+  title: Perception Test temporal action localisation
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - perception_test
+  survey_note: Multi-instance TAL
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: perception_test_sound_loc
+  title: Perception Test temporal sound localisation
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - perception_test
+  survey_note: Multi-instance sound TAL
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: speechocean762
+  title: speechocean762
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - icme2025_audio
+  survey_note: Pronunciation score regression
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: stir_points
+  title: STIR
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - scivid
+  survey_note: Surgical point tracking
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: thumos14_tad
+  title: THUMOS14
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - twlv_i
+  survey_note: Multi-instance temporal action detection
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ucf_rc_counting
+  title: UCF-RC (UCF repetition counting)
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - severe
+  - severe_pp
+  survey_note: Repetition counting regression
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: weatherbench2
+  title: WeatherBench 2
+  kind: benchmark
+  survey_class: B1
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents:
+  - scivid
+  survey_note: Weather forecasting regression
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: actionatlas_mcq
+  title: ActionAtlas
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Multiple-choice QA with text options
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: activitynet_captions
+  title: ActivityNet Captions
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Dense captioning, paragraph retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: atp_hard
+  title: ATP / NExT-QA ATP-hard
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Video QA/retrieval with text; ATP-hard subset
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: audiocaps_retrieval
+  title: AudioCaps
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Audio captioning/retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: aura_mcq
+  title: AURA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: AV reasoning MCQ, LLM judge
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: av_syncbench
+  title: AV-SyncBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Zero-shot cosine/offset consistency tests
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: avut_qa
+  title: AVUT
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Audio-centric video QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: burst_tracking
+  title: BURST
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Exemplar-guided mask propagation/tracking; borderline B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: causalvqa
+  title: CausalVQA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: 5-way MCQ QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: cg_av_counting
+  title: CG-AV-Counting
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Clue-grounded counting QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: charades_sta
+  title: Charades-STA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Temporal sentence grounding
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: clevrer_qa
+  title: CLEVRER
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Question answering on collisions
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: clotho_retrieval
+  title: Clotho
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - icme2025_audio
+  - maeb
+  - x_ares
+  survey_note: Audio captioning/retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: dave_avqa
+  title: DAVE
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Diagnostic AVQA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: davis2017_vos
+  title: DAVIS 2017
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Label-propagation (kNN) VOS, no probe; B1 if a trained mask head
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: didemo
+  title: DiDeMo
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Text-conditioned moment localization/retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: egocvr
+  title: EgoCVR
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Composed video retrieval with modification text
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: egoschema
+  title: EgoSchema
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: 5-way MCQ QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: egosound_qa
+  title: EgoSound
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Open QA, GPT judge
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: egotempo_qa
+  title: EgoTempo
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Open-ended QA, LLM judge
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: favor_bench
+  title: FAVOR-Bench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Motion MCQA and captioning
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: grasp_voe
+  title: GRASP
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Prompted yes/no plus VoE surprise
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: hd_epic_vqa
+  title: HD-EPIC
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: 5-way MC VQA with text; recognition and sound-recognition subsets fit A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: hourvideo
+  title: HourVideo
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQ QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: intphys2019
+  title: IntPhys (2019)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Violation-of-expectation surprise score
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: intphys2
+  title: IntPhys 2
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Surprise score; binary plausibility probe (2606.09646) would fit A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: jhmdb_keypoints
+  title: J-HMDB
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Keypoint propagation, probe-free
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: jointavbench
+  title: JointAVBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: AV MCQ
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: longvale
+  title: LongVALE
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Grounding and dense captioning
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: longvideobench
+  title: LongVideoBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQ QA with subtitles
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: lovr_retrieval
+  title: LoVR
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Long-video text retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: lsmdc
+  title: LSMDC
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Movie description, retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: lvbench
+  title: LVBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQ QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mad_grounding
+  title: MAD
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Natural-language moment grounding
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: maeb
+  title: MAEB
+  kind: suite
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: suite
+  text_fields: true
+  parents: []
+  survey_note: 'MTEB-style: clustering, pair, retrieval, audio-text; classification/multilabel subset fits A'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - beijing_opera
+  - birdset
+  - clotho_retrieval
+  - commonlanguage_attr
+  - commonvoice_retrieval
+  - crema_d
+  - esc50
+  - fleurs_retrieval
+  - fsd2019_kaggle
+  - gigaspeech_retrieval
+  - gtzan_genre
+  - iemocap_emotion
+  - jamalt_retrieval
+  - macs_retrieval
+  - minds14_intent
+  - mridangam
+  - nmsqa_pairs
+  - ravdess_emotion
+  - sib_fleurs_topic
+  - speech_commands
+  - spokensquad_retrieval
+  - urbansound8k
+  - vehicle_sound_clustering
+  - vocalsound
+  - voxceleb_sentiment
+  - voxlingua107
+  - voxpopuli_attr
+- name: mevis_refseg
+  title: MeViS
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  route: folder-probe
+  text_fields: true
+  parents: []
+  survey_note: Text/speech referring segmentation
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mlvu
+  title: MLVU
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQ QA and generation
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mmsi_video
+  title: MMSI-Video-Bench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Spatial MCQ
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: momentseeker
+  title: MomentSeeker
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Text-conditioned moment retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mose_vos
+  title: MOSE
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Label-propagation VOS under occlusion
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: motionbench
+  title: MotionBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Motion MCQA; camera-motion/repetition subsets could fit A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: msrvtt
+  title: MSR-VTT
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Text-video retrieval, captioning
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: msvd
+  title: MSVD
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Text-video retrieval, captioning
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: music_avqa
+  title: MUSIC-AVQA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: AV question answering
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mvbench
+  title: MVBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: 20-task temporal MCQA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: mveb
+  title: MVEB
+  kind: suite
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: suite
+  text_fields: true
+  parents: []
+  survey_note: 'MTEB-style: zero-shot, clustering, retrieval, QA; classification subset (UCF101, MELD, K700...) fits A'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - activitynet_captions
+  - audiocaps_retrieval
+  - ave
+  - avmeme_clf
+  - avqa
+  - avspeakerbench
+  - breakfast_activity
+  - daily_omni
+  - didemo
+  - diving48
+  - egoschema
+  - hmdb51
+  - human_animal_cartoon
+  - k400
+  - meld_emotion
+  - msrvtt
+  - msvd
+  - music_avqa
+  - next_qa
+  - omnivideobench
+  - panda70m_retrieval
+  - perception_test
+  - ravdess_emotion
+  - shot2story20k
+  - ssv2
+  - tuna
+  - ucf101
+  - valor32k
+  - vatex
+  - vggsound
+  - video_mme
+  - videocon
+  - vinoground
+  - worldqa
+  - worldsense
+  - youcook2
+- name: mvp_pairs
+  title: MVP (Minimal Video Pairs)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: 'MCQ on minimal pairs; intuitive-physics subset: binary pair probe (A-like)'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: neptune
+  title: Neptune
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQ and open QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: next_qa
+  title: NExT-QA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: MC and open QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: omnivideobench
+  title: OmniVideoBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: AV reasoning MCQ
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: osnom_tracking
+  title: OSNOM
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Frozen features as matching cue inside tracker; borderline B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: pano_avqa
+  title: Pano-AVQA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: 360 AV QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: perception_test
+  title: Perception Test
+  kind: suite
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: suite
+  text_fields: true
+  parents:
+  - fourds
+  - mveb
+  survey_note: mc-vQA/grounded vQA headline; point/object tracking and localisation subsets B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - perception_test_action_loc
+  - perception_test_box_track
+  - perception_test_grounded_vqa
+  - perception_test_mc_vqa
+  - perception_test_point_track
+  - perception_test_sound_loc
+- name: qvhighlights
+  title: QVHighlights
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Query-based moment retrieval, highlights
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: real_acoustic_fields
+  title: Real Acoustic Fields
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - iii
+  route: folder-direct
+  text_fields: false
+  parents: []
+  survey_note: Novel-view acoustic synthesis (rendering); not a clip-encoder benchmark
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: rtime_retrieval
+  title: RTime
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Reversed-video hard negatives text retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: soundingactions
+  title: SoundingActions
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Cross-modal retrieval and similarity AUC
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ssv2_text_retrieval
+  title: SSv2-Template / SSv2-Label retrieval
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Text-to-video retrieval over template text
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: star_reasoning
+  title: STAR
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Situated reasoning MCQ
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tara_retrieval
+  title: TARA suite (CiA, RTime, NegBench, CoVR)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Nuanced text-video retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tempcompass
+  title: TempCompass
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQ, yes/no, caption matching
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tempcore
+  title: TempCore
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQA temporal subsets of MVBench/NExT-QA etc.
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tempo_grounding
+  title: TEMPO
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Temporal-language moment localization
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: temporalbench
+  title: TemporalBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Caption matching/QA with minimal negatives
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: test_of_time
+  title: Test of Time
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Before/after caption matching
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: timeblind
+  title: TimeBlind
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Paired temporal QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tomato
+  title: TOMATO
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQA on temporal reasoning
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tuna
+  title: TUNA (CAP/MCQ)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Dense captioning and MCQA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tvbench
+  title: TVBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Temporal MCQA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: univbench
+  title: UniVBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Captioning/generation/editing scored by LLM judge
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: valor32k
+  title: VALOR-32K
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: AV text retrieval and captioning
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: value
+  title: VALUE
+  kind: suite
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: suite
+  text_fields: true
+  parents: []
+  survey_note: Text-video retrieval, QA, captioning with subtitles
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+  components:
+  - how2qa
+  - how2r
+  - tvc_captioning
+  - tvqa
+  - tvr
+  - vatex
+  - violin
+  - vlep
+  - youcook2
+- name: vast_eval
+  title: VAST omni-modality eval
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Retrieval, captioning, QA with audio+text
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vatex
+  title: VATEX
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  - value
+  survey_note: Captioning, translation, retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vbenchcomp
+  title: VBenchComp
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: 'Temporal/semantic subsets of VideoQA benchmarks; borderline X: categorisation of existing QA sets'
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: verified_retrieval
+  title: VERIFIED
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Fine-grained corpus moment retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: video_mme
+  title: Video-MME
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: MCQ video QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: video_mme_logical
+  title: Video-MME-Logical
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Logical QA with answers
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: videocomp
+  title: VideoComp
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Caption reorder/replace matching
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: videonet_mcq
+  title: VideoNet
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: MCQ action recognition with text options
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vilma
+  title: ViLMA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Caption vs foil matching
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vinoground
+  title: Vinoground
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Counterfactual video-caption matching
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vip_parts
+  title: VIP
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Dense part-mask label propagation; borderline B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vitatecs
+  title: VITATECS
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Counterfactual caption discrimination
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: voxceleb2_verification
+  title: VoxCeleb2
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents:
+  - av_superb
+  survey_note: Verification EER from embeddings; closed-set identification subset fits A
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vsi_bench
+  title: VSI-Bench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Spatial QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: worldsense
+  title: WorldSense
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Omnimodal MCQA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: x_lebench
+  title: X-LeBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Text queries and summaries on long video
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: youcook2
+  title: YouCook2
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  - value
+  survey_note: Dense captioning and retrieval; procedure segmentation subset is B1
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: youtube_vos
+  title: YouTube-VOS
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Label-propagation VOS
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: avqa
+  title: AVQA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: AV multiple-choice QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: avspeakerbench
+  title: AVSpeakerBench
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Speaker-grounded QA/pair clf
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: commonvoice_retrieval
+  title: CommonVoice (audio-text retrieval)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - maeb
+  survey_note: Speech-text retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: daily_omni
+  title: Daily-Omni
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Omni QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: dvsc23_copy
+  title: DVSC23 (copy detection)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: Embedding copy detection
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ego4d_nlq
+  title: Ego4D NLQ
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  route: folder-probe
+  text_fields: true
+  parents:
+  - ego4d
+  survey_note: Natural-language query localization
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fivr5k
+  title: FIVR5K (DSV/CSV/ISV retrieval)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents:
+  - videoeval
+  survey_note: Training-free embedding retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: fleurs_retrieval
+  title: FLEURS (speech-text retrieval)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - maeb
+  survey_note: Speech-text retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: gigaspeech_retrieval
+  title: GigaSpeech (speech-text retrieval)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - maeb
+  survey_note: Speech-text retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: how2qa
+  title: How2QA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - value
+  survey_note: Video QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: how2r
+  title: How2R
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - value
+  survey_note: Text-to-video moment retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: inflevel_lab
+  title: InfLevel-lab
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Intuitive-physics VoE
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: jamalt_retrieval
+  title: JamAlt (artist A2A, lyric A2T)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - maeb
+  survey_note: Audio-audio and audio-lyric retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: macs_retrieval
+  title: MACS (audio-text retrieval)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - maeb
+  survey_note: Audio-text retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ms_cxr_t
+  title: MS-CXR-T
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Zero-shot chest X-ray progression
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: msrvtt_qa_family
+  title: MSRVTT-QA / ActivityNet-QA / MSRVTT-MC
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents: []
+  survey_note: Video QA sets
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: nmsqa_pairs
+  title: NMSQA (pair classification)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Spoken QA pair classification
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: panda70m_retrieval
+  title: Panda-70M
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Text-video retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: perception_test_grounded_vqa
+  title: Perception Test grounded vQA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - perception_test
+  survey_note: QA with track outputs
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: perception_test_mc_vqa
+  title: Perception Test mc-vQA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - perception_test
+  survey_note: 3-option QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: s_mit_retrieval
+  title: S-MiT (Spoken Moments in Time)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents: []
+  survey_note: Caption retrieval in UTD
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: shot2story20k
+  title: Shot2Story20K
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Text-video retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: spokensquad_retrieval
+  title: SpokenSQuAD (retrieval)
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - maeb
+  survey_note: Spoken passage-text retrieval
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tvc_captioning
+  title: TVC
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - iii
+  route: folder-direct
+  text_fields: false
+  parents:
+  - value
+  survey_note: Video captioning
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tvqa
+  title: TVQA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - value
+  survey_note: Subtitle-based video QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: tvr
+  title: TVR
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - value
+  survey_note: Text-to-video moment retrieval with subtitles
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vehicle_sound_clustering
+  title: Vehicle Sound clustering
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - ii
+  route: folder-stateless
+  text_fields: false
+  parents:
+  - maeb
+  survey_note: Clustering v-measure
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: videocon
+  title: VideoCon
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Video-text pair classification
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: violin
+  title: VIOLIN
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - value
+  survey_note: Video-language entailment
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vlep
+  title: VLEP
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - ii
+  route: folder-stateless
+  text_fields: true
+  parents:
+  - value
+  survey_note: Future event prediction with text options
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: worldqa
+  title: WorldQA
+  kind: benchmark
+  survey_class: B2
+  survey_reasons:
+  - i
+  - iii
+  route: folder-direct
+  text_fields: true
+  parents:
+  - mveb
+  survey_note: Omni QA
+  status: todo
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: in1k
+  title: ImageNet-1k
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: not in the survey
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: audiocaps_t2a
+  title: AudioCaps text-to-audio generation
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: folder-direct
+  text_fields: false
+  parents: []
+  survey_note: generation task of the AudioCaps row
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vggsounder_v2a
+  title: VGGSounder video-to-audio generation
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: folder-direct
+  text_fields: false
+  parents: []
+  survey_note: generation task of the VGGSounder row
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: ave_causal
+  title: AVE causal streaming
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: core-stream
+  text_fields: false
+  parents: []
+  survey_note: streaming task of the AVE row
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: unav100_causal
+  title: UnAV-100 causal streaming
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: core-stream
+  text_fields: false
+  parents: []
+  survey_note: streaming task of the UnAV-100 row
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: thumos14_oad
+  title: THUMOS'14 online action detection
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: core-stream
+  text_fields: false
+  parents: []
+  survey_note: streaming task of the THUMOS14 row
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: epic100_anticipation_stream
+  title: EPIC-KITCHENS-100 action anticipation on the stream
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: core-stream
+  text_fields: false
+  parents: []
+  survey_note: streaming task of the EPIC-KITCHENS row
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: epic_sounds_det
+  title: EPIC-SOUNDS sound event detection
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: folder-probe
+  text_fields: false
+  parents: []
+  survey_note: detection task of the EPIC-SOUNDS row
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: avsync
+  title: Audio-visual synchronisation offsets on VGGSound
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: core-clf
+  text_fields: false
+  parents: []
+  survey_note: derived protocol; the shipped analogue of VGGSound-Sparse
+  status: shipped
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vggss_loc
+  title: VGG-SS training-free localisation
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: being built in another session
+  status: in_flight
+  obtain: null
+  blocked_by: null
+  branch: null
+- name: vggsound_retrieval
+  title: VGGSound audio-visual retrieval
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: being built in another session
+  status: in_flight
+  obtain: null
+  blocked_by: null
+  branch: null

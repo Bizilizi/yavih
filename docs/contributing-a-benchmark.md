@@ -20,6 +20,10 @@ folders live (the wheel ships the core only; users fetch a folder from the catal
 generated benchmark tables, `catalog/index.json` and the header images are written by CI after the merge: never
 regenerate or commit them in a benchmark pull request.
 
+**Adding many benchmarks at once?** The [fleet](../fleet/README.md) runs one agent per folder from a
+[worker brief](../fleet/worker-brief.md) that follows this guide, reserves names in a [queue](../fleet/queue.yaml) and
+integrates the branches in reviewed batches.
+
 ## 0. Fork, clone, install
 
 ```bash
@@ -362,8 +366,9 @@ Splits and frozen rows: <train n / eval n>. Scaffolded from `<like>`.
 
 | workflow | check | what it runs |
 |---|---|---|
-| `ci.yml` | ruff | `ruff check src tests benchmarks` on Python 3.12 |
+| `ci.yml` | ruff | `ruff check src tests benchmarks fleet` on Python 3.12 |
 | `ci.yml` | pytest (pull request, Python 3.12) | a pull request that changes only `benchmarks/`: `yavih bench lint` and the tests of the changed folders, plus the repository checks that read every folder (each folder's lint, on conformance verdicts cached across runs; the docs; the catalog); anything else changed: the whole suite. CPU torch, ffmpeg, `.[media,dev]`, no benchmark data (tests that need staged media skip); the generated tables are written first |
+| `ci.yml` | fleet (footprint and queue) | a pull request labelled `benchmark` changes exactly one folder and nothing else (`python fleet/check.py footprint`), under a name reserved in `fleet/queue.yaml`; every pull request keeps the queue valid (`python fleet/check.py queue`) |
 | `ci.yml` | build and smoke-test the wheel | builds the sdist and wheel, checks that the wheel ships the core only, installs it into a clean venv without torch and lints and fetches the repository's folders with it |
 | `headers.yml` | render the header images | on pull requests touching `benchmarks/**`: renders every header and a contact sheet into the `headers` artifact (never fails) |
 

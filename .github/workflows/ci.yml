@@ -31,7 +31,7 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: python -m pip install ruff
-      - run: ruff check src tests benchmarks
+      - run: ruff check src tests benchmarks fleet
 
   changes:
     name: what changed
@@ -58,6 +58,36 @@ jobs:
           echo "core=$([ -n "$other" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "folders=$folders" >> "$GITHUB_OUTPUT"
           echo "core changes: ${other:-none}"; echo "folders: ${folders:-none}"
+
+  fleet:
+    # fleet/worker-brief.md: a pull request labelled `benchmark` adds or changes exactly one folder and nothing else,
+    # under a name reserved in fleet/queue.yaml; every other pull request keeps the queue valid
+    name: fleet (footprint and queue)
+    if: github.event_name == 'pull_request'
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pyyaml
+      - name: A benchmark pull request changes one folder only
+        if: contains(github.event.pull_request.labels.*.name, 'benchmark')
+        run: |
+          set -- ${{ needs.changes.outputs.folders }}
+          if [ "${{ needs.changes.outputs.core }}" = "true" ] || [ "$#" -ne 1 ]; then
+            echo "a pull request labelled benchmark changes benchmarks/<name>/ of exactly one folder and nothing else"
+            echo "(changes outside the folders: ${{ needs.changes.outputs.core }}; folders: ${*:-none})"
+            exit 1
+          fi
+          python fleet/check.py footprint HEAD --base "origin/${{ github.base_ref }}" --name "$1"
+          python fleet/check.py queue --allow-new "$1"
+      - name: The fleet queue
+        if: "!contains(github.event.pull_request.labels.*.name, 'benchmark')"
+        run: python fleet/check.py queue
 
   test-pr:
     name: pytest (pull request, Python 3.12)

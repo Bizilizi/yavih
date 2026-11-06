@@ -178,7 +178,8 @@ def _check_target(source: Path, target: Path, anchor: str | None) -> str | None:
     return None
 
 
-@pytest.mark.parametrize("path", [*PAGES, REPO / "README.md"], ids=lambda p: str(p.relative_to(REPO)))
+@pytest.mark.parametrize("path", [*PAGES, REPO / "README.md", *sorted((REPO / "fleet").glob("*.md"))],
+                         ids=lambda p: str(p.relative_to(REPO)))
 def test_every_link_resolves(path: Path) -> None:
     """Relative links (and GitHub links into this repository's main branch) name an existing file and heading."""
     problems = []
