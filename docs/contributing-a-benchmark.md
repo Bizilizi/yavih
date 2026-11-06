@@ -295,11 +295,15 @@ yavih bench trial <name> --synthetic --readout-fast
 runs the whole chain (conformance fixture, stand-in, oracle bridge, `bridge check`, extract, validate, probe, report)
 in process on a generated stand-in of the folder ([CLI](cli.md#bench-trial---synthetic)). Beyond the conformance
 stage (which runs the real folder's scoring path, `eval.py` and `external` included), it does not exercise the
-real data; step 13 does. A scorer without a synthetic stand-in (a folder's own scorer, `stream`) answers
-`E_TRIAL_NOT_READY` (exit 3): the step does not apply, and step 13 is the trial.
+real data; step 13 does. A scorer no stand-in covers (a folder's own scorer without a core family or `testing.py`,
+`stream`) runs the `conformance` stage and records the rest `not_applicable`. When the conformance stage is
+`skipped` as well (the authors' package is not installed here), the trial ends `trial UNVERIFIED`
+(`E_TRIAL_UNVERIFIED`, exit 3): nothing was checked, so install the package `setup.md` "## Dependencies" names and run
+it again.
 
-**Done when:** it exits 0, every stage in `data.stages` is `ok` (or, for a scorer no stand-in covers, `conformance`
-is `ok` and the rest `not_applicable`; better, ship a `testing.py` stand-in), and the headline clears its floor.
+**Done when:** it exits 0 with `trial ok` (`data.verdict` `ok`), every stage in `data.stages` is `ok` (or, for a scorer
+no stand-in covers, `conformance` is `ok` and the rest `not_applicable`; better, ship a `testing.py` stand-in), and the
+headline clears its floor. `trial UNVERIFIED` is never done.
 
 ## 13. Trial run with a fresh agent (required)
 

@@ -78,7 +78,8 @@ folder (`yavih.testing.make_synthetic_like`: its name, readout, stream names and
 label facts over tiny generated media), with the oracle test bridge, whose features encode the label:
 `stand_in`, `bridge`, `bridge_check`, `extract` (every role split in two shards), `validate`, `probe` (no
 results-store file), `report`, `headline`. `data.stages` holds one record per stage (`ok`, `warning`, `failed`,
-`skipped` after a failure; `seconds`; `detail`; `error`), `data.headline` the headline metric, its CI and floor and
+`skipped` after a failure or, for `conformance`, when a package its scoring path needs is missing here, with
+`detail.reason`; `not_applicable` without a stand-in; `seconds`; `detail`; `error`), `data.headline` the headline metric, its CI and floor and
 `clears_floor`. Under `--readout-fast` the oracle must clear the floor; without it a miss is the warning
 `W_TRIAL_HEADLINE`, since the pinned schedule may underfit the stand-in's few dozen rows.
 
@@ -102,10 +103,18 @@ family's synthetic rows is `E_TRIAL_NOT_READY`, exit 3). For any other folder (`
 family without a fixture such as `stream`) only the `conformance` stage runs and the others are recorded
 `not_applicable` (exit 0) ([extending through a folder](extending-through-a-folder.md#a-stand-in-of-the-folders-own)).
 
+`data.verdict` and the last line of the text say what the trial established: `ok` (`trial ok`, exit 0) when no stage
+failed and at least one stage really ran (`ok` or `warning`); `failed` (`trial FAILED at <stage>`, exit 2, or 3 when
+that stage was not ready); `unverified` (`trial UNVERIFIED: ...`, `E_TRIAL_UNVERIFIED`, exit 3) when no stage failed but
+none ran: the `conformance` stage was `skipped` and no stand-in covers the folder, so nothing was checked
+(`data.unverified` says why and what to install). A `skipped` `conformance` stage followed by stages that ran keeps
+their verdict and adds a `limits` line saying the real folder's scoring path was not checked.
+
 | code | exit | meaning |
 |---|---|---|
 | `E_TRIAL` | 2 | a stage failed a contract (the oracle below its floor under `--readout-fast`, a failed validation or probe); `errors[0].where` names the stage. A stage that was not ready (a decoder missing) exits 3 with its own code |
 | `E_TRIAL_NOT_READY` | 3 | the stand-in's media cannot be written here (PyAV, soundfile, pillow missing) |
+| `E_TRIAL_UNVERIFIED` | 3 | nothing was verified: the `conformance` stage was skipped (a package its scoring path needs is missing here) and every later stage is `not_applicable`; install that package or ship a `testing.py` stand-in |
 | `W_TRIAL_HEADLINE` | 0 | without `--readout-fast`, the oracle's headline did not clear its floor |
 
 ## Suites

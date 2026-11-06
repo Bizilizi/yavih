@@ -112,7 +112,9 @@ folder's scorer name and a copy of its `eval.py` and sibling modules, so the fol
 every stage (an `eval.py` whose hooks or protocol keys do not fit the family's synthetic rows is `E_TRIAL_NOT_READY`:
 ship `testing.py`). A folder whose scorer neither the core fixtures nor a `testing.py` cover (no family, or a family
 without a fixture such as `stream`) runs the `conformance` stage and records the later stages as `not_applicable`
-(exit 0); the fresh-agent [trial run](trial-run.md) on real data covers it.
+(exit 0); the fresh-agent [trial run](trial-run.md) on real data covers it. If the `conformance` stage is `skipped` too
+(a package its scoring path needs is missing here), nothing was checked: the trial ends `trial UNVERIFIED`
+(`E_TRIAL_UNVERIFIED`, exit 3).
 
 ## Decisions
 

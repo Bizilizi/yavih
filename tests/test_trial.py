@@ -82,13 +82,17 @@ def test_bench_trial_synthetic(name, capsys, yavih_home, runs_dir, monkeypatch):
         rec = env["data"]
         assert rc == 0 and env["status"] == "ok" and rec["stand_in"] == "none", env["errors"]
         assert [s["status"] for s in rec["stages"]] == ["ok"] + ["not_applicable"] * (len(STAGES) - 1)
+        assert rec["verdict"] == "ok" and rec["unverified"] is None  # conformance ran: something was verified
         assert any("no synthetic stand-in" in lim for lim in rec["limits"])
         assert _tree(yavih_home) == home_before and _tree(runs_dir) == []
         return
     rec = env["data"]
     assert rc == 0 and env["status"] == "ok" and env["errors"] == [], (rec.get("failed"), rec.get("stages"))
-    assert [s["stage"] for s in rec["stages"]] == list(STAGES) and all(s["status"] == "ok" for s in rec["stages"])
+    assert [s["stage"] for s in rec["stages"]] == list(STAGES) and all(s["status"] == "ok" for s in rec["stages"][1:])
+    # conformance is skipped where the folder's authors' package is absent (CI installs none): the stages after it ran
+    assert rec["stages"][0]["status"] in ("ok", "skipped"), rec["stages"][0]
     assert rec["benchmark"] == name and rec["synthetic"] is True and rec["exit_code"] == 0 and rec["paths"] == {}
+    assert rec["verdict"] == "ok"
     h = rec["headline"]
     assert h["clears_floor"] is True and h["standard"] is False and h["value"] > h["floor"], h
     assert any("synthetic stand-in" in lim for lim in rec["limits"])
@@ -148,3 +152,58 @@ def test_bench_trial_failing_stage_is_exit_2(tmp_path):
     assert rec["ok"] is False and rec["exit_code"] == 2 and rec["failed"]["stage"] == "headline"
     assert [s["status"] for s in rec["stages"]] == ["ok"] * 8 + ["failed"] and rec["headline"]["clears_floor"] is False
     assert _yavih_env() == env_before
+
+
+def _skipped_conformance(monkeypatch, package: str = "authors_pkg"):
+    """The conformance check as it answers when a package the folder's scoring path needs is not installed here."""
+    import yavih.conformance as C
+
+    def check(bench, **_):
+        return C.ConformanceReport(name=bench.name, folder=str(bench.folder), protocol_version=1, expected_version=1, ok=True, skipped=True,
+                                   findings=[C.Finding("warning", C.W_SKIPPED, f"{bench.name}: not checked here: E_EXTERNAL_MISSING: "
+                                                                               f"the benchmark authors' package {package!r} is not installed")])
+
+    monkeypatch.setattr(C, "check", check)
+
+
+def test_skipped_conformance_and_no_stand_in_is_unverified_never_ok(capsys, yavih_home, monkeypatch):
+    """Conformance skipped (an authors' package missing) and every later stage not_applicable: nothing ran, so the trial
+    is ``unverified``: exit 3, envelope status error, ``E_TRIAL_UNVERIFIED``, and the text's last line is not ``trial ok``."""
+    from yavih.trial import E_TRIAL_UNVERIFIED
+
+    name = next(n for n in PACKAGED if _yaml_scorer(n) == "stream")  # a scorer no stand-in covers
+    _skipped_conformance(monkeypatch)
+    rc, env = _json(capsys, ["bench", "trial", name, "--synthetic", "--readout-fast"])
+    rec = env["data"]
+    assert rc == 3 and env["status"] == "error" and rec["exit_code"] == 3 and rec["ok"] is False and rec["verdict"] == "unverified"
+    assert env["errors"][0]["code"] == E_TRIAL_UNVERIFIED and "authors_pkg" in env["errors"][0]["message"]
+    assert [s["status"] for s in rec["stages"]] == ["skipped"] + ["not_applicable"] * (len(STAGES) - 1)
+    assert "authors_pkg" in rec["stages"][0]["detail"]["reason"] and rec["failed"] is None
+    assert "nothing was verified" in rec["unverified"]
+    rc = cli.main(["bench", "trial", name, "--synthetic", "--readout-fast"])
+    last = capsys.readouterr().out.strip().splitlines()[-1]
+    assert rc == 3 and last.startswith("trial UNVERIFIED:") and last.endswith("(exit 3)") and "trial ok" not in last
+
+
+def test_skipped_conformance_with_stages_that_ran_keeps_their_verdict(capsys, yavih_home, runs_dir, monkeypatch):
+    """Conformance skipped but the core stand-in's stages ran: the verdict is theirs (``ok``, exit 0), the conformance
+    stage says ``skipped`` with its reason, and a limits line says the real scoring path was not checked."""
+    monkeypatch.setenv("YAVIH_RESULTS", str(runs_dir.parent / "results"))
+    _skipped_conformance(monkeypatch)
+    rc, env = _json(capsys, ["bench", "trial", "esc50", "--synthetic", "--readout-fast"])
+    rec = env["data"]
+    assert rc == 0 and env["status"] == "ok" and rec["verdict"] == "ok" and rec["ok"] is True and rec["unverified"] is None
+    assert [s["status"] for s in rec["stages"]] == ["skipped"] + ["ok"] * (len(STAGES) - 1)
+    assert "authors_pkg" in rec["stages"][0]["detail"]["reason"]
+    assert any(lim.startswith("the conformance stage was skipped") and "authors_pkg" in lim for lim in rec["limits"]), rec["limits"]
+
+
+def test_a_trial_whose_stages_ran_ends_trial_ok(capsys, yavih_home, runs_dir, monkeypatch):
+    """The normal case: conformance and every stand-in stage ran: ``verdict`` ``ok``, exit 0, last line ``trial ok``."""
+    monkeypatch.setenv("YAVIH_RESULTS", str(runs_dir.parent / "results"))
+    rc = cli.main(["bench", "trial", "esc50", "--synthetic", "--readout-fast"])
+    out = capsys.readouterr().out.strip().splitlines()
+    assert rc == 0 and out[-1] == "trial ok"
+    assert all(line.split()[1] == "ok" for line in out[1:1 + len(STAGES)]), out
+    rec = run_trial("esc50", readout_fast=True)
+    assert rec["verdict"] == "ok" and rec["exit_code"] == 0 and rec["unverified"] is None

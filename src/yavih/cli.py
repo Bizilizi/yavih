@@ -1614,8 +1614,9 @@ def cmd_bench_trial(ns: argparse.Namespace) -> Envelope:
     tiny synthetic stand-in, in process (``yavih.trial.run_trial``): per-stage status, the headline against its floor
     and, with ``--keep``, the paths. Exit 2 when a stage fails a contract, 3 when a stage is not ready (the stand-in's
     media writers missing); a folder no stand-in covers (no core fixture, no ``testing.py``) runs the conformance stage
-    and records the others as ``not_applicable`` (exit 0); without ``--synthetic`` a usage error (the trial on real data
-    is the fresh-agent trial run)."""
+    and records the others as ``not_applicable`` (exit 0), unless the conformance stage was ``skipped`` too (a package its
+    scoring path needs is missing): then nothing was verified, ``verdict: unverified``, ``E_TRIAL_UNVERIFIED``, exit 3;
+    without ``--synthetic`` a usage error (the trial on real data is the fresh-agent trial run)."""
     from yavih.trial import TRIAL_DOC, format_trial, run_trial
 
     if not ns.synthetic:
@@ -1626,6 +1627,10 @@ def cmd_bench_trial(ns: argparse.Namespace) -> Envelope:
     if rec.get("failed"):
         f = rec["failed"]
         errors.append(_finding(str(f.get("code") or "E_TRIAL"), f"stage {f['stage']}: {f.get('message')}", f["stage"]))
+    elif rec.get("verdict") == "unverified":
+        from yavih.trial import E_TRIAL_UNVERIFIED
+
+        errors.append(_finding(E_TRIAL_UNVERIFIED, str(rec.get("unverified")), "conformance"))
     warnings = [_finding("W_TRIAL_HEADLINE", s["detail"]["note"], s["stage"]) for s in rec["stages"]
                 if s["status"] == "warning" and isinstance(s.get("detail"), dict) and s["detail"].get("note")]
     return Envelope(status="ok" if rec["ok"] else "error", data=rec, errors=errors, warnings=warnings, paths=dict(rec.get("paths") or {}),

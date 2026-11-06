@@ -31,6 +31,15 @@ exit 3: ship ``testing.py``). For any other scorer (no family, or a family witho
 own detection scorer) the trial runs the ``conformance`` stage and records every later stage as ``not_applicable``
 (exit 0): the folder's own scorer is exercised by its conformance fixture and by the fresh-agent trial on real data.
 
+Verdict (``verdict`` in the record, the last line of the text): ``ok`` when no stage failed and at least one stage
+really ran (``ok`` or ``warning``), exit 0; ``failed`` when a stage failed, exit 2 (3 when that stage was not ready);
+``unverified`` when no stage failed but none ran either, exit 3 (``E_TRIAL_UNVERIFIED``, "not ready", like a missing
+authors' package): the ``conformance`` stage was ``skipped`` because a package the folder's scoring path needs is not
+installed here (``W_CONFORMANCE_SKIPPED``) and every later stage is ``not_applicable`` (no stand-in), so nothing was
+checked. Install the package the ``conformance`` stage names, or ship a ``testing.py`` stand-in. A ``skipped``
+``conformance`` stage followed by stages that ran keeps the verdict of those stages and adds a limit line saying the
+real folder's scoring path was not checked.
+
 Limits: the ``conformance`` stage (first) runs the real folder's scoring path, ``eval.py`` hooks and pinned ``external``
 package included, on the fixture's generated population; every later stage runs on the stand-in, which never reads
 the real data and is single-label, so a ``multi`` / ``multi_sets`` folder's ``probe`` stage trials as single-label
@@ -58,7 +67,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-__all__ = ["run_trial", "TrialError", "TRIAL_DOC", "STAGES", "E_TRIAL", "E_TRIAL_NOT_READY", "format_trial"]
+__all__ = ["run_trial", "TrialError", "TRIAL_DOC", "STAGES", "E_TRIAL", "E_TRIAL_NOT_READY", "E_TRIAL_UNVERIFIED", "VERDICTS",
+           "format_trial"]
 
 #: The trial-run protocol (the fresh-agent trial on real data).
 TRIAL_DOC = "https://github.com/Bizilizi/yavih/blob/main/docs/trial-run.md"
@@ -69,6 +79,13 @@ E_TRIAL = "E_TRIAL"
 #: The stand-in cannot be built: a readout or stream kind the synthetic fixtures do not cover, or no media writer
 #: (exit 3).
 E_TRIAL_NOT_READY = "E_TRIAL_NOT_READY"
+#: No stage failed and none ran: the conformance stage was skipped (a package the scoring path needs is missing) and every
+#: later stage is ``not_applicable``; nothing was verified (exit 3, never a pass).
+E_TRIAL_UNVERIFIED = "E_TRIAL_UNVERIFIED"
+#: The trial's verdicts (``run_trial(...)["verdict"]``).
+VERDICTS: tuple[str, ...] = ("ok", "failed", "unverified")
+#: Stage statuses that mean the stage really ran (``unverified`` is a trial where none did).
+_RAN = frozenset({"ok", "warning"})
 
 _SHARDS = 2
 _CANARIES = 2
@@ -136,7 +153,8 @@ class _Stages:
 
     def run(self, name: str, fn) -> Any:
         if self.failed is not None:
-            self.records.append({"stage": name, "status": "skipped", "seconds": 0.0, "detail": None, "error": None})
+            self.records.append({"stage": name, "status": "skipped", "seconds": 0.0,
+                                 "detail": {"reason": f"not run: stage {self.failed['stage']} failed"}, "error": None})
             return None
         from yavih.cli import exit_code_for
 
@@ -378,6 +396,9 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
         if not rep.ok:
             err = rep.errors[0]
             return {"_status": "failed", "_code": err.code, "_message": err.message, **out}
+        if rep.skipped:  # the scoring path could not run here (an authors' package missing): nothing was compared
+            why = "; ".join(f.message for f in rep.warnings) or "the conformance check was skipped"
+            return {"_status": "skipped", "reason": why, **out}
         return out
 
     st.run("conformance", conformance)
@@ -396,7 +417,11 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
         head = st.run("headline", lambda: _headline(state["bench"], state["result"], readout_fast=readout_fast))
 
     failed = st.failed
-    exit_code = 0 if failed is None else (3 if failed.get("exit_code") == 3 else 2)
+    ran = [s["stage"] for s in st.records if s["status"] in _RAN]
+    verdict = "failed" if failed is not None else ("ok" if ran else "unverified")
+    exit_code = {"ok": 0, "unverified": 3}.get(verdict) if failed is None else (3 if failed.get("exit_code") == 3 else 2)
+    conf = next((s for s in st.records if s["stage"] == "conformance"), None)
+    conf_skipped = (conf["detail"] or {}).get("reason") if conf and conf["status"] == "skipped" and conf.get("detail") else None
     paths = {k: str(v) for k, v in (("work", work), ("folder", state.get("folder")), ("bridge", state.get("bridge")),
                                      ("profile", state.get("profile_path")), ("run_dir", state.get("run_dir")),
                                      ("report", state.get("report"))) if v}
@@ -408,13 +433,18 @@ def _run(real: Any, work: Path, *, readout_fast: bool, bridge: str, n_eval: int,
         "synthetic": True,
         "readout_fast": bool(readout_fast),
         "bridge": bridge,
-        "ok": failed is None,
+        "ok": verdict == "ok",
+        "verdict": verdict,
+        "unverified": (f"nothing was verified: the conformance stage was skipped ({conf_skipped}) and no stand-in covers this "
+                       "folder, so every later stage is not_applicable; install the package the conformance stage names, or ship "
+                       f"a {FOLDER_TESTING} stand-in") if verdict == "unverified" else None,
         "exit_code": exit_code,
         "stages": st.records,
         "headline": headline,
         "failed": failed,
         "paths": paths,
-        "limits": _limits(real, source=source, why_not=why_not),
+        "limits": ([f"the conformance stage was skipped ({conf_skipped}): the real folder's scoring path, eval.py hooks and "
+                    "external packages were not checked here"] if conf_skipped and ran else []) + _limits(real, source=source, why_not=why_not),
         "stand_in": source,
     }
 
@@ -435,7 +465,7 @@ def _label_kind(real: Any) -> str | None:
 
 def _limits(real: Any, *, source: str = "core", why_not: str | None = None) -> list[str]:
     if source == "none":
-        return [f"no synthetic stand-in: {why_not}; only the conformance stage ran, the fresh-agent trial on real data covers the rest "
+        return [f"no synthetic stand-in: {why_not}; only the conformance stage applies, the fresh-agent trial on real data covers the rest "
                 f"({TRIAL_DOC})"]
     out = ["synthetic stand-in: speed and numbers carry over to nothing; the fresh-agent trial on real data covers the rest "
            f"({TRIAL_DOC})"]
@@ -470,6 +500,8 @@ def format_trial(rec: dict) -> str:
             note = f"  {s['detail']['note']}"
         elif s.get("status") == "not_applicable" and s["stage"] == "stand_in":
             note = f"  {s['detail']['reason']}"
+        elif s.get("status") == "skipped" and s["stage"] == "conformance" and isinstance(s.get("detail"), dict):
+            note = f"  {s['detail'].get('reason')}"
         lines.append(f"  {s['stage']:<13} {s['status']:<14} {s['seconds']:>7.1f}s{note}")
     h = rec.get("headline") or {}
     if h.get("metric"):
@@ -480,5 +512,11 @@ def format_trial(rec: dict) -> str:
         lines.append(f"limit: {lim}")
     for k, v in (rec.get("paths") or {}).items():
         lines.append(f"{k}: {v}")
-    lines.append("trial ok" if rec["ok"] else f"trial FAILED at {rec['failed']['stage']} (exit {rec['exit_code']})")
+    verdict = rec.get("verdict") or ("ok" if rec["ok"] else "failed")
+    if verdict == "ok":
+        lines.append("trial ok")
+    elif verdict == "unverified":
+        lines.append(f"trial UNVERIFIED: {rec.get('unverified')} (exit {rec['exit_code']})")
+    else:
+        lines.append(f"trial FAILED at {rec['failed']['stage']} (exit {rec['exit_code']})")
     return "\n".join(lines) + "\n"
