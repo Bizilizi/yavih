@@ -37,11 +37,12 @@ jobs:
           python -m pip install -e .
       - name: Regenerate
         run: |
+          python fleet/check.py ship        # a merged benchmark pull request's queue entry becomes shipped
+          # a folder merged under an unreserved name is reported, never a reason to leave the index stale
+          python fleet/check.py queue || echo "::warning::fleet/queue.yaml does not validate: see the lines above"
           python -m yavih.doctables --write
           python -m yavih.catalog --write
           python -m yavih.catalog --check
-          python fleet/check.py ship        # a merged benchmark pull request's queue entry becomes shipped
-          python fleet/check.py queue
       - name: Commit when changed
         run: |
           if [ -n "$(git status --porcelain)" ]; then

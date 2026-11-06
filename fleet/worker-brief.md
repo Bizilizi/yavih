@@ -24,6 +24,8 @@ agents add other benchmarks in parallel; an integrator merges your branch after 
 
 The queue entry for your benchmark (what the survey knows about it and the suggested route):
 <ENTRY>
+(A worker is only ever given a `kind: benchmark` entry. A `kind: suite` entry is the integrator's: a suite file in
+the core, written once its components are shipped. If you were given one, stop and report it.)
 
 Environment, for every command:
   cd <WORKTREE>
@@ -46,7 +48,8 @@ docs/extending-through-a-folder.md. `yavih bench extensions` lists the folders t
 one and scaffold from it (`yavih bench new <NAME> --like <that folder> --dir benchmarks`). Whatever your folder
 implements that the core might one day absorb, list in benchmarks/<NAME>/notes/UNIFY.md: one bullet per item (what it
 is, which file, which other folders might share it). A checkout's local excludes may ignore `notes/` directories:
-add your notes with `git add -f benchmarks/<NAME>/notes` and check `git ls-files benchmarks/<NAME>/notes` lists them.
+add your notes with `git add benchmarks/<NAME>/notes` and check `git ls-files benchmarks/<NAME>/notes` lists them
+(use `git add -f` only if `git status` does not show them; `-f` also adds files .gitignore excludes).
 If the protocol truly cannot be expressed through the folder,
 stop, describe the gap in benchmarks/<NAME>/notes/CORE_REQUEST.md, and report the entry blocked; never edit the core.
 
@@ -86,7 +89,8 @@ is a bug to fix; `trial UNVERIFIED` (exit 3) means nothing was checked (the auth
 needs is missing): install it as setup.md "## Dependencies" says and rerun, it never counts as done. Stages reported
 `not_applicable` mean no synthetic stand-in covers your scorer: give the folder a `testing.py` stand-in
 (docs/extending-through-a-folder.md "A stand-in of the folder's own") so the trial runs end to end.
-LAST, the fresh-agent trial run of docs/trial-run.md on a small sample of the real data, with the wheel built from an
+LAST, commit everything on bench/<NAME> (the trial run builds from the committed tree), then the fresh-agent trial
+run of docs/trial-run.md on a small sample of the real data, with the wheel built from an
 archive copy as above. If you cannot start a sub-agent, or the data is blocked, record `trial run: not run` and why.
 
 FINISH. Commit on bench/<NAME> in small commits (never push, never open a pull request, never edit fleet/queue.yaml),

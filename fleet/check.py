@@ -105,6 +105,9 @@ def check_queue(entries: list[dict], folders: set[str], *, allow_new: frozenset[
             out.append(f"{where}: obtain must be one of {list(TIERS)} or null")
         if status == "blocked" and not e.get("blocked_by"):
             out.append(f"{where}: a blocked entry says what unblocks it (blocked_by)")
+        if kind == "suite" and status in ("claimed", "review"):
+            out.append(f"{where}: a suite entry is never claimed for a worker (the integrator writes the suite file in "
+                       "src/yavih/suites/ once its components are shipped)")
         if status in ("claimed", "review") and e.get("branch") != f"bench/{n}":
             out.append(f"{where}: a {status} entry names its branch, bench/{n}")
         exists = n in folders
@@ -137,20 +140,25 @@ def check_queue(entries: list[dict], folders: set[str], *, allow_new: frozenset[
 
 def ship(path: Path, folders: set[str]) -> list[str]:
     """Set ``status: shipped`` on every benchmark entry of ``path`` whose folder exists; returns the names changed.
-    Only each such entry's ``status:`` line is rewritten, so the file's comments and layout stay as they are."""
+    Each entry block (from its ``- `` line to the next) is read as a whole, whatever its key order; only its
+    ``status:`` line is rewritten, so the file's comments and layout stay as they are."""
     lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    starts = [i for i, line in enumerate(lines) if line.startswith("- ")]
     changed: list[str] = []
-    current: str | None = None
-    kind: str | None = None
-    for i, line in enumerate(lines):
-        if line.startswith("- name: "):
-            current, kind = line[len("- name: "):].strip(), None
-        elif current is not None and line.startswith("  kind: "):
-            kind = line[len("  kind: "):].strip()
-        elif current is not None and line.startswith("  status: ") and kind == "benchmark" and current in folders:
-            if line.strip() != "status: shipped":
-                lines[i] = "  status: shipped\n"
-                changed.append(current)
+    for k, s in enumerate(starts):
+        block = range(s, starts[k + 1] if k + 1 < len(starts) else len(lines))
+        keys: dict[str, tuple[int, str]] = {}
+        for i in block:
+            line = lines[i][2:] if i == s else lines[i]
+            if line.startswith("  ") and not line.startswith("   ") and ":" in line or i == s:
+                key, _, value = line.strip().partition(":")
+                keys.setdefault(key.strip(), (i, value.strip()))
+        name, kind, status = (keys.get(x, (None, None))[1] for x in ("name", "kind", "status"))
+        if kind == "benchmark" and name in folders and "status" in keys and status != "shipped":
+            i = keys["status"][0]
+            indent = "- " if i == s else "  "
+            lines[i] = f"{indent}status: shipped\n"
+            changed.append(name)
     if changed:
         path.write_text("".join(lines), encoding="utf-8")
     return changed

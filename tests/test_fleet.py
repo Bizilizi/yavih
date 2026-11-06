@@ -46,6 +46,8 @@ def test_the_repository_queue_is_valid_and_reserves_every_folder():
     (lambda q: q[0].pop("branch"), "missing keys ['branch']"),
     (lambda q: q[1].update(name="beta"), "has no queue entry"),
     (lambda q: q[2].update(components=["alpha"]), "does not list it under parents"),
+    (lambda q: q[2].update(status="claimed", branch="bench/suite_x"), "never claimed for a worker"),
+    (lambda q: q[2].update(status="review", branch="bench/suite_x"), "never claimed for a worker"),
 ])
 def test_the_queue_check_names_each_problem(mutate, needle):
     q = [_entry("alpha"), _entry("existing", status="shipped"),
@@ -83,6 +85,19 @@ def test_ship_marks_existing_folders_and_keeps_the_layout(tmp_path: Path):
     assert "- name: alpha\n  kind: benchmark\n  status: shipped\n  branch: bench/alpha\n" in text
     assert "- name: beta\n  kind: benchmark\n  status: todo\n" in text and "  status: todo\n" in text.split("alpha_suite")[1]
     assert check.ship(q, {"alpha", "gamma"}) == []
+
+
+def test_ship_reads_an_entry_whatever_its_key_order(tmp_path: Path):
+    q = tmp_path / "queue.yaml"
+    q.write_text("schema_version: 1\nentries:\n"
+                 "- status: todo\n  name: alpha\n  kind: benchmark\n"
+                 "- name: beta\n  status: claimed\n  survey_note: 'kind: suite, status: todo'\n  kind: benchmark\n"
+                 "- kind: suite\n  status: todo\n  name: delta\n")
+    assert check.ship(q, {"alpha", "beta", "delta"}) == ["alpha", "beta"]
+    text = q.read_text()
+    assert text.startswith("schema_version: 1\nentries:\n- status: shipped\n  name: alpha\n")
+    assert "- name: beta\n  status: shipped\n  survey_note: 'kind: suite, status: todo'\n" in text
+    assert text.endswith("- kind: suite\n  status: todo\n  name: delta\n")
 
 
 @pytest.fixture()

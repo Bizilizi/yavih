@@ -42,6 +42,12 @@ The version comes from git tags, so clone with history (no `--depth`). The `dev`
 
 ## 1. Scaffold
 
+**Reserve the name first.** Every folder name is reserved in [`fleet/queue.yaml`](../fleet/queue.yaml), and CI refuses a
+benchmark pull request whose folder has no entry there (`python fleet/check.py queue`). Look the name up with
+`python fleet/check.py entry <name>`. If it has no entry, add one in a separate one-line pull request first (an entry
+with `status: todo`, the keys described at the top of the file), or ask a maintainer to add it; the benchmark pull
+request itself changes `benchmarks/<name>/` only.
+
 ```bash
 yavih bench new <name> --scorer clf --dir benchmarks                # copies the scorer's default folder
 yavih bench new <name> --like vggsounder --dir benchmarks            # or the folder closest to yours

@@ -29,7 +29,7 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
     expected.json       the conformance fixture: the scoring path's numbers at this protocol_version (bench conformance --record)
   tests/test_folder.py  the folder's own facts
   assets/header.png     the README header image (python -m yavih.headers) + header.src.sha256; never shipped
-  notes/                optional maintainer notes; never shipped
+  notes/                optional maintainer notes; not in the wheel, not a shipped file (a fetched folder carries it)
 ```
 
 | file | required | role |
@@ -46,14 +46,14 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
 | `reader.py` | no | [Folder reader](#readerpy) for what the yaml cannot express. |
 | `tests/test_folder.py` | yes | Pins the folder's own facts (row counts, hashes, curation sums, reader smoke on synthetic media, docs). |
 | `assets/header.png` | no | The README header image, rendered from the `header:` block, and `assets/header.src.sha256`, the sha256 of the HTML it was rendered from ([header image](#header-image)); excluded from the wheel. |
-| `notes/` | no | Maintainer notes (freeze decisions, provenance); excluded from the wheel. |
+| `notes/` | no | Maintainer notes (freeze decisions, provenance, unification candidates): not in the wheel and not a shipped file (`bench files` omits it), but a fetched folder carries the directory, since a fetch delivers the folder's git tree; a note edit changes that tree, a documentation-only revision of the folder. |
 
 A folder is data plus scripts, never a Python package: there is no `__init__.py` in it or in `tests/`. `eval.py`,
 `reader.py`, `make_manifest.py` and `bridge_template.py` are loaded by path. pytest runs with
 `--import-mode=importlib`, so every folder's `tests/test_folder.py` is collected under a unique name. Run one folder's
 tests with `python -m pytest "$(yavih bench path <name>)/tests" -q -p no:cacheprovider`.
 
-The wheel ships the folder, `prepare/` and `tests/`, minus `notes/`, `assets/`, bytecode and hidden files. No shipped text file
+The wheel ships no folder (the core only). A folder's shipped files, what `yavih bench files <name>` lists, are the folder, `prepare/` and `tests/`, minus `notes/`, `assets/`, bytecode and hidden files; a fetched folder is the whole git tree, `notes/` and `assets/` included. No shipped text file
 of a folder (`*.md`, `*.yaml`, `*.yml`, `*.py`, `*.sh`, `*.txt` in the folder, `prepare/` or `tests/`) may name a
 `notes/` path (`E_NOTES_LINK`). `yavih bench files <name>` lists the shipped files and `yavih bench show <name>
 <what>` prints one (`readme`, `setup`, `yaml`, `template`, `probe`, `classes`, or a path relative to the folder).

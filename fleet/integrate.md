@@ -12,7 +12,10 @@ checkout of the integration branch with `PY` the fleet's Python and `yavih() { "
 grep -B1 -A12 'status: todo' fleet/queue.yaml | less        # choose 5-8 entries
 ```
 
-Prefer a mix of routes and data sizes, and entries whose `obtain` tier is likely `auto`. For each chosen entry set
+Never claim a `kind: suite` entry for a worker: a suite is a file in `src/yavih/suites/` (a core change, outside any
+worker's footprint) that the integrator writes once its components are shipped, listing them by capability
+(`docs/suites.md`). `python fleet/check.py queue` refuses a suite entry that is `claimed` or `review`. Prefer a mix of
+routes and data sizes, and entries whose `obtain` tier is likely `auto`. For each chosen entry set
 `status: claimed` and `branch: bench/<name>` in `fleet/queue.yaml`, run the check again and commit the claim on the
 integration branch. That commit is the batch's `<BASE>`: every worker starts from it.
 
@@ -30,8 +33,8 @@ git ls-tree -r --name-only bench/<name> -- benchmarks/<name>/notes             #
 ```
 
 A checkout's local excludes may ignore `notes/` directories, in which case a worker's notes exist on disk but not on
-its branch; the brief tells workers to add them with `git add -f`, and the `ls-tree` line above shows whether they
-did.
+its branch; the brief tells workers to check `git ls-files` and to use `git add -f` only when `git status` hides
+them, and the `ls-tree` line above shows whether the notes arrived.
 
 A branch that fails the footprint check is returned to its worker with the offending paths: a change outside the
 folder is never merged, whatever it fixes. A change to the core that the benchmark really needs arrives as a
@@ -52,6 +55,9 @@ this list; it runs everything itself:
   `not_applicable` stage; `trial UNVERIFIED` is never accepted;
 - the fresh-agent trial report meets [the trial-run criteria](../docs/trial-run.md#reviewer-criteria), or the
   report says why it was not run (blocked data, no sub-agent) and the entry stays `blocked` or `review`;
+- a branch whose fresh-agent trial run was not run for lack of a sub-agent is merged only after the integrator has
+  run it from the branch (`docs/trial-run.md`) and it passed; one not run because the data is blocked keeps its entry
+  `blocked` and is merged only when the maintainer accepts a folder that has not met real data yet;
 - every budget is measured, or marked derived (how) or not measured (why); nothing is invented;
 - `notes/UNIFY.md` lists what the folder implements that the core might absorb.
 
@@ -86,6 +92,7 @@ For every entry of the batch, on `batch/<n>`:
 
 ```bash
 "$PY" fleet/check.py ship        # every merged folder's entry becomes shipped (only those `status:` lines change)
+# then set `obtain` (and clear `blocked_by`) by hand from each worker's report: ship changes the status only
 "$PY" fleet/check.py queue && git commit -am "queue: batch <n>"
 ```
 

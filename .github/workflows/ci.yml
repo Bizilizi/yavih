@@ -84,7 +84,12 @@ jobs:
             exit 1
           fi
           python fleet/check.py footprint HEAD --base "origin/${{ github.base_ref }}" --name "$1"
-          python fleet/check.py queue --allow-new "$1"
+          python fleet/check.py queue --allow-new "$1" || {
+            echo "::error::benchmarks/$1/ needs an entry in fleet/queue.yaml before its benchmark pull request: add it"
+            echo "in a separate one-line pull request (status: todo; keys at the top of the file) or ask a maintainer"
+            echo "(docs/contributing-a-benchmark.md, step 1: reserve the name first)"
+            exit 1
+          }
       - name: The fleet queue
         if: "!contains(github.event.pull_request.labels.*.name, 'benchmark')"
         run: python fleet/check.py queue

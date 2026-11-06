@@ -1,7 +1,8 @@
 # Unification candidates: unav100
 
-What this folder implements that the core might absorb once enough folders share it. Maintainer notes: never
-shipped, never linked from shipped files.
+What this folder implements that the core might absorb once enough folders share it. Maintainer notes: not in the
+wheel and not a shipped file (`yavih bench files` omits them, no shipped file links them), but a fetched folder
+carries this directory, and an edit here changes the folder's git tree (a documentation-only revision).
 
 ## The shared temporal-detection scorer, `detection.py`
 
