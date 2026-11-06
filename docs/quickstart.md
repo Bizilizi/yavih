@@ -182,6 +182,6 @@ Every command takes `--json` and returns one envelope `{status, data, errors, wa
 - The probe refuses stale hashes, training on an eval split, train ∩ eval ≠ ∅ and eval coverage below the benchmark's threshold. Pooled features on a dense readout become a recorded `not_applicable`, never a number.
 - Every readout emits its floor. The report greys out rows that do not clear it, and never a row because of a bridge decision (a `custom` rule, unfingerprinted weights).
 <!-- yavih:bench-table controls begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-- `avsync` and `vggss_box` emit controls (`floor_violated`, `audio_blind`); the report greys out the rows they void.
+- `avsync`, `vggss_box` and `vggss_loc` emit controls (`floor_violated`, `audio_blind`); the report greys out the rows they void.
 <!-- yavih:bench-table controls end -->
 

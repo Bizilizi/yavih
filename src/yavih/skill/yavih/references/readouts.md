@@ -19,7 +19,7 @@ not see empty (they get a learned null embedding); a bridge that read 8 frames a
 over the same seconds see the same targets.
 
 <!-- yavih:bench-table readout_groups begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-Packaged benchmarks per readout: `clf` audioset20k, avsync, esc50, fsd50k, in1k, k400, ssv2, vggsounder · `seq` ave · `grid` nyuv2_depth · `box` vggss_box · `stream` ave_causal, epic100_anticipation_stream, thumos14_oad, unav100_causal · `audiocaps_t2a` audiocaps_t2a · `epic_sounds_det` epic_sounds_det · `perception_test_action_loc` perception_test_action_loc · `perception_test_sound_loc` perception_test_sound_loc · `unav100` unav100 · `vggsounder_v2a` vggsounder_v2a.
+Packaged benchmarks per readout: `clf` audioset20k, avsync, esc50, fsd50k, in1k, k400, ssv2, vggsounder · `seq` ave · `grid` nyuv2_depth · `box` vggss_box · `stream` ave_causal, epic100_anticipation_stream, thumos14_oad, unav100_causal · `audiocaps_t2a` audiocaps_t2a · `epic_sounds_det` epic_sounds_det · `perception_test_action_loc` perception_test_action_loc · `perception_test_sound_loc` perception_test_sound_loc · `unav100` unav100 · `vggsound_retrieval` vggsound_retrieval · `vggsounder_v2a` vggsounder_v2a · `vggss_loc` vggss_loc.
 <!-- yavih:bench-table readout_groups end -->
 
 | | `clf` | `seq` | `grid` | `box` |

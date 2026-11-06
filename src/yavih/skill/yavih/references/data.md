@@ -45,9 +45,11 @@ the sizes of the upstream release and the layout rules are in that folder's `set
 | thumos14_oad | stream | `public_url`; 34.8 GB = `source.bytes` | 34.8 GB = `budget.media_gb` | 200 validation / 213 test | video + audio | auto | `yavih bench info thumos14_oad --setup` |
 | unav100 | unav100 (multi) | `public_url`; 65.8 GB = `source.bytes` | 52.8 GB = `budget.media_gb` | 6 489 train / 2 167 test | video + audio | auto | `yavih bench info unav100 --setup` |
 | unav100_causal | stream | `public_url`; 66.1 GB = `source.bytes` | 66.1 GB = `budget.media_gb` | 6 487 train / 2 166 test | video + audio | auto | `yavih bench info unav100_causal --setup` |
+| vggsound_retrieval | vggsound_retrieval | `public_url`; 407.0 GB = `source.bytes` | 31.12 GB = `budget.media_gb` | 15 440 test | video + audio | needs-data-owner | `yavih bench info vggsound_retrieval --setup` |
 | vggsounder | clf (multi_sets) | `public_url`; 407.0 GB = `source.bytes` | 67 GB = `budget.media_gb` | 20 000 train / 12 008 test | video + audio | needs-data-owner | `yavih bench info vggsounder --setup` |
 | vggsounder_v2a | vggsounder_v2a | `public_url` | 4.5 GB = `budget.media_gb` | 3 000 test | video (materialized at prepare time) | needs-data-owner | `yavih bench info vggsounder_v2a --setup` |
 | vggss_box | box (box) | `public_url`; 10.5 GB = `source.bytes` | 9.35 GB = `budget.media_gb` | 3 700 train / 914 eval | video + audio | needs-data-owner | `yavih bench info vggss_box --setup` |
+| vggss_loc | vggss_loc | `public_url`; 10.5 GB = `source.bytes` | 10.53 GB = `budget.media_gb` | 5 154 test | video + audio | needs-data-owner | `yavih bench info vggss_loc --setup` |
 <!-- yavih:bench-table data end -->
 
 Budget rules of thumb: `bytes_per_row = N · D · itemsize (+ N·16 for
@@ -75,7 +77,7 @@ also in setup.md. Roots marked `prepare_only` are read only by `prepare/` and `m
 `doctor` reports them missing as a note.
 
 <!-- yavih:bench-table prepare_roots begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-Roots marked `prepare_only`: audiocaps_t2a `source_root`; avsync `media_root` and `curation_root`; nyuv2_depth `geonet_root`; vggss_box `annotations_root`.
+Roots marked `prepare_only`: audiocaps_t2a `source_root`; avsync `media_root` and `curation_root`; nyuv2_depth `geonet_root`; vggss_box `annotations_root`; vggss_loc `annotations_root`.
 <!-- yavih:bench-table prepare_roots end -->
 
 Every folder script resolves its defaults through the same
@@ -155,7 +157,7 @@ lines; "None." for most), "## Input contract", "## Output contract", "## Prepare
 expected `yavih bench verify <b>` output), "## Gotchas" (bridge mistakes that pass validation on
 this benchmark). One per folder:
 <!-- yavih:bench-table names begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `epic_sounds_det`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `perception_test_action_loc`, `perception_test_sound_loc`, `ssv2`, `thumos14_oad`, `unav100`, `unav100_causal`, `vggsounder`, `vggsounder_v2a`, `vggss_box`.
+`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `epic_sounds_det`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `perception_test_action_loc`, `perception_test_sound_loc`, `ssv2`, `thumos14_oad`, `unav100`, `unav100_causal`, `vggsound_retrieval`, `vggsounder`, `vggsounder_v2a`, `vggss_box`, `vggss_loc`.
 <!-- yavih:bench-table names end -->
 
 ## 6. Failure modes yavih guards against
