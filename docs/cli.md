@@ -25,7 +25,7 @@ These are accepted by every command, before or after the subcommand.
 | `--runs-root DIR` | runs root (beats `YAVIH_RUNS` and `[runs] root`) |
 | `--results DIR` | results-store root (beats `YAVIH_RESULTS` and `[results] root`) |
 | `--data BENCH.ROOT=PATH` | one data root override, repeatable; also `root=PATH` and `datasets.NAME=PATH` |
-| `--lenient` | unknown config keys, unknown `YAVIH_*` variables and stale benchmark copies warn instead of failing |
+| `--lenient` | unknown config keys and unknown `YAVIH_*` variables warn instead of failing |
 
 The configuration options are described in [configuration](configuration.md); the command exports
 them to the environment of every child process it starts.

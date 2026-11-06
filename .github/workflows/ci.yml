@@ -93,6 +93,9 @@ jobs:
       - name: Generated tables and the catalog index (CI writes them; a contributor never does)
         run: |
           python -m yavih.doctables --write
+          # the committed index must be what its own commit regenerates (a hand-edited index fails here, before
+          # --write replaces it for the tests; a pull request's lagging index names an older commit and passes)
+          python -m yavih.catalog --check
           python -m yavih.catalog --write
       - name: Tests (core changed)
         if: needs.changes.outputs.core == 'true'
@@ -147,6 +150,9 @@ jobs:
       - name: Generated tables and the catalog index
         run: |
           python -m yavih.doctables --write
+          # the committed index must be what its own commit regenerates (a hand-edited index fails here, before
+          # --write replaces it for the tests; a pull request's lagging index names an older commit and passes)
+          python -m yavih.catalog --check
           python -m yavih.catalog --write
       - name: Tests
         # no site data here: tests that need staged benchmark data skip

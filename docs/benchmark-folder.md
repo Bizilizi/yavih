@@ -374,7 +374,8 @@ From the yaml (`SchemaError`, exit 1):
 From the folder (`UnknownBenchmark` / `SchemaError`, exit 1; `ManifestError`, exit 2):
 
 - the folder holds `benchmark.yaml` and `name` equals the directory name;
-- a `$YAVIH_HOME/benchmarks` copy of a packaged folder is current (below);
+- a fetched folder whose files differ from the tree its lock records loads with a warning (`W_FETCHED_MODIFIED`;
+  `yavih bench fetch --refresh` restores it, [catalog](catalog.md));
 - `manifest.csv.gz` exists, decompresses, and its decompressed sha256 equals `manifest.sha256`; `classes.csv`
   exists, matches `classes_sha256` and follows its rules;
 - the manifest header is exactly key, `split`, label columns and declared columns (no duplicate, nothing undeclared);
@@ -473,8 +474,8 @@ class Benchmark:
     def probe_module(self)                       # the folder's eval.py as a module, or None
 ```
 
-- `data` overrides data roots for this instance ([configuration](configuration.md)); `fetch=True` first syncs the
-  folder into `$YAVIH_HOME/benchmarks/<name>` (`yavih bench fetch`).
+- `data` overrides data roots for this instance ([configuration](configuration.md)); `fetch=True` fetches a name
+  that resolves nowhere from the catalog first (`yavih bench fetch`; [resolution order](#resolution-order)).
 - `reader` yields the `Sample`s of a row range or of shard `(i, n)`, then the shard's canaries; it refuses `unused`
   splits. It delegates to `reader.py` when present, else to `yavih.sample.iter_samples`. Sharding and canaries:
   [execution](execution.md) and [bridge](bridge.md).

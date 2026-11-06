@@ -1074,6 +1074,9 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
         except CatalogError as e:
             warnings.append(_finding("W_CATALOG", str(e)))
     index = index or cached_index()  # no network without --catalog: the index the last fetch downloaded
+    from yavih.benchmark import folder_locations, same_name_folders
+
+    locations = folder_locations()  # scanned once: same_name_folders below asks about every row
     for ref in refs:
         if suite is not None and not facts[ref].get("fetched", True):
             continue  # listed below from the catalog
@@ -1086,12 +1089,11 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
             row.update(facts[ref])
         if (newer := _newer_in_catalog(index, row)) is not None:
             row["origin"]["newer"] = newer
-        from yavih.benchmark import same_name_folders
-
-        shadowed = [str(f) for f in same_name_folders(row["name"])[1:]]
+        same = same_name_folders(row["name"], locations=locations)
+        shadowed = [str(f) for f in same[1:]]
         if shadowed:
             row["origin"]["shadows"] = shadowed
-            warnings.append(_finding("W_FETCH_SHADOWED", f"{row['name']}: {same_name_folders(row['name'])[0]} loads; same-named "
+            warnings.append(_finding("W_FETCH_SHADOWED", f"{row['name']}: {same[0]} loads; same-named "
                                      f"folders later in the resolution order are not used: {', '.join(shadowed)}", where=row["name"]))
         rows.append(row)
     have = {r["name"] for r in rows}
@@ -2222,7 +2224,7 @@ def build_parser() -> argparse.ArgumentParser:
         parser.add_argument("--data", dest="cfg_data", action="append", default=argparse.SUPPRESS, metavar="BENCH.ROOT=PATH",
                             help="data root override, repeatable (also root=PATH, datasets.NAME=PATH)")
         parser.add_argument("--lenient", dest="cfg_lenient", action="store_true", default=argparse.SUPPRESS,
-                            help="unknown config keys / YAVIH_* variables / stale benchmark copies warn instead of failing")
+                            help="unknown config keys / YAVIH_* variables warn instead of failing")
 
     common = argparse.ArgumentParser(add_help=False)
     # SUPPRESS: a subparser that did not see --json must not reset the flag a parent parser set
@@ -2488,7 +2490,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--scratch", default=None, metavar="DIR")
     s.add_argument("--allow-low-coverage", action="store_true")
     s.add_argument("--loader-workers", type=int, default=None)
-    s.add_argument("--bench", default=None, metavar="<ref|dir>", help="benchmark folder/ref when _meta.json's name is neither packaged nor under $YAVIH_HOME/benchmarks")
+    s.add_argument("--bench", default=None, metavar="<ref|dir>", help="benchmark folder/ref when _meta.json's name does not resolve (project, $YAVIH_HOME/benchmarks, repository, $YAVIH_BENCH_PATH)")
     s.add_argument("--no-validate", action="store_true", help="skip the validate prologue and trust _meta.json as is")
     s.add_argument("--waive", action="append", default=[], metavar="CODE=reason",
                    help="waive a waivable check in the validate prologue, with a reason (repeatable; all=reason; as features validate --waive)")

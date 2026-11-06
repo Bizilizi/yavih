@@ -55,6 +55,7 @@ __all__ = [
     "CoreVersionError",
     "core_status",
     "check_core",
+    "folder_locations",
     "same_name_folders",
     "ManifestError",
     "UnknownBenchmark",
@@ -2504,7 +2505,8 @@ class TargetReader:
 
 
 def home_benchmarks_dir() -> Path:
-    """``$YAVIH_HOME/benchmarks`` (second in the resolution order; written by ``bench fetch``)."""
+    """``$YAVIH_HOME/benchmarks``: where ``bench fetch`` puts a folder outside a project; it resolves after the
+    project's benchmarks directory and before the repository's folders (:func:`resolve_folder`)."""
     return _config.yavih_home() / "benchmarks"
 
 
@@ -2872,10 +2874,10 @@ class Benchmark:
     # -- construction ------------------------------------------------------------------
     @classmethod
     def load(cls, ref: str, *, data: dict | None = None, fetch: bool = False) -> Benchmark:
-        """Resolution order (``resolve_folder``): existing directory → ``$YAVIH_HOME/benchmarks/<ref>`` → the
-        repository's ``benchmarks/<ref>`` (a source checkout) → the project's benchmarks directory and
-        ``$YAVIH_BENCH_PATH`` → ``yavih.benchmarks`` entry-point packs → alias. ``fetch``: a name that resolves
-        nowhere is fetched from the catalog first (``yavih bench fetch``)."""
+        """Resolution order (``resolve_folder``): existing directory → the project's benchmarks directory →
+        ``$YAVIH_HOME/benchmarks/<ref>`` → the repository's ``benchmarks/<ref>`` (a source checkout) →
+        ``$YAVIH_BENCH_PATH`` → ``yavih.benchmarks`` entry-point packs → alias. ``fetch``: a name that resolves nowhere
+        is fetched from the catalog first (``yavih bench fetch``)."""
         folder = resolve_folder(ref)
         if folder is None and fetch:
             folder = Path(bench_fetch(ref)["folder"])
@@ -3183,15 +3185,24 @@ def _candidate_folders() -> dict[str, Path]:
     return out
 
 
-def same_name_folders(name: str) -> list[Path]:
+def folder_locations() -> tuple[dict[str, Path], Path, dict[str, Path]]:
+    """``(project folders, $YAVIH_HOME/benchmarks, $YAVIH_BENCH_PATH and pack folders)``: the locations
+    :func:`same_name_folders` searches besides the repository, scanned once (the pack scan reads the entry points), so
+    a caller that asks about many names (``bench list``) passes them in instead of rescanning per name."""
+    from yavih.benchmarks import external_folders, project_folders
+
+    return project_folders(), home_benchmarks_dir(), external_folders(include_project=False)
+
+
+def same_name_folders(name: str, *, locations: tuple[dict[str, Path], Path, dict[str, Path]] | None = None) -> list[Path]:
     """Every folder named ``name`` in resolution order (project, ``$YAVIH_HOME``, repository, ``$YAVIH_BENCH_PATH``,
     packs); the first is the one that loads. ``yavih bench fetch`` and ``bench list`` report the others as shadowed
-    (``W_FETCH_SHADOWED``)."""
-    from yavih.benchmarks import external_folders, packaged_folder, project_folders
+    (``W_FETCH_SHADOWED``). ``locations``: :func:`folder_locations`, precomputed by a caller that asks about many names."""
+    from yavih.benchmarks import packaged_folder
 
+    project, home, external = locations if locations is not None else folder_locations()
     out: list[Path] = []
-    for cand in (project_folders().get(name), home_benchmarks_dir() / name, packaged_folder(name),
-                 external_folders(include_project=False).get(name)):
+    for cand in (project.get(name), home / name, packaged_folder(name), external.get(name)):
         if cand is not None and (Path(cand) / "benchmark.yaml").is_file() and all(Path(cand).resolve() != o.resolve() for o in out):
             out.append(Path(cand))
     return out

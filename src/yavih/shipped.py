@@ -1,11 +1,12 @@
-"""Shipped files: one command surface for what the wheel carries (benchmark folders, bridge templates, prepare
-scripts, the agent skill), identical from a wheel install and a source checkout.
+"""Shipped files: one command surface for a benchmark folder's files (bridge templates, prepare scripts, docs) and the
+agent skill, identical for a fetched folder, a source checkout and an installed wheel.
 
 An agent never searches ``site-packages`` or a repository for these files: ``yavih bench files|show|prepare``,
 ``yavih bridge new`` and ``yavih skill show`` reach them (this module is their backend, re-exported as
 ``yavih.benchmark.bench_files`` / ``bench_file_text``). Paths are resolved through the benchmark resolution order
-(``yavih.benchmark.resolve_folder``: ``$YAVIH_HOME/benchmarks`` → packaged → ``$YAVIH_BENCH_PATH`` → entry-point
-packs → alias), never through the current directory, and every relative path is checked to stay inside the folder.
+(``yavih.benchmark.resolve_folder``: the project's benchmarks directory → ``$YAVIH_HOME/benchmarks`` → the
+repository's ``benchmarks/`` → ``$YAVIH_BENCH_PATH`` → entry-point packs → alias), never through the current
+directory, and every relative path is checked to stay inside the folder.
 
 stdlib only (plus ``yavih.benchmark`` for the folder resolution); torch-free.
 """
