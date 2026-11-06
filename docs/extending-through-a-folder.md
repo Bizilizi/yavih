@@ -28,6 +28,7 @@ folder that extends anything (`--all`: every folder).
 | eligibility | `eval.py` `eligible(view)` | a rule of the folder's own on the validated features, after the scorer's verdict (below) |
 | stand-in | `testing.py` `make_stand_in`, `write_bridge` | `yavih bench trial --synthetic` runs the whole chain on the folder's own stand-in (below) |
 | reader | `reader.py` `iter_samples` | replaces the generic sample reader ([benchmark folder](benchmark-folder.md#readerpy)) |
+| preview | `preview.py` `COMPONENTS`, `intervals` | README figure kinds of the folder's own and the event intervals a `timeline` / `av` / `motion` figure draws (`python -m yavih.previews`; [design system](design-system.md#adding-a-kind)); never hashed |
 | readings | `eval.py` `READINGS = ("...",)` | readings beyond `a`, `v`, `av`, `t` are the folder's own (`bench lint` warns `W_READING_UNKNOWN` for an undeclared one) |
 | capability | `capability: [..., "<tag>"]` | a tag beyond the core vocabulary is listed under its own heading (`W_CAPABILITY_UNKNOWN`, a note) |
 | label kind | `manifest.label.kind: <kind>` | a kind beyond the core ones is kept as the cell's string; valid when the folder's scorer lists it in `label_kinds` |

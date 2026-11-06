@@ -16,6 +16,8 @@ folder, through these extension points, and the core picks it up
 ``stand_in``       ``testing.py`` ``make_stand_in`` (and ``write_bridge``): its own synthetic stand-in for
                    ``yavih bench trial --synthetic``
 ``reader``         ``reader.py``: its own sample reader
+``preview``        ``preview.py`` ``COMPONENTS`` / ``intervals``: README figure kinds of its own and the event
+                   intervals a figure draws (``python -m yavih.previews``)
 ``readings``       ``eval.py`` ``READINGS`` beyond the core a / v / av / t
 ``capability``     capability tags beyond ``yavih.suites.CAPABILITIES``
 ``label_kind``     a ``manifest.label.kind`` beyond the core kinds (its scorer reads the cells)
@@ -33,7 +35,7 @@ from typing import Any
 __all__ = ["EXTENSION_POINTS", "DOC_URL", "folder_extensions", "extends_line"]
 
 #: The extension points, in report order.
-EXTENSION_POINTS: tuple[str, ...] = ("scorer", "metrics", "hooks", "codecs", "checks", "eligible", "stand_in", "reader", "readings",
+EXTENSION_POINTS: tuple[str, ...] = ("scorer", "metrics", "hooks", "codecs", "checks", "eligible", "stand_in", "reader", "preview", "readings",
                                      "capability", "label_kind")
 DOC_URL = "https://github.com/Bizilizi/yavih/blob/main/docs/extending-through-a-folder.md"
 _CORE_READINGS = frozenset({"a", "v", "av", "t"})
@@ -44,7 +46,8 @@ def folder_extensions(bench: Any) -> dict[str, Any]:
     ``{name, kind, family, head_families, losses, own_driver}`` (``own_driver``: its ``score`` drives scoring; it may
     still train with the core trainer); ``metrics`` names; ``hooks`` names; ``codecs`` names;
     ``checks`` gate names (``default`` when the folder declares none and its output contract implies the core's);
-    ``eligible`` ``True``; ``stand_in`` ``["make_stand_in", "write_bridge"?]``; ``reader`` ``True``; ``readings``,
+    ``eligible`` ``True``; ``stand_in`` ``["make_stand_in", "write_bridge"?]``; ``reader`` ``True``; ``preview`` the
+    figure kinds of its ``preview.py`` (``intervals`` when it defines that hook); ``readings``,
     ``capability``, ``label_kind`` the values beyond the core vocabularies."""
     from yavih.benchmark import LABEL_KINDS
     from yavih.lint import folder_readings, template_readings
@@ -88,6 +91,12 @@ def folder_extensions(bench: Any) -> dict[str, Any]:
         out["stand_in"] = ["make_stand_in"] + (["write_bridge"] if callable(getattr(tmod, "write_bridge", None)) else [])
     if (folder / "reader.py").is_file():
         out["reader"] = True
+    if (folder / "preview.py").is_file():
+        from yavih.benchmark import _load_module
+
+        pmod = _load_module(folder / "preview.py", "yavih_benchmark_preview")
+        out["preview"] = sorted(getattr(c, "kind", str(c)) for c in (getattr(pmod, "COMPONENTS", None) or ())) + (
+            ["intervals"] if callable(getattr(pmod, "intervals", None)) else [])
     tpl = folder / "bridge_template.py"
     readings = template_readings(tpl.read_text(encoding="utf-8")) if tpl.is_file() else set()
     own_readings = sorted((set(readings) | set(folder_readings(folder))) - _CORE_READINGS - {r for r in readings if r.endswith("-rt")})

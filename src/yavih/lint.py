@@ -26,6 +26,11 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   header template is at hand (a source checkout), a folder without ``assets/header.png`` is a warning
   (``W_HEADER_MISSING``), and ``assets/header.src.sha256`` must equal the sha256 of the current header HTML
   (``W_HEADER_STALE``, a warning: the image predates its yaml, chips or template).
+- ``preview``: the README figures (``python -m yavih.previews``), where the design system is at hand (a source checkout):
+  an invalid ``assets/preview.yaml`` (``E_PREVIEW_SPEC``: parse, unknown kind / split / clip_id / option, wrong row
+  count); no spec or a declared figure file absent (``W_PREVIEW_MISSING``); a figure rendered from another spec,
+  template or design, or an undeclared ``preview*`` / ``clip*`` file (``W_PREVIEW_STALE``); a file over its size budget
+  or ``assets/`` over 10 MB (``W_ASSET_SIZE``). The figure files are warnings: they may be rendered after the merge.
 - ``readme``: the first line is the header image ``![<header.name>](assets/header.png)``, the second paragraph the
   links line (naming ``setup.md``); the ``##`` sections Description, Citation (with a fenced ``bibtex`` block) and
   In yavih in that order; "## In yavih" names ``protocol_version``, the headline metric and the re-freeze
@@ -50,7 +55,7 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   the source tree); a ``https://github.com/Bizilizi/yavih`` URL is the exception. No shipped text file of the folder
   (``*.md``, ``*.yaml``, ``*.py``, ``*.sh`` in the folder, ``prepare/``, ``tests/``) names a ``notes/`` path
   (``E_NOTES_LINK``): a folder may keep maintainer ``notes/``, but they are never packaged.
-- ``imports``: ``reader.py`` / ``eval.py`` import with torch and the folder's external packages blocked.
+- ``imports``: ``reader.py`` / ``eval.py`` / ``preview.py`` import with torch and the folder's external packages blocked.
 - ``todo``: unfilled ``TODO`` markers (a ``yavih bench new`` scaffold) are reported as warnings: ``TODO`` in the
   folder's yaml, docs and scripts, ``TODO:`` in ``tests/*.py`` and ``prepare/*`` (where a test may name the bridge
   template's own ``TODO`` slots).
@@ -448,6 +453,24 @@ def _c_header(c: _Ctx) -> Iterator[Finding]:
                     "the `headers` CI artifact, the sha file from `--html-only`)", HEADER_IMAGE)
 
 
+@_check("preview")
+def _c_preview(c: _Ctx) -> Iterator[Finding]:
+    if c.bench is None:
+        return
+    from yavih import design
+
+    if not design.available():
+        return  # an installed wheel: no design to render with (and no assets/ shipped)
+    from yavih import previews
+
+    for code, file, msg in previews.check_folder(c.folder, c.bench):
+        yield (_err if code.startswith("E_") else _warn)("preview", code, msg, file)
+
+
+#: A README link or image into the folder's ``assets/`` (``W_README_ASSET`` when the file is absent).
+_ASSET_LINK = re.compile(r"\]\((assets/[^)\s#]+)\)")
+
+
 def _retired_headings(text: str, f: str, check: str) -> Iterator[Finding]:
     for level in range(1, 7):
         for _, h in headings(text, level):
@@ -477,6 +500,10 @@ def _c_readme(c: _Ctx) -> Iterator[Finding]:
         yield _err("readme", "E_README", "the second paragraph must be the links line (Paper · Homepage · Dataset · "
                    "[setup.md](setup.md), whichever exist)", f)
     yield from _retired_headings(text, f, "readme")
+    for rel in dict.fromkeys(_ASSET_LINK.findall(text)):
+        if rel != HEADER_IMAGE and not (c.folder / rel).is_file():
+            yield _warn("readme", "W_README_ASSET", f"{rel} is linked but absent: render it (`python -m yavih.previews {c.name}`) "
+                        "or drop the link", f)
     h1 = headings(text, 1)
     if h1:
         yield _err("readme", "E_README", f"no H1 (the header image carries the name), got {[h for _, h in h1]}", f)
@@ -731,7 +758,7 @@ sys.path.insert(0, sys.argv[2])  # the yavih the linter runs from, not whichever
 for m in sys.argv[3:]:
     sys.modules[m] = None   # `import m` raises ImportError, as in an env without the package
 folder = sys.argv[1]
-for f in ("reader.py", "eval.py"):
+for f in ("reader.py", "eval.py", "preview.py"):
     p = os.path.join(folder, f)
     if not os.path.isfile(p):
         continue
@@ -750,7 +777,7 @@ def _c_imports(c: _Ctx) -> Iterator[Finding]:
                           capture_output=True, text=True, timeout=120)
     if proc.returncode != 0 or not proc.stdout.strip().endswith("ok"):
         tail = (proc.stderr or "").strip().splitlines()[-1:] or ["?"]
-        yield _err("imports", "E_IMPORT", "reader.py / eval.py must import without torch and without the external "
+        yield _err("imports", "E_IMPORT", "reader.py / eval.py / preview.py must import without torch and without the external "
                    f"packages (assert-import at call time): {tail[0][:300]}", "reader.py")
 
 

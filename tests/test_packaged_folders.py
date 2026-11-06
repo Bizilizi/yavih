@@ -358,7 +358,8 @@ def test_lint_yaml_obtain_budget_and_name(esc50_copy, tmp_path):
 def test_lint_todo_is_a_warning(esc50_copy):
     (esc50_copy / "setup.md").write_text((esc50_copy / "setup.md").read_text(encoding="utf-8") + "\nTODO: say more\n", encoding="utf-8")
     rep = lint.lint_folder(esc50_copy)
-    assert rep.ok and [f.code for f in rep.warnings] == ["W_TODO"]
+    # W_PREVIEW_MISSING: the folder's figures arrive with its README migration (docs/design-system.md)
+    assert rep.ok and [f.code for f in rep.warnings if f.code != "W_PREVIEW_MISSING"] == ["W_TODO"]
 
 
 def _notes_findings(folder, rel: str) -> list[lint.Finding]:

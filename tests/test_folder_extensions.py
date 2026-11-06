@@ -368,6 +368,7 @@ def test_bench_extensions_and_the_extends_line(capsys):
     data = json.loads(capsys.readouterr().out)["data"]
     assert data["benchmarks"]["vggsounder_v2a"]["scorer"]["kind"] == "direct" and "esc50" not in data["benchmarks"]
     assert data["benchmarks"]["thumos14_oad"]["checks"] == ["stream (default)"] and data["doc"].endswith("extending-through-a-folder.md")
+    assert "preview" in data["points"]  # README figure kinds of a folder (preview.py; tests/test_previews.py)
     assert cli.main(["--json", "bench", "extensions", "--all"]) == 0
     assert json.loads(capsys.readouterr().out)["data"]["benchmarks"]["esc50"] == {}
     assert cli.main(["bench", "info", "esc50"]) == 0
