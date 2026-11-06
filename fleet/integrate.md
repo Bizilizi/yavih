@@ -26,7 +26,12 @@ One worktree and branch per entry, created from `<BASE>`, and one worker started
 ```bash
 "$PY" fleet/check.py footprint bench/<name> --base <BASE> --name <name>      # must print `footprint ok`
 git -C <worktree> status --short                                               # nothing left uncommitted
+git ls-tree -r --name-only bench/<name> -- benchmarks/<name>/notes             # UNIFY.md (and CORE_REQUEST.md) committed
 ```
+
+A checkout's local excludes may ignore `notes/` directories, in which case a worker's notes exist on disk but not on
+its branch; the brief tells workers to add them with `git add -f`, and the `ls-tree` line above shows whether they
+did.
 
 A branch that fails the footprint check is returned to its worker with the offending paths: a change outside the
 folder is never merged, whatever it fixes. A change to the core that the benchmark really needs arrives as a

@@ -27,9 +27,16 @@ obtaining the data costs (point the worker at data that is already staged to ski
 
    ```bash
    TRIAL=$(mktemp -d)
-   pip wheel --no-deps . -w "$TRIAL/wheel"          # -> $TRIAL/wheel/yavih-<version>-py3-none-any.whl
+   mkdir "$TRIAL/src" && git archive HEAD | tar -x -C "$TRIAL/src"     # the committed tree, outside the checkout
+   pip wheel --no-deps "$TRIAL/src" -w "$TRIAL/wheel"   # -> $TRIAL/wheel/yavih-<version>-py3-none-any.whl
    python -m yavih.catalog --export "$TRIAL/catalog" <name>   # the folder at that commit + its index, as fetch reads them
    ```
+
+   Build from the archived copy, never from the checkout itself: `pip wheel .` writes `build/`, `src/yavih.egg-info`
+   and `src/yavih/_version.py` into the checkout, and the editable install then reports the wrong origin and
+   version to the repository's tests. An archive has no `.git`, so give the build the version git would compute:
+   `SETUPTOOLS_SCM_PRETEND_VERSION=$(python -m setuptools_scm) pip wheel ...` (run `python -m setuptools_scm` in the
+   checkout).
 
    The published catalog lists the folder only after the merge, so the worker fetches it from this export
    (`yavih bench fetch <name> --from $TRIAL/catalog`), exactly as a user fetches it from the published one.

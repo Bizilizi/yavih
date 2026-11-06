@@ -31,8 +31,9 @@ Environment, for every command:
   PY=<PYTHON>; yavih() { "$PY" -m yavih "$@"; }
 Data goes under <DATA_ROOT>/<NAME> (never into the repository), at most <DISK_CAP_GB> GB. Scratch files go under
 <SCRATCH>. Never build a wheel inside <WORKTREE> (pip leaves build/ and *.egg-info there, which break the repository's
-tests): build from a copy, `git -C <WORKTREE> archive HEAD | tar -x -C <SCRATCH>/src` then `pip wheel --no-deps
-<SCRATCH>/src -w <SCRATCH>/wheel`.
+tests): build from a copy, `mkdir -p <SCRATCH>/src && git -C <WORKTREE> archive HEAD | tar -x -C <SCRATCH>/src`, then
+`SETUPTOOLS_SCM_PRETEND_VERSION=$("$PY" -m setuptools_scm) "$PY" -m pip wheel --no-deps <SCRATCH>/src -w <SCRATCH>/wheel`
+(the archive has no .git, so the build is told the version git would compute).
 
 THE FOOTPRINT RULE. Your branch changes files under benchmarks/<NAME>/ and nowhere else: not src/ (the core), not
 tests/, docs/, README.md, .github/, fleet/ (the queue is the integrator's), catalog/index.json, the generated
@@ -44,7 +45,9 @@ stand-in, a reader, readings, capability tags, label kinds) goes into your folde
 docs/extending-through-a-folder.md. `yavih bench extensions` lists the folders that already do this; read the closest
 one and scaffold from it (`yavih bench new <NAME> --like <that folder> --dir benchmarks`). Whatever your folder
 implements that the core might one day absorb, list in benchmarks/<NAME>/notes/UNIFY.md: one bullet per item (what it
-is, which file, which other folders might share it). If the protocol truly cannot be expressed through the folder,
+is, which file, which other folders might share it). A checkout's local excludes may ignore `notes/` directories:
+add your notes with `git add -f benchmarks/<NAME>/notes` and check `git ls-files benchmarks/<NAME>/notes` lists them.
+If the protocol truly cannot be expressed through the folder,
 stop, describe the gap in benchmarks/<NAME>/notes/CORE_REQUEST.md, and report the entry blocked; never edit the core.
 
 WHAT TO DO. Follow docs/contributing-a-benchmark.md, which is the contract, with these differences for a fleet
