@@ -12,8 +12,8 @@ wheel or is read by yavih itself.
 | [launch.md](launch.md) | starting a batch of workers, each in its own worktree |
 
 **Reserving a name.** Every folder under `benchmarks/` has an entry here, and a pull request labelled `benchmark`
-passes CI only when its folder's name has one. A name that is not yet queued is reserved by a separate one-line pull
-request that adds its entry (`status: todo`), or by a maintainer, before the benchmark pull request.
+passes CI only when its folder's name has one. A name that is not yet queued is reserved by a separate pull request
+that adds only its entry (every key described at the top of `queue.yaml`, `status: todo`), or by a maintainer, before the benchmark pull request.
 
 The rules behind it: a benchmark contribution changes its folder only and extends yavih through the folder
 ([extending through a folder](../docs/extending-through-a-folder.md)); folders are integrated in reviewed batches; what

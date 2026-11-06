@@ -44,8 +44,8 @@ The version comes from git tags, so clone with history (no `--depth`). The `dev`
 
 **Reserve the name first.** Every folder name is reserved in [`fleet/queue.yaml`](../fleet/queue.yaml), and CI refuses a
 benchmark pull request whose folder has no entry there (`python fleet/check.py queue`). Look the name up with
-`python fleet/check.py entry <name>`. If it has no entry, add one in a separate one-line pull request first (an entry
-with `status: todo`, the keys described at the top of the file), or ask a maintainer to add it; the benchmark pull
+`python fleet/check.py entry <name>`. If it has no entry, add one first in a separate pull request that adds only that
+entry (every key described at the top of the file, `status: todo`), or ask a maintainer to add it; the benchmark pull
 request itself changes `benchmarks/<name>/` only.
 
 ```bash
