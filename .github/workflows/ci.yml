@@ -50,7 +50,11 @@ jobs:
           fi
           files="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
           folders="$(printf '%s\n' "$files" | sed -n 's#^benchmarks/\([a-z0-9_]*\)/.*#\1#p' | sort -u | while read -r n; do [ -f "benchmarks/$n/benchmark.yaml" ] && echo "$n"; done | tr '\n' ' ')"
-          other="$(printf '%s\n' "$files" | grep -v '^benchmarks/' | grep -v '^$' || true)"
+          # anything outside an existing folder counts as core: a deleted folder, benchmarks/README.md, a stray file
+          other="$(printf '%s\n' "$files" | grep -v '^$' | while read -r f; do
+            n="$(printf '%s' "$f" | sed -n 's#^benchmarks/\([a-z0-9_]*\)/.*#\1#p')"
+            if [ -z "$n" ] || [ ! -f "benchmarks/$n/benchmark.yaml" ]; then echo "$f"; fi
+          done)"
           echo "core=$([ -n "$other" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "folders=$folders" >> "$GITHUB_OUTPUT"
           echo "core changes: ${other:-none}"; echo "folders: ${folders:-none}"
@@ -75,8 +79,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .conformance-cache
-          key: conformance-${{ hashFiles('src/yavih/**/*.py') }}-${{ github.sha }}
-          restore-keys: conformance-${{ hashFiles('src/yavih/**/*.py') }}-
+          # the same prefix as the 3.12 job on main, so a pull request restores main's verdicts
+          key: conformance-3.12-${{ hashFiles('src/yavih/**/*.py') }}-${{ github.sha }}
+          restore-keys: conformance-3.12-${{ hashFiles('src/yavih/**/*.py') }}-
       - name: System packages
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Install (CPU torch)
@@ -85,8 +90,10 @@ jobs:
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install "setuptools>=77" "setuptools-scm>=10" wheel
           python -m pip install -e ".[media,dev]"
-      - name: Generated tables (CI writes them; a contributor never does)
-        run: python -m yavih.doctables --write
+      - name: Generated tables and the catalog index (CI writes them; a contributor never does)
+        run: |
+          python -m yavih.doctables --write
+          python -m yavih.catalog --write
       - name: Tests (core changed)
         if: needs.changes.outputs.core == 'true'
         run: pytest tests benchmarks -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs
@@ -137,8 +144,10 @@ jobs:
         run: |
           yavih --version
           python -c "import torch, numpy; print('torch', torch.__version__, 'numpy', numpy.__version__)"
-      - name: Generated tables
-        run: python -m yavih.doctables --write
+      - name: Generated tables and the catalog index
+        run: |
+          python -m yavih.doctables --write
+          python -m yavih.catalog --write
       - name: Tests
         # no site data here: tests that need staged benchmark data skip
         run: pytest tests benchmarks -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs
