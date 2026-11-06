@@ -152,7 +152,7 @@ def header_html(bench) -> str:
         page_css=design.page_css(WIDTH, HEIGHT),
         bench=html.escape(bench.name),
         name=html.escape(h.name),
-        name_px=_size(h.name, ((8, "110px"), (11, "96px"), (14, "82px")), "68px"),
+        name_px=_size(h.name, ((8, "110px"), (11, "96px"), (14, "82px"), (20, "68px"), (24, "60px")), "52px"),
         title=html.escape(h.title),
         title_px=_size(h.title, ((60, "27px"), (90, "24px")), "21px"),
         venue=html.escape(h.venue),
