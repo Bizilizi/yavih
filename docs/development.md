@@ -68,7 +68,7 @@ pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and
 | `shipped.py` | one command surface for shipped files (`bench files/show/prepare`, `bridge new`, `skill show`) |
 | `cli.py` | argparse mirror of the API, the `--json` envelope, exit-code mapping |
 | `testing/` | shipped fixtures: synthetic benchmarks, `random_bridge`, `oracle_bridge`; `folder.py` helps folder tests |
-| `benchmarks/__init__.py` | the helpers that find the repository's folders from a source checkout (the wheel ships none) |
+| `benchmarks/__init__.py` | the helpers that find the repository's folders from a source checkout (the wheel ships none); the historical names `packaged_*` and `tests/test_packaged_folders.py` are kept on purpose and mean "the repository's folders" (a rename would change no behaviour) |
 | `skill/yavih/` | the agent skill: `SKILL.md` and `references/{bridge,cli,data,readouts,slurm}.md` |
 
 ## Invariants

@@ -49,7 +49,7 @@ packaged one `W_SKILL_STALE`. Run it on a compute node of the cluster that will 
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih bench list` | every discoverable benchmark: aliases, readout, `capability` tags, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their suite group (`suite_capability`) and `readings` |
+| `yavih bench list` | every discoverable benchmark: aliases, readout, `capability` tags, clips per split, media size, source kind, local status (`missing`, `partial NN%`, `verified`) | `--fmt text\|md` (`md`: the table the docs embed, no data scan); `--suite S` only the suite's benchmarks, with their suite group (`suite_capability`) and `readings`; `--catalog` reads the catalog index first (network; without it the cached index lists the catalog benchmarks not fetched); each row's `origin` (`fetched@<commit>`, `repository`, `local`, `catalog`), a newer revision, `W_FETCH_SHADOWED` |
 | `yavih bench info` | a benchmark's README plus its `capability` tags, hashes, roles, floors, metrics, source, budget, external packages and hash history | `<name>`; `--readme-only`; `--setup` prints `setup.md` instead |
 | `yavih bench path` | print the benchmark folder, or the absolute path of one shipped file | `<name> [<what>]` (`what` as for `bench show`) |
 | `yavih bench files` | every shipped file of a folder with absolute path, kind (`readme`, `setup`, `yaml`, `template`, `eval`, `manifest`, `classes`, `conformance`, `prepare`, `test`, `other`) and size | `<name>` |
@@ -107,7 +107,7 @@ yavih ([suites](suites.md)).
 | command | purpose | important flags |
 |---|---|---|
 | `yavih suite list` | every suite with its `origin` (`shipped`, `project`; a project suite of a shipped name shadows it) and description | an invalid project file is listed with its error (`W_SUITE_INVALID`) |
-| `yavih suite show` | a suite's capabilities, benchmarks, readings and joins | `<name\|file.yaml>` |
+| `yavih suite show` | a suite's capabilities, benchmarks, readings and joins; an entry whose folder is not here is marked `not fetched` | `<name\|file.yaml>`; `--fetch` fetches those (`yavih bench fetch`); `--from SRC` fetches from a checkout, an index directory or a repository archive |
 | `yavih suite new` | copy a suite into the project suites directory to edit | `<name>`; `--from S` (default `default`); `--out DIR\|FILE`; `--force` overwrites |
 | `yavih suite missing` | per suite `(benchmark, reading)` of one model `done`, `missing` or `pending`; per join `done`, `join-missing` (with the `report build --join` command) or `join-unknown`; exit 0 | `<name> [<glob>...] --model M` (globs before the options; default: the runs root); `--results DIR` (where joins are found) |
 
@@ -156,7 +156,7 @@ root, else `E_RESULTS_ROOT` (exit 1). See [readouts](readouts.md) and [results](
 
 | command | purpose | important flags |
 |---|---|---|
-| `yavih plan init` | write a matrix skeleton (one entry per suite `(benchmark, reading)`) and one bridge stub per benchmark for one model, into the project's `matrices/<M>.yaml` and `bridges/` (else `./matrix.yaml`, `./bridges/`); profiles go to `<matrix stem>.profiles/`; prints the `bridge check` command of every entry, then `plan build <matrix> --out <runs root>/_plans/<M>.jsonl` | `--suite S --model M`; `--launcher PYTHON\|NAME` (default: the configured launcher at execution; `W_LAUNCHER_UNSET` when none); `--out FILE`; `--bridges-dir DIR` (relative to the matrix); `--force` overwrites the matrix (bridge files are always kept) |
+| `yavih plan init` | write a matrix skeleton (one entry per suite `(benchmark, reading)`) and one bridge stub per benchmark for one model, into the project's `matrices/<M>.yaml` and `bridges/` (else `./matrix.yaml`, `./bridges/`); profiles go to `<matrix stem>.profiles/`; prints the `bridge check` command of every entry, then `plan build <matrix> --out <runs root>/_plans/<M>.jsonl` | `--suite S --model M`; `--launcher PYTHON\|NAME` (default: the configured launcher at execution; `W_LAUNCHER_UNSET` when none); `--out FILE`; `--bridges-dir DIR` (relative to the matrix); `--force` overwrites the matrix (bridge files are always kept); `--no-fetch` does not fetch the suite's benchmarks that are not here (they are listed, not planned; by default they are fetched first, `W_NOT_FETCHED` for one that cannot be); `--from SRC` fetches from a checkout, an index directory or a repository archive |
 | `yavih plan build` | turn a `matrix.yaml` into unit records (`plan.jsonl`) | `<matrix.yaml>`; `--out plan.jsonl` (else JSONL on stdout); `--pending` (only units whose DONE is missing or stale); `--kind extract\|probe\|report`; `--shard-minutes M`; `--format jsonl\|count`; `--sample N` (a capped trial run, below) |
 | `yavih plan status` | count units by status and list those that need attention | `<plan.jsonl>`; `--root DIR` |
 | `yavih plan run` | run every pending unit of a plan on this machine, dependencies first | `<plan.jsonl> --local` (required); `--slots K` (default 1); `--deadline …`; `--deadline-margin 900`; `--root DIR`; `--cpus N`; `--deps plan.jsonl` |

@@ -27,6 +27,11 @@ GROUPS = ("init", "doctor", "config", "skill", "bench", "bridge", "extract", "fe
 # the operational rules that follow the guardrail checklist, carried verbatim (whitespace-normalized)
 # CLI flags the skill documents
 DOCUMENTED_FLAGS = {
+    ("bench", "list"): ("--catalog",),
+    ("bench", "fetch"): ("--from", "--refresh"),
+    ("bench", "update"): ("--yes", "--from"),
+    ("suite", "show"): ("--fetch", "--from"),
+    ("plan", "init"): ("--no-fetch", "--from"),
     ("bench", "info"): ("--setup",),
     ("bench", "verify"): ("--census",),
     ("eval", "run"): ("--log-samples", "--results", "--no-results"),
@@ -434,3 +439,17 @@ def test_repository_urls_in_the_shipped_skill_resolve():
                       for m in re.findall(r"https://github\.com/Bizilizi/yavih/blob/main/([\w./-]+?)(?:#[\w-]+)?(?=[\s)`'\"]|$)", text)
                       if not (REPO / m).exists()})
     assert not missing, missing
+
+
+@pytest.mark.parametrize("ref", ["references/cli.md", "docs/cli.md"])
+def test_catalog_flags_sit_in_their_command_rows(ref):
+    """The flags of the catalog commands are documented in each command's own row of both CLI references."""
+    path = SKILL_ROOT / ref if ref.startswith("references/") else REPO / ref
+    if not path.is_file():
+        pytest.skip(f"{ref} not available")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for argv in (("bench", "list"), ("bench", "fetch"), ("bench", "update"), ("suite", "show"), ("plan", "init")):
+        row = next((ln for ln in lines if ln.startswith(f"| `yavih {' '.join(argv)}` |")), None)
+        assert row is not None, f"{ref}: no row for yavih {' '.join(argv)}"
+        for flag in DOCUMENTED_FLAGS[argv]:
+            assert flag in row, f"{ref}: yavih {' '.join(argv)} row lacks {flag}"

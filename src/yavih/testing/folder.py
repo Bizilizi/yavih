@@ -2,8 +2,10 @@
 
 Each folder test keeps only that folder's facts (counts, hashes, columns, gotchas, reader behaviour); what every
 folder needs to load its files and what holds for every folder lives here once. The contract every folder must
-meet (layout, README/setup headings and pins, contract copies, budget vs rows, …) is :mod:`yavih.lint`, run for all
-folders by the repo tests and for one folder by :func:`assert_lint_clean`.
+meet (layout, README/setup headings and pins, contract copies, budget vs rows, …) is :mod:`yavih.lint`, run once per
+folder by the repository's tests (``tests/test_packaged_folders.py``), never again by a folder test.
+:func:`assert_lint_clean` is for a folder that lives outside the repository (``$YAVIH_BENCH_PATH``, a pack), whose
+own tests are the only place its lint runs.
 
 Fixtures resolve the folder from the requesting test module (``<folder>/tests/test_*.py``), so a test module
 registers one by binding it to a module-level name (pytest uses that name)::
@@ -222,7 +224,8 @@ def assert_metric_names_resolve(folder: Path, spec: dict | None = None) -> None:
 
 
 def assert_lint_clean(folder: Path, *, skip: tuple[str, ...] = ()) -> None:
-    """``yavih bench lint`` on this folder reports no error (the contract every folder meets)."""
+    """``yavih bench lint`` on this folder reports no error (the contract every folder meets). Only for an
+    out-of-tree folder: a repository folder is linted once by the repository's tests, not by its own."""
     from yavih.lint import lint_folder
 
     errors = lint_folder(Path(folder), skip=skip).errors
