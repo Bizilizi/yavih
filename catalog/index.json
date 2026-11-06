@@ -585,12 +585,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "3c65305b0462b5d9acfd21e7d6f45bdc801c843d",
+     "commit": "fb7a20b1f1fb6f34165b2c7568e17abb6828c960",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggsound_retrieval",
      "protocol_hash": "9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49",
      "protocol_version": 1,
-     "tree": "1d78a9d596bb3a5369b03941fa5611ecf791b9db"
+     "tree": "097487a070eeb48fa0dabcb8dd362a31c7130c77"
     }
    ],
    "scorer": "vggsound_retrieval",
@@ -719,6 +719,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "d0aa3e39acb53aaa2ce7da6ff0cf1689f3e73be2",
+ "commit": "fb7a20b1f1fb6f34165b2c7568e17abb6828c960",
  "repo": "Bizilizi/yavih"
 }
