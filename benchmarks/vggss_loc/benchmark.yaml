@@ -1,0 +1,190 @@
+# yavih benchmark folder — VGG-SS sound-source localization (schema 3). Values under `manifest` and `budget` are
+# written by make_manifest.py; `make_manifest.py --check` re-derives them.
+schema_version: 3
+name: vggss_loc
+aliases: []
+title: VGG-SS training-free sound-source localization (cIoU@0.5, AUC on heatmaps)
+capability: [audio-visual, spatial]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+header:
+  name: VGG-SS
+  title: Localizing Visual Sounds the Hard Way
+  venue: "Chen et al. · CVPR 2021"
+  abstract: >-
+    VGG-SS annotates 5 158 clips of the VGGSound test split (221 classes) with 1–7 bounding boxes around the
+    visible sound source in the frame at 5 s. The task is to localize the sounding object given its audio: a
+    heatmap over the frame, scored against the box union with the published consensus IoU and AUC.
+  chips: ["video + audio", "sound-source localisation", "5 154 clips", "training-free heatmaps", "av", "cIoU@0.5, AUC"]
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+scorer: vggss_loc
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-05"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 3e58261a9a2ed7a8194c96349b5356f25fcf3d1cf747e5f239f933ea5f657c04   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 99a6dabe1c5fbff74e4947fa435be278cedc6dd246acd4d6361f21c34cf5f9f6
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://raw.githubusercontent.com/hche11/Localizing-Visual-Sounds-the-Hard-Way/master/metadata/vggss.json
+    - https://github.com/hche11/Localizing-Visual-Sounds-the-Hard-Way
+    - https://www.robots.ox.ac.uk/~vgg/research/lvs/
+    - https://www.robots.ox.ac.uk/~vgg/data/vggsound/
+  licence: >-
+    VGG-SS annotations (Chen et al., CVPR 2021) are distributed through the authors' GitHub repository, which
+    states no licence; check it before redistributing the boxes. VGGSound listing: CC BY 4.0; the media are
+    YouTube clips fetched by the user, subject to YouTube's terms.
+  bytes: 10_540_801_003
+  sha256:
+    "vggss/vggss.json": ae300b4a259267e6fe839970d495862edd70bfe3da63d925bcdb34054ed3b15e
+    "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+  notes: >-
+    One 620 306-byte annotation file (vggss.json: 5 158 VGGSound-test clips, 221 classes, 1–7 boxes each at
+    t = 5.0 s; no auth) plus the media of those 5 158 clips, which are VGGSound test clips (VGG-SS has no media
+    download of its own; `bytes` = annotation + the 5 158 mp4 + wav). The frozen rows touch 5 154 of them
+    (budget.media_gb). The media come from a VGGSound copy, obtained as for `vggsounder`.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-data-owner
+  how: "vggss.json is public on GitHub; the 5 158 VGGSound test clips (YouTube, partly no longer available) must come from an existing VGGSound copy"
+budget:
+  clips: {test: 5154}
+  media_gb: 10.53
+  extract_min_per_1k_clips_ref: 2.0
+  probe_minutes_ref: {vggss_loc: 2}         # training-free: heatmaps, the shuffled control and the leave-one-out floor over 5 154 rows
+
+manifest:
+  file: manifest.csv.gz
+  sha256: c934591d0b4c820695feaeecf7402fe190501281e52d3d58f7ad7a0ecc39cbce
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+  columns:
+    boxes: {type: str, role: label_aux}
+    class_name: {type: str, role: extra}
+    rel_video: {type: str, role: media, stream: video}
+    rel_audio: {type: str, role: media, stream: audio}
+  upstream:
+    source: "VGG-SS vggss.json + VGGSound vggsound.csv: every entry not leaked into VGGSound train (source level), multi-box included, one split"
+    sha256: ae300b4a259267e6fe839970d495862edd70bfe3da63d925bcdb34054ed3b15e
+    rows: 5158
+    note: >-
+      Rows = every VGG-SS entry whose YouTube source has no clip in the VGGSound train split (4 entries excluded,
+      source level), in sorted clip_id order, all in the one split `test` (VGG-SS is an evaluation set; the
+      scorer trains nothing). `boxes` = the entry's 1–7 boxes as x1|y1|x2|y2 fractions of the original frame
+      `;`-joined, after the official max(x, 0) sanitisation (12 corrupt coordinates -2.8823e16 become 0), 6
+      decimals = exact; `class_name` = its vggss.json `class`. 538 entries have more than one box (their union is
+      the ground truth); 2 entries have an empty ground truth after sanitisation and are kept (they score 0,
+      `n_empty_gt`).
+    upstream_files:
+      "vggss/vggss.json": ae300b4a259267e6fe839970d495862edd70bfe3da63d925bcdb34054ed3b15e
+      "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    curation:
+      total_upstream: 5158
+      per_split:
+        test: {listed: 5154, staged: 5154, missing: 0}
+      excluded:
+        leakage: 4
+      leakage_audit: {against: "VGGSound train ytids (metadata/vggsound.csv split==train), source level", excluded: 4}
+
+splits:
+  train: []
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_video
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_audio
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${datasets.vggsound}"
+      description: "VGGSound root: video/<clip_id>.mp4, audio/<clip_id>.wav (16 kHz mono); the VGG-SS clips are VGGSound test clips"
+    annotations_root:
+      default: "${data.root}/vggss"
+      prepare_only: true
+      description: >-
+        PREPARE-TIME SOURCE ONLY: the VGG-SS annotation staging directory (vggss.json; prepare/01_annotations_vggss.sh)
+        read by make_manifest.py --staging-dir; the frozen manifest already carries the boxes
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: "the VGGSound mp4 exactly as stored (native size, mixed 16:9 / 4:3 and some portrait; ~10 s, some shorter, every one holds the annotated 5.0 s frame); nothing decoded, cut, cropped or resized"
+    audio: "the VGGSound wav exactly as stored (16 kHz mono PCM, ~10 s, some shorter); nothing decoded, cut, resampled or padded"
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: [annotated_second]
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+  schema:
+    audio_emb:    {type: array, dtype: [float16, float32], shape: [D], stats: true}       # the clip's audio embedding in the shared space
+    video_tokens: {type: array, dtype: [float16, float32], shape: ["*", D], stats: true}  # the annotated frame's visual tokens in the same space
+    video_pos:    {type: array, dtype: float64, shape: ["*", 2], exact: true}             # (y, x) centres in fractions of the ORIGINAL frame
+  isolation:   # bridge check's modality-isolation gate (E_MODALITY_LEAK): each key reads only the listed streams
+    audio_emb: [audio]
+    video_tokens: [video]
+    video_pos: [video]
+
+external: []
+
+protocol:
+  clip_seconds: 10.0
+  train_draw: null
+  views: none
+  gt_size: 224          # the raster side of the ground truth and the upsampled heatmap (int(224 * x) of the published scorer)
+  annotated_second: 5.0
+
+metrics:
+  headline: "ciou@0.5"
+  list: ["ciou@0.5", auc, ciou_mean, n_empty_gt, n_eval]
+  floors: [ciou_floor]
+  controls: [ciou_shuffled, audio_blind]
+  chance: {}
+  ci:
+    "ciou@0.5": binomial
+    ciou_mean: bootstrap_clip
+  bootstrap: {samples: 2000, seed: 0}
+
+readout_params:
+  grid: 14                  # the heatmap grid tiling the full frame (one ViT-B/16 patch per cell at 224)
+  min_cell_coverage: 0.25   # refused below this median fraction of cells holding a visual token
+  boxes_column: boxes
+  shuffle_seed: 20260913

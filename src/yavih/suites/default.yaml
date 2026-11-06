@@ -2,7 +2,7 @@
 # Schema: https://github.com/Bizilizi/yavih/blob/main/docs/suites.md
 schema_version: 1
 name: default
-description: "Default set: audio, visual, audio-visual, temporal and spatial capabilities on packaged benchmarks."
+description: "Default set: audio, visual, audio-visual, temporal, spatial and retrieval capabilities on packaged benchmarks."
 groups:
   # audio: single-label (ESC-50) and multi-label (FSD50K) sound-event classification
   - capability: audio
@@ -28,3 +28,8 @@ groups:
   - capability: spatial
     entries:
       - {benchmark: vggss_box, readings: [av]}
+      - {benchmark: vggss_loc, readings: [av]}
+  # retrieval: audio <-> video over the VGGSound test split (a shared space only)
+  - capability: retrieval
+    entries:
+      - {benchmark: vggsound_retrieval, readings: [av]}

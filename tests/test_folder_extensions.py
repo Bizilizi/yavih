@@ -480,3 +480,25 @@ def test_bench_extensions_lists_the_others_when_one_folder_does_not_load(tmp_pat
     assert data["brokenfold"] is None and data["vggsounder_v2a"]["scorer"]["kind"] == "direct"
     assert cli.main(["bench", "extensions"]) == 0
     assert "brokenfold: extends: unknown (" in capsys.readouterr().out
+
+
+XMODAL_FOLDERS = ("vggss_loc", "vggsound_retrieval")
+
+
+def test_the_shared_space_folders_own_their_scorers_and_one_stand_in():
+    """The two shared-space folders each register a stateless scorer of their own (the core ships no ``loc`` or
+    ``retrieval`` scorer), carry byte-identical copies of their synthetic stand-in (``xmodal_synth.py``) and run the
+    core's ``isolation`` gate by default."""
+    import importlib.util
+
+    from yavih.benchmarks import packaged_folder
+    from yavih.extensions import folder_extensions
+
+    copies = {n: (packaged_folder(n) / "xmodal_synth.py").read_bytes() for n in XMODAL_FOLDERS}
+    assert len(set(copies.values())) == 1, "xmodal_synth.py differs between folders: keep the copies identical (a unification candidate: `yavih bench extensions`)"
+    for n in XMODAL_FOLDERS:
+        ext = folder_extensions(Benchmark.load(n))
+        assert ext["scorer"]["name"] == n and ext["scorer"]["kind"] == "stateless" and ext["stand_in"] == ["make_stand_in", "write_bridge"]
+        assert ext["checks"] == ["isolation (default)"]
+    assert all(importlib.util.find_spec(m) is None for m in ("yavih.readouts.loc", "yavih.readouts.retrieval", "yavih.metrics.localization",
+                                                              "yavih.metrics.retrieval", "yavih.testing.xmodal"))

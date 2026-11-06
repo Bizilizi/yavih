@@ -88,7 +88,8 @@ What "benchmark my model" means when nothing else is said.
 | audio-visual | `vggsounder` | a, v, av + join | per-modality labels; the join reports what the model hears, sees and confuses |
 | audio-visual | `audioset20k` | a, v, av | large-vocabulary multi-label tagging from either or both streams |
 | temporal | `avsync` | av | synchronisation offset: needs both streams aligned in time |
-| spatial | `vggss_box` | av | where the sounding object is in the frame |
+| spatial | `vggss_box`, `vggss_loc` | av | where the sounding object is in the frame: a trained box head; the training-free heatmap |
+| retrieval | `vggsound_retrieval` | av | whether the audio and the video of a clip find each other in the model's shared space |
 
 Kinetics-400, Something-Something-v2, ESC-50 and VGGSound (here through VGGSounder, its re-annotated test set)
 are the benchmarks the literature keeps reporting as continuity anchors, so numbers stay comparable with
@@ -100,8 +101,7 @@ AV-SyncBench as the successor of VGGSound-Sparse-style synchronisation; neither 
 
 Not defined yet. Candidates, in order:
 
-1. VGGSound retrieval
-2. SSv2 Temporal-50 / SSv2-Template subsets
+1. SSv2 Temporal-50 / SSv2-Template subsets
 3. the UTD-debiased Kinetics-400 split
 4. AV-SyncBench
 5. AVATAR

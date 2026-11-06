@@ -22,7 +22,8 @@ DEFAULT = {
     "visual": {"ssv2": ["v"], "k400": ["v"], "in1k": ["v"]},
     "audio-visual": {"vggsounder": ["a", "v", "av"], "audioset20k": ["a", "v", "av"]},
     "temporal": {"avsync": ["av"]},
-    "spatial": {"vggss_box": ["av"]},
+    "spatial": {"vggss_box": ["av"], "vggss_loc": ["av"]},
+    "retrieval": {"vggsound_retrieval": ["av"]},
 }
 
 

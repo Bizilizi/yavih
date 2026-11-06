@@ -1,0 +1,112 @@
+{
+ "benchmark": "vggsound_retrieval",
+ "generator": 1,
+ "population": {
+  "eval": 256,
+  "floor": 0,
+  "folds": 0,
+  "train": 0
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "e0f6a5ec3a84ebf9364a6949f2063dd7c3a0b2d6+dirty",
+  "externals": {},
+  "folder_source": {
+   "eval": "7147cd38f11cf00df139189d5f3dc286e6e61ceff8b3d2e0e28bd7d6d133899b",
+   "reader": null
+  },
+  "protocol_hash": "9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49",
+  "scorer": {
+   "kind": "stateless",
+   "name": "vggsound_retrieval",
+   "version": 1
+  },
+  "scoring_hash": "13dfb8625cbeb29d89002be92acd1ce2f3473e5abb733967513347405a7e5a9b",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "medr_a2v": 0.001,
+  "medr_a2v_cavmae": 0.001,
+  "medr_v2a": 0.001,
+  "medr_v2a_cavmae": 0.001,
+  "n_eval": 0.001,
+  "r@1": 0.001,
+  "r@10_a2v": 0.001,
+  "r@10_a2v_cavmae": 0.001,
+  "r@10_v2a": 0.001,
+  "r@10_v2a_cavmae": 0.001,
+  "r@1_a2v": 0.001,
+  "r@1_a2v_cavmae": 0.001,
+  "r@1_v2a": 0.001,
+  "r@1_v2a_cavmae": 0.001,
+  "r@5_a2v": 0.001,
+  "r@5_a2v_cavmae": 0.001,
+  "r@5_v2a": 0.001,
+  "r@5_v2a_cavmae": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "r@1": [
+     0.15234375,
+     0.21484375
+    ],
+    "r@10_a2v": [
+     0.31795501653541774,
+     0.43574094757105014
+    ],
+    "r@10_v2a": [
+     0.2698445830530154,
+     0.38379036647170506
+    ],
+    "r@1_a2v": [
+     0.12030547683153675,
+     0.21005542558292273
+    ],
+    "r@1_a2v_cavmae": [
+     0.13704448322018375,
+     0.4608304037917617
+    ],
+    "r@1_v2a": [
+     0.16190727728556475,
+     0.2608176385889693
+    ],
+    "r@1_v2a_cavmae": [
+     0.13704448322018375,
+     0.4608304037917617
+    ],
+    "r@5_a2v": [
+     0.240606845197983,
+     0.3514520953533543
+    ],
+    "r@5_v2a": [
+     0.2297209150846507,
+     0.33924702210166807
+    ]
+   },
+   "controls": {},
+   "floors": {},
+   "metrics": {
+    "medr_a2v": 28.0,
+    "medr_a2v_cavmae": 6.0,
+    "medr_v2a": 45.5,
+    "medr_v2a_cavmae": 4.5,
+    "n_eval": 256,
+    "r@1": 0.18359375,
+    "r@10_a2v": 0.375,
+    "r@10_a2v_cavmae": 0.7307692307692307,
+    "r@10_v2a": 0.32421875,
+    "r@10_v2a_cavmae": 0.6923076923076923,
+    "r@1_a2v": 0.16015625,
+    "r@1_a2v_cavmae": 0.2692307692307692,
+    "r@1_v2a": 0.20703125,
+    "r@1_v2a_cavmae": 0.2692307692307692,
+    "r@5_a2v": 0.29296875,
+    "r@5_a2v_cavmae": 0.46153846153846156,
+    "r@5_v2a": 0.28125,
+    "r@5_v2a_cavmae": 0.5384615384615384
+   }
+  }
+ }
+}

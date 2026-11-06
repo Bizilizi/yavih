@@ -54,8 +54,8 @@ def test_skeleton_loads_through_load_matrix_once_profiles_exist(tmp_path, runs_d
     m = tmp_path / "matrix.yaml"
     rec = plan_init("default", model="toy", launcher="python", out=m)
     matrix = load_matrix(str(m))
-    assert len(matrix.entries) == len(rec["entries"]) == 13 and matrix.out == str(runs_dir)
-    assert len({e.script for e in matrix.entries}) == 9  # one bridge file per benchmark
+    assert len(matrix.entries) == len(rec["entries"]) == 15 and matrix.out == str(runs_dir)
+    assert len({e.script for e in matrix.entries}) == 11  # one bridge file per benchmark
     for ent in matrix.entries:
         bench, reading = ent.benchmark, ent.key.rsplit("-", 1)[1]
         prof = make_profile(bench, model="toy", reading=reading, args=dict(ent.args))

@@ -1,0 +1,188 @@
+# yavih benchmark folder — VGGSound audio-visual retrieval (schema 3). Values under `manifest` and `budget` are
+# written by make_manifest.py; `make_manifest.py --check` re-derives them.
+schema_version: 3
+name: vggsound_retrieval
+aliases: []
+title: VGGSound test-set audio–video retrieval (A→V and V→A R@1 over 15 440 clips; the CAV-MAE Sync 1 545-clip subset alongside)
+capability: [audio-visual, retrieval]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+header:
+  name: VGGSound retrieval
+  title: "VGGSound: A Large-scale Audio-Visual Dataset"
+  venue: "Chen et al. · ICASSP 2020; retrieval protocol of CAV-MAE (Gong et al. · ICLR 2023)"
+  abstract: >-
+    Each VGGSound test clip is split into its video and its audio. Given one, retrieve the other among every test
+    clip by similarity in the model's shared embedding space: audio-to-video and video-to-audio recall at 1, 5
+    and 10 and the median rank, with no training. The 1 545-clip subset the CAV-MAE and CAV-MAE Sync papers
+    report on is scored alongside.
+  chips: ["video + audio", "cross-modal retrieval", "15 440 clips", "shared embedding space", "av", "R@1 (A→V, V→A)"]
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+scorer: vggsound_retrieval
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-05"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 20353f184a7bd2cd924d6a7ca22d931b2557b6b182eaba3b9b4e9afcb88c5e32
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://www.robots.ox.ac.uk/~vgg/data/vggsound/
+    - https://github.com/edsonroteia/cav-mae-sync
+    - https://github.com/YuanGongND/cav-mae
+  licence: >-
+    VGGSound: CC BY 4.0 (the listing; the media are YouTube clips fetched by the user, subject to YouTube's
+    terms). The CAV-MAE Sync subset list: BSD-2-Clause (the authors' repository).
+  bytes: 407_000_000_000
+  sha256:
+    "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    "cav-mae-sync/datafiles/vgg_test_5_per_class_for_retrieval_template.json": 09c577a64d31ad6205dd2494917ed833c4e1123704b16ca32c1379be57828abd
+  notes: >-
+    Media = the full VGGSound corpus staged as loose files (199 176 mp4 + 199 176 wav, 318 GiB + 61 GiB;
+    `bytes` is that total). The frozen rows touch the 15 440 test clips (budget.media_gb). The subset list is
+    shipped here as cavmae_sync_subset.csv (the video_id values of the pinned CAV-MAE Sync datafile).
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-data-owner
+  how: "VGGSound media from YouTube (clips decay: prefer an existing copy of the corpus) and vggsound.csv from the official page; the subset list is shipped"
+budget:
+  clips: {test: 15440}
+  media_gb: 31.12
+  extract_min_per_1k_clips_ref: 2.0
+  probe_minutes_ref: {vggsound_retrieval: 1}   # training-free: two 15 440 x 15 440 cosine matrices
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 61ecee9919eed820bf02cc50939b5ee7add4e0e9dca4f511c2738dbc4a42d23f
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+  columns:
+    class_name: {type: str, role: extra}
+    rel_video: {type: str, role: media, stream: video}
+    rel_audio: {type: str, role: media, stream: audio}
+    cavmae_sync_5pc: {type: int, role: extra}
+  upstream:
+    source: "VGGSound vggsound.csv split == test, minus the clips whose source has a train clip; cavmae_sync_subset.csv flags the CAV-MAE Sync retrieval subset"
+    sha256: ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    rows: 15446
+    note: >-
+      Rows = the 15 446 test rows of the official listing minus the 6 whose YouTube source also has a clip in the
+      train split (source level), in sorted clip_id order (<ytid>_<start:06d>), one split `test`; 309 classes,
+      48–50 clips each. `class_name` = the listing's label (never handed over, never scored).
+      `cavmae_sync_5pc` = 1 for the 1 545 clips (5 per class) of the CAV-MAE Sync retrieval datafile, all of
+      which are rows; the folder's subset metrics rank them among themselves.
+    upstream_files:
+      "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+      "cavmae_sync_subset.csv": 77d83114deff63f551278526fb76845a9e69c95e9d61ede99dbc760ebc96847f
+    curation:
+      total_upstream: 15446
+      per_split:
+        test: {listed: 15440, staged: 15440, missing: 0}
+      excluded:
+        leakage: 6
+      leakage_audit: {against: "VGGSound train ytids (metadata/vggsound.csv split==train), source level", excluded: 6}
+
+splits:
+  train: []
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_video
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_audio
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${datasets.vggsound}"
+      description: "VGGSound root: video/<clip_id>.mp4, audio/<clip_id>.wav (16 kHz mono), metadata/vggsound.csv"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the VGGSound mp4 exactly as stored (H.264, native and mixed frame size, ~10 s at ~30 fps, with its own AAC
+      track, which the video embedding must not read); nothing decoded, cut, resized or padded
+    audio: >-
+      the VGGSound wav exactly as stored (16 kHz mono 16-bit PCM, nominal 10 s; some files shorter, down to
+      ~1 s); nothing resampled, trimmed or padded
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+  schema:
+    audio_emb: {type: array, dtype: [float16, float32], shape: [D], stats: true}   # the clip's audio embedding in the shared space
+    video_emb: {type: array, dtype: [float16, float32], shape: [D], stats: true}   # the clip's video embedding in the same space
+  isolation:   # bridge check's modality-isolation gate (E_MODALITY_LEAK): each key reads only the listed stream
+    audio_emb: [audio]
+    video_emb: [video]
+
+external: []
+
+protocol:
+  clip_seconds: 10.0
+  train_draw: null
+  views: none
+
+metrics:
+  headline: "r@1"
+  list: ["r@1", "r@1_a2v", "r@5_a2v", "r@10_a2v", medr_a2v, "r@1_v2a", "r@5_v2a", "r@10_v2a", medr_v2a,
+         "r@1_a2v_cavmae", "r@5_a2v_cavmae", "r@10_a2v_cavmae", medr_a2v_cavmae,
+         "r@1_v2a_cavmae", "r@5_v2a_cavmae", "r@10_v2a_cavmae", medr_v2a_cavmae, n_eval]
+  table: ["r@1", "r@1_a2v", "r@1_v2a", "r@1_a2v_cavmae", "r@1_v2a_cavmae"]
+  floors: []
+  controls: []
+  chance: {"r@1": 0.0000648, "r@1_a2v": 0.0000648, "r@5_a2v": 0.000324, "r@10_a2v": 0.000648, "r@1_v2a": 0.0000648, "r@5_v2a": 0.000324, "r@10_v2a": 0.000648,
+           "r@1_a2v_cavmae": 0.000647, "r@5_a2v_cavmae": 0.00324, "r@10_a2v_cavmae": 0.00647, "r@1_v2a_cavmae": 0.000647, "r@5_v2a_cavmae": 0.00324, "r@10_v2a_cavmae": 0.00647}
+  ci:
+    "r@1": bootstrap_clip
+    "r@1_a2v": binomial
+    "r@5_a2v": binomial
+    "r@10_a2v": binomial
+    "r@1_v2a": binomial
+    "r@5_v2a": binomial
+    "r@10_v2a": binomial
+    "r@1_a2v_cavmae": binomial
+    "r@1_v2a_cavmae": binomial
+  bootstrap: {samples: 2000, seed: 0}
+
+readout_params:
+  subsets: {cavmae: cavmae_sync_5pc}   # the folder's *_cavmae metrics: the flagged rows as query set and gallery
