@@ -389,6 +389,25 @@ def test_a_scaffold_like_a_folder_scorer_owns_it_under_its_new_name(tmp_path, ya
     assert _first_folder_of("stream") == "ave_causal" and _first_folder_of("no_such_scorer") is None
 
 
+def test_a_scaffold_named_after_its_parent_renames_once_and_a_derivative_of_a_derivative_loads(tmp_path, yavih_home):
+    """``bench new toyfold_v2 --like toyfold``: the parent's name is replaced once (never ``toyfold_v2_v2``), and a
+    folder scaffolded from that one renames again cleanly; every generation loads and lints without errors."""
+    from yavih.lint import lint_folder
+    from yavih.scaffold import new_benchmark
+
+    src = _toy_folder(tmp_path / "src")
+    _edit_yaml(src, capability=["audio"])  # the synthetic parent carries none; lint requires one
+    v2 = new_benchmark("toyfold_v2", like=str(src), dir=tmp_path / "out")
+    v3 = new_benchmark("toyfold_v2_b", like=str(v2), dir=tmp_path / "out")
+    for folder, name in ((v2, "toyfold_v2"), (v3, "toyfold_v2_b")):
+        text = (folder / "eval.py").read_text(encoding="utf-8")
+        assert f'name="{name}"' in text and f'"{name}_mlp_v1"' in text and f'"{name}_ce"' in text
+        assert "_v2_v2" not in text and "_b_b" not in text
+        b = Benchmark.load(str(folder))
+        assert b.spec.readout == name and registry.get(name).losses == {f"{name}_ce"}
+        assert lint_folder(folder).ok, [f.message for f in lint_folder(folder).errors]
+
+
 # ----------------------------------------------------------------------------- A6: the detection folders own their scorer
 
 
@@ -426,6 +445,25 @@ def test_a_second_folder_scorer_cannot_take_another_ones_loss_or_head_family():
     with pytest.raises(ValueError, match="already builds"):
         registry.register_folder(scorer("secondfold"))
     registry.register_folder(scorer("firstfold"))  # the same folder loaded again is fine
+
+
+def test_a_folder_scorer_cannot_build_a_core_loss_or_head_family():
+    """``per_sample_loss`` and ``build_head_for`` ask the core first: a folder scorer that builds a core name itself
+    (``loss_fn`` with ``ce``, ``build_head`` with ``attentive_probe_v1``) is refused; declaring a core name without
+    building it (the detection folders' ``dense_query_v1``) is fine."""
+    from yavih.readouts import clf
+
+    def scorer(name, *, losses, families, builds):
+        return registry.Scorer(name=name, version=1, module="m", kind="probe", family="clf", label_kinds=frozenset({"single"}),
+                               train=dict(clf.SCORER.train), head=lambda **kw: {"family": sorted(families)[0], "out": kw.get("num_classes")},
+                               loss=lambda k: sorted(losses)[0], head_families=frozenset(families), losses=frozenset(losses),
+                               build_head=(lambda cfg, **kw: None) if builds else None, loss_fn=(lambda name: None) if builds else None)
+
+    with pytest.raises(ValueError, match="core builds those names"):
+        registry.register_folder(scorer("corefold", losses={"ce"}, families={"corefold_head_v1"}, builds=True))
+    with pytest.raises(ValueError, match="core builds those names"):
+        registry.register_folder(scorer("corefold", losses={"corefold_loss"}, families={"attentive_probe_v1"}, builds=True))
+    registry.register_folder(scorer("corefold", losses={"ce"}, families={"attentive_probe_v1"}, builds=False))
 
 
 def test_bench_extensions_lists_the_others_when_one_folder_does_not_load(tmp_path, monkeypatch, capsys):

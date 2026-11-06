@@ -326,8 +326,9 @@ def _rename_folder_scorer(dest: Path, y: dict[str, Any], like_name: str, name: s
     ev = dest / "eval.py"
     if ev.is_file():
         text = ev.read_text(encoding="utf-8")
-        text = re.sub(rf"""(["']){re.escape(like_name)}\1""", lambda m: f"{m.group(1)}{name}{m.group(1)}", text)
-        text = re.sub(rf"""(["']){re.escape(like_name)}_""", lambda m: f"{m.group(1)}{name}_", text)
+        # one pass: a quote, the parent's name, then the closing quote or "_" (a name starting with the parent's is not
+        # renamed twice, and "<like>_v2" stays a single rename of "<like>")
+        text = re.sub(rf"""(["']){re.escape(like_name)}(?=\1|_)""", lambda m: f"{m.group(1)}{name}", text)
         ev.write_text(text, encoding="utf-8")
     y["scorer"] = name
     pmr = (y.get("budget") or {}).get("probe_minutes_ref")

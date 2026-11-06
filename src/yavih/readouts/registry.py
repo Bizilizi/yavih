@@ -290,6 +290,13 @@ def register_folder(scorer: Scorer) -> Scorer:
         reg = _load()
         if scorer.name in reg and scorer.name not in _FOLDER:
             raise ValueError(f"scorer {scorer.name!r} is already a registered scorer; a folder scorer must carry the folder's own name")
+        from yavih.probes.config import HEAD_FAMILIES, LOSSES  # torch-free
+
+        core = sorted((scorer.losses & LOSSES if scorer.loss_fn is not None else set())
+                      | (scorer.head_families & HEAD_FAMILIES if scorer.build_head is not None else set()))
+        if core:  # the core builds these names first: the folder's loss_fn / build_head would never be asked for them
+            raise ValueError(f"scorer {scorer.name!r} builds {core} itself, but the core builds those names: declare a core loss or head "
+                             f"family without loss_fn / build_head, and name the folder's own ones after the folder ('{scorer.name}_...')")
         for other in reg.values():  # a loss or head family resolves to ONE scorer (per_sample_loss, build_head_for)
             if other.name == scorer.name:
                 continue
