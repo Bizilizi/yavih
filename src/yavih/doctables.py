@@ -219,14 +219,18 @@ def _folder(folders: Mapping[str, Path]) -> str:
 
 
 def _readout_groups(folders: Mapping[str, Path]) -> str:
-    """Skill ``references/readouts.md``: the packaged benchmarks per readout (registry order, then any other)."""
+    """Skill ``references/readouts.md``: the packaged benchmarks per readout: the built-in scorers in their fixed order,
+    then every other scorer (a folder's own, a pack's) by name. Never the registry's order, which depends on which
+    folders a process happened to load first."""
     from yavih.readouts import registry
 
-    groups: dict[str, list[str]] = {r: [] for r in registry.names()}
+    builtin = [m.rsplit(".", 1)[-1] for m in registry.BUILTIN]
+    groups: dict[str, list[str]] = {r: [] for r in builtin}
     for name, folder in folders.items():
         groups.setdefault(str(_yaml(folder).get("scorer")), []).append(name)
+    order = builtin + sorted(r for r in groups if r not in builtin)
     return "Packaged benchmarks per readout: " + " · ".join(
-        f"`{r}` {', '.join(names)}" for r, names in groups.items() if names) + "."
+        f"`{r}` {', '.join(groups[r])}" for r in order if groups[r]) + "."
 
 
 def _prepare_roots(folders: Mapping[str, Path]) -> str:

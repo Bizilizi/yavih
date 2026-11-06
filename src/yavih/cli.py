@@ -1107,19 +1107,28 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
         rows += [{**{"name": ref, "aliases": [], "scorer": None, "capability": [], "clips": {}, "media_gb": None, "source_kind": None,
                      "obtain": None, "status": "not fetched", "origin": {"kind": "catalog", "commit": None}}, **facts[ref]}
                  for ref in missing if ref not in {r["name"] for r in rows}]
-    head = f"{'group':<14}{'readings':<16}" if suite is not None else ""
-    lines = [f"{head}{'name':<16}{'scorer':<8}{'capability':<23}{'clips':<28}{'media_gb':>9}  {'source':<15}{'obtain':<17}{'status':<13}origin"]
+    header = (["group", "readings"] if suite is not None else []) + ["name", "scorer", "capability", "clips", "media_gb", "source",
+                                                                     "obtain", "status", "origin"]
+    cells: list[list[str]] = []
     for r in rows:
         clips = ", ".join(f"{k}={v}" for k, v in r["clips"].items())
         tier = (r.get("obtain") or {}).get("tier") or "-"
         caps = ",".join(r.get("capability") or []) or "-"
-        pre = f"{r['suite_capability']:<14}{','.join(r['readings']):<16}" if suite is not None else ""
         o = r.get("origin") or {}
         org = o.get("kind", "-") + (f"@{str(o['commit'])[:12]}" if o.get("kind") == "fetched" and o.get("commit") else "")
         if o.get("newer"):
             org += f" (newer: {str(o['newer'])[:12]}, `yavih bench update`)"
-        lines.append(f"{pre}{r['name']:<16}{str(r['scorer']):<8}{caps:<23}{clips:<28}{str(r['media_gb']):>9}  "
-                     f"{str(r['source_kind']):<15}{tier:<17}{r['status']:<13}{org}")
+        pre = [str(r["suite_capability"]), ",".join(r["readings"])] if suite is not None else []
+        cells.append(pre + [r["name"], str(r["scorer"]), caps, clips, str(r["media_gb"]), str(r["source_kind"]), tier, r["status"], org])
+    # every column as wide as its widest cell (a long scorer or capability list never runs into the next column)
+    widths = [max(len(c[i]) for c in [header, *cells]) for i in range(len(header))]
+    right = header.index("media_gb")
+
+    def _row(c: list[str]) -> str:
+        parts = [v.rjust(w) if i == right else (v if i == len(c) - 1 else v.ljust(w)) for i, (v, w) in enumerate(zip(c, widths, strict=True))]
+        return "  ".join(parts).rstrip()
+
+    lines = [_row(header)] + [_row(c) for c in cells]
     if index is None and not any((r.get("origin") or {}).get("kind") == "repository" for r in rows):
         lines.append("catalog: no index cached here; `yavih bench list --catalog` reads it (network), "
                      "`yavih bench fetch <name>` brings a folder")

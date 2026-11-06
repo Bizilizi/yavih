@@ -143,6 +143,27 @@ def test_index_links_resolve():
 
 
 
+def test_generated_tables_do_not_depend_on_which_folder_scorers_a_process_loaded_first():
+    """The per-readout groups list the built-in scorers in their fixed order, then every other scorer by name: loading the
+    folders that own a scorer in reverse name order first (as a folder-only test selection may) changes no table."""
+    from yavih import doctables
+    from yavih.readouts import registry
+
+    own = sorted(n for n in packaged_names() if (packaged_folder(n) / "eval.py").is_file()
+                 and str(yaml.safe_load((packaged_folder(n) / "benchmark.yaml").read_text(encoding="utf-8")).get("scorer")) == n)
+    assert own, "no repository folder owns its scorer"
+    registry.reset()
+    try:
+        for n in reversed(own):
+            Benchmark.load(n)
+        assert list(registry.names())[-len(own):] == list(reversed(own))  # registered in reverse name order
+        for doc in doctables.repo_documents():
+            text = doc.read_text(encoding="utf-8")
+            assert doctables.replace_blocks(text) == text, f"{doc}: the table follows the registration order"
+    finally:
+        registry.reset()
+
+
 def test_generated_benchmark_tables_are_current():
     """The benchmark tables of the repo README, the index and the skill's data.md are generated from the folders
     (``python -m yavih.doctables --write``); a committed block that differs is stale."""
@@ -150,7 +171,7 @@ def test_generated_benchmark_tables_are_current():
 
     docs = doctables.repo_documents()
     assert {"data.md", "readouts.md"} <= {d.name for d in docs} and any(d.parent.name == "benchmarks" for d in docs)
-    if (packaged_root().parents[2] / "pyproject.toml").is_file():  # a source checkout: the repo docs too
+    if (packaged_root().parent / "pyproject.toml").is_file():  # a source checkout (<checkout>/benchmarks): the repo docs too
         assert {"README.md", "benchmark-folder.md"} <= {d.name for d in docs if d.parent.name != "benchmarks"}
     for doc in docs:
         text = doc.read_text(encoding="utf-8")

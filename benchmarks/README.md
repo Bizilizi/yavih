@@ -1,6 +1,6 @@
 # yavih benchmarks
 
-The packaged benchmark folders, one frozen protocol each. Every benchmark hands
+The repository's benchmark folders (`yavih bench fetch <name>` brings one), one frozen protocol each. Every benchmark hands
 the bridge its raw stored files and states two contracts in its `setup.md`; everything
 model-side is the bridge's declared decision. Click a name for the
 benchmark's README (description, citation, the protocol in yavih).

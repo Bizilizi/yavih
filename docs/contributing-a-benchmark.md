@@ -10,7 +10,7 @@ the rules are in [design](design.md).
 scorer, a head or loss, a metric, an output type, a bridge-check gate, an eligibility rule, a synthetic stand-in, a
 reading, a capability tag, a label kind) goes into the folder through the extension points of
 [extending through a folder](extending-through-a-folder.md): that is the intended path, not a workaround. A pull
-request that adds a benchmark changes files inside its folder only, plus the generated tables (step 10).
+request that adds a benchmark changes files inside its folder only.
 
 Throughout, `<name>` is the new benchmark's name (`[a-z][a-z0-9_]*`, the folder name, the `name:` in
 `benchmark.yaml`) and `F=benchmarks/<name>` is its folder.
