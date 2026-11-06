@@ -117,6 +117,15 @@ def test_exploring_a_benchmark_block_runs():
 # ------------------------------------------------------------------------------------------- references
 
 
+def test_bridge_md_has_a_row_per_temporal_rule():
+    """The closed temporal vocabulary (``yavih.media.rules.TEMPORAL_RULES``): one row each in references/bridge.md."""
+    from yavih.media.rules import TEMPORAL_RULES
+
+    text = (SKILL_ROOT / "references" / "bridge.md").read_text(encoding="utf-8")
+    for rule in TEMPORAL_RULES:
+        assert re.search(rf"^\| `{rule}` \|", text, flags=re.M), f"bridge.md: temporal rule {rule!r} has no row"
+
+
 def test_cli_md_documents_flags_and_codes():
     text = (SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8")
     for flags in DOCUMENTED_FLAGS.values():

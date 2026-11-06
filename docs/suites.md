@@ -102,12 +102,12 @@ AV-SyncBench as the successor of VGGSound-Sparse-style synchronisation; neither 
 Not defined yet. Candidates, in order:
 
 1. SSv2 Temporal-50 / SSv2-Template subsets
-3. the UTD-debiased Kinetics-400 split
-4. AV-SyncBench
-5. AVATAR
-6. UnAV-100
-7. RTime
-8. Diving48
+2. the UTD-debiased Kinetics-400 split
+3. AV-SyncBench
+4. AVATAR
+5. UnAV-100
+6. RTime
+7. Diving48
 
 Each needs a packaged benchmark folder first ([contributing a benchmark](contributing-a-benchmark.md)); until then a project
 suite can list one as `status: pending`.
