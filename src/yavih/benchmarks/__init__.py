@@ -15,7 +15,7 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
-__all__ = ["packaged_root", "checkout_root", "packaged_names", "packaged_folder", "external_folders", "BENCHMARK_YAML", "BENCH_PATH_ENV",
+__all__ = ["packaged_root", "checkout_root", "packaged_names", "packaged_folder", "project_folders", "external_folders", "BENCHMARK_YAML", "BENCH_PATH_ENV",
            "ENTRY_POINT_GROUP"]
 
 BENCHMARK_YAML = "benchmark.yaml"
@@ -97,7 +97,19 @@ def _entry_point_roots() -> list[tuple[str, Path]]:
     return out
 
 
-def external_folders(env: dict | None = None) -> dict[str, Path]:
+def project_folders(env: dict | None = None) -> dict[str, Path]:
+    """``name -> folder`` of the project's benchmarks directory (``yavih-bench/benchmarks/``, or ``[project]
+    benchmarks``): the project's own folders and the ones ``yavih bench fetch`` brought (its lock sits next to it).
+    Empty outside a project."""
+    import os
+
+    from yavih import config  # stdlib-only; reads the project file without building the settings
+
+    root = config.project_benchmarks_dir(os.environ if env is None else env)
+    return {f.name: f for f in _folders_in(root)} if root is not None else {}
+
+
+def external_folders(env: dict | None = None, *, include_project: bool = True) -> dict[str, Path]:
     """``name -> folder`` of the out-of-tree benchmark folders, in resolution order: the project's benchmarks
     directory (``yavih-bench/benchmarks/``, or ``[project] benchmarks``), each directory of ``$YAVIH_BENCH_PATH``
     (colon-separated, first wins), then each ``yavih.benchmarks`` entry-point pack. A name is
@@ -110,7 +122,7 @@ def external_folders(env: dict | None = None) -> dict[str, Path]:
     env = os.environ if env is None else env
     out: dict[str, Path] = {}
     roots = [("YAVIH_BENCH_PATH", Path(p).expanduser()) for p in str(env.get(BENCH_PATH_ENV, "") or "").split(os.pathsep) if p]
-    project = config.project_benchmarks_dir(env)
+    project = config.project_benchmarks_dir(env) if include_project else None
     if project is not None:
         roots.insert(0, ("project", project))
     for _origin, root in [*roots, *_entry_point_roots()]:

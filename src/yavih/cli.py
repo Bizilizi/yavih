@@ -940,12 +940,15 @@ def cmd_skill_show(ns: argparse.Namespace) -> Envelope:
 
 
 def _bench_refs() -> list[str]:
-    """Packaged benchmark names, then folders under ``$YAVIH_HOME/benchmarks/``, on ``$YAVIH_BENCH_PATH`` and in
-    ``yavih.benchmarks`` entry-point packs (the resolution order)."""
+    """Repository folder names, then the project's benchmarks directory, ``$YAVIH_HOME/benchmarks/``,
+    ``$YAVIH_BENCH_PATH`` and ``yavih.benchmarks`` entry-point packs (each name once; it loads from the first location
+    in the resolution order)."""
     from yavih.benchmark import _external_folders, packaged_benchmarks
+    from yavih.benchmarks import project_folders
     from yavih.config import yavih_home
 
     names = list(packaged_benchmarks())
+    names += [n for n in sorted(project_folders()) if n not in names]
     home = yavih_home() / "benchmarks"
     if home.is_dir():
         for p in sorted(home.iterdir()):
@@ -1083,6 +1086,13 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
             row.update(facts[ref])
         if (newer := _newer_in_catalog(index, row)) is not None:
             row["origin"]["newer"] = newer
+        from yavih.benchmark import same_name_folders
+
+        shadowed = [str(f) for f in same_name_folders(row["name"])[1:]]
+        if shadowed:
+            row["origin"]["shadows"] = shadowed
+            warnings.append(_finding("W_FETCH_SHADOWED", f"{row['name']}: {same_name_folders(row['name'])[0]} loads; same-named "
+                                     f"folders later in the resolution order are not used: {', '.join(shadowed)}", where=row["name"]))
         rows.append(row)
     have = {r["name"] for r in rows}
     if suite is None:
@@ -1257,6 +1267,8 @@ def cmd_bench_fetch(ns: argparse.Namespace) -> Envelope:
     verb = {"fetched": "fetched", "refreshed": "refreshed", "unchanged": "already at"}[rec["status"]]
     text = (f"{rec['name']}: {verb} {str(rec['commit'])[:12]} (protocol_version {rec.get('protocol_version')}, core "
             f"{rec.get('core')}){note} -> {rec['folder']}\n  lock {rec['lock']}; next: yavih bench show {rec['name']} setup\n")
+    if rec.get("shadowed_by"):
+        text += f"  warning: {rec['shadowed_by']} comes earlier in the resolution order and loads instead (W_FETCH_SHADOWED)\n"
     return Envelope(data=rec, paths={"folder": rec["folder"], "lock": rec["lock"]}, text=text)
 
 

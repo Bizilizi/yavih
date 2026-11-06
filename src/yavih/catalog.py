@@ -161,44 +161,6 @@ def _git(repo: Path, *args: str, binary: bool = False) -> Any:
     return proc.stdout if binary else proc.stdout.decode()
 
 
-def _git_ok(repo: Path, *args: str) -> str | None:
-    proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, timeout=300)
-    return proc.stdout.decode().strip() if proc.returncode == 0 else None
-
-
-def _folder_names(repo: Path, commit: str) -> list[str]:
-    """Folder names at ``commit``: the directories under ``benchmarks/`` (or the older ``src/yavih/benchmarks/``)
-    that hold a ``benchmark.yaml``."""
-    names: set[str] = set()
-    for parent in _FOLDER_PARENTS:
-        out = _git_ok(repo, "ls-tree", "--name-only", f"{commit}:{parent}")
-        for n in (out or "").splitlines():
-            if _git_ok(repo, "cat-file", "-e", f"{commit}:{parent}/{n}/benchmark.yaml") is not None:
-                names.add(n)
-        if names:
-            break
-    return sorted(names)
-
-
-def _yaml_at(repo: Path, commit: str, path: str) -> Mapping[str, Any] | None:
-    raw = _git_ok(repo, "show", f"{commit}:{path}/benchmark.yaml")
-    if raw is None:
-        return None
-    try:
-        d = yaml.safe_load(raw)
-    except yaml.YAMLError:
-        return None
-    return d if isinstance(d, Mapping) else None
-
-
-def _path_at(repo: Path, commit: str, name: str) -> str | None:
-    for parent in _FOLDER_PARENTS:
-        p = f"{parent}/{name}"
-        if _git_ok(repo, "cat-file", "-e", f"{commit}:{p}/benchmark.yaml") is not None:
-            return p
-    return None
-
-
 def _newest_protocol_hash(d: Mapping[str, Any]) -> str | None:
     log = d.get("changelog")
     if isinstance(log, list) and log and isinstance(log[-1], Mapping):
@@ -230,25 +192,87 @@ def _metadata(d: Mapping[str, Any], name: str, path: str) -> dict[str, Any]:
     }
 
 
-def build_index(repo: str | os.PathLike, *, commit: str = "HEAD", repo_name: str = DEFAULT_REPO) -> dict[str, Any]:
+def _batch(repo: Path, specs: Sequence[str], *, contents: bool) -> dict[str, tuple[str, bytes | None] | None]:
+    """``git cat-file --batch[-check]`` over ``specs`` in one process: ``spec -> (oid, content or None)``, ``None`` when
+    the object is missing."""
+    if not specs:
+        return {}
+    args = ["git", "-C", str(repo), "cat-file", "--batch" if contents else "--batch-check"]
+    proc = subprocess.run(args, input=("\n".join(specs) + "\n").encode(), capture_output=True, timeout=600)
+    if proc.returncode != 0:
+        raise CatalogError("E_CATALOG_GIT", f"git cat-file failed in {repo}: {proc.stderr.decode(errors='replace').strip()}")
+    out: dict[str, tuple[str, bytes | None] | None] = {}
+    buf, pos = proc.stdout, 0
+    for spec in specs:
+        nl = buf.index(b"\n", pos)
+        head = buf[pos:nl].decode()
+        pos = nl + 1
+        if head.endswith(" missing") or head.endswith(" ambiguous"):
+            out[spec] = None
+            continue
+        oid, _kind, size = head.split()
+        if contents:
+            out[spec] = (oid, buf[pos:pos + int(size)])
+            pos += int(size) + 1
+        else:
+            out[spec] = (oid, None)
+    return out
+
+
+def build_index(repo: str | os.PathLike, *, commit: str = "HEAD", repo_name: str | None = DEFAULT_REPO) -> dict[str, Any]:
     """The index of the folders of the git repository ``repo`` at ``commit``, from its history alone (the working
     tree is never read, so the index is reproducible from the commit it names). A revision without ``core:`` (a
-    folder older than the catalog) is not listed: no core that can fetch could load it."""
+    folder older than the catalog) is not listed: no core that can fetch could load it.
+
+    Three git processes whatever the number of folders: one ``git log --name-only`` walk over the folder directories
+    (which commit touched which folder), one ``git cat-file --batch-check`` (each folder's path and tree id at each of
+    those commits), one ``git cat-file --batch`` (their ``benchmark.yaml``)."""
     repo = Path(repo)
     head = _git(repo, "rev-parse", "--verify", f"{commit}^{{commit}}").strip()
+    names = sorted({PurePosixPath(p).parent.name for p in _git(repo, "ls-tree", "-r", "--name-only", head, "--", *_FOLDER_PARENTS).splitlines()
+                    if PurePosixPath(p).name == "benchmark.yaml" and PurePosixPath(p).parent.parent.as_posix() in _FOLDER_PARENTS})
+    # newest first: the commits touching each folder (one walk over every folder directory)
+    touched: dict[str, list[str]] = {n: [] for n in names}
+    log = _git(repo, "log", "--format=%x00%H", "--name-only", head, "--", *_FOLDER_PARENTS)
+    for block in log.split("\x00")[1:]:
+        lines = [ln for ln in block.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        c, files = lines[0], lines[1:]
+        hit = set()
+        for f in files:
+            parts = PurePosixPath(f).parts
+            for parent in _FOLDER_PARENTS:
+                pp = PurePosixPath(parent).parts
+                if parts[:len(pp)] == pp and len(parts) > len(pp) + 1 and parts[len(pp)] in touched:
+                    hit.add(parts[len(pp)])
+        for n in hit:
+            touched[n].append(c)
+    trees = _batch(repo, [f"{c}:{parent}/{n}" for n in names for c in touched[n] for parent in _FOLDER_PARENTS], contents=False)
+    paths: dict[tuple[str, str], tuple[str, str]] = {}  # (folder, commit) -> (path, tree id)
+    for n in names:
+        for c in touched[n]:
+            for parent in _FOLDER_PARENTS:  # benchmarks/<n> first: the current layout wins at the commit that moved it
+                t = trees.get(f"{c}:{parent}/{n}")
+                if t is not None:
+                    paths[(n, c)] = (f"{parent}/{n}", t[0])
+                    break
+    blobs = _batch(repo, [f"{c}:{p}/benchmark.yaml" for (n, c), (p, _t) in paths.items()], contents=True)
     out: dict[str, Any] = {}
-    for name in _folder_names(repo, head):
-        paths = [f"{parent}/{name}" for parent in _FOLDER_PARENTS]
-        commits = _git(repo, "log", "--format=%H", head, "--", *paths).split()
+    for name in names:
         revisions: list[dict[str, Any]] = []
         seen: set[tuple[Any, Any]] = set()
         newest: tuple[Mapping[str, Any], str] | None = None
-        for c in commits:
-            path = _path_at(repo, c, name)
-            if path is None:  # the commit that removed or moved it away
+        for c in touched[name]:
+            if (name, c) not in paths:  # the commit that removed or moved it away
                 continue
-            d = _yaml_at(repo, c, path)
-            if d is None or not d.get("core"):
+            path, tree = paths[(name, c)]
+            blob = blobs.get(f"{c}:{path}/benchmark.yaml")
+            try:
+                d = yaml.safe_load(blob[1]) if blob is not None and blob[1] is not None else None
+            except yaml.YAMLError:
+                d = None
+            if not isinstance(d, Mapping) or not d.get("core"):
                 continue
             if newest is None:
                 newest = (d, path)
@@ -256,9 +280,8 @@ def build_index(repo: str | os.PathLike, *, commit: str = "HEAD", repo_name: str
             if key in seen:
                 continue
             seen.add(key)
-            revisions.append({"commit": c, "path": path, "tree": _git(repo, "rev-parse", f"{c}:{path}").strip(),
-                              "core": d.get("core"), "protocol_version": d.get("protocol_version"),
-                              "protocol_hash": _newest_protocol_hash(d)})
+            revisions.append({"commit": c, "path": path, "tree": tree, "core": d.get("core"),
+                              "protocol_version": d.get("protocol_version"), "protocol_hash": _newest_protocol_hash(d)})
         if newest is None:
             continue
         out[name] = {**_metadata(newest[0], name, newest[1]), "revisions": revisions}
@@ -325,27 +348,36 @@ def cached_index() -> dict[str, Any] | None:
         return None
 
 
-def load_index(source: str | os.PathLike | None = None, *, offline: bool = False) -> dict[str, Any]:
+def load_index(source: str | os.PathLike | None = None) -> dict[str, Any]:
     """The index from ``source`` (a yavih checkout or a directory holding ``catalog/index.json``, a repository
     archive, an index file) or, without one, from ``[catalog] url`` (cached under ``$YAVIH_HOME/catalog``; the cache
-    is used when the download fails, and alone with ``offline``)."""
+    is used when the download fails)."""
     if source is not None:
         return _index_of_source(Path(source))
     url = _setting("url", DEFAULT_URL)
     cache = _home() / "catalog" / "index.json"
-    if not offline:
-        try:
-            _download(url, cache)
-        except CatalogError:
-            if cached_index() is None:
-                raise
-            from yavih import config
+    try:
+        _download(url, cache)
+    except CatalogError:
+        if cached_index() is None:
+            raise
+        from yavih import config
 
-            config.warn_once("W_CATALOG_CACHED", f"the catalog index at {url} is unreachable: using the cached copy {cache}")
+        config.warn_once("W_CATALOG_CACHED", f"the catalog index at {url} is unreachable: using the cached copy {cache}")
     idx = cached_index()
     if idx is None:
         raise CatalogError("E_CATALOG_UNREACHABLE", f"no catalog index cached at {cache} (fetch one online, or --from <checkout>)", exit_code=3)
     return idx
+
+
+def _remote_repo(checkout: Path) -> str | None:
+    """``owner/name`` of a checkout's ``origin`` remote on GitHub (``https://github.com/o/n(.git)`` or
+    ``git@github.com:o/n(.git)``), else ``None``: a fork or an unpushed clone is recorded as it is, never guessed."""
+    import re
+
+    proc = subprocess.run(["git", "-C", str(checkout), "remote", "get-url", "origin"], capture_output=True, text=True, timeout=60)
+    m = re.match(r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([\w.-]+/[\w.-]+?)(?:\.git)?/?$", proc.stdout.strip())
+    return m.group(1) if proc.returncode == 0 and m else None
 
 
 def _is_git_checkout(d: Path) -> bool:
@@ -355,7 +387,9 @@ def _is_git_checkout(d: Path) -> bool:
 def _index_of_source(src: Path) -> dict[str, Any]:
     if src.is_dir():
         if _is_git_checkout(src) and any((src / p).is_dir() for p in _FOLDER_PARENTS):
-            return build_index(src)  # the checkout's own history: current even on a branch the published index lags
+            # the checkout's own history (current even on a branch the published index lags); its repository is its
+            # origin remote, or unknown (None) for a clone without a GitHub origin
+            return build_index(src, repo_name=_remote_repo(src))
         idx = src / INDEX_PATH
         if idx.is_file():
             return _check_index(json.loads(idx.read_text(encoding="utf-8")), str(idx))
@@ -653,9 +687,15 @@ def fetch(ref: str, *, source: str | os.PathLike | None = None, refresh: bool = 
             if got != rev["tree"]:
                 raise CatalogError("E_CATALOG_TREE", f"{name}@{str(rev['commit'])[:12]} from {where}: tree {got} != {rev['tree']} "
                                    "(the index lists another content: a corrupt download or a wrong source)", exit_code=2)
-            from yavih.benchmark import Benchmark
+            from yavih.benchmark import Benchmark, CoreVersionError
 
-            Benchmark.from_dir(staging / name)  # the manifest's sha256 and the schema, before the folder is installed
+            try:
+                Benchmark.from_dir(staging / name)  # the manifest's sha256 and the schema, before the folder is installed
+            except CoreVersionError:
+                raise CatalogError("E_CORE_VERSION", f"{name}@{str(rev['commit'])[:12]} needs yavih core {rev.get('core')}; this is "
+                                   f"yavih {st['version']}. Install a core that fits: pip install --no-deps \"yavih{rev.get('core')}\" "
+                                   "(yavih never upgrades itself), or fetch a revision for this core without @<commit>; nothing "
+                                   "was installed", exit_code=3) from None
             if folder.exists():
                 shutil.rmtree(folder)
             os.replace(staging / name, folder)
@@ -663,16 +703,32 @@ def fetch(ref: str, *, source: str | os.PathLike | None = None, refresh: bool = 
             shutil.rmtree(staging, ignore_errors=True)
     else:
         where = (old or {}).get("source") if isinstance(old, Mapping) else None
-    record = {"repo": index.get("repo") or DEFAULT_REPO, "commit": rev["commit"], "path": rev["path"], "tree": rev["tree"],
+    record = {"repo": index.get("repo"), "commit": rev["commit"], "path": rev["path"], "tree": rev["tree"],
               "core": rev.get("core"), "protocol_version": rev.get("protocol_version"), "protocol_hash": rev.get("protocol_hash"),
               "source": where, "fetched_at": (old or {}).get("fetched_at") if status == "unchanged" and isinstance(old, Mapping) else _now()}
     if old != record:
         lock["benchmarks"][name] = record
         _write_lock(lockp, lock)
     _update_gitignore(bench_dir, list(lock["benchmarks"]))
+    shadowed_by = _shadowed_by(name, folder)
     return {"name": name, "folder": str(folder), "status": status, "commit": rev["commit"], "tree": rev["tree"],
             "core": rev.get("core"), "protocol_version": rev.get("protocol_version"), "protocol_hash": rev.get("protocol_hash"),
-            "core_status": st, "source": where, "lock": str(lockp)}
+            "core_status": st, "source": where, "lock": str(lockp), "shadowed_by": shadowed_by}
+
+
+def _shadowed_by(name: str, folder: Path) -> str | None:
+    """The same-named folder that loads instead of ``folder`` (earlier in the resolution order), reported once
+    (``W_FETCH_SHADOWED``); ``None`` when ``folder`` is the one that loads."""
+    from yavih import config
+    from yavih.benchmark import same_name_folders
+
+    found = same_name_folders(name)
+    if not found or found[0].resolve() == folder.resolve():
+        return None
+    config.warn_once("W_FETCH_SHADOWED", f"{name}: fetched into {folder}, but {found[0]} comes earlier in the resolution "
+                     "order and is the one that loads (the project's benchmarks directory, then $YAVIH_HOME/benchmarks, then "
+                     "the repository folders); remove it or fetch inside the project", where=str(folder))
+    return str(found[0])
 
 
 def update(names: Sequence[str] | None = None, *, yes: bool = False, source: str | os.PathLike | None = None,

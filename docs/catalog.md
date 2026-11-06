@@ -63,7 +63,8 @@ when the network is down), downloads the repository archive at the chosen commit
 commit under `$YAVIH_HOME/catalog/archives/`), extracts only the folder, checks that its tree id equals the index's
 (`E_CATALOG_TREE` otherwise: nothing is installed), loads it (the manifest's sha256 is checked) and only then moves it
 into place. It goes to the project's benchmarks directory (`yavih-bench/benchmarks/<name>`, or `[project]
-benchmarks`), or to `$YAVIH_HOME/benchmarks/<name>` outside a project.
+benchmarks`), or to `$YAVIH_HOME/benchmarks/<name>` outside a project. Inside a project the project's directory
+resolves before `$YAVIH_HOME/benchmarks`, so its committed lock decides what it loads.
 
 Next to that directory, `benchmarks.lock` records every fetched folder: `repo`, `commit`, `path`, `tree`, `core`,
 `protocol_version`, `protocol_hash`, `source`, `fetched_at`. Commit the lock with the project; the fetched folders
@@ -128,6 +129,7 @@ the code digests: a README edit moves the tree without changing what scored the 
 | `E_FETCH_MODIFIED` | 1 | the folder here is not the one the lock records; `--refresh` replaces it |
 | `E_LOCK` | 2 | an unreadable `benchmarks.lock` |
 | `W_FETCHED_MODIFIED` | | a fetched folder no longer matches its lock (results record the edited tree) |
+| `W_FETCH_SHADOWED` | | a same-named folder earlier in the resolution order (the project's benchmarks directory, then `$YAVIH_HOME/benchmarks`, then the repository folders) loads instead of the fetched one, or `bench list` found one later that is not used |
 | `W_CATALOG_CACHED` | | the index is unreachable: the cached copy is used |
 | `W_CATALOG` | | `bench list --catalog` could not read the index |
 | `W_NOT_FETCHED` | | `plan init` could not fetch a suite benchmark: listed, not planned |

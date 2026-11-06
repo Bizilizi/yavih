@@ -387,11 +387,17 @@ def _registry() -> dict[str, tuple[tuple[str, ...], dict[str, Any]]]:
 def _scan_registry(home: Path) -> dict[str, tuple[tuple[str, ...], dict[str, Any]]]:
     import yaml  # core dependency; imported lazily so `import yavih.config` stays stdlib
 
-    from yavih.benchmarks import BENCHMARK_YAML, external_folders, packaged_folder, packaged_names
+    from yavih.benchmarks import (
+        BENCHMARK_YAML,
+        external_folders,
+        packaged_folder,
+        packaged_names,
+        project_folders,
+    )
 
     loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
     folders: dict[str, Path] = {}
-    for name, p in external_folders().items():  # $YAVIH_BENCH_PATH and entry-point packs: lowest precedence
+    for name, p in external_folders(include_project=False).items():  # $YAVIH_BENCH_PATH and entry-point packs: lowest precedence
         folders[name] = p
     for name in packaged_names():
         p = packaged_folder(name)
@@ -402,6 +408,7 @@ def _scan_registry(home: Path) -> dict[str, tuple[tuple[str, ...], dict[str, Any
         for p in sorted(hb.iterdir()):
             if (p / BENCHMARK_YAML).is_file():
                 folders[p.name] = p
+    folders.update(project_folders())  # the project's benchmarks directory resolves first (yavih.benchmark.resolve_folder)
     out: dict[str, tuple[tuple[str, ...], dict[str, Any]]] = {}
     for name, folder in folders.items():
         try:

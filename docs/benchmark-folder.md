@@ -477,16 +477,17 @@ class Benchmark:
 `Benchmark.load(ref)` (and every `yavih bench` command) resolves `ref` to a folder in this order; the first match wins:
 
 1. an existing directory path holding `benchmark.yaml` (a `ref` containing `/` is only tried as a path);
-2. `$YAVIH_HOME/benchmarks/<ref>` (where `yavih bench fetch` puts a folder outside a project);
-3. the repository folder `benchmarks/<ref>` when yavih runs from a source checkout (an installed wheel ships none);
-4. the project's benchmarks directory (`yavih-bench/benchmarks/`, or `[project] benchmarks`: a project's own folders
-   and the fetched ones), then the directories of `$YAVIH_BENCH_PATH` (colon-separated, first wins; each is a
-   benchmark folder or holds benchmark folders);
-5. pip-installed benchmark packs: entry-point group `yavih.benchmarks`, value `"pkg.module"`, whose package directory
-   is a benchmark folder or holds benchmark folders (read as data, never imported);
+2. the project's benchmarks directory (`yavih-bench/benchmarks/<ref>`, or `[project] benchmarks`): a project's own
+   folders and the fetched ones its committed `benchmarks.lock` records, so the lock decides what a project loads;
+3. `$YAVIH_HOME/benchmarks/<ref>` (where `yavih bench fetch` puts a folder outside a project);
+4. the repository folder `benchmarks/<ref>` when yavih runs from a source checkout (an installed wheel ships none);
+5. the directories of `$YAVIH_BENCH_PATH` (colon-separated, first wins; each is a benchmark folder or holds benchmark
+   folders), then pip-installed benchmark packs: entry-point group `yavih.benchmarks`, value `"pkg.module"`, whose
+   package directory is a benchmark folder or holds benchmark folders (read as data, never imported);
 6. an alias declared by any of the folders above.
 
-A folder from 4 or 5 never shadows a repository folder's name. A name that resolves nowhere is a catalog benchmark not
+A folder from 5 never shadows a repository folder's name. When a name exists in more than one location, the first
+loads; `yavih bench fetch` and `yavih bench list` report the others (`W_FETCH_SHADOWED`). A name that resolves nowhere is a catalog benchmark not
 fetched yet: `yavih bench fetch <name>` brings it, verified against the index and recorded in the lock
 ([catalog](catalog.md)).
 

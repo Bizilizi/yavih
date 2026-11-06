@@ -55,6 +55,7 @@ __all__ = [
     "CoreVersionError",
     "core_status",
     "check_core",
+    "same_name_folders",
     "ManifestError",
     "UnknownBenchmark",
     "NoTargets",
@@ -3130,16 +3131,18 @@ def packaged_benchmarks() -> list[str]:
 
 
 def _external_folders() -> dict[str, Path]:
-    """``$YAVIH_BENCH_PATH`` and entry-point packs, minus names a packaged folder already has (never shadowed)."""
+    """``$YAVIH_BENCH_PATH`` and entry-point packs, minus names a repository folder already has (never shadowed). The
+    project's benchmarks directory is not among them: it resolves first (:func:`resolve_folder`)."""
     from yavih.benchmarks import external_folders, packaged_folder
 
-    return {n: f for n, f in external_folders().items() if packaged_folder(n) is None}
+    return {n: f for n, f in external_folders(include_project=False).items() if packaged_folder(n) is None}
 
 
 def _candidate_folders() -> dict[str, Path]:
-    """``name → folder`` over ``$YAVIH_HOME/benchmarks`` (wins), the packaged folders, then ``$YAVIH_BENCH_PATH`` and
-    entry-point packs (which never shadow a packaged name)."""
-    from yavih.benchmarks import packaged_folder
+    """``name → folder`` in resolution order, the first location winning: the project's benchmarks directory, then
+    ``$YAVIH_HOME/benchmarks``, the repository folders (a source checkout), then ``$YAVIH_BENCH_PATH`` and entry-point
+    packs (which never shadow a repository folder's name)."""
+    from yavih.benchmarks import packaged_folder, project_folders
 
     out: dict[str, Path] = dict(_external_folders())
     for name in packaged_benchmarks():
@@ -3148,6 +3151,21 @@ def _candidate_folders() -> dict[str, Path]:
             out[name] = p
     for name in _home_benchmarks():
         out[name] = home_benchmarks_dir() / name
+    out.update(project_folders())
+    return out
+
+
+def same_name_folders(name: str) -> list[Path]:
+    """Every folder named ``name`` in resolution order (project, ``$YAVIH_HOME``, repository, ``$YAVIH_BENCH_PATH``,
+    packs); the first is the one that loads. ``yavih bench fetch`` and ``bench list`` report the others as shadowed
+    (``W_FETCH_SHADOWED``)."""
+    from yavih.benchmarks import external_folders, packaged_folder, project_folders
+
+    out: list[Path] = []
+    for cand in (project_folders().get(name), home_benchmarks_dir() / name, packaged_folder(name),
+                 external_folders(include_project=False).get(name)):
+        if cand is not None and (Path(cand) / "benchmark.yaml").is_file() and all(Path(cand).resolve() != o.resolve() for o in out):
+            out.append(Path(cand))
     return out
 
 
@@ -3167,15 +3185,20 @@ def _aliases_of(folder: Path) -> tuple[str, tuple[str, ...]]:
 
 
 def resolve_folder(ref: str) -> Path | None:
-    """Resolution order: existing directory → ``$YAVIH_HOME/benchmarks/<ref>`` → packaged →
-    ``$YAVIH_BENCH_PATH`` (colon-separated, first wins) → ``yavih.benchmarks`` entry-point packs → alias over all of
-    them. An out-of-tree folder never shadows a packaged name. ``None`` when nothing matches."""
-    from yavih.benchmarks import packaged_folder
+    """Resolution order: existing directory → the project's benchmarks directory (``yavih-bench/benchmarks/<ref>``: a
+    project's own folders and the fetched ones its committed lock records) → ``$YAVIH_HOME/benchmarks/<ref>`` → the
+    repository folder (a source checkout) → ``$YAVIH_BENCH_PATH`` (colon-separated, first wins) →
+    ``yavih.benchmarks`` entry-point packs → alias over all of them. ``$YAVIH_BENCH_PATH`` and packs never shadow a
+    repository folder's name. ``None`` when nothing matches."""
+    from yavih.benchmarks import packaged_folder, project_folders
 
     p = Path(ref).expanduser()
     if p.is_dir() and (p / "benchmark.yaml").is_file():
         return p
     if "/" not in ref and os.sep not in ref:
+        project = project_folders().get(ref)
+        if project is not None:
+            return project
         home = home_benchmarks_dir() / ref
         if home.is_dir() and (home / "benchmark.yaml").is_file():
             return home

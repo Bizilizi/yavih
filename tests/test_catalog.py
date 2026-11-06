@@ -133,7 +133,8 @@ def test_fetch_from_a_checkout_verifies_locks_and_ignores(catrepo, tmp_path, yav
     assert catalog.origin(folder)["tree"] != rec["tree"]
     out = catalog.fetch("catx", source=catrepo["repo"], dest_dir=dest, version="1.2.0", refresh=True)
     assert out["status"] == "refreshed" and catalog.tree_id(folder) == rec["tree"]
-    assert catalog.origin(folder) == {"repo": catalog.DEFAULT_REPO, "commit": catrepo["c2b"], "tree": rec["tree"]}
+    # a checkout without a GitHub origin: its repository is recorded as unknown, never guessed
+    assert catalog.origin(folder) == {"repo": None, "commit": catrepo["c2b"], "tree": rec["tree"]}
 
 
 def test_fetch_from_an_archive_and_from_file_urls_with_the_archive_cache(catrepo, tmp_path, yavih_home, monkeypatch):
@@ -313,3 +314,66 @@ def test_plan_init_fetches_a_suite_benchmark_that_is_not_here_and_lists_one_it_c
     rec = plan_init(str(two), model="toy2", out=str(tmp_path / "m2.yaml"), source=tmp_path / "nowhere")
     assert [x["benchmark"] for x in rec["not_fetched"]] == ["catx"] and "E_CATALOG_SOURCE" in rec["not_fetched"][0]["error"]
     assert [e["benchmark"] for e in rec["entries"]] == ["esc50"]
+
+
+def test_the_projects_locked_folder_resolves_before_a_home_copy_and_a_shadowed_fetch_is_reported(catrepo, tmp_path, yavih_home, monkeypatch, capsys):
+    """Inside a project, its benchmarks directory (the committed lock) wins over a same-named $YAVIH_HOME copy; a fetch
+    whose folder does not load and ``bench list`` say so (``W_FETCH_SHADOWED``)."""
+    from yavih import config
+    from yavih.benchmark import Benchmark, resolve_folder, same_name_folders
+    from yavih.cli import main
+
+    proj = tmp_path / "work"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+    monkeypatch.delenv("YAVIH_CONFIG", raising=False)
+    assert main(["init", "--json"]) == 0
+    capsys.readouterr()
+    home_copy = catalog.fetch("catx", source=catrepo["repo"], dest_dir=yavih_home / "benchmarks", version="1.2.0")
+    project_copy = catalog.fetch("catx", source=catrepo["repo"], version="1.2.0")  # the project's directory
+    assert Path(project_copy["folder"]) == proj / "yavih-bench" / "benchmarks" / "catx" and project_copy["shadowed_by"] is None
+    assert resolve_folder("catx").resolve() == Path(project_copy["folder"]).resolve()
+    assert Benchmark.load("catx").folder_origin["commit"] == project_copy["commit"]
+    assert [p.resolve() for p in same_name_folders("catx")] == [Path(project_copy["folder"]).resolve(), Path(home_copy["folder"]).resolve()]
+    config.drain_warnings()
+    again = catalog.fetch("catx", source=catrepo["repo"], dest_dir=yavih_home / "benchmarks", version="1.2.0")
+    assert again["shadowed_by"] and Path(again["shadowed_by"]).resolve() == Path(project_copy["folder"]).resolve()
+    assert any(w["code"] == "W_FETCH_SHADOWED" for w in config.drain_warnings())
+    assert main(["bench", "list", "--json"]) == 0
+    env = json.loads(capsys.readouterr().out)
+    assert any(w["code"] == "W_FETCH_SHADOWED" and "catx" in w["message"] for w in env["warnings"])
+
+
+@pytest.mark.parametrize(("url", "want"), [("https://github.com/someone/yavih.git", "someone/yavih"),
+                                           ("git@github.com:Bizilizi/yavih.git", "Bizilizi/yavih"),
+                                           ("https://gitlab.example.org/x/y.git", None)])
+def test_a_checkouts_repository_is_its_github_origin_or_unknown(catrepo, tmp_path, yavih_home, url, want):
+    _git(catrepo["repo"], "remote", "add", "origin", url)
+    rec = catalog.fetch("catx", source=catrepo["repo"], dest_dir=tmp_path / "b", version="1.2.0")
+    assert json.loads((tmp_path / "benchmarks.lock").read_text())["benchmarks"]["catx"]["repo"] == want
+    assert rec["name"] == "catx"
+
+
+def test_an_explicit_revision_for_a_newer_core_is_refused_without_the_staging_path(catrepo, tmp_path, yavih_home):
+    from unittest import mock
+
+    with mock.patch("yavih.versions.__version__", "1.2.0"), pytest.raises(CatalogError) as ei:
+        catalog.fetch(f"catx@{catrepo['c3'][:10]}", source=catrepo["repo"], dest_dir=tmp_path / "b", version="1.2.0")
+    assert ei.value.code == "E_CORE_VERSION" and ei.value.exit_code == 3
+    assert ".fetch-" not in str(ei.value) and 'pip install --no-deps "yavih>=9,<10"' in str(ei.value)
+    assert not (tmp_path / "b" / "catx").exists() and not list((tmp_path / "b").glob(".catx.fetch-*"))
+
+
+def test_repository_index_is_reproducible_from_the_commit_it_names_and_lists_every_folder():
+    """The committed catalog/index.json equals a regeneration at the commit it names, and lists every folder under
+    benchmarks/ (CI writes the index before the tests, as it writes the tables: a folder a pull request adds is
+    listed there; locally, `python -m yavih.catalog --write` without committing)."""
+    if not (REPO / ".git").exists() or shutil.which("git") is None:
+        pytest.skip("not a git checkout")
+    idx = json.loads((REPO / catalog.INDEX_PATH).read_text(encoding="utf-8"))
+    if subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{idx['commit']}^{{commit}}"], capture_output=True).returncode != 0:
+        pytest.skip(f"the commit the index names ({idx['commit'][:12]}) is not in this clone")
+    assert catalog.main(["--repo", str(REPO), "--check"]) == 0
+    folders = sorted(p.name for p in (REPO / "benchmarks").iterdir() if (p / "benchmark.yaml").is_file())
+    missing = [n for n in folders if n not in idx["benchmarks"]]
+    assert not missing, f"catalog/index.json does not list {missing}: python -m yavih.catalog --write (CI does it)"
