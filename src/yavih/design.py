@@ -23,8 +23,8 @@ import tempfile
 from pathlib import Path
 
 __all__ = ["CSS_FILES", "DESIGN_DIR", "DESIGN_VERSION", "FONTS_DIR", "RenderError", "SCALE", "available", "base_css",
-           "chrome", "chrome_args", "compress_png", "contact_sheet", "design_sha256", "page_css", "render_html",
-           "stage_fonts"]
+           "chrome", "chrome_args", "compress_png", "contact_sheet", "design_sha256", "page_css", "png_has_transparency",
+           "render_html", "stage_fonts"]
 
 #: ``assets/design/`` of the source checkout (not shipped).
 DESIGN_DIR = Path(__file__).resolve().parents[2] / "assets" / "design"
@@ -36,12 +36,20 @@ CSS_FILES: tuple[str, ...] = ("fonts.css", "tokens.css", "components.css")
 #: Device scale of every committed PNG (a 1600 CSS px page is 3200 pixels wide).
 SCALE = 2
 _CHROMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome")
+#: Captures retried when an opaque still comes back with transparent pixels or a capture hangs (``render_html``).
+OPAQUE_RETRIES = 2
+#: Seconds one Chrome capture may take.
+CAPTURE_TIMEOUT_S = 120
 #: Background of the contact sheets (``--bg1``).
 _SHEET_BG = (15, 23, 42)
 
 
 class RenderError(RuntimeError):
     """A page cannot be built or rendered (no design files, no Chrome, Chrome failed)."""
+
+
+class _CaptureTimeout(RenderError):
+    """One Chrome capture did not finish in time (retried by ``render_html``)."""
 
 
 def available() -> bool:
@@ -106,23 +114,65 @@ def chrome_args(width: int, height: int, scale: int = SCALE) -> tuple[str, ...]:
     default background: a page that paints none renders with alpha, the motion overlay)."""
     return ("--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
             f"--force-device-scale-factor={scale}", f"--window-size={int(width)},{int(height)}",
-            "--default-background-color=00000000", "--virtual-time-budget=10000")
+            "--default-background-color=00000000", "--virtual-time-budget=10000",
+            # raster every tile before the screenshot: without it a loaded machine captures a page whose late tiles are
+            # still blank (transparent holes, a few per cent of renders with 24 Chromes in parallel)
+            "--run-all-compositor-stages-before-draw")
 
 
-def render_html(html_path: Path, png_path: Path, *, size: tuple[int, int] = (1600, 500), scale: int = SCALE,
-                chrome: str | None = None, compress: bool = True) -> Path:
-    """Screenshot ``html_path`` into ``png_path`` with headless Chrome (``chrome_args``); ``compress_png`` after."""
-    png_path.parent.mkdir(parents=True, exist_ok=True)
-    exe = _find_chrome(chrome)
+def _screenshot(exe: str, html_path: Path, png_path: Path, size: tuple[int, int], scale: int) -> None:
     with tempfile.TemporaryDirectory() as profile:
         cmd = [exe, *chrome_args(*size, scale), f"--user-data-dir={profile}", f"--screenshot={png_path.resolve()}",
                Path(html_path).resolve().as_uri()]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=CAPTURE_TIMEOUT_S)
+        except subprocess.TimeoutExpired as e:
+            raise _CaptureTimeout(f"chrome did not finish {png_path.name} within {CAPTURE_TIMEOUT_S} s") from e
     if proc.returncode != 0 or not png_path.is_file():
         raise RenderError(f"chrome failed ({proc.returncode}): {(proc.stderr or '').strip()[-500:]}")
+
+
+def render_html(html_path: Path, png_path: Path, *, size: tuple[int, int] = (1600, 500), scale: int = SCALE,
+                chrome: str | None = None, compress: bool = True, opaque: bool = True) -> Path:
+    """Screenshot ``html_path`` into ``png_path`` with headless Chrome (``chrome_args``); ``compress_png`` after.
+
+    ``opaque`` (every still: the pages paint the dark background edge to edge): a screenshot with a transparent pixel
+    is a capture taken before every tile was painted; it is taken again (``OPAQUE_RETRIES`` times) and then refused
+    with ``RenderError("screenshot incomplete ...")``. The motion overlay, transparent by design, passes ``False``. A
+    capture that hangs past ``CAPTURE_TIMEOUT_S`` is retried the same way."""
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    exe = _find_chrome(chrome)
+    for attempt in range(OPAQUE_RETRIES + 1):
+        try:
+            _screenshot(exe, Path(html_path), png_path, size, scale)
+        except _CaptureTimeout:
+            if attempt == OPAQUE_RETRIES:
+                raise
+            continue
+        if not opaque or not png_has_transparency(png_path):
+            break
+        if attempt == OPAQUE_RETRIES:
+            raise RenderError(f"screenshot incomplete: {png_path.name} has transparent pixels after {OPAQUE_RETRIES + 1} "
+                              "captures (Chrome took it before every tile was painted; a loaded machine?)")
     if compress:
         compress_png(png_path)
     return png_path
+
+
+def png_has_transparency(path: Path) -> bool | None:
+    """Whether a PNG has a pixel with alpha < 255 (an incomplete still); ``None`` when it cannot be read (no
+    Pillow, not a PNG)."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        with Image.open(path) as im:
+            if im.mode not in ("RGBA", "LA", "PA", "P") and "transparency" not in im.info:
+                return False
+            return im.convert("RGBA").getchannel("A").getextrema()[0] < 255
+    except (OSError, ValueError, SyntaxError):
+        return None
 
 
 def compress_png(path: Path) -> Path:

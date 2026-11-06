@@ -160,7 +160,7 @@ def test_source_sha256_needs_no_media_and_follows_spec_template_design(folders, 
 
 
 def _fake_render(calls=None, fail_on=None):
-    def render(html_path, png_path, *, size=(1600, 500), scale=2, chrome=None, compress=True):
+    def render(html_path, png_path, *, size=(1600, 500), scale=2, chrome=None, compress=True, opaque=True):
         if fail_on and fail_on in html_path.name:
             raise design.RenderError("no chrome")
         if calls is not None:
@@ -205,6 +205,11 @@ def test_lint_preview_codes(folders, tmp_path, monkeypatch):
     folder = _copy(folders["audio"], tmp_path)
     rep, found = _codes(folder)
     assert rep.ok and found == [("W_PREVIEW_MISSING", "assets/preview.yaml")]
+    (folder / "assets").mkdir(exist_ok=True)
+    (folder / "assets" / "old.mp4").write_bytes(b"mp4")  # no spec at all: the message does not claim one exists
+    stray = [f for f in _codes(folder)[0].warnings if f.code == "W_PREVIEW_STALE"]
+    assert len(stray) == 1 and "declared by no assets/preview.yaml" in stray[0].message
+    (folder / "assets" / "old.mp4").unlink()
     rows = _rows(folder, 2)
     _spec(folder, [{"id": "preview", "kind": "audio", "split": "val", "rows": rows}])
     assert _codes(folder)[1] == [("W_PREVIEW_MISSING", "assets/preview.png")]
@@ -229,12 +234,69 @@ def test_lint_preview_codes(folders, tmp_path, monkeypatch):
     assert _codes(folder)[1] == [("W_ASSET_SIZE", "assets/preview.png")]
     monkeypatch.undo()
     for bad in ({"rows": rows[:1]}, {"split": "nope"}, {"kind": "nope"}, {"options": {"colour": "red"}}, {"rows": [rows[0], "zz"]},
-                {"options": {"seconds": 6}}, {"options": {"start_s": -1}}, {"options": {"start_s": "0"}}):
+                {"options": {"seconds": 6}}, {"options": {"start_s": -1}}, {"options": {"start_s": "0"}},
+                {"options": {"start_s": None}}):
         _spec(folder, [{"id": "preview", "kind": "audio", "split": "val", "rows": rows, **bad}])
         rep, found = _codes(folder)
         assert not rep.ok and found == [("E_PREVIEW_SPEC", "assets/preview.yaml")], bad
     (folder / "assets" / "preview.yaml").write_text("schema_version: 1\nfigures: [", encoding="utf-8")
     assert _codes(folder)[1] == [("E_PREVIEW_SPEC", "assets/preview.yaml")]
+
+
+def _png(path, *, hole: bool):
+    from PIL import Image
+
+    im = Image.new("RGBA", (8, 4), (7, 10, 18, 255))
+    if hole:
+        im.putpixel((7, 3), (0, 0, 0, 0))
+    im.save(path)
+    return path
+
+
+def test_an_incomplete_screenshot_is_retaken_then_refused(tmp_path, monkeypatch):
+    """A still with a transparent pixel is a capture taken before every tile was painted: render_html takes it again
+    (OPAQUE_RETRIES times) and then raises; the transparent motion overlay (opaque=False) passes."""
+    calls = []
+
+    def shot(exe, html_path, png_path, size, scale):
+        calls.append(png_path)
+        _png(png_path, hole=len(calls) < 3)  # the third capture is complete
+
+    monkeypatch.setattr(design, "_find_chrome", lambda c: "chrome")
+    monkeypatch.setattr(design, "_screenshot", shot)
+    html_path = tmp_path / "p.html"
+    html_path.write_text("<html></html>", encoding="utf-8")
+    assert design.render_html(html_path, tmp_path / "a.png", compress=False) and len(calls) == 3
+    calls.clear()
+    monkeypatch.setattr(design, "_screenshot", lambda exe, h, p, size, scale: (calls.append(p), _png(p, hole=True)))
+    with pytest.raises(design.RenderError, match="screenshot incomplete"):
+        design.render_html(html_path, tmp_path / "b.png", compress=False)
+    assert len(calls) == design.OPAQUE_RETRIES + 1
+    calls.clear()
+    design.render_html(html_path, tmp_path / "c.png", compress=False, opaque=False)
+    assert len(calls) == 1
+    hung = []
+
+    def slow_then_ok(exe, h, p, size, scale):
+        hung.append(p)
+        if len(hung) == 1:
+            raise design._CaptureTimeout("chrome did not finish")
+        _png(p, hole=False)
+
+    monkeypatch.setattr(design, "_screenshot", slow_then_ok)
+    design.render_html(html_path, tmp_path / "d.png", compress=False)
+    assert len(hung) == 2  # a hung capture is taken again
+
+
+def test_a_committed_still_with_transparent_pixels_is_stale(folders, tmp_path, monkeypatch):
+    folder = _copy(folders["audio"], tmp_path)
+    _spec(folder, [{"id": "preview", "kind": "audio", "split": "val", "rows": _rows(folder, 2)}])
+    monkeypatch.setattr(previews, "render_html", lambda html_path, png_path, **kw: _png(png_path, hole=False))
+    previews.render_folder(str(folder))
+    assert _codes(folder)[1] == []
+    _png(folder / "assets" / "preview.png", hole=True)  # an old render that kept a hole
+    rep, found = _codes(folder)
+    assert found == [("W_PREVIEW_STALE", "assets/preview.png")] and "transparent pixels" in rep.warnings[0].message
 
 
 def test_lint_warns_a_readme_linking_a_missing_asset(folders, tmp_path):
@@ -314,7 +376,8 @@ def test_motion_writes_gif_and_mp4(folders, tmp_path, monkeypatch):
 
     from yavih.media.ffmpeg import ffprobe_video
 
-    def frame(html_path, png_path, *, size=(1600, 500), scale=2, chrome=None, compress=True):
+    def frame(html_path, png_path, *, size=(1600, 500), scale=2, chrome=None, compress=True, opaque=True):
+        assert not opaque  # the overlay is transparent by design
         Image.new("RGBA", (size[0] * scale, size[1] * scale), (0, 0, 0, 0)).save(png_path)  # Chrome's transparent frame
         return png_path
 

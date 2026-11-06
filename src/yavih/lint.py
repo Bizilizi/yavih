@@ -446,7 +446,12 @@ def _c_header(c: _Ctx) -> Iterator[Finding]:
         return
     rel = f"assets/{headers.SOURCE_SHA_FILE}"
     got = (c.text(rel) or "").strip()
-    if got != want:
+    from yavih.design import png_has_transparency
+
+    if png_has_transparency(c.folder / HEADER_IMAGE):
+        yield _warn("header", "W_HEADER_STALE", f"{HEADER_IMAGE}: incomplete render: transparent pixels (Chrome captured it "
+                    f"before every tile was painted); re-render with `python -m yavih.headers {c.name}`", HEADER_IMAGE)
+    elif got != want:
         yield _warn("header", "W_HEADER_STALE", f"{HEADER_IMAGE} was not rendered from the current header ({rel} "
                     f"{'is missing' if not got else 'records ' + got[:12] + '…'}, the header HTML is {want[:12]}…): "
                     f"re-render and commit both with `python -m yavih.headers {c.name}` (without Chrome: the PNG from "

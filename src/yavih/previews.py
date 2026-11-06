@@ -280,6 +280,9 @@ def validate_spec(bench: Any, spec: PreviewSpec) -> list[str]:
         unknown = sorted(set(fig.options) - set(comp.options))
         if unknown:
             out.append(f"{at}: unknown option(s) {unknown} for kind {fig.kind!r}; known: {sorted(comp.options)}")
+        nulls = sorted(k for k, v in fig.options.items() if v is None and k in comp.options and comp.options[k] is not None)
+        if nulls:
+            out.append(f"{at}: option(s) {nulls} set to null; omit a key for its default ({', '.join(f'{k}: {comp.options[k]!r}' for k in nulls)})")
         if comp.rows is not None and len(fig.rows) != comp.rows:
             out.append(f"{at}: kind {fig.kind!r} draws {comp.rows} row(s), the spec lists {len(fig.rows)}")
         elif comp.rows is None and not fig.rows:
@@ -844,7 +847,8 @@ def render_figure(bench: Any, fig: Figure, *, chrome: str | None = None, html_on
     names = figure_files(bench.folder, fig, motion=comp.motion)
     staged = [work_dir / f"_out_{n}" for n in names]
     if comp.motion:
-        frame = render_html(src, work_dir / f"{fig.id}.frame.png", size=comp.size, scale=2, chrome=chrome, compress=False)
+        frame = render_html(src, work_dir / f"{fig.id}.frame.png", size=comp.size, scale=2, chrome=chrome, compress=False,
+                            opaque=False)  # the overlay is transparent by design
         ctx = RenderContext(bench, fig, comp, work_dir=work_dir)
         from yavih.sample import stored_file
 
@@ -995,6 +999,12 @@ def check_folder(folder: str | Path, bench: Any) -> list[tuple[str, str, str]]:
                 out.append(("W_PREVIEW_MISSING", f"assets/{missing[0]}", f"figure {fig.id!r}: {', '.join(missing)} not rendered: "
                             f"`python -m yavih.previews {name} --only {fig.id} --chrome <chrome>` where the data is staged"))
                 continue
+            holed = [f for f in files if f.endswith(".png") and design.png_has_transparency(assets / f)]
+            if holed:
+                out.append(("W_PREVIEW_STALE", f"assets/{holed[0]}", f"figure {fig.id!r}: incomplete render: transparent pixels in "
+                            f"{holed[0]} (Chrome captured it before every tile was painted): re-render with "
+                            f"`python -m yavih.previews {name} --only {fig.id}`"))
+                continue
             entry = prov.get(fig.id) or {}
             want = figure_source_sha256(bench, fig)
             if entry.get("source_sha256") != want:
@@ -1005,7 +1015,8 @@ def check_folder(folder: str | Path, bench: Any) -> list[tuple[str, str, str]]:
     if not problems and assets.is_dir():
         for p in sorted(assets.iterdir()):
             if p.is_file() and _FIGURE_FILE.match(p.name) and p.name not in declared:
-                out.append(("W_PREVIEW_STALE", f"assets/{p.name}", f"assets/{p.name} is no figure of assets/{SPEC_FILE}: delete it or declare it"))
+                where = f"is no figure of assets/{SPEC_FILE}" if spec is not None else f"is declared by no assets/{SPEC_FILE}"
+                out.append(("W_PREVIEW_STALE", f"assets/{p.name}", f"assets/{p.name} {where}: delete it or declare it"))
     return out + _budget_findings(folder)
 
 

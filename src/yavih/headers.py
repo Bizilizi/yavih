@@ -199,10 +199,13 @@ def render_folder(name: str, *, chrome: str | None = None, html_only: bool = Fal
 
 
 def check_folder(folder: Path, bench) -> str:
-    """``ok`` (the PNG exists and its sha file names the current header HTML), ``missing`` (no PNG) or ``stale``."""
+    """``ok`` (the PNG exists, is fully opaque and its sha file names the current header HTML), ``missing`` (no PNG)
+    or ``stale`` (another HTML, or an incomplete render with transparent pixels)."""
     folder = Path(folder)
     if not (folder / "assets" / "header.png").is_file():
         return "missing"
+    if design.png_has_transparency(folder / "assets" / "header.png"):
+        return "stale"
     try:
         sha = (folder / "assets" / SOURCE_SHA_FILE).read_text(encoding="utf-8").strip()
     except OSError:

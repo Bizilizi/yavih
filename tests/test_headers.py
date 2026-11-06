@@ -147,6 +147,17 @@ def test_check_prints_ok_missing_stale(tmp_path, capsys):
     (dst / "assets" / "header.png").write_bytes(b"png")
     capsys.readouterr()
     assert headers.main([str(dst), "--check"]) == 0 and capsys.readouterr().out.startswith("ok")
+    from PIL import Image
+
+    Image.new("RGBA", (8, 4), (0, 0, 0, 0)).save(dst / "assets" / "header.png")  # an incomplete render
+    assert headers.main([str(dst), "--check"]) == 1 and capsys.readouterr().out.startswith("stale")
+    from yavih.lint import lint_folder
+
+    found = [f for f in lint_folder(dst, checks=["header"]).warnings if f.code == "W_HEADER_STALE"]
+    assert len(found) == 1 and "transparent pixels" in found[0].message
+    Image.new("RGBA", (8, 4), (7, 10, 18, 255)).save(dst / "assets" / "header.png")
+    assert headers.main([str(dst), "--check"]) == 0
+    capsys.readouterr()
     y = yaml.safe_load((dst / "benchmark.yaml").read_text(encoding="utf-8"))
     y["header"]["venue"] = "Another venue"
     (dst / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False, allow_unicode=True), encoding="utf-8")

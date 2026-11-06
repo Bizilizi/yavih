@@ -1,5 +1,6 @@
 /* yavih components (docs/design-system.md): the page background, the header pieces and the figure pieces. Needs tokens.css. */
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--bg0); }  /* the canvas never depends on the body's paint (the motion overlay resets it) */
 body.ds {
   font-family: var(--sans);
   color: var(--ink);

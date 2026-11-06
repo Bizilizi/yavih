@@ -120,7 +120,11 @@ python -m yavih.previews --all --check               # ok / missing / stale / in
 python -m yavih.headers --all --contact-sheet sheet.png
 ```
 
-`--data-root KEY=PATH` points a data root elsewhere for one run. Rendering writes the files and their provenance only
+`--data-root KEY=PATH` points a data root elsewhere for one run. Every still is opaque by the dark-background rule, so
+a screenshot with a transparent pixel is an incomplete capture: `render_html` takes it again (twice) and then fails
+with "screenshot incomplete" (a capture that hangs is retried the same way), and lint reports a committed still or
+header with transparent pixels as stale. Chrome runs with `--run-all-compositor-stages-before-draw` and the page's
+`html` paints `--bg0`: in stress runs of 24 parallel renders such captures fell from 5 in 120 to none in over 400. Rendering writes the files and their provenance only
 after every figure of the run succeeded. `bench lint` reports the figures (`preview` check: `E_PREVIEW_SPEC`,
 `W_PREVIEW_MISSING`, `W_PREVIEW_STALE`, `W_ASSET_SIZE`) and README links to absent assets (`W_README_ASSET`); only an
 invalid spec is an error, since figures may be rendered after a merge where the data is staged. The `render` workflow
