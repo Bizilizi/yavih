@@ -76,7 +76,7 @@ gallery is the whole split: 15 440 candidates per query.
 ### Reference numbers
 
 CAV-MAE and CAV-MAE Sync report VGGSound retrieval R@1 / R@5 / R@10 on the 1 545-clip subset in their papers
-(`*_cavmae` here). The released CAV-MAE Sync checkpoint, scored on that subset through av-joint's own frame
+(`*_cavmae` here). The released CAV-MAE Sync checkpoint, scored on that subset through an independent frame
 extraction (2026-07), reached A→V R@1 22.4 and V→A R@1 25.7, below the paper's numbers (a different frame grid):
 expect a bridge's number to depend on its declared frames and audio window. No published numbers exist for the
 full 15 440-clip gallery.

@@ -12,7 +12,9 @@ import pytest
 
 from yavih import cli, config
 from yavih import testing as T
+from yavih.benchmark import Benchmark
 from yavih.benchmarks import packaged_folder, packaged_names
+from yavih.readouts import registry
 from yavih.scaffold import DEFAULT_LIKE
 from yavih.trial import STAGES, TRIAL_DOC, TrialError, run_trial
 
@@ -94,7 +96,9 @@ def test_bench_trial_synthetic(name, capsys, yavih_home, runs_dir, monkeypatch):
     assert rec["benchmark"] == name and rec["synthetic"] is True and rec["exit_code"] == 0 and rec["paths"] == {}
     assert rec["verdict"] == "ok"
     h = rec["headline"]
-    assert h["clears_floor"] is True and h["standard"] is False and h["value"] > h["floor"], h
+    # --readout-fast swaps the probe's schedule; a scorer that trains nothing (stateless) scores the standard way
+    trains = registry.get(Benchmark.load(name).spec.readout).is_probe
+    assert h["clears_floor"] is True and h["standard"] is (not trains) and h["value"] > h["floor"], h
     assert any("synthetic stand-in" in lim for lim in rec["limits"])
     if name in ("fsd50k", "audioset20k", "vggsounder"):  # multi / multi_sets: trialled single-label
         assert any("single-label" in lim for lim in rec["limits"]), rec["limits"]
