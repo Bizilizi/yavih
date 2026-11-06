@@ -19,12 +19,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/audiocaps_t2a",
      "protocol_hash": "22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552",
      "protocol_version": 1,
-     "tree": "fd762dc29fda3786d3df1e465de73362d1661890"
+     "tree": "0003b536c7f5d96be1737ab98f00d62ea184f13d"
     }
    ],
    "scorer": "audiocaps_t2a",
@@ -49,12 +49,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/audioset20k",
      "protocol_hash": "5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7",
      "protocol_version": 1,
-     "tree": "5ef14d7b41d4c0c588d6d77eddad25a7695d3cb9"
+     "tree": "16a44adea90412c01e7e99a05da952df28534b24"
     }
    ],
    "scorer": "clf",
@@ -80,12 +80,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/ave",
      "protocol_hash": "df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27",
      "protocol_version": 1,
-     "tree": "3ff16bf4ac86d71ce0177a44f21dcf13abf2688e"
+     "tree": "3addbe28dfc57ef017e716993a4981306f9e767b"
     }
    ],
    "scorer": "seq",
@@ -112,12 +112,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/ave_causal",
      "protocol_hash": "73c3a319ef75ae381f2cf1482a38c4b96168345a25f196aabae0b4b95bf7c89a",
      "protocol_version": 1,
-     "tree": "1d7fd7609fe0e7a3766eb1d390638535772f1fd2"
+     "tree": "18bbee091dafda51e7a3e19249dc2873567c0dbb"
     }
    ],
    "scorer": "stream",
@@ -144,12 +144,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/avsync",
      "protocol_hash": "90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1",
      "protocol_version": 1,
-     "tree": "c084f6f5a0a67bb1f7ca72e2f50ae998d4216df1"
+     "tree": "0d25768c7f3b4db3f7716486f240d54d50ca46e9"
     }
    ],
    "scorer": "clf",
@@ -176,12 +176,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/epic100_anticipation_stream",
      "protocol_hash": "8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de",
      "protocol_version": 1,
-     "tree": "4c91a2198a57968cd1cef4214b78b24f98325616"
+     "tree": "43cef2c5c98d157bf8e2a1943f6f51b810eb4a34"
     }
    ],
    "scorer": "stream",
@@ -209,12 +209,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/epic_sounds_det",
      "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
      "protocol_version": 1,
-     "tree": "3fd166866f60f2d3d2390daaafd1d32dc4de976b"
+     "tree": "fd2661350742945d62409cd2da70cf1545620dd7"
     }
    ],
    "scorer": "epic_sounds_det",
@@ -242,12 +242,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/esc50",
      "protocol_hash": "0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e",
      "protocol_version": 1,
-     "tree": "d019b1161ec6e75884e8bffadb231d9219216b7c"
+     "tree": "8f3672156775fcc828a94c884d842be4789d1f5a"
     }
    ],
    "scorer": "clf",
@@ -272,12 +272,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/fsd50k",
      "protocol_hash": "2e59e335f433b107e9f5f37436a21c89d177a0ee2e6bb5425c9740ef8bf2e6b7",
      "protocol_version": 1,
-     "tree": "867ba0139fa5c9d3c00d6e0611c2fc61e2c7cd1b"
+     "tree": "102165cd03dbb30efc10f9a18b68665c0876f64e"
     }
    ],
    "scorer": "clf",
@@ -305,12 +305,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/in1k",
      "protocol_hash": "c8814a905192a566ac3b70814cc70fa237c34a39028b8037e39e0ab9404d6dc4",
      "protocol_version": 1,
-     "tree": "b0e4437d90140146ba95ce17e0c765b255568bae"
+     "tree": "20036c7fae26acdb24e75eafba7abaa03cf5fae6"
     }
    ],
    "scorer": "clf",
@@ -335,12 +335,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/k400",
      "protocol_hash": "62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470",
      "protocol_version": 1,
-     "tree": "e036bf4ca545bc91025f2e86ac96af073bbf2165"
+     "tree": "fd70ff6de34de550d78067027e6e4f7cc3261e19"
     }
    ],
    "scorer": "clf",
@@ -366,12 +366,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/nyuv2_depth",
      "protocol_hash": "4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4",
      "protocol_version": 1,
-     "tree": "3ac476433626db6ce74ffbc94d556e1475dda2c0"
+     "tree": "5eee8ba6953f1f621c930b128dfe27710bf05d98"
     }
    ],
    "scorer": "grid",
@@ -398,12 +398,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/perception_test_action_loc",
      "protocol_hash": "19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3",
      "protocol_version": 1,
-     "tree": "fe2f0e45559a377900f5315780c181f0e71759ef"
+     "tree": "d4ceb050b5f52087435d45d734bba95d029ffb0c"
     }
    ],
    "scorer": "perception_test_action_loc",
@@ -430,12 +430,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/perception_test_sound_loc",
      "protocol_hash": "c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7",
      "protocol_version": 1,
-     "tree": "d604c5b7f94144094bffcf58286d3da410aadcc8"
+     "tree": "42e3357e9a724220f6f2fa649768607d3ecf3d6f"
     }
    ],
    "scorer": "perception_test_sound_loc",
@@ -460,12 +460,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/ssv2",
      "protocol_hash": "641928e796bd0eda4ac0df9bdac78e77b0b7b115bb91466bf72dec2d79c0d9c7",
      "protocol_version": 1,
-     "tree": "036e17ad3e6ecd6d39a0b8d31046253f2a094a08"
+     "tree": "572e1a4f6657d9ba676a98897de4554192475715"
     }
    ],
    "scorer": "clf",
@@ -492,12 +492,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/thumos14_oad",
      "protocol_hash": "284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912",
      "protocol_version": 1,
-     "tree": "98cebd679f0a9e15063ad3b2c87aa5b065b6fbf0"
+     "tree": "09c0fe7b0a7b3f708bc995d78943e8cd8e7e4b43"
     }
    ],
    "scorer": "stream",
@@ -523,12 +523,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/unav100",
      "protocol_hash": "59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e",
      "protocol_version": 1,
-     "tree": "229f001021221466528cc50357af9a3c89a72f0e"
+     "tree": "e7d8d428ad301c589d2de74e22810120d756cc0c"
     }
    ],
    "scorer": "unav100",
@@ -555,12 +555,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/unav100_causal",
      "protocol_hash": "ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438",
      "protocol_version": 1,
-     "tree": "767968fb8e671c2d117830c8b64b7face9c78cdc"
+     "tree": "a87c2fcaa854454bf69a1ddc993c5b5460788a3c"
     }
    ],
    "scorer": "stream",
@@ -585,12 +585,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggsound_retrieval",
      "protocol_hash": "9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49",
      "protocol_version": 1,
-     "tree": "fb4a5de9fce5b7093ca1e19fdf204b94b106873b"
+     "tree": "2736197daa5af75161764cd167843b9ff8516956"
     }
    ],
    "scorer": "vggsound_retrieval",
@@ -615,12 +615,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggsounder",
      "protocol_hash": "89c057ccce207b4627b6e5f43394a2cd7f34f892375b087510e22e6e63519530",
      "protocol_version": 1,
-     "tree": "862a194f4ac024f7db77d45f416acd288547617f"
+     "tree": "da3b66b56fa4ec6e955ab6cdc8e3cb82878eaea7"
     }
    ],
    "scorer": "clf",
@@ -645,12 +645,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggsounder_v2a",
      "protocol_hash": "cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0",
      "protocol_version": 1,
-     "tree": "0456fcc7fcc52b1e0a55fa4ad6152ae9bdcc355e"
+     "tree": "250988641279f85422479a137ba3a8220b3ded21"
     }
    ],
    "scorer": "vggsounder_v2a",
@@ -676,12 +676,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggss_box",
      "protocol_hash": "f108458e24156e0d49c873b3abb7101f61e077abf664a5282aa43d54b36a7799",
      "protocol_version": 1,
-     "tree": "6367cc2ceb9c8e02912863b477b57cb6db3745e4"
+     "tree": "b16225d47269346561a5ddb67822f8af763faffa"
     }
    ],
    "scorer": "box",
@@ -706,12 +706,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+     "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggss_loc",
      "protocol_hash": "3e58261a9a2ed7a8194c96349b5356f25fcf3d1cf747e5f239f933ea5f657c04",
      "protocol_version": 1,
-     "tree": "a7a066f1f5982613d6535a8faca8cba64ca3cf96"
+     "tree": "935faac283d4cbb15bb8346a21824d3fbda3b361"
     }
    ],
    "scorer": "vggss_loc",
@@ -719,6 +719,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "6f952d735cf6d61f3e43600c4bfaa3406a923365",
+ "commit": "2f2088e174f497f65d6d970b2f0962200f5d4f1e",
  "repo": "Bizilizi/yavih"
 }
