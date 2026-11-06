@@ -25,6 +25,7 @@ _stale/
 # python -m yavih.headers / previews --html-only (the committed records are assets/header.src.sha256, assets/preview.src.json)
 benchmarks/*/assets/*.html
 benchmarks/*/assets/_work/
+benchmarks/*/assets/fonts
 
 # editors / OS / agents
 .DS_Store

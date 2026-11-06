@@ -97,6 +97,17 @@ def test_every_core_kind_fills_its_template(folders, kind, tmp_path):
         assert page.count(needle) == count, (needle, page.count(needle))
 
 
+def test_options_are_type_and_range_checked():
+    """The pixels-and-licences bounds and the option types are refused when the spec is read, not when it renders."""
+    ok = {"n": 8, "times": [0.5, 1.0], "seed": 3, "candidates": 5, "start_s": 0.0, "seconds": 5.0}
+    assert previews._option_problems("frames", ok) == []
+    assert previews._option_problems("classes", {"n": 32}) == []
+    for bad in ({"n": 9}, {"n": 2.0}, {"times": [1.0] * 9}, {"times": [-1]}, {"seed": "x"}, {"candidates": 1},
+                {"start_s": -0.5}, {"seconds": 0}, {"n": True}):
+        assert previews._option_problems("frames", bad), bad
+    assert previews._option_problems("classes", {"n": 65})
+
+
 def test_json_intervals_draw_bands(folders, tmp_path):
     folder = folders["events"]
     bench = Benchmark.load(str(folder))
@@ -135,6 +146,12 @@ def test_source_sha256_needs_no_media_and_follows_spec_template_design(folders, 
     assert previews.figure_source_sha256(bench, previews.Figure("preview", "audio", "val", fig.rows, {"seconds": 4.0})) != sha
     monkeypatch.setattr(design, "DESIGN_VERSION", design.DESIGN_VERSION + 1)
     assert previews.figure_source_sha256(bench, fig) != sha
+    monkeypatch.undo()
+    default = previews.CORE_COMPONENTS["audio"]
+    monkeypatch.setitem(previews.CORE_COMPONENTS, "audio", previews.Component(
+        "audio", default.version, default.size, default.rows, default.template, default.fill,
+        options={**default.options, "start_s": 1.0}))
+    assert previews.figure_source_sha256(bench, fig) != sha  # a changed default the entry does not set
     monkeypatch.undo()
     comp = previews.CORE_COMPONENTS["audio"]
     monkeypatch.setitem(previews.CORE_COMPONENTS, "audio", previews.Component(
@@ -204,12 +221,15 @@ def test_lint_preview_codes(folders, tmp_path, monkeypatch):
     assert previews.main([str(folder), "--check"]) == 1
     _spec(folder, [{"id": "preview", "kind": "audio", "split": "val", "rows": rows}])
     (folder / "assets" / "clip.gif").write_bytes(b"gif")
-    assert _codes(folder)[1] == [("W_PREVIEW_STALE", "assets/clip.gif")]
+    (folder / "assets" / "walk.mp4").write_bytes(b"mp4")  # a removed motion figure of another id
+    assert _codes(folder)[1] == [("W_PREVIEW_STALE", "assets/clip.gif"), ("W_PREVIEW_STALE", "assets/walk.mp4")]
     (folder / "assets" / "clip.gif").unlink()
+    (folder / "assets" / "walk.mp4").unlink()
     monkeypatch.setitem(previews.SIZE_BUDGET, "png", 3)
     assert _codes(folder)[1] == [("W_ASSET_SIZE", "assets/preview.png")]
     monkeypatch.undo()
-    for bad in ({"rows": rows[:1]}, {"split": "nope"}, {"kind": "nope"}, {"options": {"colour": "red"}}, {"rows": [rows[0], "zz"]}):
+    for bad in ({"rows": rows[:1]}, {"split": "nope"}, {"kind": "nope"}, {"options": {"colour": "red"}}, {"rows": [rows[0], "zz"]},
+                {"options": {"seconds": 6}}, {"options": {"start_s": -1}}, {"options": {"start_s": "0"}}):
         _spec(folder, [{"id": "preview", "kind": "audio", "split": "val", "rows": rows, **bad}])
         rep, found = _codes(folder)
         assert not rep.ok and found == [("E_PREVIEW_SPEC", "assets/preview.yaml")], bad
@@ -232,6 +252,12 @@ def test_suggest_spec_is_deterministic_and_valid(folders):
         assert draft == previews.suggest_spec(bench, seed=3)
         spec = previews._parse_spec(yaml.safe_load(yaml.safe_dump(draft)), "draft")
         assert spec.figures[0].kind == kind and previews.validate_spec(bench, spec) == [], key
+    seq = Benchmark.load(str(folders["seq"]))
+    draft = previews.suggest_spec(seq)
+    clip = draft["figures"][1]
+    man = seq.manifest("val")
+    first = int(man.segments[man.index_of(clip["rows"][0])][0])  # 1-s segments: the event's start in seconds
+    assert clip["kind"] == "motion" and clip["options"]["start_s"] == max(0.0, first - 1.0)
     image = Benchmark.load(str(folders["image"]))
     labels = [image.manifest("val").label_ids[image.manifest("val").index_of(c)] for c in previews.suggest_spec(image)["figures"][0]["rows"]]
     assert len(set(labels)) == 8  # class-stratified

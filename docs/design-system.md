@@ -13,6 +13,7 @@ assets/design/
   fonts.css         @font-face for the bundled fonts (relative urls)
   fonts/inter/            Inter 400/500/600/800, Latin subset woff2 + OFL.txt
   fonts/jetbrains-mono/   JetBrains Mono 400/600, Latin subset woff2 + OFL.txt
+  fonts/SOURCES.txt       the upstream versions, release archives and the subset command
   figures/<kind>.html     one string.Template page per core figure kind (and base.html for a folder's own kinds)
 assets/benchmark-header/template.html   the folder header layout
 assets/header.html                      the repository header (links the design CSS)
@@ -78,7 +79,7 @@ a `.figbar` (kicker, title, chips) over a `.figbody`.
 | `depth` | three image → depth pairs (the depth colours) | 3 | 1600 x 440 | an image stream, dense targets |
 | `generation` | what the model is given (a caption, or 4 frames) → the reference audio (waveform and mel) | 1 | 1600 x 420 | a caption cell or a video stream; the reference through `options.reference_column` / `reference_root` or the audio stream |
 | `retrieval` | a query video → five candidate sounds, the match ringed (4 drawn by `options.seed`) | 1 | 1600 x 460 | video and audio |
-| `classes` | sampled class names with their counts; no media | 0 | 1600 x 360 | `classes.csv` |
+| `classes` | up to 32 sampled class names with their counts (`options.n`, at most 64); no media | 0 | 1600 x 340 | `classes.csv` |
 | `motion` | `<id>.gif` 640 x 400 at 10 fps, 256 colours, and `<id>.mp4` 1280 x 800 H.264 CRF 18 yuv420p with its audio: the clip over a label bar and a filling time track | 1 | 640 x 400 overlay | a video stream (audio kept) |
 
 Intervals (`timeline`, `av`, `motion`) come from `label.kind: segments`, else `options.intervals: {column, format:
@@ -93,7 +94,8 @@ and links the MP4). A `preview*` or `clip*` file the spec does not declare is st
 sha256 when the manifest carries one, and `source_sha256`: the canonical spec entry, the template, the component
 version, `PREVIEW_VERSION` and `design_sha256()`. Nothing decoded enters it: pixels differ between machines and decoder
 builds and that is accepted; what was asked for does not. The header images record the sha256 of their filled HTML
-(`assets/header.src.sha256`) the same way. A changed token, component or font makes every figure stale (and every
+(`assets/header.src.sha256`) the same way; that HTML names `design_sha256()` in a comment, so a font change makes the
+headers stale too. A changed token, component or font makes every figure stale (and every
 header, whose HTML inlines the CSS): re-render, and review the contact sheets.
 
 **Size budget.** A PNG at most 1.5 MB, a GIF 4 MB, an MP4 2 MB, the folder's `assets/` 10 MB: the folder's files
@@ -102,8 +104,8 @@ excerpt, and `pip install imagequant` (PNGs are then saved as 256-colour palette
 
 ## Pixels and licences
 
-A figure shows a handful of downscaled stills (at most 8 tiles, at most 960 px on a side) and at most 5 s of audio
-or video (`MAX_SECONDS`), as documentation of the task. A folder whose data licence forbids redistribution (ImageNet
+A figure shows a handful of downscaled stills (at most 8 tiles, `MAX_TILES`; at most 960 px on a side) and at most 5 s
+of audio or video (`MAX_SECONDS`), as documentation of the task; `validate_spec` refuses options beyond these bounds. A folder whose data licence forbids redistribution (ImageNet
 first; in general `obtain.tier: needs-licence`, which `--suggest` maps to it) uses the data-free `classes` kind and
 shows no media at all. The reviewer of a folder checks this with the figures.
 

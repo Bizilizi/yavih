@@ -43,6 +43,14 @@ def test_header_html_fills_every_field():
         assert html.escape(text) in page
     assert design.base_css() in page and design.page_css(headers.WIDTH, headers.HEIGHT) in page  # the design system
     assert 'url("fonts/inter/' in page and str(design.DESIGN_DIR) not in page  # fonts by relative url: no machine path
+    assert design.design_sha256() in page  # the design digest (fonts included) is part of the recorded HTML
+
+
+def test_header_sha_follows_the_design_digest(monkeypatch):
+    b = Benchmark.load("esc50")
+    sha = headers.header_source_sha256(b)
+    monkeypatch.setattr(design, "design_sha256", lambda: "0" * 64)  # e.g. a font swapped under the same file name
+    assert headers.header_source_sha256(b) != sha
 
 
 def test_header_html_needs_the_header_block(tmp_path):
@@ -121,6 +129,7 @@ def test_html_only_writes_sha(tmp_path):
 
     dst = _esc50_copy(tmp_path)
     assert headers.main([str(dst), "--html-only"]) == 0
+    assert (dst / "assets" / "fonts").exists()  # the page opens with its fonts
     page = (dst / "assets" / "header.html").read_bytes()
     sha = (dst / "assets" / headers.SOURCE_SHA_FILE).read_text(encoding="utf-8")
     assert sha == hashlib.sha256(page).hexdigest() + "\n" == headers.header_source_sha256(Benchmark.load(str(dst))) + "\n"

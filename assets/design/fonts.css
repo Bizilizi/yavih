@@ -1,4 +1,5 @@
-/* Inter and JetBrains Mono (SIL Open Font License 1.1, fonts/<family>/OFL.txt), Latin + Greek + symbols subsets as woff2.
+/* Inter and JetBrains Mono (SIL Open Font License 1.1, fonts/<family>/OFL.txt), Latin + Greek + symbols subsets as woff2;
+   versions, release archives and the subset command: fonts/SOURCES.txt.
    The urls are relative: a filled page sits next to a `fonts/` link (yavih.design.stage_fonts). */
 @font-face { font-family: Inter; font-style: normal; font-weight: 400; font-display: block; src: url("fonts/inter/Inter-Regular-latin.woff2") format("woff2"); }
 @font-face { font-family: Inter; font-style: normal; font-weight: 500; font-display: block; src: url("fonts/inter/Inter-Medium-latin.woff2") format("woff2"); }

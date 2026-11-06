@@ -1,0 +1,20 @@
+Provenance of the bundled fonts (assets/design/fonts/). Both are licensed under the SIL Open Font License 1.1; the
+licence of each family sits next to its files (inter/OFL.txt is the release's LICENSE.txt, jetbrains-mono/OFL.txt the
+release's OFL.txt).
+
+Inter 4.1
+  release archive: https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
+  files used: extras/ttf/Inter-Regular.ttf, Inter-Medium.ttf, Inter-SemiBold.ttf, Inter-ExtraBold.ttf (400/500/600/800)
+
+JetBrains Mono 2.304
+  release archive: https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
+  files used: fonts/ttf/JetBrainsMono-Regular.ttf, JetBrainsMono-SemiBold.ttf (400/600)
+
+Subsetting (fontTools 4.53 with brotli), one command per file, output <name>-latin.woff2:
+  python -m fontTools.subset <name>.ttf --flavor=woff2 --layout-features+=tnum,zero,case \
+    --unicodes="U+0000-024F,U+0259,U+02B0-02FF,U+0300-036F,U+0370-03FF,U+1E00-1EFF,U+2000-206F,U+2070-209F,U+20A0-20CF,U+2100-214F,U+2190-21FF,U+2200-22FF,U+25A0-25FF,U+2713,U+2715,U+FEFF,U+FFFD" \
+    --output-file=<name>-latin.woff2
+(Basic Latin through Latin Extended-B, IPA schwa, modifier letters, combining marks, Greek, Latin Extended Additional,
+general punctuation, super- and subscripts, currency, letterlike symbols, arrows, math operators, geometric shapes,
+check and cross marks.) Replacing a font: update this file and fonts.css; design_sha256() follows the bytes, so every
+header and figure turns stale and is re-rendered.

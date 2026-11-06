@@ -78,6 +78,9 @@ TEMPLATES_DIR = design.DESIGN_DIR / "figures"
 WIDTH = 1600
 #: Bytes per committed file type and for the whole ``assets/`` directory.
 SIZE_BUDGET: dict[str, int] = {"png": 1_500_000, "gif": 4_000_000, "mp4": 2_000_000, "folder": 10_000_000}
+#: The most stills a figure strip or grid shows (pixels and licences); the classes kind lists names, not media.
+MAX_TILES = 8
+MAX_CLASS_NAMES = 64
 #: The longest media excerpt a figure shows (the pixels-and-licences rule of the design system).
 MAX_SECONDS = 5.0
 #: The motion overlay page (CSS px): the GIF is rendered at this size, the MP4 at twice it.
@@ -86,8 +89,8 @@ MOTION_SIZE = (640, 400)
 _MOTION_VIDEO_H, _MOTION_TRACK_H = 336, 4
 _MOTION_MP4_FPS = 25
 _ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
-#: Files in assets/ the figures own (an undeclared one is stale).
-_FIGURE_FILE = re.compile(r"^(preview|clip)[^/]*\.(png|gif|mp4)$")
+#: Files in assets/ the figures own (an undeclared one is stale): stills named preview*, any GIF or MP4 (motion).
+_FIGURE_FILE = re.compile(r"^(?:(?:preview|clip)[^/]*\.png|[^/]*\.(?:gif|mp4))$")
 
 
 class SpecError(ValueError):
@@ -246,11 +249,13 @@ def figure_files(folder: str | Path | None, fig: Figure, *, motion: bool | None 
 
 
 def figure_source_sha256(bench: Any, fig: Figure) -> str:
-    """sha256 (hex) of what a figure is drawn from, without decoding anything: the canonical spec entry, the
-    component's template, CSS and version, ``PREVIEW_VERSION`` and ``design_sha256()``."""
+    """sha256 (hex) of what a figure is drawn from, without decoding anything: the canonical spec entry with its
+    options merged over the component's defaults (a changed default makes the figure stale), the component's template,
+    CSS and version, ``PREVIEW_VERSION`` and ``design_sha256()``."""
     comp = components(bench)[fig.kind]
+    entry = {**fig.to_dict(), "options": {**dict(comp.options), **dict(fig.options)}}
     h = hashlib.sha256(f"yavih-preview:{PREVIEW_VERSION}\n".encode())
-    h.update(json.dumps(fig.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n")
+    h.update(json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n")
     h.update(f"{comp.kind}:{comp.version}:{comp.size[0]}x{comp.size[1]}:{int(comp.motion)}\n".encode())
     h.update(comp.template_text().encode("utf-8") + b"\0" + comp.css.encode("utf-8") + b"\0")
     h.update(design.design_sha256().encode())
@@ -291,9 +296,38 @@ def validate_spec(bench: Any, spec: PreviewSpec) -> list[str]:
                 out.append(f"{at}: clip_id(s) {missing[:3]} not in split {fig.split!r}")
         if len(set(fig.rows)) != len(fig.rows):
             out.append(f"{at}: a clip_id is listed twice")
-        secs = fig.options.get("seconds")
-        if secs is not None and (not isinstance(secs, (int, float)) or not 0 < float(secs) <= MAX_SECONDS):
-            out.append(f"{at}: seconds must be in (0, {MAX_SECONDS:g}] (pixels and licences: a preview shows a short excerpt)")
+        out += [f"{at}: {p}" for p in _option_problems(fig.kind, fig.options)]
+    return out
+
+
+def _is_num(x: Any) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def _is_int(x: Any) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def _option_problems(kind: str, o: Mapping[str, Any]) -> list[str]:
+    """Type and range checks of the core option keys a spec sets (the pixels-and-licences bounds included; the
+    ``classes`` kind's ``n`` counts names, not media, up to ``MAX_CLASS_NAMES``)."""
+    out = []
+    if "seconds" in o and not (_is_num(o["seconds"]) and 0 < float(o["seconds"]) <= MAX_SECONDS):
+        out.append(f"seconds must be a number in (0, {MAX_SECONDS:g}] (pixels and licences: a preview shows a short excerpt)")
+    for key in ("start_s", "time_s"):
+        if o.get(key) is not None and not (_is_num(o[key]) and float(o[key]) >= 0):
+            out.append(f"{key} must be a number >= 0")
+    n_max = MAX_CLASS_NAMES if kind == "classes" else MAX_TILES
+    if "n" in o and not (_is_int(o["n"]) and 1 <= o["n"] <= n_max):
+        out.append(f"n must be an integer in [1, {n_max}]" + ("" if kind == "classes" else f" (pixels and licences: at most {MAX_TILES} tiles)"))
+    if o.get("times") is not None:
+        t = o["times"]
+        if not (isinstance(t, list) and 1 <= len(t) <= MAX_TILES and all(_is_num(x) and x >= 0 for x in t)):
+            out.append(f"times must be a list of 1 to {MAX_TILES} numbers >= 0 (seconds)")
+    if "seed" in o and not _is_int(o["seed"]):
+        out.append("seed must be an integer")
+    if "candidates" in o and not (_is_int(o["candidates"]) and 2 <= o["candidates"] <= MAX_TILES):
+        out.append(f"candidates must be an integer in [2, {MAX_TILES}]")
     return out
 
 
@@ -721,7 +755,7 @@ CORE_COMPONENTS: dict[str, Component] = {c.kind: c for c in (
     _core("generation", 420, 1, _fill_generation,
           {"given": "caption", "cell": None, "reference_column": None, "reference_root": None, "seconds": 5.0}),
     _core("retrieval", 460, 1, _fill_retrieval, {"seed": 0, "candidates": 5}),
-    _core("classes", 360, 0, _fill_classes, {"n": 24, "seed": 0}),
+    _core("classes", 340, 0, _fill_classes, {"n": 32, "seed": 0}),
     _core("motion", None, 1, _fill_motion, {"start_s": 0.0, "seconds": 4.0, "intervals": None}, motion=True),
 )}
 CORE_KINDS: tuple[str, ...] = tuple(CORE_COMPONENTS)
@@ -917,7 +951,7 @@ def _budget_findings(folder: Path) -> list[tuple[str, str, str]]:
         return []
     out, total = [], 0
     for p in sorted(assets.rglob("*")):
-        if not p.is_file() or "_work" in p.relative_to(assets).parts or p.suffix == ".html":
+        if not p.is_file() or {"_work", "fonts"} & set(p.relative_to(assets).parts) or p.suffix == ".html":
             continue
         size = p.stat().st_size
         total += size
@@ -1015,6 +1049,25 @@ def _draw(bench: Any, split: str, n: int, rng: random.Random, *, keep: Callable[
     return [man.clip_id[k] for k in picked]
 
 
+def _first_event_start(bench: Any, split: str, clip_id: str, intervals: Mapping[str, Any] | None) -> float | None:
+    """The start (s) of the row's first annotated event in the manifest (segments, or a json_triples column), if any."""
+    man = bench.manifest(split)
+    k = man.index_of(clip_id)
+    proto = bench.spec.protocol
+    if bench.spec.manifest.label.kind == "segments" and man.segments is not None:
+        a, b = (int(x) for x in man.segments[k])
+        seg = float(proto.get("segment_seconds") or 1.0)
+        return (float(proto.get("segment_offset") or 0) + a) * seg if b > a else None
+    if intervals:
+        cell = man.extra[k].get(intervals.get("column"))
+        try:
+            cell = json.loads(cell) if isinstance(cell, str) else (cell or [])
+            return min(float(e[0]) for e in cell) if cell else None
+        except (ValueError, TypeError, IndexError):
+            return None
+    return None
+
+
 def suggest_spec(bench: Any, seed: int = 0) -> dict[str, Any]:
     """A draft ``assets/preview.yaml`` (a mapping): the main figure's kind inferred from the capability, the streams,
     the label kind and the scorer; a ``clip`` motion figure for a video folder; rows drawn by ``random.Random(seed)``,
@@ -1061,11 +1114,12 @@ def suggest_spec(bench: Any, seed: int = 0) -> dict[str, Any]:
     rows: list[str] = [] if kind == "classes" else _draw(bench, split, n, rng)
     figs: list[dict[str, Any]] = [{"id": "preview", "kind": kind, "split": split, "rows": rows, "options": options}]
     if "video" in kinds and kind not in ("classes",):
-        motion_opts: dict[str, Any] = {"start_s": 0.0, "seconds": 4.0}
+        clip_rows = rows[:1] or _draw(bench, split, 1, rng)
+        start = _first_event_start(bench, split, clip_rows[0], options.get("intervals"))
+        motion_opts: dict[str, Any] = {"start_s": round(max(0.0, start - 1.0), 2) if start is not None else 0.0, "seconds": 4.0}
         if "intervals" in options:
             motion_opts["intervals"] = dict(options["intervals"])
-        figs.append({"id": "clip", "kind": "motion", "split": split, "rows": rows[:1] or _draw(bench, split, 1, rng),
-                     "options": motion_opts})
+        figs.append({"id": "clip", "kind": "motion", "split": split, "rows": clip_rows, "options": motion_opts})
     for f in figs:
         if not f["options"]:
             del f["options"]

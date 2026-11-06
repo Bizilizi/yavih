@@ -1,7 +1,9 @@
 <!doctype html>
 <!-- README header of one benchmark folder. Filled and rendered by `python -m yavih.headers <name>` from the folder's
      benchmark.yaml `header:` block; the chips are derived from the yaml. Fields are string.Template placeholders:
-     $base_css is the design system (assets/design/: fonts, tokens, components), $page_css the 1600 x 500 page box. -->
+     $base_css is the design system (assets/design/: fonts, tokens, components), $page_css the 1600 x 500 page box,
+     $design the design_sha256() (fonts included), so the recorded HTML sha follows a font change too. -->
+<!-- design $design -->
 <html><head><meta charset="utf-8"><style>
 $base_css
 $page_css

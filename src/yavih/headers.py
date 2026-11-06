@@ -10,8 +10,8 @@ Chromium. Both are maintainer tools: the images are for the repository's README 
 wheel, and ``bench lint`` requires the ``header:`` block, not the image.
 
 Provenance: every render also writes ``assets/header.src.sha256``, the sha256 of the filled HTML
-(``header_source_sha256``), so ``bench lint`` can tell a PNG rendered from an older ``header:`` block, chip set,
-template or design (``W_HEADER_STALE``, a warning: the pixels are machine-dependent, the HTML is not). The PNG and the
+(``header_source_sha256``; the HTML names ``design_sha256()``, so the fonts are covered too), so ``bench lint`` can
+tell a PNG rendered from an older ``header:`` block, chip set, template or design (``W_HEADER_STALE``, a warning: the pixels are machine-dependent, the HTML is not). The PNG and the
 sha file are committed together; the repository's ``render`` CI workflow renders every header of a pull request as an
 artifact and reports (never fails on) the sha files that are not current. ``--check`` prints ``ok``, ``missing`` or
 ``stale`` per folder and exits 1 when any is not ``ok``.
@@ -150,6 +150,7 @@ def header_html(bench) -> str:
     return Template(tpl.read_text(encoding="utf-8")).substitute(
         base_css=design.base_css(),
         page_css=design.page_css(WIDTH, HEIGHT),
+        design=design.design_sha256(),
         bench=html.escape(bench.name),
         name=html.escape(h.name),
         name_px=_size(h.name, ((8, "110px"), (11, "96px"), (14, "82px"), (20, "68px"), (24, "60px")), "52px"),
@@ -186,6 +187,7 @@ def render_folder(name: str, *, chrome: str | None = None, html_only: bool = Fal
     if html_only:
         target = out_dir / "header.html"
         target.write_text(page, encoding="utf-8")
+        design.stage_fonts(out_dir)  # assets/fonts (git-ignored): the page opens with its fonts
     else:
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "header.html"
