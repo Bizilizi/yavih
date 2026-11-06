@@ -43,10 +43,13 @@ number. Releases follow semantic versioning for the Python API, the CLI and the 
 (`python -m yavih.catalog --write`, then `--check`) and the generated tables, and commits them when they changed
 ([catalog](catalog.md)).
 
-`.github/workflows/headers.yml` runs on pull requests that touch `benchmarks/`, `assets/benchmark-header/` or
-`src/yavih/headers.py`, and on demand, with read-only permissions: it renders every folder's header image with the
-runner's Chrome (`python -m yavih.headers --all --contact-sheet headers-contact-sheet.png`) and uploads the images and
-the contact sheet as the `headers` artifact. It never fails on a stale or missing image (lint warns about both): a
+`.github/workflows/render.yml` runs on pull requests that touch `benchmarks/`, `assets/design/`,
+`assets/benchmark-header/` or the renderers (`src/yavih/{design,headers,previews}.py`), and on demand, with read-only
+permissions: it renders every folder's header image with the runner's Chrome (`python -m yavih.headers --all
+--contact-sheet headers-contact-sheet.png`), reports the headers and figures that are not current (`--check`, information
+only), tiles the committed figures (`python -m yavih.previews --all --contact-sheet previews-contact-sheet.png
+--committed`; CI has no benchmark data, so figures are never re-rendered there) and uploads the images and both
+contact sheets as the `render` artifact. It never fails on a stale or missing image (lint warns about both): a
 folder's PNG is committed in its `assets/`, and a contributor without Chrome takes it from the artifact and writes its
 sha file with `python -m yavih.headers <name> --html-only`.
 

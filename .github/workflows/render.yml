@@ -1,15 +1,20 @@
-name: headers
+name: render
 
-# Renders every benchmark folder's README header image and a contact sheet into the `headers` artifact, for review.
-# Each folder commits its own assets/header.png and sha file (bench lint warns W_HEADER_MISSING / W_HEADER_STALE);
-# a contributor without Chrome takes the PNG from this artifact (python -m yavih.headers <name> --html-only writes its
-# sha file). It never fails on a stale or missing image.
+# Renders every benchmark folder's README header image, reports the headers and README figures that are not current,
+# and tiles the committed figures, into the `render` artifact for review. Each folder commits its own assets/
+# (bench lint warns W_HEADER_* / W_PREVIEW_* / W_ASSET_SIZE); a contributor without Chrome takes a header PNG from this
+# artifact (python -m yavih.headers <name> --html-only writes its sha file). CI holds no benchmark data, so figures are
+# never re-rendered here. It never fails on a stale or missing image.
 on:
   pull_request:
     paths:
       - "benchmarks/**"
+      - "assets/design/**"
       - "assets/benchmark-header/**"
+      - "src/yavih/design.py"
       - "src/yavih/headers.py"
+      - "src/yavih/previews.py"
+      - "src/yavih/media/figures.py"
   workflow_dispatch:
 
 concurrency:
@@ -21,7 +26,7 @@ permissions:
 
 jobs:
   render:
-    name: render the header images
+    name: render the header images, check the figures
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -39,18 +44,21 @@ jobs:
           python -m pip install -e ".[media]" imagequant
       - name: Chrome
         run: google-chrome --version
+      - name: Headers that are missing or stale (information only)
+        run: python -m yavih.headers --all --check || true
       - name: Render every header and the contact sheet
         run: python -m yavih.headers --all --contact-sheet headers-contact-sheet.png
-      - name: Report the header sha files that are not current (information only)
-        run: |
-          python -m yavih.headers --all --html-only
-          git status --porcelain -- 'benchmarks/*/assets/header.src.sha256' || true
+      - name: Figures that are missing or stale (information only)
+        run: python -m yavih.previews --all --check || true
+      - name: Contact sheet of the committed figures
+        run: python -m yavih.previews --all --contact-sheet previews-contact-sheet.png --committed || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: headers
+          name: render
           path: |
             headers-contact-sheet.png
+            previews-contact-sheet.png
             benchmarks/*/assets/header.png
           if-no-files-found: warn
           retention-days: 14

@@ -11,6 +11,10 @@ wheel or is read by yavih itself.
 | [integrate.md](integrate.md) | the integrator's recipe: claim a batch, check and review each branch, merge, regenerate, update the queue, test |
 | [launch.md](launch.md) | starting a batch of workers, each in its own worktree |
 
+A worker renders its folder's header image and README figures when it has Chrome (and the data, and ffmpeg for
+motion); otherwise it commits the figure spec and the integrator renders where the data is staged
+([design system](../docs/design-system.md)).
+
 **Reserving a name.** Every folder under `benchmarks/` has an entry here, and a pull request labelled `benchmark`
 passes CI only when its folder's name has one. A name that is not yet queued is reserved by a separate pull request
 that adds only its entry (every key described at the top of `queue.yaml`, `status: todo`), or by a maintainer, before the benchmark pull request.

@@ -292,8 +292,10 @@ folder computes other hashes than its changelog records (the file is then restor
 folder · `hashes` `E_CHANGELOG_HASH` · `hashed` `E_HASHED_PROSE` · `budget` `E_MANIFEST` unreadable manifest,
 `E_BUDGET` `budget.clips` ≠ frozen rows, `E_CURATION` `manifest.upstream.curation` missing or its sums wrong ·
 `header` `E_HEADER` no `header` block, `W_HEADER_MISSING` no `assets/header.png` (source checkout), `W_HEADER_STALE` header image not rendered from the current header ·
+`preview` (source checkout) `E_PREVIEW_SPEC` an invalid `assets/preview.yaml`, `W_PREVIEW_MISSING` no spec or a figure not rendered,
+`W_PREVIEW_STALE` a figure not rendered from the current spec or an undeclared one, `W_ASSET_SIZE` a file or `assets/` over budget ·
 `readme` / `setup` `E_README` / `E_SETUP` headings, header line, links, pins; `E_README_HASH` a quoted
-`protocol_hash` that is not current · `external` `E_EXTERNAL` a pin without a full `pip install` line · `codecs`
+`protocol_hash` that is not current; `W_README_ASSET` a linked `assets/` file that is absent · `external` `E_EXTERNAL` a pin without a full `pip install` line · `codecs`
 `E_CODEC_SELFTEST` a folder codec of the output schema fails its self-test · `obtain`
 `E_OBTAIN` · `core` `E_CORE` no `core:` specifier (loading under a release outside it: `E_CORE_VERSION`, exit 3, the pip line in the message; a development build is never refused) · `capability` `E_CAPABILITY` missing or not a capability tag, `W_CAPABILITY_UNKNOWN` a tag of the folder's own, `W_SUITE_CAPABILITY` a shipped suite
 lists the folder under a capability it does not carry · `template` `E_TEMPLATE` no literal `model` or no `reading`,

@@ -29,6 +29,9 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
     expected.json       the conformance fixture: the scoring path's numbers at this protocol_version (bench conformance --record)
   tests/test_folder.py  the folder's own facts
   assets/header.png     the README header image (python -m yavih.headers) + header.src.sha256; committed, never in the wheel
+  assets/preview.yaml   the README figures (python -m yavih.previews): preview.png, preview-<id>.png, <id>.gif + <id>.mp4,
+                        preview.src.json; committed, never hashed or in the wheel
+  preview.py            optional: figure kinds and an intervals hook of the folder's own (never hashed)
   notes/                optional local maintainer notes; ignored by git, so never in the folder's tree
 ```
 
@@ -46,6 +49,8 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
 | `reader.py` | no | [Folder reader](#readerpy) for what the yaml cannot express. |
 | `tests/test_folder.py` | yes | Pins the folder's own facts (row counts, hashes, curation sums, reader smoke on synthetic media, docs). |
 | `assets/header.png` | yes (lint warns `W_HEADER_MISSING`) | The README header image, rendered from the `header:` block, and `assets/header.src.sha256`, the sha256 of the HTML it was rendered from ([header image](#header-image)); committed in the folder and fetched with it, never in the wheel. |
+| `assets/preview.yaml` | no (lint warns `W_PREVIEW_MISSING`) | The README figures and what they are drawn from ([figures](#figures)); the rendered files and `assets/preview.src.json` sit next to it. |
+| `preview.py` | no | Figure kinds and an intervals hook of the folder's own ([design system](design-system.md#adding-a-kind)). |
 | `notes/` | no | Local maintainer notes. The repository's `.gitignore` ignores `benchmarks/*/notes/`, so notes are never committed: they are not in the folder's git tree, a fetched folder, the catalog's tree id or the wheel. Unification candidates are listed by `yavih bench extensions`, not kept in notes. |
 
 A folder is data plus scripts, never a Python package: there is no `__init__.py` in it or in `tests/`. `eval.py`,
@@ -533,19 +538,30 @@ readout (multi-label when the labels are), the clip and class counts, the folds,
 or the train/eval sizes, and the headline metric. A folder whose task the derived chips do not describe (its own scorer,
 its own readings) lists its chips in `header.chips` (1 to 6 strings of at most 40 characters, the first styled as the
 media chip, the second as the task chip); they replace the derived ones. The template is `assets/benchmark-header/` in the source
-repository; rendering needs a headless Chrome or Chromium (`--chrome PATH` or `$CHROME`). The image lives in the
+repository, drawn with the [design system](design-system.md) (`assets/design/`); rendering needs a headless Chrome or Chromium (`--chrome PATH` or `$CHROME`). The image lives in the
 folder: `benchmarks/<name>/assets/header.png`, committed with the folder and fetched with it, never in the wheel. In a
 source checkout `bench lint` warns `W_HEADER_MISSING` when a folder has none.
 
 Every render also writes `assets/header.src.sha256`: the sha256 of the filled HTML the image was rendered from. The
 image and the sha file are committed together. `bench lint` warns `W_HEADER_STALE` when an image exists and its sha
 file is missing or differs from the current HTML (an edited `header:` block, a chip that changed with the yaml or the
-bridge template's readings, an edited template). Pixels differ between machines, the HTML does not, so the HTML is what
+bridge template's readings, an edited template or design). Pixels differ between machines, the HTML does not, so the HTML is what
 is compared. `--html-only` writes `assets/header.html` (not committed) and the sha file without rendering. On a pull
-request that touches a folder, the `headers` workflow renders every header and a contact sheet as the `headers`
-artifact; it never fails on a stale or missing image. A contributor renders and commits the folder's image and sha
+request that touches a folder, the `render` workflow renders every header and a contact sheet into its `render`
+artifact; it never fails on a stale or missing image. `python -m yavih.headers --all --check` prints `ok`, `missing` or
+`stale` per folder. A contributor renders and commits the folder's image and sha
 file when a Chrome is at hand; without one, the image comes from that artifact and the sha file from `--html-only`
 (or the maintainer adds both before the merge).
+
+### Figures
+
+`assets/preview.yaml` declares the README's figures: per figure an `id`, a `kind` (a core kind or one of the
+folder's `preview.py`), a `split`, the `rows` it draws (clip_ids, in display order) and the kind's `options`.
+`python -m yavih.previews <name>` renders them where the data is staged (`--suggest --write` drafts the spec):
+`assets/preview.png` (id `preview`, the main figure), `assets/preview-<id>.png`, and for a motion figure
+`assets/<id>.gif` (shown inline) and `assets/<id>.mp4` (linked), with `assets/preview.src.json` as provenance. The
+kinds, sizes, budgets and the pixels-and-licences rule are in the [design system](design-system.md). `bench lint`
+warns about missing, stale, undeclared or oversized figure files and fails only on an invalid spec.
 
 ## setup.md contract
 
@@ -639,7 +655,8 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `reader` | `E_READER` | An optional `reader.py` loads and its `iter_samples` accepts `shard=`. |
 | `budget` | `E_MANIFEST`, `E_BUDGET`, `E_CURATION` | The manifest reads; `budget.clips` equals the frozen rows per read split; `manifest.upstream.curation` exists, its `per_split.*.listed` equal the frozen rows, and listed plus excluded equals `total_upstream`. |
 | `header` | `E_HEADER`, `W_HEADER_MISSING`, `W_HEADER_STALE` (warnings) | `benchmark.yaml` has a `header: {name, title, venue, abstract}` block (its content is checked by the loader: non-empty strings, an abstract of at most 60 words). Where the header template is at hand (a source checkout; skipped for an installed wheel): `assets/header.png` exists (`W_HEADER_MISSING`), and `assets/header.src.sha256` equals the sha256 of the current header HTML; otherwise the image predates its yaml, chips or template (`W_HEADER_STALE`). |
-| `readme` | `E_README`, `E_README_HASH` | The [README.md contract](#readmemd-contract). |
+| `preview` | `E_PREVIEW_SPEC`, `W_PREVIEW_MISSING`, `W_PREVIEW_STALE`, `W_ASSET_SIZE` (warnings) | Where the design system is at hand (a source checkout): `assets/preview.yaml` parses and names known kinds, splits, clip_ids and options with the row count its kind draws (`E_PREVIEW_SPEC`); it exists and every declared figure file exists (`W_PREVIEW_MISSING`); `assets/preview.src.json` records the current source of each figure, and no undeclared `preview*` / `clip*` file is left (`W_PREVIEW_STALE`); no file over its size budget and `assets/` at most 10 MB (`W_ASSET_SIZE`). |
+| `readme` | `E_README`, `E_README_HASH`, `W_README_ASSET` (warning) | The [README.md contract](#readmemd-contract); a `](assets/<file>)` link other than the header image names an existing file (`W_README_ASSET`). |
 | `setup` | `E_SETUP` | The [setup.md contract](#setupmd-contract). |
 | `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |
 | `codecs` | `E_CODEC_SELFTEST` | Every folder or entry-point codec the output schema names passes `yavih.codecs.self_test` ([codecs](codecs.md#writing-a-codec)). |
@@ -648,7 +665,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `capability` | `E_CAPABILITY`, `W_CAPABILITY_UNKNOWN` (warning), `W_SUITE_CAPABILITY` (warning) | `capability` is a non-empty list of capability tags (`[a-z][a-z0-9-]*`); a tag outside `yavih.suites.CAPABILITIES` is the folder's own (`W_CAPABILITY_UNKNOWN`). A shipped suite that lists the benchmark (by name or alias) in a group whose capability is not among its tags is a warning (`W_SUITE_CAPABILITY`). |
 | `template` | `E_TEMPLATE`, `W_READING_UNKNOWN` (warning) | `bridge_template.py` has a literal `describe()["model"]` and a `reading`; a reading outside `a`/`v`/`av`/`t` (`t`: the model is given text) that the folder's `eval.py` `READINGS` does not declare is a warning. |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |
-| `imports` | `E_IMPORT` | `reader.py` / `eval.py` import in a fresh interpreter with torch and the `external` packages blocked. |
+| `imports` | `E_IMPORT` | `reader.py` / `eval.py` / `preview.py` import in a fresh interpreter with torch and the `external` packages blocked. |
 | `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `eval.py`, `make_manifest.py`, `classes.csv`, and `TODO:` markers in `tests/*.py` and `prepare/*` (a folder test may name the bridge template's own `TODO` slots without the colon). |
 
 A path without `benchmark.yaml` yields `E_LAYOUT`; an unknown name or check is a usage error (exit 1).

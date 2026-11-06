@@ -438,7 +438,7 @@ def _c_header(c: _Ctx) -> Iterator[Finding]:
     if not (c.folder / HEADER_IMAGE).is_file():
         yield _warn("header", "W_HEADER_MISSING", f"{HEADER_IMAGE} is missing: the header image lives in the folder; render "
                     f"and commit it with `python -m yavih.headers {c.name} --chrome <chrome>` (without Chrome: the PNG from "
-                    "the pull request's `headers` CI artifact, the sha file from `--html-only`)", HEADER_IMAGE)
+                    "the pull request's `render` CI artifact, the sha file from `--html-only`)", HEADER_IMAGE)
         return
     try:
         want = headers.header_source_sha256(c.bench)
@@ -450,7 +450,7 @@ def _c_header(c: _Ctx) -> Iterator[Finding]:
         yield _warn("header", "W_HEADER_STALE", f"{HEADER_IMAGE} was not rendered from the current header ({rel} "
                     f"{'is missing' if not got else 'records ' + got[:12] + '…'}, the header HTML is {want[:12]}…): "
                     f"re-render and commit both with `python -m yavih.headers {c.name}` (without Chrome: the PNG from "
-                    "the `headers` CI artifact, the sha file from `--html-only`)", HEADER_IMAGE)
+                    "the `render` CI artifact, the sha file from `--html-only`)", HEADER_IMAGE)
 
 
 @_check("preview")

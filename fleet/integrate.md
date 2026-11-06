@@ -71,9 +71,13 @@ for b in <passing branches>; do git merge --no-ff "$b" -m "Merge $b"; done   # f
 
 The catalog index names the commit it was generated at, so write it after the folders are committed. On `main` the
 `catalog` workflow regenerates both after a push; writing them on the batch branch keeps its tests honest. Header
-images live in each folder's `assets/` and are committed: a worker with Chrome commits its own; for every folder of
-the batch that `bench lint` reports with `W_HEADER_MISSING` or `W_HEADER_STALE`, render and commit them here with
-`python -m yavih.headers <name> ... --chrome <chrome>`.
+images and README figures live in each folder's `assets/` and are committed: a worker with Chrome commits its own; for
+every folder of the batch that `bench lint` reports with `W_HEADER_MISSING` or `W_HEADER_STALE`, render and commit them
+here with `python -m yavih.headers <name> ... --chrome <chrome>`. For a folder reported with `W_PREVIEW_MISSING` or
+`W_PREVIEW_STALE`: where `yavih bench list` shows its data present (`verified`, or the rows a figure draws present), render the figures here with
+`python -m yavih.previews <name> --chrome <chrome>` (ffmpeg for motion) and commit them; elsewhere leave the warning and
+list the folder under "figures pending data" in the batch hand-over. An `E_PREVIEW_SPEC` or a `W_ASSET_SIZE` goes back
+to the worker (an invalid spec, or figures over the budget of docs/design-system.md).
 
 ## 6. Update the queue
 

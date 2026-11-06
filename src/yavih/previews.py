@@ -78,7 +78,7 @@ TEMPLATES_DIR = design.DESIGN_DIR / "figures"
 WIDTH = 1600
 #: Bytes per committed file type and for the whole ``assets/`` directory.
 SIZE_BUDGET: dict[str, int] = {"png": 1_500_000, "gif": 4_000_000, "mp4": 2_000_000, "folder": 10_000_000}
-#: The longest media excerpt a figure shows (pixels and licences: docs/design-system.md).
+#: The longest media excerpt a figure shows (the pixels-and-licences rule of the design system).
 MAX_SECONDS = 5.0
 #: The motion overlay page (CSS px): the GIF is rendered at this size, the MP4 at twice it.
 MOTION_SIZE = (640, 400)
@@ -573,7 +573,7 @@ def _fill_boxes(ctx: RenderContext) -> dict[str, Any]:
             side.append(f'<div class="lab">audio around it</div>{ctx.wave_svg(y, 560, 64)}<img class="spec" src="{ctx.mel_uri(y, rate, columns=560)}">')
         except Exception:  # noqa: BLE001 - a frame without its audio is still the task
             pass
-    pic = (f'<div class="pic" style="aspect-ratio:{w}/{h}"><img src="{ctx.data_uri(frame[0], 1100)}">'
+    pic = (f'<div class="pic" style="aspect-ratio:{w}/{h}"><img src="{ctx.data_uri(frame[0], 960)}">'
            f'<div class="box" style="left:{x1 * 100:.3f}%;top:{y1 * 100:.3f}%;width:{(x2 - x1) * 100:.3f}%;height:{(y2 - y1) * 100:.3f}%">'
            f'<span class="lab">{_esc(name)}</span></div></div>')
     return {"title": f"where is the sound? {name}", "chips": [_media_chip(ctx.bench), _chip(ctx.clip_id(0))],
@@ -709,7 +709,7 @@ def _core(kind: str, height: int | None, rows: int | None, fill: Callable, optio
     return Component(kind, 1, MOTION_SIZE if motion else (WIDTH, int(height or 0)), rows, f"{kind}.html", fill, motion=motion, options=options)
 
 
-#: The core kinds (docs/design-system.md has the table).
+#: The core kinds (the design system page has the table).
 CORE_COMPONENTS: dict[str, Component] = {c.kind: c for c in (
     _core("images", 620, 8, _fill_images, {}),
     _core("frames", 330, 1, _fill_frames, {"n": 6, "times": None}),

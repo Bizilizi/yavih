@@ -26,8 +26,9 @@ history; an editable install writes `src/yavih/_version.py`, which is never comm
 src/yavih/            the package (everything below ships in the wheel)
 tests/                repo tests: contract, integration, golden, docs and import-boundary tests
 docs/                 this documentation (not shipped in the wheel)
-assets/               header.html → header.png (the README header), benchmark-header/ (the folder header template)
-.github/workflows/    ci.yml (ruff, pytest: 3.12 on pull requests, 3.10–3.14 nightly and on tags, wheel smoke test), catalog.yml (index and tables on main), headers.yml, release.yml (PyPI + GitHub Release)
+assets/               design/ (the design system: tokens, components, fonts, figure templates), header.html → header.png
+                      (the README header), benchmark-header/ (the folder header template)
+.github/workflows/    ci.yml (ruff, pytest: 3.12 on pull requests, 3.10–3.14 nightly and on tags, wheel smoke test), catalog.yml (index and tables on main), render.yml (header images and figures), release.yml (PyPI + GitHub Release)
 pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and ruff settings
 ```
 
@@ -48,7 +49,7 @@ pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and
 | `hash_history.py` | the folders' changelog hashes merged (`supersedes`), used by validation, migration and lint |
 | `benchmark.py` | `Benchmark`: `benchmark.yaml` schema, manifest and classes, roles, targets, contracts, metric resolution, data status, folder resolution |
 | `sample.py` | `RawStream`, `Sample` and the generic reader `iter_samples` (stored bytes + facts, canaries) |
-| `media/` | `rules.py` (evaluate declared rules, numpy only), `tarindex.py` (read tar members in place), `info.py` (header probes, census), `decode.py` and `ffmpeg.py` (optional decode helpers); no protocol semantics |
+| `media/` | `rules.py` (evaluate declared rules, numpy only), `tarindex.py` (read tar members in place), `info.py` (header probes, census), `decode.py` and `ffmpeg.py` (optional decode helpers), `figures.py` (drawing helpers of the README figures); no protocol semantics |
 | `external.py` | `require()`: assert-import and version check of benchmark authors' packages |
 | `bridge.py` | `Bridge` base class, `BenchmarkView`, `describe()` validation, `fingerprint_state_dict`, `grid_pos` |
 | `bridges/examples/` | `hf_reference.py`, the one shipped reference bridge (`doctor --selftest`) |
@@ -64,7 +65,9 @@ pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and
 | `scaffold.py` | `yavih bench new`: scaffold a folder that passes lint |
 | `freeze.py` | shared helpers of the folders' `make_manifest.py` (byte-identical re-freeze, seeded train draw) |
 | `doctables.py` | the benchmark lists generated from the folders into README.md, `docs/benchmark-folder.md`, the index and the skill's `references/data.md` and `references/readouts.md` |
+| `design.py` | the [design system](design-system.md) as code: the shared CSS, the design digest, fonts staging, Chrome screenshots, PNG compression, contact sheets |
 | `headers.py` | `python -m yavih.headers`: renders the folders' README header images and the repository's `assets/header.png` and records each folder render's HTML sha256 (a maintainer tool; the images are not shipped) |
+| `previews.py` | `python -m yavih.previews`: renders the folders' README figures from `assets/preview.yaml` (stills with Chrome, motion with ffmpeg), records their provenance, drafts a spec, and the `preview` lint check |
 | `shipped.py` | one command surface for shipped files (`bench files/show/prepare`, `bridge new`, `skill show`) |
 | `cli.py` | argparse mirror of the API, the `--json` envelope, exit-code mapping |
 | `testing/` | shipped fixtures: synthetic benchmarks, `random_bridge`, `oracle_bridge`; `folder.py` helps folder tests |
@@ -219,7 +222,7 @@ without `--json`; progress goes to stderr. See [cli](cli.md).
 | normative reference | `docs/*.md` (see [the index](README.md)) | by hand; tables of codes, env vars and commands are checked against the code by `tests/test_docs.py` |
 | per-benchmark docs | each folder's `README.md`, `setup.md` | by hand; pinned to `benchmark.yaml` by folder tests and `bench lint` |
 | benchmark lists | `README.md` (table, controls), `docs/benchmark-folder.md` (packaged benchmarks), `benchmarks/README.md` (index, setup links), `references/data.md` (obtainability, `prepare_only` roots), `references/readouts.md` (benchmarks per readout) | generated between `yavih:bench-table` markers: `python -m yavih.doctables --write` (`--check` in the tests) |
-| header images | `assets/header.png`, each folder's `assets/header.png` + `assets/header.src.sha256` | rendered: `python -m yavih.headers` (below); the `headers` workflow renders them as an artifact |
+| header images and figures | `assets/header.png`, each folder's `assets/header.png` + `assets/header.src.sha256`, its `assets/preview*` / `clip.*` + `assets/preview.src.json` | rendered: `python -m yavih.headers` and `python -m yavih.previews` (below, [design system](design-system.md)); the `render` workflow renders them as an artifact |
 | catalog index | `catalog/index.json` | generated from git history on `main` by the `catalog` workflow (`python -m yavih.catalog --write`); never edited by hand |
 | agent-facing docs | `src/yavih/skill/yavih/` | by hand; shipped, so links go to GitHub URLs |
 | user-facing overview | `README.md` | by hand (do not regenerate it) |
@@ -237,8 +240,17 @@ repository files and are not shipped in the wheel.
 
 Each folder render also writes `assets/header.src.sha256`, the sha256 of the HTML the image was rendered from;
 commit it with the image. `bench lint` warns `W_HEADER_STALE` when a folder's image has no or another sha (a changed
-`header:` block, chip or template); the `headers` workflow (`.github/workflows/headers.yml`) renders every header of a
-pull request into its `headers` artifact and never fails on one. The images live in the folders: each folder
+`header:` block, chip, template or design); the `render` workflow (`.github/workflows/render.yml`) renders every header of
+a pull request into its `render` artifact and never fails on one. The images live in the folders: each folder
 commits its `assets/header.png` and sha file (`bench lint` warns `W_HEADER_MISSING` without them). A contributor
 without Chrome takes the PNG from the artifact and writes the sha file with `python -m yavih.headers <name>
 --html-only` (the `assets/header.html` it also writes is not committed), or the maintainer adds both before the merge.
+
+### README figures
+
+The figures of a folder's README (`assets/preview.png`, `assets/preview-<id>.png`, `assets/<id>.gif` + `.mp4`) are
+declared in its `assets/preview.yaml` and rendered by `python -m yavih.previews <name>` with the same design system
+(`assets/design/`, [design system](design-system.md)); unlike the headers they read the folder's data, so they are
+rendered where the data is staged (`--data-root KEY=PATH`), with Chrome and, for motion, ffmpeg. `--check` and the
+lint's `preview` check report missing, stale, undeclared and oversized files; the `render` workflow tiles the committed
+figures into a contact sheet (`--contact-sheet PATH --committed`).

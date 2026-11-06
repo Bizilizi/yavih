@@ -39,7 +39,7 @@ tests): build from a copy, `mkdir -p <SCRATCH>/src && git -C <WORKTREE> archive 
 
 THE FOOTPRINT RULE. Your branch changes files under benchmarks/<NAME>/ and nowhere else: not src/ (the core), not
 tests/, docs/, README.md, .github/, fleet/ (the queue is the integrator's), catalog/index.json, the generated
-benchmark tables, other benchmark folders. Your folder's header image is yours (benchmarks/<NAME>/assets/, step 11).
+benchmark tables, other benchmark folders. Your folder's header image and README figures are yours (benchmarks/<NAME>/assets/, step 11).
 Before you report, this must print `footprint ok`:
   "$PY" fleet/check.py footprint HEAD --base <BASE> --name <NAME>
 The core is read-only BY DESIGN, not as a restriction to work around: whatever your protocol needs that yavih does not
@@ -56,10 +56,14 @@ put the one-line unblocking action in `blocked_by`, and report the entry blocked
 WHAT TO DO. Follow docs/contributing-a-benchmark.md, which is the contract, with these differences for a fleet
 worker:
   - steps 1-13 are yours (scaffold, protocol, frozen manifest, prepare steps, setup.md and README.md, bridge
-    template, eval.py, hashes and conformance fixture, folder tests, lint and tests, the header image, synthetic
-    trial, the fresh-agent trial run); step 11: when a headless Chrome or Chromium is at hand, render and commit your
-    header with `python -m yavih.headers <NAME> --chrome <path>` (it writes only benchmarks/<NAME>/assets/); without
-    one, say so in your report and the integrator renders it;
+    template, eval.py, hashes and conformance fixture, folder tests, lint and tests, the header image and figures,
+    synthetic trial, the fresh-agent trial run); step 11, "Header image and figures": draft the figure spec with
+    `python -m yavih.previews <NAME> --suggest --write`, edit its `rows` if the draw misrepresents the task (keep the
+    pixels-and-licences rule of docs/design-system.md), then, when a headless Chrome or Chromium is at hand, render and
+    commit the header with `python -m yavih.headers <NAME> --chrome <path>` and the figures from your staged data with
+    `python -m yavih.previews <NAME> --chrome <path>` (ffmpeg for a motion figure; both write only
+    benchmarks/<NAME>/assets/); without Chrome, ffmpeg or the data, commit the spec only and say so in your report:
+    the integrator renders the rest;
   - the integrator does the rest: step 0 (your checkout exists), the generated tables and catalog/index.json (never
     run `python -m yavih.doctables --write` or `python -m yavih.catalog --write`), step 14
     (the pull request) and the queue update;
@@ -81,7 +85,8 @@ and is listed under "Budgets" in your report as not measured, with the reason; o
 official file sizes, minutes scaled from a sample) says how.
 
 CHECKS, in this order, all inside your folder:
-  yavih bench lint <NAME>                              # nothing but W_TODO for budgets you could not measure
+  yavih bench lint <NAME>                              # nothing but W_TODO for budgets you could not measure and the
+                                                       # figure warnings of what you could not render
   "$PY" -m pytest benchmarks/<NAME> -q -p no:cacheprovider -o addopts="--import-mode=importlib"
   "$PY" -m ruff check benchmarks/<NAME>
   yavih bench conformance <NAME> --record               # once the protocol and scorer are final; re-record after edits
@@ -108,6 +113,7 @@ run the footprint check, and end with this report, filled in exactly:
 - lint / folder tests / ruff: <outcome each>
 - conformance: <recorded | skipped (why)>
 - synthetic trial: <verdict, exit code, stages not ok and why>
+- figures: rendered | spec only (no Chrome | no ffmpeg | no data) | none (why)
 - fresh-agent trial run: <pass | fail | not run> with the TRIAL_REPORT.md path; friction found and fixed
 - budgets: media_gb, extract_min_per_1k_clips_ref, probe_minutes_ref: value and measured | derived (how) | not measured (why)
 - unification candidates: <one bullet per item: what, which file, which other folders might share it; or none>

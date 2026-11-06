@@ -17,7 +17,7 @@ Throughout, `<name>` is the new benchmark's name (`[a-z][a-z0-9_]*`, the folder 
 
 **What a contribution touches: `benchmarks/<name>/` only.** The repository's `benchmarks/` directory is where the
 folders live (the wheel ships the core only; users fetch a folder from the catalog, [catalog](catalog.md)). The
-folder's header image is part of the folder (`assets/`, step 11). The generated benchmark tables and
+folder's header image and README figures are part of the folder (`assets/`, step 11). The generated benchmark tables and
 `catalog/index.json` are written by CI after the merge: never regenerate or commit them in a benchmark pull request.
 
 **Adding many benchmarks at once?** The [fleet](../fleet/README.md) runs one agent per folder from a
@@ -290,20 +290,27 @@ not run `python -m yavih.doctables --write` in the pull request.
 
 **Done when:** `yavih bench lint <name>` reports nothing, the folder's tests pass and ruff is clean.
 
-## 11. Header image
+## 11. Figures
 
-The header image lives in the folder: `assets/header.png` and `assets/header.src.sha256`, committed with it
-([header image](benchmark-folder.md#header-image)). With a headless Chrome or Chromium at hand:
+The header image and the README figures live in the folder's `assets/`, committed with it and drawn with the
+[design system](design-system.md) ([header image](benchmark-folder.md#header-image), [figures](benchmark-folder.md#figures)).
+With a headless Chrome or Chromium at hand (and ffmpeg for a motion figure):
 
 ```bash
 python -m yavih.headers <name> --chrome <chrome>     # writes assets/header.png and assets/header.src.sha256
+python -m yavih.previews <name> --suggest --write    # drafts assets/preview.yaml: check that its rows show the task
+python -m yavih.previews <name> --chrome <chrome>    # renders the figures from the staged data + assets/preview.src.json
 ```
 
-Without one, take `assets/header.png` from the pull request's `headers` artifact (the `headers` workflow renders it
-from the `header:` block) and write the sha file with `python -m yavih.headers <name> --html-only` (do not commit the
-`assets/header.html` it also writes); or leave both to the maintainer, who adds them before the merge.
+Edit the drafted `rows` when the draw misrepresents the task (a silent clip, an unreadable frame), and keep to the
+pixels-and-licences rule (a few downscaled stills, at most 5 s of media; the `classes` kind for data whose licence
+forbids redistribution). Without Chrome, take `assets/header.png` from the pull request's `render` artifact and write
+the sha file with `python -m yavih.headers <name> --html-only` (do not commit the `assets/header.html` it also writes);
+without the data, Chrome or ffmpeg, commit the spec only and say so: the maintainer renders the figures where the data
+is staged, before or after the merge.
 
-**Done when:** `yavih bench lint <name>` reports neither `W_HEADER_MISSING` nor `W_HEADER_STALE`.
+**Done when:** `yavih bench lint <name>` reports neither `W_HEADER_MISSING` nor `W_HEADER_STALE`, no `E_PREVIEW_SPEC`
+and, where you rendered, no `W_PREVIEW_*` or `W_ASSET_SIZE`.
 
 ## 12. Synthetic trial
 
@@ -370,9 +377,10 @@ Splits and frozen rows: <train n / eval n>. Scaffolded from `<like>`.
 
 <the trial-run report, pasted verbatim>
 
-## Header contact sheet
+## Figures
 
-<the rendered header (assets/header.png), or a link to the `headers` artifact of this pull request>
+<the rendered header and figures (assets/header.png, assets/preview.png, a motion GIF), or a link to the `render`
+artifact of this pull request; "spec only" and why when the figures are not rendered>
 ````
 
 **Done when:** the pull request is open with that title, the `benchmark` label and the filled body.
@@ -385,7 +393,7 @@ Splits and frozen rows: <train n / eval n>. Scaffolded from `<like>`.
 | `ci.yml` | pytest (pull request, Python 3.12) | a pull request that changes only `benchmarks/`: `yavih bench lint` and the tests of the changed folders, plus the repository checks that read every folder (each folder's lint, on conformance verdicts cached across runs; the docs; the catalog); anything else changed: the whole suite. CPU torch, ffmpeg, `.[media,dev]`, no benchmark data (tests that need staged media skip); the generated tables are written first |
 | `ci.yml` | fleet (footprint and queue) | a pull request labelled `benchmark` changes exactly one folder and nothing else (`python fleet/check.py footprint`), under a name reserved in `fleet/queue.yaml`; every pull request keeps the queue valid (`python fleet/check.py queue`) |
 | `ci.yml` | build and smoke-test the wheel | builds the sdist and wheel, checks that the wheel ships the core only, installs it into a clean venv without torch and lints and fetches the repository's folders with it |
-| `headers.yml` | render the header images | on pull requests touching `benchmarks/**`: renders every header and a contact sheet into the `headers` artifact (never fails) |
+| `render.yml` | render the header images and figures | on pull requests touching `benchmarks/**` or the design: renders every header and its contact sheet, reports stale headers and figures, and tiles the committed figures into a second contact sheet, all in the `render` artifact (never fails; no data in CI, so figures are not re-rendered there) |
 
 After the merge, `catalog.yml` regenerates `catalog/index.json` and the tables on `main`; the nightly run tests every
 Python version.
