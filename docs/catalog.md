@@ -92,8 +92,9 @@ nowhere.
 - a yavih git checkout: the index is generated from its own history (current even on a branch the published index
   lags) and the folder is read with `git archive` at the chosen commit;
 - a directory holding `catalog/index.json` and the folders at their `path`;
-- a repository archive (`.tar.gz`, as `https://codeload.github.com/Bizilizi/yavih/tar.gz/<commit>` serves it): the
-  revision is the one whose tree id the archive's folder has.
+- a repository archive (`.tar.gz` or `.tar`), with the repository under one top-level directory (as
+  `https://codeload.github.com/Bizilizi/yavih/tar.gz/<commit>` serves it, or `git archive --prefix=yavih-<commit>/`) or
+  at its root (a plain `git archive HEAD`): the revision is the one whose tree id the archive's folder has.
 
 `python -m yavih.catalog --export DIR [<name>...]` writes such a directory from a checkout: `catalog/index.json`
 listing the newest revision of each folder, and those folders at their path (a mirror, or the trial run's worker that

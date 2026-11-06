@@ -396,9 +396,12 @@ def _index_of_source(src: Path) -> dict[str, Any]:
         raise CatalogError("E_CATALOG_SOURCE", f"{src} is neither a yavih git checkout nor a directory holding {INDEX_PATH}")
     if src.is_file() and _is_archive(src):
         with tarfile.open(src) as tf:
-            member = next((m for m in tf.getmembers() if m.isfile() and _strip_top(m.name) == INDEX_PATH), None)
+            strip = _archive_strips(tf)
+            member = next((m for m in tf.getmembers()
+                           if m.isfile() and (_strip_top(m.name) if strip else PurePosixPath(m.name).as_posix()) == INDEX_PATH), None)
             if member is None:
-                raise CatalogError("E_CATALOG_SOURCE", f"{src} holds no {INDEX_PATH}")
+                raise CatalogError("E_CATALOG_SOURCE", f"{src} holds no {INDEX_PATH}, neither at its root (a plain `git archive "
+                                   "HEAD`) nor under one top-level directory (codeload, `git archive --prefix=yavih-<commit>/`)")
             fh = tf.extractfile(member)
             assert fh is not None
             return _check_index(json.loads(fh.read().decode("utf-8")), f"{src}:{INDEX_PATH}")
@@ -544,6 +547,17 @@ def _is_archive(p: Path) -> bool:
     return p.name.endswith((".tar.gz", ".tgz", ".tar"))
 
 
+def _archive_strips(tf: tarfile.TarFile) -> bool:
+    """Whether the archive wraps the repository in one top-level directory (``yavih-<commit>/...``, as codeload and
+    ``git archive --prefix=...`` produce: ``True``) or holds it at its root (a plain ``git archive HEAD`` or ``tar -C
+    <checkout> .``: ``False``, recognised by ``catalog/index.json`` or a ``benchmarks/`` path at the root)."""
+    for m in tf.getmembers():
+        name = PurePosixPath(m.name).as_posix()  # "./catalog/index.json" -> "catalog/index.json"
+        if name == INDEX_PATH or name == "benchmarks" or name.startswith("benchmarks/"):
+            return False
+    return True
+
+
 def _strip_top(name: str) -> str:
     """``<top>/<rest>`` (an archive's single top directory) → ``<rest>``."""
     parts = PurePosixPath(name).parts
@@ -617,7 +631,7 @@ def _materialize(rev: Mapping[str, Any], *, repo: str, source: Path | None, dest
     else:
         archive = source if source is not None and source.is_file() else _archive_for(commit, repo)
         with tarfile.open(archive) as tf:
-            n = _extract(tf, path, dest, strip=True)
+            n = _extract(tf, path, dest, strip=_archive_strips(tf))
         where = str(archive) if source is not None else f"{_setting('archive', DEFAULT_ARCHIVE).format(repo=repo, commit=commit)}"
     if n == 0:
         raise CatalogError("E_CATALOG_SOURCE", f"{path} at {commit[:12]} is empty in {where}", exit_code=2)
@@ -631,7 +645,7 @@ def _archive_revision(entry: Mapping[str, Any], archive: Path) -> dict[str, Any]
             d = Path(tmp) / str(rev["commit"])
             d.mkdir()
             with tarfile.open(archive) as tf:
-                if _extract(tf, str(rev["path"]), d, strip=True) and tree_id(d) == rev["tree"]:
+                if _extract(tf, str(rev["path"]), d, strip=_archive_strips(tf)) and tree_id(d) == rev["tree"]:
                     return dict(rev)
     raise CatalogError("E_CATALOG_TREE", f"{archive} holds no revision of {entry.get('name')} the index lists", exit_code=2)
 

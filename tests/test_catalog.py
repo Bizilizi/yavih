@@ -158,6 +158,41 @@ def test_fetch_from_an_archive_and_from_file_urls_with_the_archive_cache(catrepo
     assert catalog.cached_index()["commit"] == catrepo["c3"]
 
 
+@pytest.mark.parametrize("shape", ["prefix", "plain", "dot"])
+def test_fetch_from_an_archive_of_either_shape(catrepo, tmp_path, yavih_home, shape):
+    """``--from <archive>`` reads the repository under one top-level directory (codeload, ``git archive --prefix=``) and
+    at the archive's root (a plain ``git archive HEAD``, or ``tar -C <dir> .`` whose names start with ``./``)."""
+    import tarfile
+
+    c = catrepo["c4"]  # holds the index and c3's folder
+    arc = tmp_path / f"{shape}.tar.gz"
+    if shape == "dot":
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        subprocess.run(["git", "-C", str(catrepo["repo"]), "archive", "--format=tar", "-o", str(tmp_path / "flat.tar"), c], check=True)
+        with tarfile.open(tmp_path / "flat.tar") as tf:
+            tf.extractall(tree, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))  # our own archive
+        subprocess.run(["tar", "-czf", str(arc), "-C", str(tree), "."], check=True)
+    else:
+        prefix = [f"--prefix=yavih-{c}/"] if shape == "prefix" else []
+        subprocess.run(["git", "-C", str(catrepo["repo"]), "archive", "--format=tar.gz", *prefix, "-o", str(arc), c], check=True)
+    rec = catalog.fetch("catx", source=arc, dest_dir=tmp_path / "out", version="9.0.0")
+    assert rec["commit"] == catrepo["c3"] and catalog.tree_id(tmp_path / "out" / "catx") == rec["tree"]
+
+
+def test_an_archive_without_the_index_names_both_shapes(tmp_path):
+    import tarfile
+
+    arc = tmp_path / "empty.tar.gz"
+    (tmp_path / "x").mkdir()
+    (tmp_path / "x" / "README.md").write_text("x\n")
+    with tarfile.open(arc, "w:gz") as tf:
+        tf.add(tmp_path / "x", arcname="x")
+    with pytest.raises(CatalogError, match="neither at its root") as ei:
+        catalog.fetch("catx", source=arc, dest_dir=tmp_path / "out", version="9.0.0")
+    assert ei.value.code == "E_CATALOG_SOURCE" and "--prefix" in str(ei.value)
+
+
 def test_a_corrupt_archive_is_refused_and_installs_nothing(catrepo, tmp_path, yavih_home, monkeypatch):
     c = catrepo["c2b"]
     bad = tmp_path / "arch" / f"{c}.tar.gz"
