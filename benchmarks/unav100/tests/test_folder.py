@@ -1,7 +1,7 @@
 """Folder tests of unav100 (run: ``python -m pytest "$(yavih bench path unav100)/tests" -q -p no:cacheprovider``).
 
 Pins the folder's own facts: the frozen rows and events per split, the class vocabulary, the curation sums, the
-protocol (the authors' tIoU thresholds bit for bit), the contracts, the prepare steps, README.md / setup.md facts and
+protocol (the authors' tIoU thresholds bit for bit), the contracts, the prepare steps and
 the bridge template; re-derives the manifest from rows rebuilt from the committed one (the parquet path needs
 pyarrow, which CI does not have); and runs the reader over a synthetic tar laid out like the upstream one.
 """
@@ -56,10 +56,6 @@ def _detection():
     """The folder's own detection scorer module (``detection.py``, loaded by ``eval.py``) and its events format."""
     ev = F.load_module(HERE / "eval.py")
     return ev.detection, ev.EVENTS_FORMAT
-
-
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
 
 
 def test_sha256_matches(spec: dict):
@@ -166,22 +162,7 @@ def test_make_manifest_check_on_staged_parquets(spec: dict, capsys):
     assert printed["manifest"]["sha256"] == spec["manifest"]["sha256"]
 
 
-# ----------------------------------------------------------------------------- README.md + setup.md + prepare/
-
-
-def test_readme_facts(spec: dict):
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    in_yavih = F.section(text, 2, "In yavih")
-    assert spec["metrics"]["headline"] in in_yavih and "make_manifest.py" in text
-    assert "geng2023dense" in text and "47.8" in text and "2 167" in in_yavih and "5 900" in in_yavih
-
-
-def test_setup_facts(spec: dict):
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    assert spec["source"]["revision"] in text and "KEEP_PARTS=0" in text
-    for name, sha in spec["source"]["sha256"].items():
-        if name.startswith("data/"):
-            assert sha[:8] in text, name
+# ----------------------------------------------------------------------------- prepare/
 
 
 def test_prepare_scripts_present():

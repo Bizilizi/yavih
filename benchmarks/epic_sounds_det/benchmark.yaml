@@ -3,6 +3,7 @@ name: epic_sounds_det
 aliases: [epic_sounds_detection]
 title: EPIC-SOUNDS audio-based interaction detection (untrimmed kitchen recordings, 44 classes)
 capability: [audio, temporal]
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: epic_sounds_det
 protocol_version: 1
 changelog:

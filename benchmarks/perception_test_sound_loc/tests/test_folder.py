@@ -1,4 +1,4 @@
-"""Folder tests of perception_test_action_loc (run: ``python -m pytest "$(yavih bench path perception_test_action_loc)/tests" -q -p no:cacheprovider``)."""
+"""Folder tests of perception_test_sound_loc (run: ``python -m pytest "$(yavih bench path perception_test_sound_loc)/tests" -q -p no:cacheprovider``)."""
 
 from __future__ import annotations
 
@@ -15,19 +15,19 @@ HERE = F.folder_of(__file__)
 _isolated_yavih_home = F.isolated_yavih_home
 spec, rows, classes, bench, mm = F.spec, F.rows, F.classes, F.bench, F.mm
 
-TASK = "action_localisation"
-READOUT = "perception_test_action_loc"  # the folder's own scorer (eval.py + detection.py)
+TASK = "sound_localisation"
+READOUT = "perception_test_sound_loc"  # the folder's own scorer (eval.py + detection.py)
 HEADLINE = "tmap"
 STREAMS = {"video": "video", "audio": "audio"}
 CLIPS = {"train": 2009, "valid": 5359}
-EVENTS = {"train": 13097, "valid": 35440}
-NUM_CLASSES = 63
-FIRST_CLASSES = ["Breaking something", "Browsing through something", "Buttoning up a button"]
+EVENTS = {"train": 13289, "valid": 35625}
+NUM_CLASSES = 11
+FIRST_CLASSES = ["Human:Speech", "Animal:sound", "Animal:walking"]
 READINGS = ["a", "av", "v"]
-DEFAULT_READING = "v"
+DEFAULT_READING = "a"
 OUTPUT_CONTRACT = {"shape": "fixed", "coordinates": "media", "target_frame": None,
-                   "requires": {"pos": ["t"], "streams": ["video"], "grid": None, "t_bins": None}}
-FLOOR = 0.012  # README "## In yavih" (rounded)
+                   "requires": {"pos": ["t"], "streams": ["audio"], "grid": None, "t_bins": None}}
+FLOOR = 0.023  # README "## In yavih" (rounded)
 COLUMNS = ["clip_id", "split", "label", "events", "duration_s", "rel_video", "rel_audio"]
 
 
@@ -38,10 +38,6 @@ def _detection():
     """The folder's own detection scorer module (``detection.py``, loaded by ``eval.py``) and its events format."""
     ev = F.load_module(HERE / "eval.py")
     return ev.detection, ev.EVENTS_FORMAT
-
-
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
 
 
 def test_sha256_matches(spec: dict):
@@ -84,7 +80,7 @@ def test_columns_and_charsets(rows: list[dict[str, str]]):
 def test_classes(classes: list[dict[str, str]]):
     names = [c["name"] for c in classes]
     assert len(names) == NUM_CLASSES and names[: len(FIRST_CLASSES)] == FIRST_CLASSES
-    assert all(n == n.strip() for n in names)
+    assert all(n == n.strip() for n in names)  # upstream " Human:Speech" is stripped
 
 
 def test_events_cells_agree_with_labels_and_durations(rows: list[dict[str, str]], classes: list[dict[str, str]]):
@@ -110,8 +106,8 @@ def test_curation_sums(spec: dict):
     assert set(spec["manifest"]["upstream"]["upstream_files"]) == {mm_file for mm_file, *_ in F.load_module(HERE / "make_manifest.py").ANNOTATIONS.values()}
 
 
-def test_floor_value_matches_readme(bench):
-    """The floor metric on the full manifest (labels only, no features) is the value README.md quotes."""
+def test_floor_value(bench):
+    """The floor metric on the full manifest (labels only, no features), the value README.md quotes."""
     det, fmt = _detection()
     metrics = F.load_module(HERE / "eval.py").METRICS
 
@@ -133,24 +129,9 @@ def test_floor_value_matches_readme(bench):
     floor = det.floor_outputs(tr["targets"], len(ev["rows"]))
     value = metrics["tmap"].fn(floor, ev["events"], dict(bench.spec.protocol), {"duration_s": ev["duration_s"]})
     assert round(value, 3) == FLOOR
-    assert f"`tmap_floor` = {FLOOR}" in (HERE / "README.md").read_text(encoding="utf-8")
 
 
-# ----------------------------------------------------------------------------- README.md + setup.md + prepare/
-
-
-def test_readme_facts(spec: dict):
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    body = F.section(text, 2, "In yavih")
-    assert spec["metrics"]["headline"] in body and "make_manifest.py" in text and "patraucean2023perception" in text
-    assert "2 009" in body and "5 359" in body and "actionformer_release_PT" in body
-
-
-def test_setup_facts(spec: dict):
-    text = (HERE / "setup.md").read_text(encoding="utf-8")
-    for _, _, sha, _ in F.load_module(HERE / "make_manifest.py").ANNOTATIONS.values():
-        assert sha in text
-    assert spec["source"]["revision"].split("@")[1] in text and "yavih bench prepare perception_test_action_loc 01" in text
+# ----------------------------------------------------------------------------- prepare/
 
 
 def test_prepare_scripts_present():

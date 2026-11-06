@@ -288,10 +288,9 @@ def _dest(dir_: str | os.PathLike | None) -> Path:
 def _first_folder_of(scorer: str) -> str | None:
     """The first resolvable folder (by name) whose ``benchmark.yaml`` names ``scorer``: the default ``--like`` of a
     scorer without an entry in :data:`DEFAULT_LIKE` (``stream``, a package's scorer)."""
-    from yavih.benchmarks import external_folders, packaged_folder, packaged_names
+    from yavih.benchmark import _candidate_folders
 
-    folders = {n: packaged_folder(n) for n in packaged_names()}
-    folders.update({n: f for n, f in external_folders().items() if n not in folders})
+    folders = _candidate_folders()  # every folder that resolves by name (project, fetched, repository, packs)
     for n in sorted(folders):
         try:
             y = yaml.safe_load((Path(folders[n]) / "benchmark.yaml").read_text(encoding="utf-8")) or {}
@@ -370,6 +369,10 @@ def new_benchmark(name: str, *, scorer: str | None = None, like: str | None = No
     y["aliases"] = []
     y["title"] = f"TODO title of {name} (scaffolded from {like_name})"
     y["protocol_version"] = 1
+    if not y.get("core"):  # a --like folder that predates the catalog (or a synthetic one) carries no specifier
+        from yavih.benchmark import DEFAULT_CORE
+
+        y["core"] = DEFAULT_CORE
     y["changelog"] = [{"version": 1, "date": today, "invalidates": False,
                        "reason": f"TODO: scaffolded from {like_name} by `yavih bench new`; replace the manifest, protocol, contracts and docs"}]
     if isinstance(y.get("source"), dict):

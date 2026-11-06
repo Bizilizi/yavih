@@ -3,6 +3,7 @@ name: unav100
 aliases: []
 title: UnAV-100 dense audio-visual event localization in untrimmed videos
 capability: [audio-visual, temporal]
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: unav100
 protocol_version: 1
 changelog:

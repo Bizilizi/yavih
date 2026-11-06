@@ -1202,11 +1202,11 @@ def cmd_bench_extensions(ns: argparse.Namespace) -> Envelope:
     hooks, codecs, bridge-check gates, eligibility rule, stand-in, reader, readings, capability tags, label kind), the
     parts of a protocol a folder owns instead of the core. Without names, the folders that extend anything (``--all``:
     every folder)."""
-    from yavih.benchmark import resolve_folder
-    from yavih.benchmarks import external_folders, packaged_names
+    from yavih.benchmark import _candidate_folders, resolve_folder
     from yavih.extensions import DOC_URL, EXTENSION_POINTS, extends_line, folder_extensions
 
-    names = list(ns.names or []) or sorted({*packaged_names(), *external_folders()})
+    # every folder that resolves by name: the project's, fetched ones, the repository's, $YAVIH_BENCH_PATH, packs
+    names = list(ns.names or []) or sorted(_candidate_folders())
     rows: dict[str, Any] = {}
     lines = []
     for n in names:

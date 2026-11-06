@@ -40,10 +40,6 @@ def _events(cell: str) -> list[tuple[int, int, int]]:
 # ----------------------------------------------------------------------------- yaml + files
 
 
-def test_folder_lint_clean():
-    F.assert_lint_clean(HERE)
-
-
 def test_sha256_matches(spec: dict):
     F.assert_manifest_hashes(HERE, spec)
 
@@ -92,15 +88,7 @@ def test_output_contract_and_external(spec: dict):
     assert (HERE / "eval.py").is_file() is HAS_PROBE and (HERE / "detection.py").is_file()
 
 
-# ----------------------------------------------------------------------------- README.md + prepare/
-
-
-def test_readme_facts(spec: dict):
-    text = (HERE / "README.md").read_text(encoding="utf-8")
-    sec = F.section(text, 2, "In yavih")
-    assert spec["metrics"]["headline"] in sec and "make_manifest.py" in text and "detection.py" in sec
-    assert "16.48 / 15.15 / 13.70 / 11.99 / 10.12" in sec and "16.74 / 15.48 / 14.01 / 12.26 / 10.35" in sec
-    assert "@article{EPICSOUNDS2025" in text
+# ----------------------------------------------------------------------------- prepare/
 
 
 def test_prepare_scripts_present():

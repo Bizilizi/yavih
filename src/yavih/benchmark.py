@@ -890,6 +890,11 @@ def _parse_capability(v: Any, path: str) -> tuple[str, ...]:
 _CORE_CLAUSE_RE = re.compile(r"^(~=|==|!=|<=|>=|<|>)\s*v?\d+(?:\.\d+)*(?:\.\*)?(?:(?:a|b|rc|\.dev|\.post)\d+)*$")
 
 
+#: The ``core`` specifier a new folder starts from (``yavih bench new`` writes it when the ``--like`` folder has none):
+#: the first core release with the catalog, up to the next major.
+DEFAULT_CORE: str = ">=1.1,<2"
+
+
 def _parse_core(v: Any, path: str) -> str | None:
     """``core``: absent, or a PEP 440 specifier set (comma-separated clauses such as ``">=1.1,<2"``) naming the yavih
     core releases this folder needs. Not hashed: it says which code can read the folder, never what a number means."""
