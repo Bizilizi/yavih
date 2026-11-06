@@ -33,7 +33,10 @@ folder that extends anything (`--all`: every folder).
 
 Name a folder's own head families and losses after the folder (`<folder>_...`): a name resolves to one scorer, so a
 second folder scorer that declares a loss or head family another already builds is refused when it registers, and
-`yavih bench new --like` renames the copied names that follow this convention.
+`yavih bench new --like` renames the copied names that follow this convention. The core's losses (`ce`, `bce`,
+`ce_seq`, `l1_log`, `box_l1_giou`) and head families (`attentive_probe_v1`, `dense_query_v1`, `dense_av_v1`) may be
+declared by a folder scorer, and the core then builds them (the detection folders declare `dense_query_v1`), but never
+built by it: a folder scorer whose own `loss_fn` or `build_head` serves a core name is refused when it registers.
 
 Every point keeps the folder's numbers honest the same way: hashes cover the declaration (`benchmark.yaml`), never
 code; the conformance fixture pins the folder's scoring path, whatever code it runs, to its `protocol_version`.
