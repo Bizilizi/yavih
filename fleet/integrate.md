@@ -80,8 +80,12 @@ For every entry of the batch, on `batch/<n>`:
 | still being fixed | `claimed` | unchanged |
 
 ```bash
+"$PY" fleet/check.py ship        # every merged folder's entry becomes shipped (only those `status:` lines change)
 "$PY" fleet/check.py queue && git commit -am "queue: batch <n>"
 ```
+
+On `main` the `catalog` workflow runs the same `ship` after every push, so a single benchmark pull request (which may
+not touch `fleet/`) still leaves the queue truthful.
 
 Collect the batch's `notes/UNIFY.md` bullets into the running list of unification candidates; when several folders
 implement the same thing, unifying it is a core change of its own (moving a folder's scorer into the core bumps that

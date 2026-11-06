@@ -2,7 +2,8 @@ name: catalog
 
 # After every push to main: regenerate catalog/index.json (the index `yavih bench fetch` reads, from the git history:
 # python -m yavih.catalog --write) and the generated benchmark tables (python -m yavih.doctables --write), and commit
-# them when they changed. Contributors never edit either. A commit pushed with the workflow token starts no other
+# them when they changed, with the fleet queue's entries of merged folders marked shipped. Contributors never edit
+# any of them. A commit pushed with the workflow token starts no other
 # workflow, so this never loops.
 on:
   push:
@@ -39,12 +40,14 @@ jobs:
           python -m yavih.doctables --write
           python -m yavih.catalog --write
           python -m yavih.catalog --check
+          python fleet/check.py ship        # a merged benchmark pull request's queue entry becomes shipped
+          python fleet/check.py queue
       - name: Commit when changed
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A catalog README.md docs benchmarks/README.md src/yavih/skill
+            git add -A catalog README.md docs benchmarks/README.md src/yavih/skill fleet/queue.yaml
             git commit -m "catalog: regenerate the index and the benchmark tables"
             git pull --rebase origin main
             git push origin HEAD:main

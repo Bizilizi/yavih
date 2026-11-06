@@ -70,6 +70,21 @@ def test_entry_prints_one_entry(capsys):
     assert check.main(["entry", "no_such_benchmark"]) == 1
 
 
+def test_ship_marks_existing_folders_and_keeps_the_layout(tmp_path: Path):
+    q = tmp_path / "queue.yaml"
+    q.write_text("# header comment\nschema_version: 1\nentries:\n"
+                 "- name: alpha\n  kind: benchmark\n  status: claimed\n  branch: bench/alpha\n"
+                 "- name: beta\n  kind: benchmark\n  status: todo\n"
+                 "- name: gamma\n  kind: benchmark\n  status: shipped\n"
+                 "- name: alpha_suite\n  kind: suite\n  status: todo\n")
+    assert check.ship(q, {"alpha", "gamma", "alpha_suite"}) == ["alpha"]
+    text = q.read_text()
+    assert text.startswith("# header comment\n")
+    assert "- name: alpha\n  kind: benchmark\n  status: shipped\n  branch: bench/alpha\n" in text
+    assert "- name: beta\n  kind: benchmark\n  status: todo\n" in text and "  status: todo\n" in text.split("alpha_suite")[1]
+    assert check.ship(q, {"alpha", "gamma"}) == []
+
+
 @pytest.fixture()
 def repo(tmp_path: Path) -> Path:
     if shutil.which("git") is None:

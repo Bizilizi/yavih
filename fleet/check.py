@@ -9,6 +9,9 @@
         (unless listed with --allow-new: the folder a benchmark pull request adds). Exit 0 / 1 / 2 as above.
     python fleet/check.py entry <name> [--file fleet/queue.yaml]
         prints one entry as YAML (the block a worker brief embeds); exit 1 when the name is not queued.
+    python fleet/check.py ship [--file fleet/queue.yaml]
+        marks `shipped` every entry whose folder exists in benchmarks/ (after a merge; the `catalog` workflow runs it
+        on main), editing only those entries' `status:` lines; prints what it changed.
 
 Standard library plus PyYAML (a yavih dependency); runs from any directory of the repository.
 """
@@ -132,6 +135,27 @@ def check_queue(entries: list[dict], folders: set[str], *, allow_new: frozenset[
     return out
 
 
+def ship(path: Path, folders: set[str]) -> list[str]:
+    """Set ``status: shipped`` on every benchmark entry of ``path`` whose folder exists; returns the names changed.
+    Only each such entry's ``status:`` line is rewritten, so the file's comments and layout stay as they are."""
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    changed: list[str] = []
+    current: str | None = None
+    kind: str | None = None
+    for i, line in enumerate(lines):
+        if line.startswith("- name: "):
+            current, kind = line[len("- name: "):].strip(), None
+        elif current is not None and line.startswith("  kind: "):
+            kind = line[len("  kind: "):].strip()
+        elif current is not None and line.startswith("  status: ") and kind == "benchmark" and current in folders:
+            if line.strip() != "status: shipped":
+                lines[i] = "  status: shipped\n"
+                changed.append(current)
+    if changed:
+        path.write_text("".join(lines), encoding="utf-8")
+    return changed
+
+
 def repo_folders(repo: Path = ROOT) -> set[str]:
     return {p.name for p in (repo / "benchmarks").iterdir() if (p / "benchmark.yaml").is_file()}
 
@@ -150,6 +174,8 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("entry", help="print one queue entry")
     s.add_argument("name")
     s.add_argument("--file", type=Path, default=QUEUE)
+    s = sub.add_parser("ship", help="mark the entries of existing folders shipped")
+    s.add_argument("--file", type=Path, default=QUEUE)
     a = ap.parse_args(argv)
     try:
         if a.cmd == "footprint":
@@ -159,6 +185,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"footprint {'FAILED' if bad else 'ok'}: {a.branch} against {a.base}")
             return 1 if bad else 0
         entries = load_queue(a.file)
+        if a.cmd == "ship":
+            names = ship(a.file, repo_folders())
+            print(f"shipped: {', '.join(names)}" if names else "nothing to ship")
+            return 0
         if a.cmd == "queue":
             problems = check_queue(entries, repo_folders(), allow_new=frozenset(a.allow_new))
             for p in problems:
