@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- yavih figure, kind retrieval: a query video and five candidate sounds, the match ringed. Filled by `python -m yavih.previews <name>` (yavih.previews); fields are
+     string.Template placeholders: $base_css the design system, $page_css the page box, then the kind's layout. -->
+<html><head><meta charset="utf-8"><style>
+$base_css
+$page_css
+.figbody{display:flex;align-items:center;gap:24px}
+.query{flex:0 0 340px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.qstrip{display:flex;flex-direction:column;gap:8px}.qstrip .frame{aspect-ratio:16/9}
+.gallery{flex:1 1 0;align-self:center}
+.cand{padding:12px;display:flex;flex-direction:column;gap:8px;overflow:visible}
+.cand .spec{height:96px}.cand .wave{height:40px}
+.cand .badge{position:absolute;top:-12px;right:12px}
+</style></head><body class="ds" data-bench="$bench"><div class="fig">
+<div class="figbar"><div><div class="kicker">$kicker</div><div class="figtitle">$title</div></div><div class="chips">$chips</div></div>
+<div class="figbody">$body</div>
+</div></body></html>

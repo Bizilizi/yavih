@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- yavih figure, kind motion: the transparent overlay ffmpeg composes over a clip (yavih.previews.render_motion).
+     640 x 400 CSS px: the video area (0-336) and the time track (336-340) stay transparent; the label bar is opaque.
+     Fields are string.Template placeholders; $body is empty. -->
+<html><head><meta charset="utf-8"><style>
+$base_css
+$page_css
+body{font-family:var(--sans);color:var(--ink);background:transparent}
+.bar{position:absolute;left:0;right:0;top:340px;bottom:0;padding:0 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  background:linear-gradient(90deg,var(--bg0),var(--bg1))}
+.bar .kicker{font-size:9px;letter-spacing:.08em}
+.bar .t{font-size:17px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+.bar .chips{font-size:10px;flex-wrap:nowrap}.bar .chip{padding:3px 8px}
+$body
+</style></head><body data-bench="$bench">
+<div class="bar"><div style="min-width:0"><div class="kicker">$kicker</div><div class="t">$title</div></div><div class="chips">$chips</div></div>
+</body></html>

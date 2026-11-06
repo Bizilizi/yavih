@@ -1,0 +1,16 @@
+<!doctype html>
+<!-- yavih figure, kind audio: two clips: waveform over mel spectrogram, label chips. Filled by `python -m yavih.previews <name>` (yavih.previews); fields are
+     string.Template placeholders: $base_css the design system, $page_css the page box, then the kind's layout. -->
+<html><head><meta charset="utf-8"><style>
+$base_css
+$page_css
+.figbody{display:flex;flex-direction:column;gap:22px}
+.clip{flex:1 1 0;min-height:0;display:flex;gap:28px;align-items:stretch}
+.meta{flex:0 0 300px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.meta .chips{flex-wrap:wrap;font-size:16px}.meta .chip{font-family:var(--sans);font-weight:600;color:var(--ink)}
+.sig{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px}
+.sig .wave{height:56px;flex:0 0 56px}.sig .spec{flex:1 1 0;min-height:0;height:100%;object-fit:fill}
+</style></head><body class="ds" data-bench="$bench"><div class="fig">
+<div class="figbar"><div><div class="kicker">$kicker</div><div class="figtitle">$title</div></div><div class="chips">$chips</div></div>
+<div class="figbody">$body</div>
+</div></body></html>

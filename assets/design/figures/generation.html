@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- yavih figure, kind generation: what the model is given, and the reference it is scored against. Filled by `python -m yavih.previews <name>` (yavih.previews); fields are
+     string.Template placeholders: $base_css the design system, $page_css the page box, then the kind's layout. -->
+<html><head><meta charset="utf-8"><style>
+$base_css
+$page_css
+.figbody{display:flex;align-items:stretch;gap:24px}
+.figbody>.arrow{align-self:center}
+.given,.ref{padding:24px 28px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.given{flex:1 1 0;justify-content:center}.ref{flex:0 0 680px}
+.quote{font-size:30px;font-weight:600;letter-spacing:-.015em;line-height:1.3;color:var(--ink)}
+.given .strip .frame{aspect-ratio:16/9}
+.ref .wave{height:64px}.ref .spec{height:110px}
+</style></head><body class="ds" data-bench="$bench"><div class="fig">
+<div class="figbar"><div><div class="kicker">$kicker</div><div class="figtitle">$title</div></div><div class="chips">$chips</div></div>
+<div class="figbody">$body</div>
+</div></body></html>

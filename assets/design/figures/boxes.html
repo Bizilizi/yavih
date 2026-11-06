@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- yavih figure, kind boxes: the annotated frame with its box, and the class, time and sound. Filled by `python -m yavih.previews <name>` (yavih.previews); fields are
+     string.Template placeholders: $base_css the design system, $page_css the page box, then the kind's layout. -->
+<html><head><meta charset="utf-8"><style>
+$base_css
+$page_css
+.row{display:flex;gap:28px;height:100%}
+.pic{position:relative;height:100%;flex:0 0 auto;max-width:900px;border-radius:12px;overflow:visible}
+.pic img{display:block;width:100%;height:100%;object-fit:fill;border-radius:12px;border:1px solid rgba(255,255,255,.12)}
+.side{flex:1 1 0;min-width:0;padding:26px 28px;display:flex;flex-direction:column;gap:10px}
+.side .big{font-size:34px;font-weight:600;letter-spacing:-.02em;margin-bottom:12px}
+.side .mid{font-size:22px;font-family:var(--mono);margin-bottom:12px}
+.side .wave{height:56px}.side .spec{height:110px;margin-top:4px}
+</style></head><body class="ds" data-bench="$bench"><div class="fig">
+<div class="figbar"><div><div class="kicker">$kicker</div><div class="figtitle">$title</div></div><div class="chips">$chips</div></div>
+<div class="figbody">$body</div>
+</div></body></html>
