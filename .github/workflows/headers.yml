@@ -1,8 +1,9 @@
 name: headers
 
 # Renders every benchmark folder's README header image and a contact sheet into the `headers` artifact, for review.
-# It never fails on a stale or missing image: contributors do not render headers (CI does); a maintainer commits the
-# rendered PNG from the artifact when wanted (python -m yavih.headers <name> --html-only writes its sha file).
+# Each folder commits its own assets/header.png and sha file (bench lint warns W_HEADER_MISSING / W_HEADER_STALE);
+# a contributor without Chrome takes the PNG from this artifact (python -m yavih.headers <name> --html-only writes its
+# sha file). It never fails on a stale or missing image.
 on:
   pull_request:
     paths:

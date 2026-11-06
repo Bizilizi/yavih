@@ -46,9 +46,9 @@ number. Releases follow semantic versioning for the Python API, the CLI and the 
 `.github/workflows/headers.yml` runs on pull requests that touch `benchmarks/`, `assets/benchmark-header/` or
 `src/yavih/headers.py`, and on demand, with read-only permissions: it renders every folder's header image with the
 runner's Chrome (`python -m yavih.headers --all --contact-sheet headers-contact-sheet.png`) and uploads the images and
-the contact sheet as the `headers` artifact. It never fails on a stale or missing image: the committed PNGs are a
-maintainer's choice (take one from the artifact and write its sha file with `python -m yavih.headers <name>
---html-only`).
+the contact sheet as the `headers` artifact. It never fails on a stale or missing image (lint warns about both): a
+folder's PNG is committed in its `assets/`, and a contributor without Chrome takes it from the artifact and writes its
+sha file with `python -m yavih.headers <name> --html-only`.
 
 ## Cutting a release
 

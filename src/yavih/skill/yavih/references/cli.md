@@ -289,7 +289,7 @@ folder computes other hashes than its changelog records (the file is then restor
 `bench lint` (errors exit 2), by check: `yaml` `E_YAML` unreadable, `E_SCHEMA` schema violation, `E_NAME` name ≠
 folder · `hashes` `E_CHANGELOG_HASH` · `hashed` `E_HASHED_PROSE` · `budget` `E_MANIFEST` unreadable manifest,
 `E_BUDGET` `budget.clips` ≠ frozen rows, `E_CURATION` `manifest.upstream.curation` missing or its sums wrong ·
-`header` `E_HEADER` no `header` block, `W_HEADER_STALE` header image not rendered from the current header ·
+`header` `E_HEADER` no `header` block, `W_HEADER_MISSING` no `assets/header.png` (source checkout), `W_HEADER_STALE` header image not rendered from the current header ·
 `readme` / `setup` `E_README` / `E_SETUP` headings, header line, links, pins; `E_README_HASH` a quoted
 `protocol_hash` that is not current · `external` `E_EXTERNAL` a pin without a full `pip install` line · `codecs`
 `E_CODEC_SELFTEST` a folder codec of the output schema fails its self-test · `obtain`

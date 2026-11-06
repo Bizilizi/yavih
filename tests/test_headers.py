@@ -161,7 +161,7 @@ def test_lint_warns_stale_header(tmp_path, monkeypatch):
         assert rep.ok
         return [f for f in rep.warnings if f.code == "W_HEADER_STALE"]
 
-    assert stale() == []  # no image: nothing to compare
+    assert stale() == []  # no image: nothing to compare (W_HEADER_MISSING instead, below)
     (dst / "assets").mkdir()
     (dst / "assets" / "header.png").write_bytes(b"png")
     found = stale()
@@ -175,3 +175,25 @@ def test_lint_warns_stale_header(tmp_path, monkeypatch):
     monkeypatch.setattr(headers, "TEMPLATE_DIR", tmp_path / "no-template")
     assert stale() == []
 
+
+
+def test_lint_warns_missing_header_in_a_source_checkout_only(tmp_path, monkeypatch):
+    """The header image lives in the folder: without ``assets/header.png`` lint warns ``W_HEADER_MISSING`` (never an
+    error) where the header template is at hand; an installed wheel (no template) is silent."""
+    from yavih.lint import lint_folder
+
+    dst = _esc50_copy(tmp_path)
+
+    def missing() -> list:
+        rep = lint_folder(dst, checks=["header"])
+        assert rep.ok
+        return [f for f in rep.warnings if f.code == "W_HEADER_MISSING"]
+
+    found = missing()
+    assert len(found) == 1 and found[0].severity == "warning" and found[0].file == "assets/header.png"
+    (dst / "assets").mkdir()
+    (dst / "assets" / "header.png").write_bytes(b"png")
+    assert missing() == []
+    (dst / "assets" / "header.png").unlink()
+    monkeypatch.setattr(headers, "TEMPLATE_DIR", tmp_path / "no-template")
+    assert missing() == []

@@ -22,9 +22,10 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   ``yavih.sample.iter_samples`` reads the folder.
 - ``budget``: ``budget.clips`` and ``manifest.upstream.curation`` agree with the frozen rows.
 - ``header``: the ``header: {name, title, venue, abstract}`` block the README header image is rendered from
-  (``python -m yavih.headers``; the image itself is not shipped and not required). When ``assets/header.png`` exists
-  and the header template is at hand (a source checkout), ``assets/header.src.sha256`` must equal the sha256 of the
-  current header HTML (``W_HEADER_STALE``, a warning: the image predates its yaml, chips or template).
+  (``python -m yavih.headers``; the image lives in the folder's ``assets/``, committed, never in the wheel). Where the
+  header template is at hand (a source checkout), a folder without ``assets/header.png`` is a warning
+  (``W_HEADER_MISSING``), and ``assets/header.src.sha256`` must equal the sha256 of the current header HTML
+  (``W_HEADER_STALE``, a warning: the image predates its yaml, chips or template).
 - ``readme``: the first line is the header image ``![<header.name>](assets/header.png)``, the second paragraph the
   links line (naming ``setup.md``); the ``##`` sections Description, Citation (with a fenced ``bibtex`` block) and
   In yavih in that order; "## In yavih" names ``protocol_version``, the headline metric and the re-freeze
@@ -423,12 +424,17 @@ def _c_header(c: _Ctx) -> Iterator[Finding]:
         yield _err("header", "E_HEADER", "benchmark.yaml needs `header: {name, title, venue, abstract}` (the README "
                    "header image, `python -m yavih.headers`)", "benchmark.yaml")
         return
-    if c.bench is None or not (c.folder / HEADER_IMAGE).is_file():
+    if c.bench is None:
         return
     from yavih import headers
 
     if not (headers.TEMPLATE_DIR / "template.html").is_file():
         return  # an installed wheel: no template to compare with (and no assets/ shipped)
+    if not (c.folder / HEADER_IMAGE).is_file():
+        yield _warn("header", "W_HEADER_MISSING", f"{HEADER_IMAGE} is missing: the header image lives in the folder; render "
+                    f"and commit it with `python -m yavih.headers {c.name} --chrome <chrome>` (without Chrome: the PNG from "
+                    "the pull request's `headers` CI artifact, the sha file from `--html-only`)", HEADER_IMAGE)
+        return
     try:
         want = headers.header_source_sha256(c.bench)
     except headers.HeaderError:

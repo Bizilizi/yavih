@@ -39,7 +39,8 @@ tests): build from a copy, `mkdir -p <SCRATCH>/src && git -C <WORKTREE> archive 
 
 THE FOOTPRINT RULE. Your branch changes files under benchmarks/<NAME>/ and nowhere else: not src/ (the core), not
 tests/, docs/, README.md, .github/, fleet/ (the queue is the integrator's), catalog/index.json, the generated
-benchmark tables, other benchmark folders, header images. Before you report, this must print `footprint ok`:
+benchmark tables, other benchmark folders. Your folder's header image is yours (benchmarks/<NAME>/assets/, step 11).
+Before you report, this must print `footprint ok`:
   "$PY" fleet/check.py footprint HEAD --base <BASE> --name <NAME>
 The core is read-only BY DESIGN, not as a restriction to work around: whatever your protocol needs that yavih does not
 ship (a scorer, a trained head or loss, metrics, an output type, a bridge-check gate, an eligibility rule, a synthetic
@@ -54,11 +55,13 @@ put the one-line unblocking action in `blocked_by`, and report the entry blocked
 
 WHAT TO DO. Follow docs/contributing-a-benchmark.md, which is the contract, with these differences for a fleet
 worker:
-  - steps 1-10, 12 and 13 are yours (scaffold, protocol, frozen manifest, prepare steps, setup.md and README.md,
-    bridge template, eval.py, hashes and conformance fixture, folder tests, lint and tests, synthetic trial, the
-    fresh-agent trial run);
+  - steps 1-13 are yours (scaffold, protocol, frozen manifest, prepare steps, setup.md and README.md, bridge
+    template, eval.py, hashes and conformance fixture, folder tests, lint and tests, the header image, synthetic
+    trial, the fresh-agent trial run); step 11: when a headless Chrome or Chromium is at hand, render and commit your
+    header with `python -m yavih.headers <NAME> --chrome <path>` (it writes only benchmarks/<NAME>/assets/); without
+    one, say so in your report and the integrator renders it;
   - the integrator does the rest: step 0 (your checkout exists), the generated tables and catalog/index.json (never
-    run `python -m yavih.doctables --write` or `python -m yavih.catalog --write`), step 11 (header images), step 14
+    run `python -m yavih.doctables --write` or `python -m yavih.catalog --write`), step 14
     (the pull request) and the queue update;
   - the reference for every file is docs/benchmark-folder.md; the route in your entry is a suggestion: take a better
     one if the paper's protocol says so, and say why.

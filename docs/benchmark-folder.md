@@ -28,7 +28,7 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
   conformance/
     expected.json       the conformance fixture: the scoring path's numbers at this protocol_version (bench conformance --record)
   tests/test_folder.py  the folder's own facts
-  assets/header.png     the README header image (python -m yavih.headers) + header.src.sha256; never shipped
+  assets/header.png     the README header image (python -m yavih.headers) + header.src.sha256; committed, never in the wheel
   notes/                optional local maintainer notes; ignored by git, so never in the folder's tree
 ```
 
@@ -45,7 +45,7 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
 | `eval.py` | no | [Hooks](#evalpy-hooks) for the scoring side. |
 | `reader.py` | no | [Folder reader](#readerpy) for what the yaml cannot express. |
 | `tests/test_folder.py` | yes | Pins the folder's own facts (row counts, hashes, curation sums, reader smoke on synthetic media, docs). |
-| `assets/header.png` | no | The README header image, rendered from the `header:` block, and `assets/header.src.sha256`, the sha256 of the HTML it was rendered from ([header image](#header-image)); excluded from the wheel. |
+| `assets/header.png` | yes (lint warns `W_HEADER_MISSING`) | The README header image, rendered from the `header:` block, and `assets/header.src.sha256`, the sha256 of the HTML it was rendered from ([header image](#header-image)); committed in the folder and fetched with it, never in the wheel. |
 | `notes/` | no | Local maintainer notes. The repository's `.gitignore` ignores `benchmarks/*/notes/`, so notes are never committed: they are not in the folder's git tree, a fetched folder, the catalog's tree id or the wheel. Unification candidates are listed by `yavih bench extensions`, not kept in notes. |
 
 A folder is data plus scripts, never a Python package: there is no `__init__.py` in it or in `tests/`. `eval.py`,
@@ -530,8 +530,9 @@ readout (multi-label when the labels are), the clip and class counts, the folds,
 or the train/eval sizes, and the headline metric. A folder whose task the derived chips do not describe (its own scorer,
 its own readings) lists its chips in `header.chips` (1 to 6 strings of at most 40 characters, the first styled as the
 media chip, the second as the task chip); they replace the derived ones. The template is `assets/benchmark-header/` in the source
-repository; rendering needs a headless Chrome or Chromium (`--chrome PATH` or `$CHROME`). The image is a maintainer
-artefact for the repository's README pages: the wheel does not ship it and `bench lint` does not require it.
+repository; rendering needs a headless Chrome or Chromium (`--chrome PATH` or `$CHROME`). The image lives in the
+folder: `benchmarks/<name>/assets/header.png`, committed with the folder and fetched with it, never in the wheel. In a
+source checkout `bench lint` warns `W_HEADER_MISSING` when a folder has none.
 
 Every render also writes `assets/header.src.sha256`: the sha256 of the filled HTML the image was rendered from. The
 image and the sha file are committed together. `bench lint` warns `W_HEADER_STALE` when an image exists and its sha
@@ -539,8 +540,9 @@ file is missing or differs from the current HTML (an edited `header:` block, a c
 bridge template's readings, an edited template). Pixels differ between machines, the HTML does not, so the HTML is what
 is compared. `--html-only` writes `assets/header.html` (not committed) and the sha file without rendering. On a pull
 request that touches a folder, the `headers` workflow renders every header and a contact sheet as the `headers`
-artifact; it never fails on a stale or missing image. A new folder may come without an image: rendering it is CI's
-job, committing it a maintainer's.
+artifact; it never fails on a stale or missing image. A contributor renders and commits the folder's image and sha
+file when a Chrome is at hand; without one, the image comes from that artifact and the sha file from `--html-only`
+(or the maintainer adds both before the merge).
 
 ## setup.md contract
 
@@ -633,7 +635,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `layout` | `E_LAYOUT` | `README.md`, `setup.md`, `benchmark.yaml`, `manifest.csv.gz`, `bridge_template.py`, `make_manifest.py`, `tests/test_folder.py` exist; `prepare/` is non-empty; `classes.csv` exists iff `manifest.classes`; no `__init__.py` in the folder or `tests/`. |
 | `reader` | `E_READER` | An optional `reader.py` loads and its `iter_samples` accepts `shard=`. |
 | `budget` | `E_MANIFEST`, `E_BUDGET`, `E_CURATION` | The manifest reads; `budget.clips` equals the frozen rows per read split; `manifest.upstream.curation` exists, its `per_split.*.listed` equal the frozen rows, and listed plus excluded equals `total_upstream`. |
-| `header` | `E_HEADER`, `W_HEADER_STALE` (warning) | `benchmark.yaml` has a `header: {name, title, venue, abstract}` block (its content is checked by the loader: non-empty strings, an abstract of at most 60 words). When `assets/header.png` exists and the header template is at hand (a source checkout; skipped for an installed wheel), `assets/header.src.sha256` equals the sha256 of the current header HTML; otherwise the image predates its yaml, chips or template (`W_HEADER_STALE`). |
+| `header` | `E_HEADER`, `W_HEADER_MISSING`, `W_HEADER_STALE` (warnings) | `benchmark.yaml` has a `header: {name, title, venue, abstract}` block (its content is checked by the loader: non-empty strings, an abstract of at most 60 words). Where the header template is at hand (a source checkout; skipped for an installed wheel): `assets/header.png` exists (`W_HEADER_MISSING`), and `assets/header.src.sha256` equals the sha256 of the current header HTML; otherwise the image predates its yaml, chips or template (`W_HEADER_STALE`). |
 | `readme` | `E_README`, `E_README_HASH` | The [README.md contract](#readmemd-contract). |
 | `setup` | `E_SETUP` | The [setup.md contract](#setupmd-contract). |
 | `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |

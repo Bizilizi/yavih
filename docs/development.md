@@ -238,7 +238,7 @@ repository files and are not shipped in the wheel.
 Each folder render also writes `assets/header.src.sha256`, the sha256 of the HTML the image was rendered from;
 commit it with the image. `bench lint` warns `W_HEADER_STALE` when a folder's image has no or another sha (a changed
 `header:` block, chip or template); the `headers` workflow (`.github/workflows/headers.yml`) renders every header of a
-pull request into its `headers` artifact and never fails on one. Contributors do not render headers: a maintainer
-commits a PNG when wanted, taken from the artifact, with the sha file from `python -m yavih.headers <name> --html-only`
-(the `assets/header.html` it also writes is not committed). Where the images should live once folders number in the
-hundreds (committed, or published elsewhere) is an open decision.
+pull request into its `headers` artifact and never fails on one. The images live in the folders: each folder
+commits its `assets/header.png` and sha file (`bench lint` warns `W_HEADER_MISSING` without them). A contributor
+without Chrome takes the PNG from the artifact and writes the sha file with `python -m yavih.headers <name>
+--html-only` (the `assets/header.html` it also writes is not committed), or the maintainer adds both before the merge.

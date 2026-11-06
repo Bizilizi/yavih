@@ -17,8 +17,8 @@ Throughout, `<name>` is the new benchmark's name (`[a-z][a-z0-9_]*`, the folder 
 
 **What a contribution touches: `benchmarks/<name>/` only.** The repository's `benchmarks/` directory is where the
 folders live (the wheel ships the core only; users fetch a folder from the catalog, [catalog](catalog.md)). The
-generated benchmark tables, `catalog/index.json` and the header images are written by CI after the merge: never
-regenerate or commit them in a benchmark pull request.
+folder's header image is part of the folder (`assets/`, step 11). The generated benchmark tables and
+`catalog/index.json` are written by CI after the merge: never regenerate or commit them in a benchmark pull request.
 
 **Adding many benchmarks at once?** The [fleet](../fleet/README.md) runs one agent per folder from a
 [worker brief](../fleet/worker-brief.md) that follows this guide, reserves names in a [queue](../fleet/queue.yaml) and
@@ -290,11 +290,20 @@ not run `python -m yavih.doctables --write` in the pull request.
 
 **Done when:** `yavih bench lint <name>` reports nothing, the folder's tests pass and ruff is clean.
 
-## 11. Header image (CI's)
+## 11. Header image
 
-Nothing to do. The `headers` workflow renders the folder's header image from its `header:` block into the pull
-request's `headers` artifact for review; committing a PNG is a maintainer's choice
-([header image](benchmark-folder.md#header-image)).
+The header image lives in the folder: `assets/header.png` and `assets/header.src.sha256`, committed with it
+([header image](benchmark-folder.md#header-image)). With a headless Chrome or Chromium at hand:
+
+```bash
+python -m yavih.headers <name> --chrome <chrome>     # writes assets/header.png and assets/header.src.sha256
+```
+
+Without one, take `assets/header.png` from the pull request's `headers` artifact (the `headers` workflow renders it
+from the `header:` block) and write the sha file with `python -m yavih.headers <name> --html-only` (do not commit the
+`assets/header.html` it also writes); or leave both to the maintainer, who adds them before the merge.
+
+**Done when:** `yavih bench lint <name>` reports neither `W_HEADER_MISSING` nor `W_HEADER_STALE`.
 
 ## 12. Synthetic trial
 

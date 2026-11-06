@@ -179,7 +179,7 @@ def test_bench_new_scaffold_passes_lint_and_loads(tmp_path, readout, capsys):
     assert folder == tmp_path / f"new_{readout}" and env["data"]["todo"] > 0
     assert env["data"]["conformance"]["state"] in ("recorded", "copied")
     rep = lint_folder(folder)
-    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"} | _conformance_warnings(folder)
+    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO", "W_HEADER_MISSING"} | _conformance_warnings(folder)
     b = Benchmark.load(str(folder))
     assert b.name == f"new_{readout}" and b.spec.readout == readout and b.spec.protocol_version == 1
     assert not (folder / "notes").exists() and (folder / "tests" / "test_folder.py").is_file()
@@ -205,7 +205,7 @@ def test_bench_new_marks_copied_scripts_and_skips_curation(tmp_path):
     first = (folder / "eval.py").read_text(encoding="utf-8").splitlines()[0]
     assert first.startswith("# TODO: copied verbatim from nyuv2_depth by `yavih bench new`")
     rep = lint_folder(folder)
-    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO"} | _conformance_warnings(folder)
+    assert rep.ok and {f.code for f in rep.warnings} == {"W_TODO", "W_HEADER_MISSING"} | _conformance_warnings(folder)
     assert {"eval.py", "tests/test_folder.py", "prepare/01_obtain.sh"} <= {f.file for f in rep.warnings}
     # the fixture: recorded here, or nyuv2_depth's copied with this folder's identity when Probe3D's evals is absent
     rec = json.loads((folder / "conformance" / "expected.json").read_text(encoding="utf-8"))

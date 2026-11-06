@@ -71,8 +71,9 @@ for b in <passing branches>; do git merge --no-ff "$b" -m "Merge $b"; done   # f
 
 The catalog index names the commit it was generated at, so write it after the folders are committed. On `main` the
 `catalog` workflow regenerates both after a push; writing them on the batch branch keeps its tests honest. Header
-images: `python -m yavih.headers <name> ... --chrome <chrome>` renders them; whether PNGs are committed is the
-maintainer's decision (the `headers` workflow also renders them into an artifact).
+images live in each folder's `assets/` and are committed: a worker with Chrome commits its own; for every folder of
+the batch that `bench lint` reports with `W_HEADER_MISSING` or `W_HEADER_STALE`, render and commit them here with
+`python -m yavih.headers <name> ... --chrome <chrome>`.
 
 ## 6. Update the queue
 
