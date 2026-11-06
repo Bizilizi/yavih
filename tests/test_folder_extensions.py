@@ -142,14 +142,45 @@ def test_a_folder_probe_scorer_runs_the_whole_chain_on_its_own_stand_in(tmp_path
     assert mod.CALLS["build_head"] >= 1 and mod.CALLS["loss_fn"] >= 1
 
 
+def test_a_family_clf_folder_scorer_trials_on_the_core_stand_in_without_testing_py(tmp_path, yavih_home):
+    """No ``testing.py``: the core ``clf`` fixture builds the stand-in, which carries the folder's scorer name and its
+    eval.py, so the folder's own head and loss train in the probe stage and the oracle clears the floor."""
+    pytest.importorskip("torch")
+    from yavih import conformance
+    from yavih.trial import run_trial
+
+    folder = _toy_folder(tmp_path / "src")
+    conformance.record(Benchmark.load(str(folder)))
+    rec = run_trial(str(folder), readout_fast=False, keep=tmp_path / "keep")
+    assert rec["stand_in"] == "core" and rec["ok"], [s for s in rec["stages"] if s["status"] != "ok"]
+    assert [s["status"] for s in rec["stages"]] == ["ok"] * 9 and rec["headline"]["clears_floor"]
+    stand_in = Path(rec["paths"]["folder"])
+    assert (stand_in / "eval.py").read_bytes() == (folder / "eval.py").read_bytes()
+    assert yaml.safe_load((stand_in / "benchmark.yaml").read_text(encoding="utf-8"))["scorer"] == "toyfold"
+    assert any("scored by the folder's own scorer 'toyfold'" in lim for lim in rec["limits"])
+    result = next((tmp_path / "keep" / "runs").rglob("result.json"))
+    import json
+
+    assert json.loads(result.read_text(encoding="utf-8"))["scorer"]["config"]["head"]["family"] == "toyfold_mlp_v1"
+
+
+NO_FAMILY_EVAL = TOY_EVAL.replace('kind="probe", family="clf",', 'kind="probe",')
+
+
 def test_trial_without_a_stand_in_runs_conformance_and_is_not_applicable(tmp_path, yavih_home, monkeypatch):
-    """A scorer neither the core fixtures nor the folder cover: conformance runs, every later stage is
-    ``not_applicable``, the trial is ok (exit 0), never ``E_TRIAL_NOT_READY``."""
+    """A folder scorer of no core family (here: ``family`` unset, conformance population borrowed from clf) and no
+    ``testing.py``: conformance runs, every later stage is ``not_applicable``, the trial is ok (exit 0)."""
     from yavih import conformance, trial
 
     folder = _toy_folder(tmp_path)
-    conformance.record(Benchmark.load(str(folder)))
-    monkeypatch.setattr(T, "READOUTS", tuple(r for r in T.READOUTS if r != "toyfold"))
+    (folder / "eval.py").write_text(textwrap.dedent(NO_FAMILY_EVAL).replace(
+        "    build_head=_build_head,", "    conformance_population=__import__('yavih.conformance', fromlist=['x'])._population_clf,\n    build_head=_build_head,"),
+        encoding="utf-8")
+    _edit_yaml(folder, metrics__headline="n_eval", metrics__list=["n_eval"], metrics__floors=[], metrics__controls=[],
+               metrics__chance={}, metrics__ci={})  # clf's metrics serve the clf family only
+    b = Benchmark.load(str(folder))
+    assert registry.get("toyfold").family is None
+    conformance.record(b)
     rec = trial.run_trial(str(folder))
     assert rec["stand_in"] == "none" and rec["ok"] and rec["exit_code"] == 0
     statuses = {s["stage"]: s["status"] for s in rec["stages"]}
@@ -353,7 +384,8 @@ def test_a_scaffold_like_a_folder_scorer_owns_it_under_its_new_name(tmp_path, ya
     folder = new_benchmark("toycopy", like=str(src), dir=tmp_path / "out")
     b = Benchmark.load(str(folder))
     assert b.spec.readout == "toycopy" and registry.get("toycopy").is_probe
-    assert 'name="toycopy"' in (folder / "eval.py").read_text(encoding="utf-8")
+    text = (folder / "eval.py").read_text(encoding="utf-8")
+    assert 'name="toycopy"' in text and '"toycopy_mlp_v1"' in text and '"toycopy_ce"' in text and '"toyfold' not in text  # the banner still names the source
     assert _first_folder_of("stream") == "ave_causal" and _first_folder_of("no_such_scorer") is None
 
 
@@ -377,3 +409,36 @@ def test_the_detection_folders_own_one_scorer_implementation():
         ext = folder_extensions(Benchmark.load(n))
         assert ext["scorer"]["name"] == n and ext["scorer"]["kind"] == "probe" and ext["scorer"]["losses"] == [f"{n}_focal_giou"]
     assert all(importlib.util.find_spec(m) is None for m in ("yavih.readouts.tad", "yavih.readouts.tdet", "yavih.metrics.detection"))
+
+
+def test_a_second_folder_scorer_cannot_take_another_ones_loss_or_head_family():
+    """``per_sample_loss`` / ``build_head_for`` resolve a name to ONE scorer: registering a folder scorer that declares a
+    loss another scorer already builds is refused, naming the convention."""
+    from yavih.readouts import clf
+
+    def scorer(name):
+        return registry.Scorer(name=name, version=1, module="m", kind="probe", family="clf", label_kinds=frozenset({"single"}),
+                               train=dict(clf.SCORER.train), head=lambda **kw: {"family": "shared_head_v1", "out": kw.get("num_classes")},
+                               loss=lambda k: "shared_loss", head_families=frozenset({"shared_head_v1"}), losses=frozenset({"shared_loss"}),
+                               build_head=lambda cfg, **kw: None, loss_fn=lambda name: None)
+
+    registry.register_folder(scorer("firstfold"))
+    with pytest.raises(ValueError, match="already builds"):
+        registry.register_folder(scorer("secondfold"))
+    registry.register_folder(scorer("firstfold"))  # the same folder loaded again is fine
+
+
+def test_bench_extensions_lists_the_others_when_one_folder_does_not_load(tmp_path, monkeypatch, capsys):
+    import json
+
+    from yavih import cli
+
+    broken = tmp_path / "packs" / "brokenfold"
+    broken.mkdir(parents=True)
+    (broken / "benchmark.yaml").write_text("name: brokenfold\nschema_version: 3\n", encoding="utf-8")
+    monkeypatch.setenv("YAVIH_BENCH_PATH", str(tmp_path / "packs"))
+    assert cli.main(["--json", "bench", "extensions"]) == 0
+    data = json.loads(capsys.readouterr().out)["data"]["benchmarks"]
+    assert data["brokenfold"] is None and data["vggsounder_v2a"]["scorer"]["kind"] == "direct"
+    assert cli.main(["bench", "extensions"]) == 0
+    assert "brokenfold: extends: unknown (" in capsys.readouterr().out

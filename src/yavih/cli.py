@@ -1117,8 +1117,15 @@ def cmd_bench_extensions(ns: argparse.Namespace) -> Envelope:
     for n in names:
         if resolve_folder(n) is None:
             raise CliError("E_NOT_FOUND", f"unknown benchmark {n!r} (`yavih bench list`)", EXIT_USAGE)
-        bench = _load_bench(n)
-        ext = folder_extensions(bench)
+        try:
+            bench = _load_bench(n)
+            ext = folder_extensions(bench)
+        except Exception as e:  # noqa: BLE001 - one folder that does not load must not hide the others
+            if ns.names:
+                raise
+            rows[n] = None
+            lines.append(f"{n}: extends: unknown ({type(e).__name__}: {e})")
+            continue
         if not ext and not ns.all and not ns.names:
             continue
         rows[bench.name] = ext

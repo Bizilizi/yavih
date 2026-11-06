@@ -141,6 +141,7 @@ header:                            # optional for the loader, required by bench 
   title: The Kinetics Human Action Video Dataset   # the paper title
   venue: "Kay et al. · arXiv 2017"  # "authors · venue year"
   abstract: "..."                   # two or three neutral sentences on the data and the task, at most 60 words
+  chips: [...]                      # optional: 1 to 6 strings of at most 40 characters that replace the derived chips
 scorer: clf                        # a registered scorer: clf | seq | grid | box, or the folder's own (eval.py SCORER; yavih.readouts.registry)
 protocol_version: 1                # int >= 1, == the newest changelog entry's version
 changelog:                         # non-empty, newest last, strictly increasing versions; the version record
@@ -523,7 +524,9 @@ There is no changelog, history or checklist section: the `benchmark.yaml` `chang
 `assets/header.png` is a 1600 x 500 (CSS px) banner at device scale 2, rendered by `python -m yavih.headers <name>`
 (`--all` for every packaged folder) from the `header:` block and chips derived from the yaml: the stream kinds, the
 readout (multi-label when the labels are), the clip and class counts, the folds, the readings of the bridge template
-or the train/eval sizes, and the headline metric. The template is `assets/benchmark-header/` in the source
+or the train/eval sizes, and the headline metric. A folder whose task the derived chips do not describe (its own scorer,
+its own readings) lists its chips in `header.chips` (1 to 6 strings of at most 40 characters, the first styled as the
+media chip, the second as the task chip); they replace the derived ones. The template is `assets/benchmark-header/` in the source
 repository; rendering needs a headless Chrome or Chromium (`--chrome PATH` or `$CHROME`). The image is a maintainer
 artefact for the repository's README pages: the wheel does not ship it and `bench lint` does not require it.
 

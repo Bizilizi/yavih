@@ -24,9 +24,12 @@ Stand-ins: a folder that ships ``testing.py`` with ``make_stand_in(work, real, *
 own stand-in (a folder with the real folder's name, its ``eval.py`` and scorer included, over generated media), and may
 ship ``write_bridge(path, kind, *, D, bench_folder) -> path`` for its own oracle/random bridge (else the core test
 bridge is used). Without one, the core fixtures build the stand-in for the scorers they cover
-(``yavih.testing.READOUTS``); for any other scorer the trial runs the ``conformance`` stage and records every later
-stage as ``not_applicable`` (exit 0): the folder's own scorer is exercised by its conformance fixture and by the
-fresh-agent trial on real data.
+(``yavih.testing.READOUTS``) and for a scorer that declares one of their families (a folder scorer of family ``clf``):
+the stand-in then carries the real scorer's name and the real folder's ``eval.py`` and sibling modules, so the folder's
+own scorer runs in every stage (an ``eval.py`` that does not fit the family's synthetic rows is ``E_TRIAL_NOT_READY``,
+exit 3: ship ``testing.py``). For any other scorer (no family, or a family without a fixture: ``stream``, a folder's
+own detection scorer) the trial runs the ``conformance`` stage and records every later stage as ``not_applicable``
+(exit 0): the folder's own scorer is exercised by its conformance fixture and by the fresh-agent trial on real data.
 
 Limits: the ``conformance`` stage (first) runs the real folder's scoring path, ``eval.py`` hooks and pinned ``external``
 package included, on the fixture's generated population; every later stage runs on the stand-in, which never reads
@@ -185,9 +188,9 @@ def stand_in_source(real: Any) -> tuple[str, str | None]:
     if mod is not None and callable(getattr(mod, "make_stand_in", None)):
         return "folder", None
     readout = real.spec.readout
-    if readout not in testing.READOUTS:
-        return "none", (f"scorer {readout!r} has no synthetic stand-in (the core fixtures cover {', '.join(testing.READOUTS)}; a folder adds "
-                        f"its own with {FOLDER_TESTING} make_stand_in)")
+    if testing._fixture(readout) not in testing.READOUTS:
+        return "none", (f"scorer {readout!r} has no synthetic stand-in (the core fixtures cover {', '.join(testing.READOUTS)} and the "
+                        f"scorers of their families; a folder adds its own with {FOLDER_TESTING} make_stand_in)")
     kinds = {s: st.kind for s, st in real.spec.streams.items()}
     bad = sorted(s for s, k in kinds.items() if k not in ("video", "audio", "image"))
     if bad:
@@ -443,7 +446,12 @@ def _limits(real: Any, *, source: str = "core", why_not: str | None = None) -> l
     if kind not in (None, "single", "none"):
         out.append(f"label kind {kind!r}: the stand-in is single-label, so the readout trials as single-label acc")
     folder = Path(real.folder)
-    if (folder / "eval.py").is_file():
+    from yavih import testing
+
+    if real.spec.readout not in testing.READOUTS:
+        out.append(f"the stand-in is the {testing._fixture(real.spec.readout)} family's synthetic fixture scored by the folder's own scorer "
+                   f"{real.spec.readout!r} (its eval.py and sibling modules are copied in)")
+    elif (folder / "eval.py").is_file():
         out.append("the folder's eval.py hooks run in the conformance stage only (the stand-in has none)")
     if (getattr(real.spec, "raw", None) or {}).get("external"):
         out.append("the folder's external packages run in the conformance stage only (the stand-in lists none)")

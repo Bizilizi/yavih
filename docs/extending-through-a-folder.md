@@ -17,7 +17,7 @@ folder that extends anything (`--all`: every folder).
 |---|---|---|
 | scorer | `eval.py` `SCORER = Scorer(name="<folder>", ...)` | registers it under the folder's name; `benchmark.yaml` says `scorer: <folder>`. Any kind: `probe` (trains), `stateless`, `direct` ([adding a scorer](adding-a-scorer.md)) |
 | heads and losses | `Scorer.build_head`, `Scorer.loss_fn` with `head_families` / `losses` | the core trainer builds the folder's head (`build_head_for`) and its loss (`per_sample_loss`); torch is imported when called |
-| own training loop | `Scorer.score(ctx)` | the scorer's driver; it may use the core trainer (`yavih.readouts._fit`) or train with its own loop |
+| own driver | `Scorer.score(ctx)` | the scorer's driver (`bench info`: `own driver`); it may use the core trainer (`yavih.readouts._fit`) or train with its own loop |
 | metrics | `eval.py` `METRICS`, `PROTOCOL_KEYS` | metrics of the folder's own (an authors' scorer, a transcription), with `per_clip` / `interval` for intervals and `floor_of` for floors ([benchmark folder](benchmark-folder.md#evalpy-hooks)) |
 | hooks | `eval.py` `targets`, `score`, `join` | target construction, the authors' scorer, a cross-reading join |
 | samples lines | `Scorer.sample_lines(part, seed=, protocol=)` | the samples file of `eval run --log-samples` for the scorer's parts |
@@ -30,6 +30,10 @@ folder that extends anything (`--all`: every folder).
 | readings | `eval.py` `READINGS = ("...",)` | readings beyond `a`, `v`, `av`, `t` are the folder's own (`bench lint` warns `W_READING_UNKNOWN` for an undeclared one) |
 | capability | `capability: [..., "<tag>"]` | a tag beyond the core vocabulary is listed under its own heading (`W_CAPABILITY_UNKNOWN`, a note) |
 | label kind | `manifest.label.kind: <kind>` | a kind beyond the core ones is kept as the cell's string; valid when the folder's scorer lists it in `label_kinds` |
+
+Name a folder's own head families and losses after the folder (`<folder>_...`): a name resolves to one scorer, so a
+second folder scorer that declares a loss or head family another already builds is refused when it registers, and
+`yavih bench new --like` renames the copied names that follow this convention.
 
 Every point keeps the folder's numbers honest the same way: hashes cover the declaration (`benchmark.yaml`), never
 code; the conformance fixture pins the folder's scoring path, whatever code it runs, to its `protocol_version`.
@@ -99,6 +103,25 @@ thresholds belong in `protocol` keys the folder declares in `PROTOCOL_KEYS`.
 - `write_bridge(path, kind, *, D, bench_folder) -> path`: the stand-in's `oracle` (features that encode the label) or
   `random` bridge, when the core test bridges cannot encode its labels.
 
-`yavih bench trial --synthetic` then runs every stage on it. A folder whose scorer neither the core fixtures nor a
-`testing.py` cover runs the `conformance` stage and records the later stages as `not_applicable` (exit 0); the
-fresh-agent [trial run](trial-run.md) on real data covers it.
+`yavih bench trial --synthetic` then runs every stage on it. Without `testing.py`, a folder scorer that declares a core
+family (`family="clf"`, `seq`, `grid`, `box`, `knn`) trials on that family's synthetic fixture: the stand-in carries the
+folder's scorer name and a copy of its `eval.py` and sibling modules, so the folder's own head, loss and driver run in
+every stage (an `eval.py` whose hooks or protocol keys do not fit the family's synthetic rows is `E_TRIAL_NOT_READY`:
+ship `testing.py`). A folder whose scorer neither the core fixtures nor a `testing.py` cover (no family, or a family
+without a fixture such as `stream`) runs the `conformance` stage and records the later stages as `not_applicable`
+(exit 0); the fresh-agent [trial run](trial-run.md) on real data covers it.
+
+## Decisions
+
+How the extension points draw their lines, and why:
+
+- **A label kind outside the core vocabulary is valid only when the folder's scorer lists it in `label_kinds`.** A
+  `targets` hook alone does not admit one: a core scorer would still be handed cells it cannot read. A folder that
+  needs its own label kind declares a scorer (of family `clf` when it reuses the clf driver) that lists the kind.
+- **Without `BRIDGE_CHECKS` the output contract's default gates run** (`stream` for a streaming benchmark, none
+  otherwise), so a folder that declares nothing keeps the gates its contract implies; `BRIDGE_CHECKS = ()` opts out,
+  and a declared tuple is exactly what runs.
+- **A folder's eligibility thresholds are `protocol` keys** listed in `PROTOCOL_KEYS`, read by `eligible(view)`:
+  `output_contract.requires` keeps its fixed keys (an unknown one is a schema error), so its hashing stays as it is.
+- **`yavih bench new --scorer` stays** until the benchmark catalog can find the closest folder: it now falls back to
+  the first folder that uses the scorer when the scaffold has no default for it; `--like` is the way to choose.

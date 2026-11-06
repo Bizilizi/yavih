@@ -73,6 +73,26 @@ def test_abstract_word_limit_is_a_schema_error(tmp_path):
         Benchmark.load(str(dst))
 
 
+def test_explicit_header_chips_replace_the_derived_ones(tmp_path):
+    """``header.chips`` (1 to 6 strings of at most 40 characters) replace the derived chips; seven are a schema error."""
+    import shutil
+
+    import yaml
+
+    from yavih.benchmark import SchemaError
+
+    dst = tmp_path / "esc50"
+    shutil.copytree(Benchmark.load("esc50").folder, dst, ignore=shutil.ignore_patterns("__pycache__", "assets"))
+    y = yaml.safe_load((dst / "benchmark.yaml").read_text(encoding="utf-8"))
+    y["header"]["chips"] = ["audio", "own task", "2 000 clips", "a <b>"]
+    (dst / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    assert headers.chips(Benchmark.load(str(dst))) == [("a", "audio"), ("b", "own task"), ("", "2 000 clips"), ("", "a &lt;b&gt;")]
+    y["header"]["chips"] = [f"chip {i}" for i in range(7)]
+    (dst / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(SchemaError, match="1 to 6"):
+        Benchmark.load(str(dst))
+
+
 def test_contact_sheet_tiles_images(tmp_path):
     Image = pytest.importorskip("PIL.Image")
     paths = []

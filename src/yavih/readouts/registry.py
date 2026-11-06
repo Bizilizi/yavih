@@ -290,6 +290,14 @@ def register_folder(scorer: Scorer) -> Scorer:
         reg = _load()
         if scorer.name in reg and scorer.name not in _FOLDER:
             raise ValueError(f"scorer {scorer.name!r} is already a registered scorer; a folder scorer must carry the folder's own name")
+        for other in reg.values():  # a loss or head family resolves to ONE scorer (per_sample_loss, build_head_for)
+            if other.name == scorer.name:
+                continue
+            clash = sorted((scorer.losses & other.losses) if scorer.loss_fn is not None and other.loss_fn is not None else set())
+            clash += sorted((scorer.head_families & other.head_families) if scorer.build_head is not None and other.build_head is not None else set())
+            if clash:
+                raise ValueError(f"scorer {scorer.name!r} declares {clash}, which scorer {other.name!r} already builds: name a folder's own "
+                                 f"losses and head families after the folder ('{scorer.name}_...')")
         reg[scorer.name] = scorer
         _FOLDER[scorer.name] = scorer
         return scorer

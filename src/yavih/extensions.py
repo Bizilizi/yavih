@@ -41,7 +41,8 @@ _CORE_READINGS = frozenset({"a", "v", "av", "t"})
 
 def folder_extensions(bench: Any) -> dict[str, Any]:
     """``{point: value}`` for every extension point the loaded ``bench`` uses (absent points are left out): ``scorer``
-    ``{name, kind, family, head_families, losses, own_training}``; ``metrics`` names; ``hooks`` names; ``codecs`` names;
+    ``{name, kind, family, head_families, losses, own_driver}`` (``own_driver``: its ``score`` drives scoring; it may
+    still train with the core trainer); ``metrics`` names; ``hooks`` names; ``codecs`` names;
     ``checks`` gate names (``default`` when the folder declares none and its output contract implies the core's);
     ``eligible`` ``True``; ``stand_in`` ``["make_stand_in", "write_bridge"?]``; ``reader`` ``True``; ``readings``,
     ``capability``, ``label_kind`` the values beyond the core vocabularies."""
@@ -61,7 +62,7 @@ def folder_extensions(bench: Any) -> dict[str, Any]:
 
         out["scorer"] = {"name": sc.name, "kind": sc.kind, "family": sc.family,
                          "head_families": sorted(sc.head_families - HEAD_FAMILIES), "losses": sorted(sc.losses - LOSSES),
-                         "own_training": bool(sc.score is not None and sc.is_probe)}
+                         "own_driver": sc.score is not None}
     if mod is not None:
         metrics = getattr(mod, "METRICS", None) or {}
         if metrics:
@@ -111,7 +112,7 @@ def extends_line(ext: dict[str, Any], *, scorer: str | None = None) -> str:
             bits = [v["kind"]] + ([f"family {v['family']}"] if v.get("family") else [])
             bits += [f"own head families {v['head_families']}"] if v.get("head_families") else []
             bits += [f"own losses {v['losses']}"] if v.get("losses") else []
-            bits += ["own training loop"] if v.get("own_training") else []
+            bits += ["own driver"] if v.get("own_driver") else []
             parts.append(f"scorer {v['name']} ({', '.join(bits)})")
         elif v is True:
             parts.append(point)

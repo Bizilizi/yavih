@@ -318,13 +318,17 @@ def _first_folder_of(scorer: str) -> str | None:
 
 def _rename_folder_scorer(dest: Path, y: dict[str, Any], like_name: str, name: str) -> None:
     """A folder scorer is named after its folder: in the copied ``eval.py`` every quoted ``like_name`` (``SCORER.name``,
-    ``MetricSpec.readouts``) becomes ``name``, and the yaml's ``scorer`` and ``budget.probe_minutes_ref`` follow."""
+    ``MetricSpec.readouts``) becomes ``name``, so does every quoted ``like_name_...`` (the convention for a folder's own
+    head families and loss names, which must be unique across folders), and the yaml's ``scorer`` and
+    ``budget.probe_minutes_ref`` follow."""
     import re
 
     ev = dest / "eval.py"
     if ev.is_file():
         text = ev.read_text(encoding="utf-8")
-        ev.write_text(re.sub(rf"""(["']){re.escape(like_name)}\1""", lambda m: f"{m.group(1)}{name}{m.group(1)}", text), encoding="utf-8")
+        text = re.sub(rf"""(["']){re.escape(like_name)}\1""", lambda m: f"{m.group(1)}{name}{m.group(1)}", text)
+        text = re.sub(rf"""(["']){re.escape(like_name)}_""", lambda m: f"{m.group(1)}{name}_", text)
+        ev.write_text(text, encoding="utf-8")
     y["scorer"] = name
     pmr = (y.get("budget") or {}).get("probe_minutes_ref")
     if isinstance(pmr, dict) and like_name in pmr:

@@ -94,9 +94,12 @@ stand-in carry over to nothing. The trial on real data is the fresh-agent [trial
 `--synthetic` the command is a usage error (exit 1) that points there.
 
 The stand-in is the folder's own when it ships `testing.py` `make_stand_in` (`data.stand_in` `folder`), else the core
-fixtures' (`core`: the scorers `clf`, `seq`, `grid`, `box`, `knn` and the scorers of their families, over video, audio and
-image). For any other folder (`none`) only the `conformance` stage runs and the others are recorded `not_applicable`
-(exit 0) ([extending through a folder](extending-through-a-folder.md#a-stand-in-of-the-folders-own)).
+fixtures' (`core`: the scorers `clf`, `seq`, `grid`, `box`, `knn` over video, audio and image, and a folder scorer that
+declares one of them as its `family`: the stand-in is that family's fixture carrying the folder's scorer name, its
+`eval.py` and sibling modules, so the folder's own scorer runs in every stage; an `eval.py` that does not fit the
+family's synthetic rows is `E_TRIAL_NOT_READY`, exit 3). For any other folder (`none`: a scorer with no family, or a
+family without a fixture such as `stream`) only the `conformance` stage runs and the others are recorded
+`not_applicable` (exit 0) ([extending through a folder](extending-through-a-folder.md#a-stand-in-of-the-folders-own)).
 
 | code | exit | meaning |
 |---|---|---|
