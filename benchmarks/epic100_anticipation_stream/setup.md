@@ -102,7 +102,11 @@ schema:
 yavih bench prepare epic100_anticipation_stream 03     # = yavih bench verify epic100_anticipation_stream --census
 ```
 
-Success: `yavih bench verify epic100_anticipation_stream` reports train 495/495 and validation 138/138 present.
+Success: `yavih bench verify epic100_anticipation_stream` reports train 495/495 and validation 138/138 present and
+the census `1266/1266 cells done (0 missing, 0 failed)`. A failed cell is a truncated download (the official
+downloader does not re-verify the files it has just written; a dropped connection leaves an MP4 without its `moov`
+atom, which `ffprobe` reports as `moov atom not found`): delete the file and re-run step 2 with
+`EPIC_VIDEOS=<id>,<id>` to fetch only those videos, then re-run the census.
 
 ## Gotchas
 
