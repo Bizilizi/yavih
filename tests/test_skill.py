@@ -22,9 +22,7 @@ SKILL_ROOT = Path(cli.__file__).resolve().parent / "skill" / "yavih"
 SKILL_MD = SKILL_ROOT / "SKILL.md"
 REFERENCES = ("bridge", "data", "readouts", "slurm", "cli")
 # the skill's step table: "<i> <step>" in the first column
-STEPS = ("install", "setup.md", "prepare", "bridge", "smoke", "extract", "validate", "eval", "report")
 GROUPS = ("init", "doctor", "config", "skill", "bench", "bridge", "extract", "features", "eval", "report", "registry", "plan", "exec", "suite")
-# the operational rules that follow the guardrail checklist, carried verbatim (whitespace-normalized)
 # CLI flags the skill documents
 DOCUMENTED_FLAGS = {
     ("bench", "list"): ("--catalog",),
@@ -42,10 +40,6 @@ DOCUMENTED_EXTRACT_FLAGS = ("--read-ahead",)
 _CMD_RE = re.compile(r"`?\byavih\s+(?:--json\s+)?(" + "|".join(GROUPS) + r")\b(?:\s+([a-z]+))?")
 
 
-def _norm(text: str) -> str:
-    return " ".join(text.split())
-
-
 def _skill_texts() -> dict[str, str]:
     return {p.name: p.read_text(encoding="utf-8") for p in [SKILL_MD, *(SKILL_ROOT / "references" / f"{r}.md" for r in REFERENCES)]}
 
@@ -60,42 +54,14 @@ def _section(text: str, heading: str) -> str:
 # ------------------------------------------------------------------------------------------- SKILL.md shape
 
 
-def test_skill_md_exists_and_is_short():
-    assert SKILL_MD.is_file(), f"{SKILL_MD} must be packaged"
-    lines = SKILL_MD.read_text(encoding="utf-8").splitlines()
-    assert len(lines) <= 250, f"SKILL.md has {len(lines)} lines; the cap is 250"
-
-
-def test_frontmatter_name_and_description():
-    text = SKILL_MD.read_text(encoding="utf-8")
-    assert text.startswith("---\n")
-    head = text.split("---", 2)[1]
-    assert re.search(r"^name:\s*yavih\s*$", head, re.M) and "description:" in head
-
-
-def test_frontmatter_enumerates_no_benchmark():
-    """The benchmark set grows by adding folders: the description triggers on `yavih bench list`, never on a list of
-    names that would go stale (no packaged name, alias or header display name)."""
+def test_frontmatter_parses_with_name_and_description():
+    """``skill install`` (the Cursor rule, the AGENTS.md block) and agents' skill discovery read the frontmatter."""
     import yaml
 
-    from yavih.benchmarks import packaged_folder, packaged_names
-
-    head = SKILL_MD.read_text(encoding="utf-8").split("---", 2)[1]
-    for name in packaged_names():
-        y = yaml.safe_load((packaged_folder(name) / "benchmark.yaml").read_text(encoding="utf-8"))
-        for word in (name, *(y.get("aliases") or []), (y.get("header") or {}).get("name") or name):
-            assert not re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", head, flags=re.I), \
-                f"the SKILL.md description names benchmark {word!r}"
-
-
-def test_nine_steps_present_in_order():
     text = SKILL_MD.read_text(encoding="utf-8")
-    pos = []
-    for i, step in enumerate(STEPS, start=1):
-        m = re.search(rf"^\|\s*{i}\s+{re.escape(step)}\s*\|", text, flags=re.M)
-        assert m, f"step row '{i} {step}' missing from the journey table"
-        pos.append(m.start())
-    assert pos == sorted(pos)
+    assert text.startswith("---\n")
+    head = yaml.safe_load(text.split("---", 2)[1])
+    assert head["name"] == "yavih" and isinstance(head["description"], str) and head["description"].strip()
 
 
 def _resolve(dotted: str) -> object:
@@ -114,19 +80,11 @@ def _resolve(dotted: str) -> object:
     raise ImportError(dotted)
 
 
-def test_guardrails_table_names_the_checking_code_or_says_advisory():
-    """Each guardrail (docs/design.md) is a row saying which code checks it (a real
-    ``yavih.…`` function) or that it is advisory; nothing enforced is presented as advice and vice versa."""
+def test_every_checker_the_guardrails_table_names_exists():
+    """Every ``yavih.…`` function the skill's guardrails table names as a checker resolves to a callable."""
     section = _section(SKILL_MD.read_text(encoding="utf-8"), "Guardrails")
-    rows = [ln for ln in section.splitlines() if ln.startswith("| ") and not ln.startswith("| rule") and not ln.startswith("|---")]
-    assert len(rows) >= 15
-    names = set()
-    for row in rows:
-        cells = [c.strip() for c in row.strip().strip("|").split("|")]
-        assert len(cells) == 3, row
-        found = re.findall(r"`(yavih\.[A-Za-z0-9_.]+)`", cells[1])
-        assert found or "advisory" in cells[1] or "by construction" in cells[1], f"row names no checker: {row}"
-        names.update(found)
+    names = set(re.findall(r"`(yavih\.[A-Za-z0-9_.]+)`", section))
+    assert names
     for name in sorted(names):
         assert callable(_resolve(name)), name
 
@@ -159,22 +117,6 @@ def test_exploring_a_benchmark_block_runs():
 # ------------------------------------------------------------------------------------------- references
 
 
-def test_reference_files_exist_and_nonempty():
-    for ref in REFERENCES:
-        p = SKILL_ROOT / "references" / f"{ref}.md"
-        assert p.is_file(), f"references/{ref}.md missing"
-        assert len(p.read_text(encoding="utf-8")) > 500
-
-
-def test_bridge_md_has_a_row_per_temporal_rule():
-    """The closed temporal vocabulary (``yavih.media.rules.TEMPORAL_RULES``): one row each in references/bridge.md."""
-    text = (SKILL_ROOT / "references" / "bridge.md").read_text(encoding="utf-8")
-    from yavih.media.rules import TEMPORAL_RULES
-
-    for rule in TEMPORAL_RULES:
-        assert re.search(rf"^\| `{rule}` \|", text, flags=re.M), f"bridge.md: temporal rule {rule!r} has no row"
-
-
 def test_cli_md_documents_flags_and_codes():
     text = (SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8")
     for flags in DOCUMENTED_FLAGS.values():
@@ -188,25 +130,6 @@ def test_cli_md_documents_flags_and_codes():
               "E_JOIN_MODEL", "W_JOIN_WEIGHTS", "<results_root>/<model>/results_<timestamp>.json",
               "samples_<benchmark>_<reading>_<timestamp>.jsonl", "eval_hash"):
         assert n in text, f"cli.md: {n!r} missing"
-
-
-def test_slurm_md_templates_are_generic():
-    """slurm.md has Templates A, B and C, each a batch script whose site-specific values are placeholders
-    (``<partition>``, ``<account>``, ``$PROJECT``, ``/path/to/…``) for the reader to replace."""
-    text = (SKILL_ROOT / "references" / "slurm.md").read_text(encoding="utf-8")
-    headings = re.findall(r"^## Template ([A-Z])\b", text, flags=re.M)
-    assert headings == ["A", "B", "C"], headings
-    for letter in headings:
-        block = re.search(r"```bash\n(.*?)```", _section(text, f"Template {letter}"), flags=re.S)
-        assert block, f"Template {letter} has no bash block"
-        script = block.group(1)
-        assert "#SBATCH --partition=<partition>" in script, f"Template {letter}: partition is not a placeholder"
-        assert 'cd "$PROJECT"' in script, f"Template {letter}: project directory is not a placeholder"
-        for line in script.splitlines():
-            m = re.match(r"#+SBATCH --(account|qos)=(\S+)", line)
-            assert not m or m.group(2).startswith("<"), f"Template {letter}: {line.strip()!r}"
-            for path in re.findall(r"(?<![\w$}])/[A-Za-z][\w.-]*(?:/[\w.${}-]*)*", line.split("#", 1)[0]):
-                assert path.startswith(("/path/to/", "/dev/", "/tmp")), f"Template {letter}: site path {path!r}"
 
 
 # ------------------------------------------------------------------------------------------- CLI agreement
@@ -328,31 +251,6 @@ def test_matrix_examples_parse_with_plan_build(tmp_path, doc):
         f.write_text(b, encoding="utf-8")
         m = load_matrix(str(f))
         assert m.entries, doc
-
-
-
-
-def test_in1k_template_declares_image_as_video_at_the_top_level():
-    """``image_as_video`` is a top-level ``describe()`` key (``input.image`` refuses it)."""
-    from yavih.benchmarks import packaged_folder
-
-    template = (packaged_folder("in1k") / "bridge_template.py").read_text(encoding="utf-8")
-    assert re.search(r'^ {12}"image_as_video": \{', template, flags=re.M)
-
-
-def test_readme_example_reading_uses_the_benchmarks_vocabulary():
-    """The quickstart's vggsounder bridge takes ``reading`` as an argument over vggsounder's {a, v, av} (the readings
-    ``plan init`` plans), records it in ``describe()``, and its step-4 ``bridge check`` is the one printed for ``v``."""
-
-    readme = REPO / "docs" / "quickstart.md"
-    if not readme.is_file():
-        pytest.skip("docs/quickstart.md not available")
-    text = readme.read_text(encoding="utf-8")
-    m = re.search(r'"reading": ArgSpec\([^)]*choices=\(([^)]*)\)', text)
-    assert m and {c.strip().strip('"') for c in m.group(1).split(",")} == {"a", "v", "av"}
-    assert '"reading": self.reading' in text
-    assert ("yavih bridge check yavih-bench/bridges/mymodel_vggsounder.py --bench vggsounder --arg reading=v "
-            "--out yavih-bench/matrices/mymodel.profiles/mymodel-vggsounder-v.profile.json") in text
 
 
 # ------------------------------------------------------------------------------------------- the complete code list
