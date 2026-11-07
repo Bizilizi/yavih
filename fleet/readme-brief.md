@@ -85,6 +85,9 @@ STEPS
    `yavih bench show <NAME> make_manifest` and `"$PY" benchmarks/<NAME>/make_manifest.py --help` show the recipe.
 4. Move transcription and dependency facts into setup.md. Fix every reference inside the folder to README
    "## In yavih" (comments, docstrings, setup.md); `grep -rn "In yavih" benchmarks/<NAME>` must print nothing.
+   KEEP the opening pointer most setup.md files carry ("`README.md` says what the benchmark is", "People-facing
+   description and metrics: README.md"): it is true, README.md is the human page. You may reword it to "README.md is
+   the benchmark's page for people", never delete it; it names README.md, not "In yavih", so the grep above passes.
    Folder tests that pin README.md wording (a quoted number, a heading, a phrase): delete those assertions (the lint
    checks the structure; prose is not tested); where the pinned fact is real (a floor value), pin it against
    benchmark.yaml or metrics.notes instead.

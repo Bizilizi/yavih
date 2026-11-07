@@ -1045,4 +1045,6 @@ def test_metrics_notes_reach_the_report(runs: Path, tmp_path, monkeypatch):
     assert "### Notes" in rep.text and f"- {folder.name}: Gaps below 0.02 at one seed are noise." in rep.text
     assert "- note: A fold near the floor means a broken extraction." in rep.text
     assert json.loads(tables.render_json(rep))["columns"][0]["notes"] == spec["metrics"]["notes"]
+    rep.lm_eval = {}  # without view 1 the notes list stays
+    assert "### Notes" in tables.render_md(rep)
     hash_history.reset()

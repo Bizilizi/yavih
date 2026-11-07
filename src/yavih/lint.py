@@ -600,7 +600,7 @@ def _legacy_readme(c: _Ctx, text: str, got: list[str], f: str) -> Iterator[Findi
     """The legacy README (a ``## In yavih`` section): today's rules, until the fleet migrates the folder."""
     yield _warn("readme", "W_README_LEGACY", "README.md has the legacy shape (## In yavih): rewrite it as the human page "
                 f"of {WRITING_A_README_URL} (floors and noise move to benchmark.yaml metrics.notes, the re-freeze "
-                "recipe to make_manifest.py's docstring; fleet/queue.yaml marks the folder `readme: legacy` until then)", f)
+                "recipe to make_manifest.py's docstring)", f)
     if got != list(LEGACY_README_SECTIONS):
         yield _err("readme", "E_README", f"## headings {got} != {list(LEGACY_README_SECTIONS)} (the legacy shape; the "
                    f"new one is {list(README_SECTIONS)})", f)
