@@ -366,12 +366,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "4aa0413d4634a2d45a8833ae56b4f3f6837fc6aa",
      "core": ">=1.1,<2",
      "path": "benchmarks/nyuv2_depth",
      "protocol_hash": "4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4",
      "protocol_version": 1,
-     "tree": "fcb07c11f8fa7369853e3ac645a8f3ceb0155917"
+     "tree": "08bb79c8da8f5fed409cfb009ca9484861bf9a19"
     }
    ],
    "scorer": "grid",
@@ -719,6 +719,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+ "commit": "2280cac347b362bebcb2e7aad57c3770094b875b",
  "repo": "Bizilizi/yavih"
 }
