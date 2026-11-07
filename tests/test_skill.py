@@ -103,11 +103,11 @@ def test_exploring_a_benchmark_block_runs():
     skill = SKILL_MD.read_text(encoding="utf-8")
     block = skill[skill.index("Exploring a benchmark:"):]
     block = block[block.index("```bash") + 7: block.index("```", block.index("```bash") + 7)]
-    for cmd in ("suite list", "bench list", "bench files <b>", "bench show <b> setup", "bench show <b> readme|yaml|eval",
+    for cmd in ("suite list", "bench list", "bench files <b>", "bench show <b> setup", "bench show <b> yaml|eval|make_manifest",
                 "bench show <b> prepare/<file>", "bench prepare <b> [<step>]", "bench path <b> [<file>]", "skill show --ref"):
         assert f"yavih {cmd}" in block, cmd
     for argv in (["suite", "list"], ["bench", "list"], ["bench", "files", "esc50"], ["bench", "show", "esc50", "setup"],
-                 ["bench", "show", "esc50", "readme"], ["bench", "show", "esc50", "yaml"], ["bench", "show", "avsync", "eval"],
+                 ["bench", "show", "esc50", "make_manifest"], ["bench", "show", "esc50", "yaml"], ["bench", "show", "avsync", "eval"],
                  ["bench", "show", "esc50", "prepare/01_download.sh"], ["bench", "prepare", "esc50"],
                  ["bench", "path", "esc50", "prepare/01_download.sh"], ["skill", "show", "--ref", "bridge"]):
         with contextlib.redirect_stdout(io.StringIO()):

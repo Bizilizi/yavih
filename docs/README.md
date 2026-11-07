@@ -41,6 +41,9 @@ Normative descriptions of current behaviour.
   figure kinds, file names, provenance, size budgets, the pixels-and-licences rule, adding a kind.
 - [Contributing a benchmark](contributing-a-benchmark.md): the ordered steps from a fork to a merged benchmark
   pull request: scaffold, protocol, freeze, prepare, docs, bridge template, hashes, tests, header, trials, CI.
+- [Writing a benchmark README](writing-a-readme.md): the folder README as the benchmark's page for people: audience,
+  tone and length, what each section answers, which figure for which task, what never goes in it and where it goes
+  instead, a worked example, the commands.
 - [Trial run](trial-run.md): the required pre-PR run of a new benchmark by a fresh agent with only the wheel and
   the skill: protocol, worker prompt, report template, pass criteria.
 - [Extending through a folder](extending-through-a-folder.md): every extension point a benchmark folder owns (scorer, heads, losses,

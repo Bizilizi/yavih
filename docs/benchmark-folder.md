@@ -15,7 +15,7 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
 
 ```
 <name>/
-  README.md             for people: header image, links, description, citation, the protocol in yavih
+  README.md             for people: the benchmark's page (header image, glance, task, data, scoring, figures, citation)
   setup.md              for the agent: obtain, dependencies, contracts, prepare & verify, gotchas
   benchmark.yaml        the machine-readable protocol
   manifest.csv.gz       the frozen rows (sha256 in benchmark.yaml)
@@ -37,7 +37,7 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
 
 | file | required | role |
 |---|---|---|
-| `README.md` | yes | Header image, links, description, citation, the protocol in yavih ([contract](#readmemd-contract)). |
+| `README.md` | yes | The human page: header image, links, the generated "at a glance" block, the task, the data, how it is scored, citation ([contract](#readmemd-contract)). Nothing an agent needs lives in it. |
 | `setup.md` | yes | The agent's first read ([contract](#setupmd-contract)). |
 | `benchmark.yaml` | yes | The protocol ([schema](#benchmarkyaml)). |
 | `manifest.csv.gz` | yes | Frozen rows; `manifest.sha256` is over the decompressed bytes. |
@@ -115,7 +115,7 @@ prints in md instead of every key (the rest under `--detail`).
 
 Every call into an original-author package goes through `yavih.external.require(name, pip, version_pin)` with the
 matching `benchmark.yaml` `external` entry. A `eval.py` that re-implements the authors' code instead (because it is
-not importable) says so in README "## In yavih" and setup.md "## Dependencies".
+not importable) says so in setup.md "## Dependencies".
 
 ### testing.py
 
@@ -530,20 +530,44 @@ fetched yet: `yavih bench fetch <name>` brings it, verified against the index an
 
 ## README.md contract
 
-For people, and rendered on GitHub. No H1 (the header image carries the name); in this order:
+README.md is the benchmark's page for people, rendered on GitHub: a reader deciding whether the benchmark is for them
+sees the task, the data and how it is scored, with figures. **Nothing an agent needs lives in README.md**: facts
+derivable from the yaml are printed by `yavih bench info <name>` and `yavih bench show <name> yaml`; floor values and
+noise guidance are `metrics.notes` (printed by `bench info` and the report); the re-freeze recipe is the
+`make_manifest.py` docstring (`yavih bench show <name> make_manifest`); transcription and dependency facts are in
+setup.md. How to write the page (audience, tone, a worked example, which figure per task): [writing a
+README](writing-a-readme.md).
+
+No H1 (the header image carries the name); in this order:
 
 1. the header image, alone on the first line: `![<header.name>](assets/header.png)`;
-2. the links line: `[Paper](…) · [Homepage](…) · [Dataset](…) · [setup.md](setup.md)`, whichever exist;
-3. exactly these `##` sections:
+2. the links line: `[Paper](…) · [Homepage](…) · [Dataset](…) · [Licence](…) · [setup.md](setup.md)`, whichever
+   exist (it must hold `(setup.md)`);
+3. the generated "at a glance" block, between its markers
+   `<!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance <name> --write) -->`
+   and `<!-- yavih:glance end -->`, before the first `##`: task, modality, size, headline, readings, data, licence
+   and protocol, rendered from the folder's yaml (`python -m yavih.doctables --glance <name> --write` writes it;
+   never edit it by hand);
+4. exactly these `##` sections:
 
-| heading | content |
-|---|---|
-| `## Description` | The task, the data and the official splits, as the benchmark's authors define them. |
-| `## Citation` | BibTeX of the paper(s) in a fenced `bibtex` block, and of the annotation source where it differs. |
-| `## In yavih` | The protocol: readout, splits and roles with counts, the headline metric (named as in `metrics.headline`) with chance, floors and controls, the frozen train draw, `protocol_version` and its number; what the bridge gets and returns in two or three lines with a pointer to setup.md. Then variants and aliases (and what is not this benchmark), reference numbers only when they are published (with the citation), and the notes for re-freezing the manifest (`make_manifest.py`, its public inputs, the folder tests). |
+| heading | required | answers |
+|---|---|---|
+| `## The task` | yes | What a model is asked to do, in human terms, with the main figure `![…](assets/preview.png)` and, where the data moves, `![…](assets/clip.gif) · [mp4](assets/clip.mp4)`. |
+| `## The data` | yes | What the recordings are and where they come from, the official splits in prose, the licence in words. |
+| `## How it is scored` | yes | The metric and why it fits; chance and the floor in words; what is *not* this benchmark (variants, aliases, near-misses). |
+| `## Reference numbers` | no | Published numbers with their citation, and why they are (not) comparable to a frozen-feature probe; only right before Citation. |
+| `## Citation` | yes | BibTeX of the paper(s) in a fenced `bibtex` block, and of the annotation source where it differs. |
 
-There is no changelog, history or checklist section: the `benchmark.yaml` `changelog` is the version record. A
-`protocol_hash` printed in README.md must be a prefix of the current one.
+A page of 60 to 120 lines reads well. There is no changelog, history or checklist section: the `benchmark.yaml`
+`changelog` is the version record. A `protocol_hash` printed in README.md must be a prefix of the current one.
+`bench lint` checks the structure only (`E_README`, `E_README_GLANCE`, `E_README_HASH`, `W_README_ASSET`), never the
+wording.
+
+**Legacy READMEs.** The packaged folders still carry the earlier shape (`## Description`, `## Citation`, `## In
+yavih`) until the fleet migrates them one by one (`readme: legacy` in `fleet/queue.yaml`). A README with an `## In
+yavih` section is checked by the earlier rules ("## In yavih" names `protocol_version`, the headline metric and
+`make_manifest`) and reported `W_README_LEGACY`; once every folder is migrated the legacy rules go and the warning
+becomes an error.
 
 ### Header image
 
@@ -672,7 +696,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `budget` | `E_MANIFEST`, `E_BUDGET`, `E_CURATION` | The manifest reads; `budget.clips` equals the frozen rows per read split; `manifest.upstream.curation` exists, its `per_split.*.listed` equal the frozen rows, and listed plus excluded equals `total_upstream`. |
 | `header` | `E_HEADER`, `W_HEADER_MISSING`, `W_HEADER_STALE` (warnings) | `benchmark.yaml` has a `header: {name, title, venue, abstract}` block (its content is checked by the loader: non-empty strings, an abstract of at most 60 words). Where the header template is at hand (a source checkout; skipped for an installed wheel): `assets/header.png` exists (`W_HEADER_MISSING`), and `assets/header.src.sha256` equals the sha256 of the current header HTML; otherwise the image predates its yaml, chips or template, or it has transparent pixels, an incomplete render (`W_HEADER_STALE`). |
 | `preview` | `E_PREVIEW_SPEC`, `W_PREVIEW_MISSING`, `W_PREVIEW_STALE`, `W_ASSET_SIZE` (warnings) | Where the design system is at hand (a source checkout): `assets/preview.yaml` parses and names known kinds, splits, clip_ids and options with the row count its kind draws (`E_PREVIEW_SPEC`); it exists and every declared figure file exists (`W_PREVIEW_MISSING`); `assets/preview.src.json` records the current source of each figure, no still has transparent pixels (an incomplete render), and no undeclared `preview*.png` / `clip*.png` / `*.gif` / `*.mp4` file is left (`W_PREVIEW_STALE`); no file over its size budget and `assets/` at most 10 MB (`W_ASSET_SIZE`). |
-| `readme` | `E_README`, `E_README_HASH`, `W_README_ASSET` (warning) | The [README.md contract](#readmemd-contract); a `](assets/<file>)` link other than the header image names an existing file (`W_README_ASSET`). |
+| `readme` | `E_README`, `E_README_GLANCE`, `E_README_HASH`, `W_README_ASSET` (warning), `W_README_LEGACY` (warning) | The [README.md contract](#readmemd-contract): header image, links line, no H1, the sections in order, a bibtex block; exactly one "at a glance" block before the first `##`, equal to `python -m yavih.doctables --glance <name>` (`E_README_GLANCE`); a `](assets/<file>)` link other than the header image (outside an HTML comment) names an existing file (`W_README_ASSET`). A README with `## In yavih` is the legacy shape: the earlier rules and `W_README_LEGACY`. |
 | `setup` | `E_SETUP` | The [setup.md contract](#setupmd-contract). |
 | `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |
 | `codecs` | `E_CODEC_SELFTEST` | Every folder or entry-point codec the output schema names passes `yavih.codecs.self_test` ([codecs](codecs.md#writing-a-codec)). |

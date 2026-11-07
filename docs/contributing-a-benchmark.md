@@ -184,14 +184,21 @@ written.
 
 ## 5. `setup.md` and `README.md`
 
-Write both against their contracts: [README.md](benchmark-folder.md#readmemd-contract) (for people: header image,
-links line, `## Description`, `## Citation`, `## In yavih`) and [setup.md](benchmark-folder.md#setupmd-contract)
-(for the agent that sets the benchmark up: the six sections in order, ending the contract sections with a copy of
-the yaml blocks). Both are shipped in the wheel: link only what a pip install can open (a public dataset page, a
+Write both against their contracts: [setup.md](benchmark-folder.md#setupmd-contract) (for the agent that sets the
+benchmark up: the six sections in order, ending the contract sections with a copy of the yaml blocks) and
+[README.md](benchmark-folder.md#readmemd-contract), the benchmark's page for people: header image, links line, the
+"at a glance" block, `## The task`, `## The data`, `## How it is scored`, the optional `## Reference numbers`, and
+`## Citation`. [Writing a README](writing-a-readme.md) says what each section answers, with a worked example. Write
+the glance block with `python -m yavih.doctables --glance <name> --write` (and again after a yaml edit: `bench lint`
+reports a stale one as `E_README_GLANCE`); never by hand. Nothing an agent needs goes into README.md: how to read
+the numbers (floor values, noise, the smallest gap that means something) goes into `metrics.notes` in
+`benchmark.yaml`, the re-freeze recipe into the `make_manifest.py` docstring (step 3), transcription and dependency
+facts into setup.md. Both are shipped in the wheel: link only what a pip install can open (a public dataset page, a
 `https://github.com/Bizilizi/yavih/blob/main/docs/<page>.md` URL, a `yavih …` command). Local maintainer notes may
 live in the folder's `notes/`, which git ignores: it is never committed, shipped or linked.
 
-**Done when:** `yavih bench lint <name>` reports no `E_README`, `E_SETUP`, `E_CITATION` or `E_NOTES_LINK`.
+**Done when:** `yavih bench lint <name>` reports no `E_README`, `E_README_GLANCE`, `E_SETUP`, `E_CITATION` or
+`E_NOTES_LINK`, and no `W_README_LEGACY`.
 
 ## 6. `bridge_template.py`
 
@@ -266,8 +273,8 @@ bump (or `--same-version --reason TEXT`), and `--record` refuses to overwrite di
 ## 9. Folder tests
 
 Make `tests/test_folder.py` this folder's: replace the pinned `--like` values (streams, clips per split, readings,
-output contract, external packages), add the folder's own facts (columns, classes, curation sums, README.md and
-setup.md facts), and write the two tests the scaffold skips:
+output contract, external packages), add the folder's own facts (columns, classes, curation sums; never the wording of
+README.md or setup.md, whose structure `bench lint` checks), and write the two tests the scaffold skips:
 
 - `test_make_manifest_check`: run `make_manifest.main(["--no-media", "--metadata", <file>, "--check"])` on the public
   metadata (or on a copy rebuilt from the committed manifest, as esc50's `test_make_manifest_check_from_metadata`

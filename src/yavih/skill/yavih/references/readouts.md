@@ -74,8 +74,8 @@ Where the authors ship a scorer, the folder's `eval.py` calls it through
   vggsounder==1.0`; the exact line is in setup.md "## Dependencies"): its 30 metrics under its own
   names (`auc_pr`, `hit_rate@1`, `f1@1`, …) per reading, and `mu` in the join. No floor, no chance, no
   `n_eval` (`metrics.floors: []`). yavih has no extra for it.
-- **nyuv2_depth**: Probe3D's depth metrics when importable at the pinned commit; otherwise the
-  folder documents yavih's transcription (README "## In yavih" says which).
+- **nyuv2_depth**: Probe3D's depth metrics at the pinned commit (a missing package stops the probe);
+  the one metric Probe3D's file lacks is yavih's own (setup.md "## Dependencies" says which).
 - ave (the authors' accuracy is a few lines of a research repo) and vggss_box (the official VGG-SS
   code scores heatmaps, not boxes) use yavih's own metric functions, `external: []`.
 

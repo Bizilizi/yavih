@@ -160,9 +160,11 @@ the skill's from the folders' `benchmark.yaml`. A folder outside the package loa
 `yavih bench lint` checks, for every folder: the required files and no `__init__.py`; a strict `benchmark.yaml`
 whose `name` is the folder's, with a `header:` block (name, paper title, venue, a short abstract) from which
 `python -m yavih.headers <name>` renders the README's header image in the source repository, and a `capability:`
-list (the groups above); README.md opens with
-that image and a links line, and its `##` headings are exactly Description, Citation (with a fenced `bibtex` block),
-In yavih (in order; "## In yavih" names `protocol_version` and `metrics.headline`). setup.md's H1 is
+list (the groups above); README.md, the benchmark's page for people, opens with
+that image, a links line and the "at a glance" block generated from the yaml (`python -m yavih.doctables --glance
+<name> --write`), and its `##` headings are exactly The task, The data, How it is scored, the optional Reference
+numbers, Citation (with a fenced `bibtex` block); a README still in the earlier shape (Description, Citation, In
+yavih) is accepted with the warning `W_README_LEGACY` until it is rewritten. setup.md's H1 is
 `# <name> — setup` and its `##` headings are exactly Obtain the data, Dependencies, Input contract, Output contract,
 Prepare & verify, Gotchas; neither file has a Changelog, History, Checklist or Maintainers heading (the
 `benchmark.yaml` `changelog` is the version record). "## Dependencies" carries every `external[].pip` line verbatim (or "None" when

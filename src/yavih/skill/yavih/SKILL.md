@@ -57,7 +57,8 @@ model package (`script: pkg.mod:Class`), a deliverable benchmark folder (`[proje
 `yavih-bench/benchmarks/<b>` and records it in `yavih-bench/benchmarks.lock` (commit it); `plan init` fetches a suite's.
 **Hard rule — shipped files.** A folder's files (setup.md, README.md, benchmark.yaml, `bridge_template.py`, `prepare/`)
 and this skill's references are reached ONLY through `yavih bench files|show|prepare <b>`, `yavih bridge new <b> --model
-<name>` and `yavih skill show --ref <name>`; never search site-packages or a checkout. Exploring a benchmark:
+<name>` and `yavih skill show --ref <name>`; never search site-packages or a checkout (README.md is the human page:
+nothing in it is needed to run the benchmark). Exploring a benchmark:
 
 ```bash
 yavih suite list                          # benchmark sets: default, minimal (`suite show <s>`, `suite new <s>`)
@@ -65,7 +66,7 @@ yavih bench list [--catalog]              # all benchmarks: readout, capability,
 yavih bench fetch <b>                     # bring the folder from the catalog (bench update: newer revisions)
 yavih bench files <b>                     # every shipped file, absolute path + kind (--json)
 yavih bench show <b> setup                # contracts, data, gotchas: read first
-yavih bench show <b> readme|yaml|eval     # paper/protocol, machine spec, extra metrics (eval.py: only some benchmarks)
+yavih bench show <b> yaml|eval|make_manifest   # machine spec, extra metrics, the re-freeze recipe
 yavih bench show <b> prepare/<file>       # read a prepare script before running it
 yavih bench prepare <b> [<step>]          # list / run prepare steps
 yavih bench path <b> [<file>]             # a real path when a tool needs one (sbatch, cp)

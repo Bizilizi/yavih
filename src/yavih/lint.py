@@ -108,7 +108,7 @@ __all__ = [
 #: Files every folder holds. ``classes.csv`` is required iff ``manifest.classes`` is set.
 REQUIRED_FILES: tuple[str, ...] = ("README.md", "setup.md", "benchmark.yaml", "manifest.csv.gz",
                                    "bridge_template.py", "make_manifest.py", "tests/test_folder.py")
-#: The README's ``##`` sections in order (the human page, docs/writing-a-readme.md); the optional ones may stand only
+#: The README's ``##`` sections in order (the human page, :data:`WRITING_A_README_URL`); the optional ones may stand only
 #: right before ``Citation``.
 README_SECTIONS: tuple[str, ...] = ("The task", "The data", "How it is scored", "Citation")
 README_OPTIONAL_SECTIONS: tuple[str, ...] = ("Reference numbers",)
@@ -559,7 +559,7 @@ def _c_readme(c: _Ctx) -> Iterator[Finding]:
         allowed = [list(README_SECTIONS), [*README_SECTIONS[:-1], *README_OPTIONAL_SECTIONS, README_SECTIONS[-1]]]
         if got not in allowed:
             yield _err("readme", "E_README", f"## headings {got} != {list(README_SECTIONS)} (optional "
-                       f"{list(README_OPTIONAL_SECTIONS)} right before Citation; docs/writing-a-readme.md)", f)
+                       f"{list(README_OPTIONAL_SECTIONS)} right before Citation; {WRITING_A_README_URL})", f)
         elif not fenced_blocks(section(text, 2, "Citation"), "bibtex"):
             yield _err("readme", "E_README", "## Citation must hold a fenced bibtex block", f)
         yield from _readme_glance(c, text, f)

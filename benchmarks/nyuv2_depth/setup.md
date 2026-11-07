@@ -98,7 +98,8 @@ version is `1.0` at every commit, so the digest is what pins the code); `yavih d
 it. It needs torch (the probe env has it) and `loguru`. The install MUST be editable (`-e`): Probe3D's `setup.py`
 declares `packages=["evals"]` while `evals/` has no `__init__.py`, so a regular `pip install git+…` installs an
 empty distribution and `import evals` fails. A missing package or digest makes `probe` exit 3 before training;
-nothing is silently re-implemented.
+nothing is silently re-implemented. Every depth metric is Probe3D's except `absrel`, which its file lacks: that one
+is yavih's own (`yavih.metrics.depth`), as is the disclosure `n_eval`.
 
 Where that pip line cannot run (a uv venv has no pip; an env you may not install into), clone the commit and
 either install the clone editable or put it on `PYTHONPATH` without installing anything:
