@@ -57,9 +57,10 @@ and never has to stay in sync with one.
 (`python -m yavih.headers <name>`). The second paragraph is the links line: paper, project page, dataset, licence,
 whichever exist, and always `[setup.md](setup.md)`. No H1: the image carries the name.
 
-**At a glance.** A two-column table generated from `benchmark.yaml`: the task and capability tags, the modality, the
-size (rows per split, classes), the headline metric with chance, the readings when there are several, where the data
-comes from with its obtain tier and size, the licence, and the protocol version with the fetch command. Write it with
+**At a glance.** A two-column table generated from `benchmark.yaml`, in words: the task and capability tags, the
+modality, the size (rows per split, classes), the headline metric with chance, the readings when there are several,
+where the data comes from and who must act to get it, its size, the licence, and in the last row the identifiers
+(version, scorer, the yavih releases it needs, the fetch command). Write it with
 `python -m yavih.doctables --glance <name> --write` and again after every yaml edit; `bench lint` fails on a missing
 or stale block (`E_README_GLANCE`). Because these facts are in the table, the prose never has to repeat them.
 
@@ -136,7 +137,15 @@ them.
 [Paper](https://dl.acm.org/doi/10.1145/2733373.2806390) · [Homepage](https://github.com/karolpiczak/ESC-50) · [Dataset](https://dx.doi.org/10.7910/DVN/YDEPUT) · [setup.md](setup.md)
 
 <!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance esc50 --write) -->
-… the generated table …
+| At a glance | ESC-50 |
+|---|---|
+| **Task** | Sound classification · audio |
+| **Modality** | Audio |
+| **Size** | 2 000 in folds 1–5 (400 each) · 50 classes |
+| **Headline** | Mean accuracy over the folds (`acc_mean`) · chance 2 % |
+| **Data** | Public download; fetched unattended · 0.88 GB of media · how: [setup.md](setup.md) |
+| **Licence** | CC BY-NC 3.0 for the dataset as a whole; the ESC-10 subset (esc10 == True, 400 clips) CC BY 3.0; per-clip Freesound attributions in the upstream LICENSE file |
+| **Protocol** | Version 1 · scorer `clf` · needs yavih >=1.1,<2 · `yavih bench fetch esc50` |
 <!-- yavih:glance end -->
 
 ## The task
@@ -153,7 +162,7 @@ ESC-50 (Karol J. Piczak, ACM Multimedia 2015) is 2 000 clips cut from public fie
 class, each exactly 5.0 s of 44.1 kHz mono audio. The authors arranged them into five folds of 400 clips, eight per
 class per fold, keeping the clips cut from one source recording in one fold where possible, so the standard protocol
 is five-fold cross-validation. The dataset is licensed CC BY-NC 3.0 (non-commercial); the 400-clip ESC-10 subset is
-CC BY 3.0. It is a public download of 0.9 GB.
+CC BY 3.0. It is a public download of 0.88 GB of audio.
 
 ## How it is scored
 

@@ -45,7 +45,7 @@ import yaml
 
 from yavih.fields import cell_fields, file_fields
 
-__all__ = ["GLANCE_BEGIN", "GLANCE_END", "KINDS", "SCORER_WORDS", "SOURCE_WORDS", "UNTAGGED", "glance_block", "glance_documents",
+__all__ = ["GLANCE_BEGIN", "GLANCE_END", "GLANCE_METRIC_LABELS", "KINDS", "SCORER_WORDS", "SOURCE_WORDS", "UNTAGGED", "glance_block", "glance_documents",
            "main", "render", "render_glance", "replace_blocks", "replace_glance", "repo_documents"]
 
 SOURCE_WORDS: dict[str, str] = {"public_url": "public", "torrent": "torrent", "manual_portal": "manual portal",
@@ -295,18 +295,54 @@ GLANCE_BEGIN = ("<!-- yavih:glance begin (generated from benchmark.yaml: python 
                 " -->")
 GLANCE_END = "<!-- yavih:glance end -->"
 _GLANCE_BEGIN = re.compile(r"^<!-- yavih:glance begin\b.*-->\s*$")
-#: The task a core scorer scores, in words (a folder's own scorer is named as such).
+#: The task a core scorer scores, in words; ``{mod}`` is the modality word (``sound``, ``image``, ``video``,
+#: ``audio-visual``). A folder that declares ``header.chips`` names its task in the second chip, which wins.
 SCORER_WORDS: dict[str, str] = {
-    "clf": "classification", "knn": "classification (k-NN, no training)", "seq": "per-segment classification over time",
-    "grid": "dense prediction on a spatial grid", "box": "box localisation", "stream": "online prediction on a stream",
+    "clf": "{mod} classification", "knn": "{mod} classification by nearest neighbours (no training)",
+    "seq": "{mod} event localisation, one label per segment", "grid": "dense per-pixel prediction{target}",
+    "box": "{what} localisation with a box", "stream": "causal prediction on a live {mod} stream",
 }
+#: A folder's own scorer without ``header.chips``: the task from its first matching capability tag.
+CAPABILITY_TASKS: tuple[tuple[str, str], ...] = (("retrieval", "cross-modal retrieval"), ("spatial", "localisation"),
+                                                  ("temporal", "temporal detection"))
+#: The headline as a reader names it, where ``headers.METRIC_LABELS`` (the header chips) is terser or silent. Kept
+#: here so a label change never makes a header image stale.
+GLANCE_METRIC_LABELS: dict[str, str] = {
+    "acc": "accuracy", "acc_mean": "mean accuracy over the folds", "map": "mean average precision",
+    "auc_pr": "mean average precision, as AUC-PR", "seg_acc": "segment accuracy", "d1": "δ₁ accuracy, depth within 1.25×",
+    "iou_mean": "mean IoU of the predicted box", "fd_passt": "Fréchet distance on PaSST embeddings, lower is better",
+    "sec_acc_gru": "segment accuracy of a causal GRU head", "map_gru": "mAP of a causal GRU head",
+    "cap_gru": "calibrated AP of a causal GRU head", "event_map_gru": "event mAP of a causal GRU head",
+    "frame_map_gru": "per-frame mAP of a causal GRU head", "top5_recall_action_gru": "top-5 action recall of a causal GRU head",
+    "mt5r_action_gru": "mean top-5 action recall of a causal GRU head", "tmap": "temporal mAP over tIoU thresholds",
+    "map_avg": "mAP averaged over tIoU thresholds", "ciou@0.5": "share of clips with cIoU ≥ 0.5",
+    "r@1": "recall at rank 1",
+}
+#: ``obtain.tier`` in words (the tier meanings of the contributing guide, step 2).
+TIER_WORDS: dict[str, str] = {
+    "auto": "fetched unattended", "manual-download": "a person downloads it", "needs-licence": "needs a signed licence",
+    "needs-data-owner": "media on request from the data owner", "site-only": "available on one site only",
+}
+#: ``source.kind`` in words.
+SOURCE_PHRASES: dict[str, str] = {"public_url": "public download", "torrent": "public torrent", "manual_portal": "official portal",
+                                  "private_mirror": "private mirror", "derived": "derived from another dataset"}
+#: Reading tags in words; a ``-rt`` suffix reads "(real time)".
+READING_WORDS: dict[str, str] = {"a": "audio", "v": "video", "av": "audio+video", "t": "text"}
+#: The longest licence text the glance shows before it cuts at a sentence or word boundary.
+LICENCE_CHARS = 240
 
 
-def _first_sentence(text: str) -> str:
-    """The first sentence of ``text`` (up to ``. `` followed by an upper-case letter), `` …`` when more follows."""
+def _cut(text: str, limit: int = LICENCE_CHARS) -> str:
+    """``text`` (whitespace collapsed) when at most ``limit`` characters, else cut at the last sentence end within the
+    limit when it lies in the last quarter (else at the last word boundary), followed by `` …``."""
     text = " ".join(str(text).split())
-    m = re.search(r"\.\s+(?=[A-Z])", text)
-    return text if m is None else text[:m.start() + 1] + " …"
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    ends = [m.end() for m in re.finditer(r"(?<!\bal)(?<!\be\.g)(?<!\bi\.e)\.\s+(?=[A-Z(])", head)]  # not "et al. "
+    if ends and ends[-1] >= limit * 3 // 4:  # a sentence end near the limit; else keep more words
+        return head[:ends[-1]].rstrip() + " …"
+    return head.rsplit(" ", 1)[0].rstrip(",;:") + " …"
 
 
 def _class_count(folder: Path, y: Mapping[str, Any]) -> int | None:
@@ -324,67 +360,132 @@ def _readings(folder: Path) -> list[str]:
 
     tpl = folder / "bridge_template.py"
     got = template_readings(tpl.read_text(encoding="utf-8")) if tpl.is_file() else set()
-    base = [r for r in ("a", "v", "av", "t") if r in got]
+    order = [*(r for r in ("a", "v", "av", "t")), *(f"{r}-rt" for r in ("a", "v", "av"))]
+    base = [r for r in order if r in got]
     return base + sorted(got - set(base))
 
 
-def _number(x: Any) -> str:
-    return f"{x:g}" if isinstance(x, float) else str(x)
+def _reading_words(r: str) -> str:
+    base, rt = (r[:-3], True) if r.endswith("-rt") else (r, False)
+    return READING_WORDS.get(base, base) + (" (real time)" if rt else "")
+
+
+def _cap(text: str) -> str:
+    """The first letter upper-cased, unless the word is an initialism or a symbol (mAP, δ₁)."""
+    if text[:1].isascii() and text[:1].islower() and not text[1:2].isupper():
+        return text[:1].upper() + text[1:]
+    return text
+
+
+def _sig(x: float, digits: int = 2) -> str:
+    """``x`` to ``digits`` significant figures, never in exponent notation (0.0065, 3.4, 11)."""
+    if x == 0:
+        return "0"
+    from math import floor, log10
+
+    places = max(0, digits - 1 - floor(log10(abs(x))))
+    out = f"{round(x, places):.{places}f}"
+    return out.rstrip("0").rstrip(".") if "." in out else out
+
+
+def _gb(x: float) -> str:
+    return _sig(x) if x < 10 else _num(int(round(x)))
+
+
+def _kinds(y: Mapping[str, Any]) -> list[str]:
+    """The media kinds handed over (file fields, then cell fields), video before audio before image before text."""
+    kinds = {str((s or {}).get("kind")) for s in file_fields(y.get("fields")).values()}
+    kinds |= {str((c or {}).get("kind")) for c in cell_fields(y.get("fields")).values()}
+    order = ["video", "audio", "image", "text"]
+    return [k for k in order if k in kinds] + sorted(kinds - set(order))
+
+
+def _mod_word(kinds: list[str]) -> str:
+    ks = set(kinds)
+    if {"video", "audio"} <= ks:
+        return "audio-visual"
+    return {"audio": "sound", "image": "image", "video": "video"}.get(kinds[0], kinds[0]) if kinds else "media"
+
+
+def _task(y: Mapping[str, Any], scorer: str, builtin: set[str], kinds: list[str], made: list[str]) -> str:
+    header = y.get("header") if isinstance(y.get("header"), Mapping) else {}
+    chips = list(header.get("chips") or [])
+    caps = [str(c) for c in y.get("capability") or []]
+    label = str((((y.get("manifest") or {}).get("label")) or {}).get("kind"))
+    if len(chips) > 1:  # the folder names its own task (the header's task chip)
+        task = str(chips[1])
+        if any("training-free" in str(c) for c in chips) and "training-free" not in task:
+            task = "training-free " + task
+    elif "generation" in caps and made:
+        given = [k for k in kinds if k not in made] or kinds
+        task = f"{'-and-'.join(given)}-to-{' + '.join(made)} generation"
+    elif scorer in builtin:
+        targets = y.get("targets") if isinstance(y.get("targets"), Mapping) else {}
+        tkind = next((str((t or {}).get("kind")) for t in targets.values() if isinstance(t, Mapping)), "")
+        task = SCORER_WORDS.get(scorer, "{mod} " + scorer).format(
+            mod=_mod_word(kinds), target=" (depth)" if "depth" in tkind else "",
+            what="sound-source" if "audio" in kinds else "object")
+    else:
+        task = next((words for cap, words in CAPABILITY_TASKS if cap in caps), f"{_mod_word(kinds)} classification")
+    if label in ("multi", "multi_sets") and "multi" not in task:
+        task += ", multi-label"
+    task = _cap(task)
+    return task + (f" · {', '.join(caps)}" if caps else "")
 
 
 def render_glance(folder: str | Path) -> str:
     """The "at a glance" block of ``folder/README.md``, both markers included (no trailing newline), from the folder's
-    ``benchmark.yaml`` (read with pyyaml), ``classes.csv`` and ``bridge_template.py``."""
-    from yavih.headers import metric_label
+    ``benchmark.yaml`` (read with pyyaml), ``classes.csv`` and ``bridge_template.py``: a summary for a person, in
+    words; the identifiers an agent uses appear in parentheses or in the Protocol row only."""
+    from yavih.headers import _CODEC_KIND, metric_label
     from yavih.readouts import registry
 
     folder = Path(folder)
     y = _yaml(folder)
     name = str(y.get("name") or folder.name)
+    header = y.get("header") if isinstance(y.get("header"), Mapping) else {}
     scorer = str(y.get("scorer"))
     builtin = {m.rsplit(".", 1)[-1] for m in registry.BUILTIN}
-    label = str((((y.get("manifest") or {}).get("label")) or {}).get("kind"))
-    if scorer in builtin:
-        task = SCORER_WORDS.get(scorer, scorer) + (", multi-label" if label in ("multi", "multi_sets") else "") + f" (scorer `{scorer}`)"
-    else:
-        task = f"the folder's own scorer (`{scorer}`)" + (", multi-label" if label in ("multi", "multi_sets") else "")
-    caps = [f"`{c}`" for c in y.get("capability") or []]
-    if caps:
-        task += " · " + ", ".join(caps)
+    caps = [str(c) for c in y.get("capability") or []]
+    kinds = _kinds(y)
+    made: list[str] = []
+    if "generation" in caps:  # what the model is given -> what it generates (the output codecs)
+        schema = ((y.get("output_contract") or {}).get("schema")) or {}
+        made = sorted({_CODEC_KIND.get(str((o or {}).get("type")), str(k)) for k, o in schema.items()})
+    modality = " + ".join(kinds) + (f" → generated {' + '.join(made)}" if made else "")
     size = _rows(y)
     n_classes = _class_count(folder, y)
     if n_classes:
         size += f" · {_num(n_classes)} classes"
     m = y.get("metrics") or {}
     headline = str(m.get("headline"))
-    head = f"{metric_label(headline)}, `{headline}`" if metric_label(headline) != headline else f"`{headline}`"
+    words = GLANCE_METRIC_LABELS.get(headline) or metric_label(headline)
+    head = f"{_cap(words)} (`{headline}`)" if words != headline else f"`{headline}`"
     chance = (m.get("chance") or {}).get(headline)
-    if isinstance(chance, (int, float)):
-        head += f" · chance {_number(chance)}"
-    modality = _media(y)
-    if "generation" in (y.get("capability") or []):  # what the model is given -> what it generates (output codecs)
-        from yavih.headers import _CODEC_KIND
-
-        schema = ((y.get("output_contract") or {}).get("schema")) or {}
-        made = sorted({_CODEC_KIND.get(str((o or {}).get("type")), str(k)) for k, o in schema.items()})
-        if made:
-            modality += f" → generated {' + '.join(made)}"
-    rows: list[list[str]] = [["**Task**", task], ["**Modality**", modality], ["**Size**", size], ["**Headline**", head]]
+    if isinstance(chance, (int, float)) and not isinstance(chance, bool):
+        head += f" · chance {_sig(float(chance) * 100)} %"
+    rows: list[list[str]] = [["**Task**", _task(y, scorer, builtin, kinds, made)], ["**Modality**", _cap(modality)],
+                             ["**Size**", size], ["**Headline**", head]]
     readings = _readings(folder)
     if len(readings) > 1:
-        rows.append(["**Readings**", " / ".join(f"`{r}`" for r in readings)])
+        rows.append(["**Readings**", _cap(" · ".join(_reading_words(r) for r in readings))])
+    src = y.get("source") or {}
+    tier = str((y.get("obtain") or {}).get("tier") or "")
+    phrase = SOURCE_PHRASES.get(str(src.get("kind")), str(src.get("kind") or "source"))
+    data = phrase[0].upper() + phrase[1:] + "; " + TIER_WORDS.get(tier, tier or "see setup.md")
     gb = (y.get("budget") or {}).get("media_gb")
-    data = f"{_source(y)} source · obtain tier `{_tier(y)}`" + (f" · {_number(gb)} GB of media" if isinstance(gb, (int, float)) else "")
-    rows.append(["**Data**", data + " · [setup.md](setup.md)"])
-    licence = (y.get("source") or {}).get("licence")
-    if licence:
-        rows.append(["**Licence**", _first_sentence(licence)])
-    proto = f"`protocol_version` {y.get('protocol_version')}"
+    if isinstance(gb, (int, float)) and not isinstance(gb, bool):
+        data += f" · {_gb(float(gb))} GB of media"
+    rows.append(["**Data**", data + " · how: [setup.md](setup.md)"])
+    if src.get("licence"):
+        rows.append(["**Licence**", _cut(src["licence"])])
+    proto = f"Version {y.get('protocol_version')} · scorer `{scorer}`" + ("" if scorer in builtin else " (the folder's own)")
     if y.get("core"):
-        proto += f" · yavih `{y.get('core')}`"
-    proto += f" · `yavih bench fetch {name}`" + _aliases(y)
+        proto += f" · needs yavih {y.get('core')}"
+    proto += f" · `yavih bench fetch {name}`" + _aliases(y).replace("; alias", " · alias")
     rows.append(["**Protocol**", proto])
-    return "\n".join([GLANCE_BEGIN.format(name=name), _table(["At a glance", ""], rows), GLANCE_END])
+    title = str(header.get("name") or name)
+    return "\n".join([GLANCE_BEGIN.format(name=name), _table(["At a glance", title], rows), GLANCE_END])
 
 
 def _glance_spans(text: str) -> list[tuple[int, int]]:

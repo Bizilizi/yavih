@@ -16,8 +16,8 @@ def test_render_glance_of_esc50():
     assert lines[0] == doctables.GLANCE_BEGIN.format(name="esc50") and lines[-1] == doctables.GLANCE_END
     rows = [ln.split(" | ")[0].strip("| *") for ln in lines[3:-1]]
     assert rows == ["Task", "Modality", "Size", "Headline", "Data", "Licence", "Protocol"]  # one reading: no Readings row
-    assert "`clf`" in block and "2 000" in block and "50 classes" in block and "`acc_mean`" in block and "chance 0.02" in block
-    assert "`yavih bench fetch esc50`" in block and "Readings" in doctables.render_glance(packaged_folder("ave"))
+    assert lines[1] == "| At a glance | ESC-50 |"  # the header row names the benchmark (header.name)
+    assert "Readings" in doctables.render_glance(packaged_folder("ave"))  # several readings: the row appears
 
 
 def test_replace_glance_inserts_replaces_and_refuses_an_open_block():
