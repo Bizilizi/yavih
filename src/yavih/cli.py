@@ -1272,7 +1272,8 @@ def cmd_bench_files(ns: argparse.Namespace) -> Envelope:
 
     folder = bench_folder(ns.name)
     rows = bench_files(ns.name)
-    lines = [f"{folder}"] + [f"  {r['kind']:<9}{r['size']:>11}  {r['rel']}" for r in rows]
+    w = max([9, *(len(r['kind']) + 1 for r in rows)])
+    lines = [f"{folder}"] + [f"  {r['kind']:<{w}}{r['size']:>11}  {r['rel']}" for r in rows]
     lines.append(f"print one: yavih bench show {ns.name} <readme|setup|yaml|template|eval|make_manifest|classes|prepare/<file>|<path>>; "
                  f"run a prepare step: yavih bench prepare {ns.name} <step>")
     return Envelope(data={"name": ns.name, "folder": str(folder), "files": rows}, paths={"folder": str(folder)}, text="\n".join(lines) + "\n")
