@@ -64,7 +64,7 @@ pyproject.toml        metadata, extras, package data, setuptools-scm, pytest and
 | `lint.py` | `yavih bench lint`: the benchmark-folder contract as a tool |
 | `scaffold.py` | `yavih bench new`: scaffold a folder that passes lint |
 | `freeze.py` | shared helpers of the folders' `make_manifest.py` (byte-identical re-freeze, seeded train draw) |
-| `doctables.py` | the benchmark lists generated from the folders into README.md, `docs/benchmark-folder.md`, the index and the skill's `references/data.md` and `references/readouts.md` |
+| `doctables.py` | the benchmark lists generated from the folders into README.md, `docs/benchmark-folder.md`, the index and the skill's `references/data.md` and `references/readouts.md`, and each folder README's "at a glance" block (`--glance <name>`) |
 | `design.py` | the [design system](design-system.md) as code: the shared CSS, the design digest, fonts staging, Chrome screenshots, PNG compression, contact sheets |
 | `headers.py` | `python -m yavih.headers`: renders the folders' README header images and the repository's `assets/header.png` and records each folder render's HTML sha256 (a maintainer tool; the images are not shipped) |
 | `previews.py` | `python -m yavih.previews`: renders the folders' README figures from `assets/preview.yaml` (stills with Chrome, motion with ffmpeg), records their provenance, drafts a spec, and the `preview` lint check |
@@ -222,6 +222,7 @@ without `--json`; progress goes to stderr. See [cli](cli.md).
 | normative reference | `docs/*.md` (see [the index](README.md)) | by hand; tables of codes, env vars and commands are checked against the code by `tests/test_docs.py` |
 | per-benchmark docs | each folder's `README.md`, `setup.md` | by hand; pinned to `benchmark.yaml` by folder tests and `bench lint` |
 | benchmark lists | `README.md` (table, controls), `docs/benchmark-folder.md` (packaged benchmarks), `benchmarks/README.md` (index, setup links), `references/data.md` (obtainability, `prepare_only` roots), `references/readouts.md` (benchmarks per readout) | generated between `yavih:bench-table` markers: `python -m yavih.doctables --write` (`--check` in the tests) |
+| a folder README's "at a glance" block | `benchmarks/<name>/README.md`, before the first `##` | generated between `yavih:glance` markers from the folder's `benchmark.yaml`: `python -m yavih.doctables --glance <name> --write` (one folder), plain `--write` refreshes every packaged README that holds one; `bench lint` reports a missing or stale block (`E_README_GLANCE`) |
 | header images and figures | `assets/header.png`, each folder's `assets/header.png` + `assets/header.src.sha256`, its `assets/preview*` / `clip.*` + `assets/preview.src.json` | rendered: `python -m yavih.headers` and `python -m yavih.previews` (below, [design system](design-system.md)); the `render` workflow renders them as an artifact |
 | catalog index | `catalog/index.json` | generated from git history on `main` by the `catalog` workflow (`python -m yavih.catalog --write`); never edited by hand |
 | agent-facing docs | `src/yavih/skill/yavih/` | by hand; shipped, so links go to GitHub URLs |

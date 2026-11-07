@@ -17,6 +17,19 @@ and this module renders the block from each folder's ``benchmark.yaml`` (read wi
 scanned; ``eval.py`` is only tested for existence), so adding a folder changes no hand-written row. ``python -m yavih.doctables --write`` rewrites the blocks
 in place; ``--check`` exits 1 when a committed block differs (the repo test does the same). ``yavih bench list
 --fmt md`` prints the ``readme`` table for any set of discoverable folders.
+
+A folder's own ``README.md`` (the human page) carries one more generated block, the "at a glance" table, between its
+own markers::
+
+    <!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance <name> --write) -->
+    ...
+    <!-- yavih:glance end -->
+
+rendered from that folder's ``benchmark.yaml`` (plus the row count of ``classes.csv`` and the readings of
+``bridge_template.py``; nothing is loaded): task, modality, size, headline, readings, data, licence, protocol.
+``--glance <name>`` prints it, ``--glance <name> --write`` rewrites one folder's README (inside a benchmark
+contribution's footprint), plain ``--write`` also refreshes every packaged folder README that holds a block, and
+``bench lint`` reports a missing or stale one (``E_README_GLANCE``).
 """
 
 from __future__ import annotations
@@ -32,7 +45,8 @@ import yaml
 
 from yavih.fields import cell_fields, file_fields
 
-__all__ = ["KINDS", "SOURCE_WORDS", "UNTAGGED", "render", "replace_blocks", "repo_documents", "main"]
+__all__ = ["GLANCE_BEGIN", "GLANCE_END", "KINDS", "SCORER_WORDS", "SOURCE_WORDS", "UNTAGGED", "glance_block", "glance_documents",
+           "main", "render", "render_glance", "replace_blocks", "replace_glance", "repo_documents"]
 
 SOURCE_WORDS: dict[str, str] = {"public_url": "public", "torrent": "torrent", "manual_portal": "manual portal",
                                 "private_mirror": "private mirror", "derived": "derived"}
@@ -274,6 +288,181 @@ KINDS: dict[str, Callable[[Mapping[str, Path]], str]] = {
 }
 
 
+# ----------------------------------------------------------------------------- the README "at a glance" block
+
+#: The glance block's markers (one block per folder README, before its first ``##`` heading).
+GLANCE_BEGIN = ("<!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance {name} --write)"
+                " -->")
+GLANCE_END = "<!-- yavih:glance end -->"
+_GLANCE_BEGIN = re.compile(r"^<!-- yavih:glance begin\b.*-->\s*$")
+#: The task a core scorer scores, in words (a folder's own scorer is named as such).
+SCORER_WORDS: dict[str, str] = {
+    "clf": "classification", "knn": "classification (k-NN, no training)", "seq": "per-segment classification over time",
+    "grid": "dense prediction on a spatial grid", "box": "box localisation", "stream": "online prediction on a stream",
+}
+
+
+def _first_sentence(text: str) -> str:
+    """The first sentence of ``text`` (up to ``. `` followed by an upper-case letter), `` …`` when more follows."""
+    text = " ".join(str(text).split())
+    m = re.search(r"\.\s+(?=[A-Z])", text)
+    return text if m is None else text[:m.start() + 1] + " …"
+
+
+def _class_count(folder: Path, y: Mapping[str, Any]) -> int | None:
+    rel = (y.get("manifest") or {}).get("classes")
+    path = folder / str(rel) if rel else None
+    if path is None or not path.is_file():
+        return None
+    lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    return max(0, len(lines) - 1)
+
+
+def _readings(folder: Path) -> list[str]:
+    """The readings ``bridge_template.py`` declares: a / v / av first, then the folder's own, sorted."""
+    from yavih.lint import template_readings
+
+    tpl = folder / "bridge_template.py"
+    got = template_readings(tpl.read_text(encoding="utf-8")) if tpl.is_file() else set()
+    base = [r for r in ("a", "v", "av", "t") if r in got]
+    return base + sorted(got - set(base))
+
+
+def _number(x: Any) -> str:
+    return f"{x:g}" if isinstance(x, float) else str(x)
+
+
+def render_glance(folder: str | Path) -> str:
+    """The "at a glance" block of ``folder/README.md``, both markers included (no trailing newline), from the folder's
+    ``benchmark.yaml`` (read with pyyaml), ``classes.csv`` and ``bridge_template.py``."""
+    from yavih.headers import metric_label
+    from yavih.readouts import registry
+
+    folder = Path(folder)
+    y = _yaml(folder)
+    name = str(y.get("name") or folder.name)
+    scorer = str(y.get("scorer"))
+    builtin = {m.rsplit(".", 1)[-1] for m in registry.BUILTIN}
+    label = str((((y.get("manifest") or {}).get("label")) or {}).get("kind"))
+    if scorer in builtin:
+        task = SCORER_WORDS.get(scorer, scorer) + (", multi-label" if label in ("multi", "multi_sets") else "") + f" (scorer `{scorer}`)"
+    else:
+        task = f"the folder's own scorer (`{scorer}`)" + (", multi-label" if label in ("multi", "multi_sets") else "")
+    caps = [f"`{c}`" for c in y.get("capability") or []]
+    if caps:
+        task += " · " + ", ".join(caps)
+    size = _rows(y)
+    n_classes = _class_count(folder, y)
+    if n_classes:
+        size += f" · {_num(n_classes)} classes"
+    m = y.get("metrics") or {}
+    headline = str(m.get("headline"))
+    head = f"{metric_label(headline)}, `{headline}`" if metric_label(headline) != headline else f"`{headline}`"
+    chance = (m.get("chance") or {}).get(headline)
+    if isinstance(chance, (int, float)):
+        head += f" · chance {_number(chance)}"
+    modality = _media(y)
+    if "generation" in (y.get("capability") or []):  # what the model is given -> what it generates (output codecs)
+        from yavih.headers import _CODEC_KIND
+
+        schema = ((y.get("output_contract") or {}).get("schema")) or {}
+        made = sorted({_CODEC_KIND.get(str((o or {}).get("type")), str(k)) for k, o in schema.items()})
+        if made:
+            modality += f" → generated {' + '.join(made)}"
+    rows: list[list[str]] = [["**Task**", task], ["**Modality**", modality], ["**Size**", size], ["**Headline**", head]]
+    readings = _readings(folder)
+    if len(readings) > 1:
+        rows.append(["**Readings**", " / ".join(f"`{r}`" for r in readings)])
+    gb = (y.get("budget") or {}).get("media_gb")
+    data = f"{_source(y)} source · obtain tier `{_tier(y)}`" + (f" · {_number(gb)} GB of media" if isinstance(gb, (int, float)) else "")
+    rows.append(["**Data**", data + " · [setup.md](setup.md)"])
+    licence = (y.get("source") or {}).get("licence")
+    if licence:
+        rows.append(["**Licence**", _first_sentence(licence)])
+    proto = f"`protocol_version` {y.get('protocol_version')}"
+    if y.get("core"):
+        proto += f" · yavih `{y.get('core')}`"
+    proto += f" · `yavih bench fetch {name}`" + _aliases(y)
+    rows.append(["**Protocol**", proto])
+    return "\n".join([GLANCE_BEGIN.format(name=name), _table(["At a glance", ""], rows), GLANCE_END])
+
+
+def _glance_spans(text: str) -> list[tuple[int, int]]:
+    """``(begin, end)`` line indices of every glance block of ``text``; a begin without an end raises ``ValueError``."""
+    lines = text.splitlines()
+    spans: list[tuple[int, int]] = []
+    i = 0
+    while i < len(lines):
+        if _GLANCE_BEGIN.match(lines[i]):
+            j = next((k for k in range(i + 1, len(lines)) if lines[k].strip() == GLANCE_END), None)
+            if j is None:
+                raise ValueError(f"line {i + 1}: {lines[i].strip()!r} has no {GLANCE_END!r}")
+            spans.append((i, j))
+            i = j + 1
+        else:
+            i += 1
+    return spans
+
+
+def glance_block(text: str) -> str | None:
+    """The first glance block of ``text`` (both marker lines), ``None`` when there is none; ``ValueError`` on a begin
+    marker without its end."""
+    spans = _glance_spans(text)
+    if not spans:
+        return None
+    lines = text.splitlines()
+    return "\n".join(lines[spans[0][0]:spans[0][1] + 1])
+
+
+def replace_glance(text: str, folder: str | Path) -> str:
+    """``text`` (a folder README) with its glance block(s) re-rendered from ``folder``; without one, the block is
+    inserted before the first ``##`` heading (at the end when there is none). ``ValueError`` on a begin marker
+    without its end."""
+    from yavih.lint import headings
+
+    block = render_glance(folder)
+    lines = text.splitlines()
+    spans = _glance_spans(text)
+    if spans:
+        out: list[str] = []
+        prev = 0
+        for b, e in spans:
+            out += lines[prev:b] + [block]
+            prev = e + 1
+        out += lines[prev:]
+    else:
+        h2 = headings(text, 2)
+        at = h2[0][0] if h2 else len(lines)
+        head = lines[:at]
+        while head and not head[-1].strip():
+            head.pop()
+        out = head + ([""] if head else []) + [block, ""] + lines[at:]
+    return "\n".join(out) + ("\n" if text.endswith("\n") or not spans else "")
+
+
+def glance_documents() -> list[Path]:
+    """The packaged folder READMEs that hold a glance block (what plain ``--write`` / ``--check`` refresh)."""
+    out = []
+    for folder in packaged().values():
+        readme = folder / "README.md"
+        if readme.is_file() and any(_GLANCE_BEGIN.match(ln) for ln in readme.read_text(encoding="utf-8").splitlines()):
+            out.append(readme)
+    return out
+
+
+def _glance_folder(ref: str) -> Path:
+    """A folder by name (packaged, project, fetched, ``$YAVIH_BENCH_PATH``, alias) or by path."""
+    p = Path(ref)
+    if (p / "benchmark.yaml").is_file():
+        return p
+    from yavih.benchmark import resolve_folder
+
+    folder = resolve_folder(ref)
+    if folder is None:
+        raise SystemExit(f"python -m yavih.doctables --glance: unknown benchmark {ref!r} (a name or a folder path)")
+    return Path(folder)
+
+
 def packaged() -> dict[str, Path]:
     from yavih.benchmarks import packaged_folder, packaged_names
 
@@ -328,11 +517,35 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--write", action="store_true", help="rewrite the generated blocks in place")
     g.add_argument("--check", action="store_true", help="exit 1 when a committed block is stale")
     ap.add_argument("--print", dest="kind", choices=sorted(KINDS), help="print one table")
+    ap.add_argument("--glance", metavar="NAME", help="one folder's README \"at a glance\" block: print it; with --write "
+                    "rewrite that README only; with --check exit 1 when it is stale")
     ns = ap.parse_args(argv)
     if ns.kind:
         sys.stdout.write(render(ns.kind) + "\n")
         return 0
+    if ns.glance:
+        folder = _glance_folder(ns.glance)
+        readme = folder / "README.md"
+        if not ns.write and not ns.check:
+            sys.stdout.write(render_glance(folder) + "\n")
+            return 0
+        text = readme.read_text(encoding="utf-8")
+        new = replace_glance(text, folder)
+        if new == text:
+            print(f"ok: {readme}")
+            return 0
+        if ns.write:
+            readme.write_text(new, encoding="utf-8")
+        print(f"{'rewrote' if ns.write else 'stale'}: {readme}")
+        return 0 if ns.write else 1
     stale = []
+    if ns.write:  # the integrator's refresh: every packaged folder README that already holds a glance block
+        for readme in glance_documents():
+            text = readme.read_text(encoding="utf-8")
+            new = replace_glance(text, readme.parent)
+            if new != text:
+                readme.write_text(new, encoding="utf-8")
+                print(f"rewrote: {readme}")
     for doc in repo_documents():
         text = doc.read_text(encoding="utf-8")
         new = replace_blocks(text)
