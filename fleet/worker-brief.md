@@ -57,7 +57,12 @@ WHAT TO DO. Follow docs/contributing-a-benchmark.md, which is the contract, with
 worker:
   - steps 1-13 are yours (scaffold, protocol, frozen manifest, prepare steps, setup.md and README.md, bridge
     template, eval.py, hashes and conformance fixture, folder tests, lint and tests, the header image and figures,
-    synthetic trial, the fresh-agent trial run); step 11, "Header image and figures": draft the figure spec with
+    synthetic trial, the fresh-agent trial run); step 5, "setup.md and README.md": setup.md is for the agent that
+    sets the benchmark up, README.md is the benchmark's page for people, written per docs/writing-a-readme.md
+    (nothing an agent needs goes into it: how to read the numbers goes into benchmark.yaml `metrics.notes`, the
+    re-freeze recipe into the make_manifest.py docstring), with its "at a glance" block written by
+    `python -m yavih.doctables --glance <NAME> --write` (rerun after every yaml edit; never `--write` alone);
+    step 11, "Header image and figures": draft the figure spec with
     `python -m yavih.previews <NAME> --suggest --write`, edit its `rows` if the draw misrepresents the task (keep the
     pixels-and-licences rule of docs/design-system.md), then, when a headless Chrome or Chromium is at hand, render and
     commit the header with `python -m yavih.headers <NAME> --chrome <path>` and the figures from your staged data with
@@ -86,7 +91,8 @@ official file sizes, minutes scaled from a sample) says how.
 
 CHECKS, in this order, all inside your folder:
   yavih bench lint <NAME>                              # nothing but W_TODO for budgets you could not measure and the
-                                                       # figure warnings of what you could not render
+                                                       # figure warnings of what you could not render (never
+                                                       # E_README_GLANCE: rerun doctables --glance after yaml edits)
   "$PY" -m pytest benchmarks/<NAME> -q -p no:cacheprovider -o addopts="--import-mode=importlib"
   "$PY" -m ruff check benchmarks/<NAME>
   yavih bench conformance <NAME> --record               # once the protocol and scorer are final; re-record after edits

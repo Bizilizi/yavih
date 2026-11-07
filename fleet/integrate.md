@@ -114,3 +114,33 @@ Then an independent reviewer checks the batch branch as a whole (the merge, the 
 full-suite result) before it becomes the next batch's base or goes to `main` as one pull request. A pull request
 labelled `benchmark` must change exactly one folder; a batch pull request is not labelled `benchmark` and runs the
 whole suite.
+
+## README migration batch
+
+The packaged folders still carry the legacy README (`## In yavih`); `fleet/queue.yaml` marks each `readme: legacy`
+and `python fleet/check.py queue` keeps the marks true (a folder whose README still has `## In yavih` must be
+`legacy` or `migrating`, a rewritten one must not be). One worker per folder rewrites it with the
+[README migration brief](readme-brief.md). The same batch rhythm, with a smaller gate:
+
+1. **Claim.** Pick 5 to 8 `readme: legacy` entries, preferring folders whose data is staged here (`yavih bench list`
+   shows `verified`): their workers can render the figures. Set `readme: migrating` and `branch: readme/<name>` on
+   each, run `"$PY" fleet/check.py queue`, and commit the claim: that commit is `<BASE>`.
+2. **Launch.** As in [launch](launch.md), with branches `readme/<name>` instead of `bench/<name>` and the filled
+   [README migration brief](readme-brief.md) (`<CONFIG>` the site configuration naming the data roots, `<CHROME>`
+   the browser, or `none`).
+3. **Gate.** An independent reviewer (a fresh agent) checks each branch: the footprint check prints `footprint ok`;
+   `yavih bench lint <name>` has no error and no `W_README_LEGACY`; the folder tests and `ruff check
+   benchmarks/<name>` pass; `protocol_hash`, `input_hash` and `scoring_hash` are those of `<BASE>`; nothing an agent
+   needs was lost (every number and caveat of the old "## In yavih" is now in the new README, `metrics.notes`, the
+   `make_manifest.py` docstring or setup.md, or is derivable from the yaml: the worker's "moved" line is checked
+   against `git show <BASE>:benchmarks/<name>/README.md`); and the README reads as a project page for a person
+   ([writing a README](../docs/writing-a-readme.md)): the task first, plain words, figures that show the task.
+4. **Merge.** As in step 5 above (`git merge --no-ff readme/<name>` per passing branch), then
+   `"$PY" -m yavih.doctables --write` (the tables, and every glance block), and for each folder whose figures are
+   not rendered and whose data is staged here, `python -m yavih.previews <name> --chrome <chrome>`; list the others
+   under "figures pending data" in the hand-over. Then `"$PY" -m yavih.catalog --write` (the folders' trees moved).
+5. **Queue.** Set `readme: done` (or drop the key) and `branch: null` for every merged folder, keep `migrating` for
+   a branch that goes back to its worker, and run `"$PY" fleet/check.py queue` before committing.
+
+When no `readme: legacy` entry is left, the follow-up is a core change: the legacy lint branch goes,
+`W_README_LEGACY` and `W_MAKE_MANIFEST_DOC` become errors, and the `readme` queue key retires.

@@ -22,7 +22,9 @@
 #                 shipped and in_flight entries name a folder that exists or is being built elsewhere
 #   obtain        filled by the worker: the obtain tier (auto | manual-download | needs-licence | needs-data-owner | site-only)
 #   blocked_by    filled by the worker when blocked: the exact action that unblocks it
-#   branch        filled when claimed: bench/<name>
+#   branch        filled when claimed: bench/<name>; while its README is rewritten: readme/<name>
+#   readme        optional, shipped benchmarks only: legacy (README.md still has "## In yavih") | migrating (a worker
+#                 rewrites it on branch readme/<name>, fleet/readme-brief.md) | done (absent = done)
 schema_version: 1
 entries:
 - name: afd101
@@ -79,6 +81,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: av_superb
   title: AV-SUPERB
   kind: suite
@@ -114,6 +117,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: avrobustbench
   title: AVROBUSTBENCH
   kind: benchmark
@@ -323,6 +327,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: finegym_element
   title: FineGym
   kind: benchmark
@@ -368,6 +373,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: hacs_clips
   title: HACS
   kind: benchmark
@@ -479,6 +485,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: kinetics_sounds
   title: Kinetics-Sounds
   kind: benchmark
@@ -687,6 +694,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: speech_commands
   title: Speech Commands
   kind: benchmark
@@ -799,6 +807,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: vggsound
   title: VGGSound
   kind: benchmark
@@ -840,6 +849,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: video_time_arrow
   title: Video time properties (arrow of time etc.)
   kind: benchmark
@@ -1549,6 +1559,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: petraw
   title: PETRAW
   kind: benchmark
@@ -2228,6 +2239,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: waymo_box_tracking
   title: Waymo Open
   kind: benchmark
@@ -2456,6 +2468,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: perception_test_sound_loc
   title: Perception Test temporal sound localisation
   kind: benchmark
@@ -2470,6 +2483,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: speechocean762
   title: speechocean762
   kind: benchmark
@@ -4496,6 +4510,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: audiocaps_t2a
   title: AudioCaps text-to-audio generation
   kind: benchmark
@@ -4509,6 +4524,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: vggsounder_v2a
   title: VGGSounder video-to-audio generation
   kind: benchmark
@@ -4522,6 +4538,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: ave_causal
   title: AVE causal streaming
   kind: benchmark
@@ -4535,6 +4552,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: unav100_causal
   title: UnAV-100 causal streaming
   kind: benchmark
@@ -4548,6 +4566,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: thumos14_oad
   title: THUMOS'14 online action detection
   kind: benchmark
@@ -4561,6 +4580,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: epic100_anticipation_stream
   title: EPIC-KITCHENS-100 action anticipation on the stream
   kind: benchmark
@@ -4574,6 +4594,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: epic_sounds_det
   title: EPIC-SOUNDS sound event detection
   kind: benchmark
@@ -4587,6 +4608,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: avsync
   title: Audio-visual synchronisation offsets on VGGSound
   kind: benchmark
@@ -4600,6 +4622,7 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
+  readme: legacy
 - name: vggss_loc
   title: VGG-SS training-free localisation
   kind: benchmark
@@ -4613,6 +4636,7 @@ entries:
   obtain: needs-data-owner
   blocked_by: null
   branch: null
+  readme: legacy
 - name: vggsound_retrieval
   title: VGGSound audio-visual retrieval
   kind: benchmark
@@ -4626,3 +4650,4 @@ entries:
   obtain: needs-data-owner
   blocked_by: null
   branch: null
+  readme: legacy

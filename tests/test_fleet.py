@@ -26,7 +26,7 @@ def _entry(name: str, **kw) -> dict:
 
 def test_the_repository_queue_is_valid_and_reserves_every_folder():
     entries = check.load_queue()
-    assert check.check_queue(entries, check.repo_folders()) == []
+    assert check.check_queue(entries, check.repo_folders(), legacy=check.repo_legacy_readmes()) == []
     shipped = {e["name"] for e in entries if e["status"] == "shipped"}
     assert shipped == check.repo_folders()
     assert check.main(["queue"]) == 0
@@ -48,15 +48,27 @@ def test_the_repository_queue_is_valid_and_reserves_every_folder():
     (lambda q: q[2].update(components=["alpha"]), "does not list it under parents"),
     (lambda q: q[2].update(status="claimed", branch="bench/suite_x"), "never claimed for a worker"),
     (lambda q: q[2].update(status="review", branch="bench/suite_x"), "never claimed for a worker"),
+    (lambda q: q[1].update(readme="someday"), "readme must be one of"),
+    (lambda q: q[1].update(readme="migrating"), "names its branch, readme/existing"),
+    (lambda q: q[0].update(readme="legacy"), "for a shipped benchmark only"),
+    (lambda q: q[1].pop("readme"), "readme must be legacy or migrating"),  # its README still has "## In yavih"
+    (lambda q: q[1].update(surprise=1), "unknown keys ['surprise']"),
 ])
 def test_the_queue_check_names_each_problem(mutate, needle):
-    q = [_entry("alpha"), _entry("existing", status="shipped"),
+    q = [_entry("alpha"), _entry("existing", status="shipped", readme="legacy"),
          _entry("suite_x", kind="suite", route="suite", components=["existing"])]
     q[1]["parents"] = ["suite_x"]
-    assert check.check_queue(q, {"existing"}) == []
+    assert check.check_queue(q, {"existing"}, legacy={"existing"}) == []
     mutate(q)
-    problems = check.check_queue(q, {"existing"})
+    problems = check.check_queue(q, {"existing"}, legacy={"existing"})
     assert any(needle in p for p in problems), problems
+
+
+def test_a_migrated_readme_is_no_longer_legacy():
+    q = [_entry("existing", status="shipped", readme="legacy")]
+    assert any("not in the legacy shape" in p for p in check.check_queue(q, {"existing"}, legacy=set()))
+    q[0].update(readme="done")
+    assert check.check_queue(q, {"existing"}, legacy=set()) == []
 
 
 def test_a_queued_folder_a_pull_request_adds_is_allowed_only_when_named():

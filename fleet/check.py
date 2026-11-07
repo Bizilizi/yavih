@@ -6,7 +6,9 @@
     python fleet/check.py queue [--file fleet/queue.yaml] [--allow-new NAME ...]
         validates the queue (keys, names, statuses, routes, suites) against the repository's benchmarks/ directory:
         every folder has an entry, a shipped entry names an existing folder, any other entry names no existing folder
-        (unless listed with --allow-new: the folder a benchmark pull request adds). Exit 0 / 1 / 2 as above.
+        (unless listed with --allow-new: the folder a benchmark pull request adds), and the `readme` key agrees with
+        the folders: a folder whose README.md still has "## In yavih" is `legacy` or `migrating`, no other entry is.
+        Exit 0 / 1 / 2 as above.
     python fleet/check.py entry <name> [--file fleet/queue.yaml]
         prints one entry as YAML (the block a worker brief embeds); exit 1 when the name is not queued.
     python fleet/check.py ship [--file fleet/queue.yaml]
@@ -36,6 +38,12 @@ CLASSES = ("A", "B1", "B2", None)
 KEYS = ("name", "title", "kind", "survey_class", "survey_reasons", "route", "text_fields", "parents", "survey_note",
         "status", "obtain", "blocked_by", "branch")
 TIERS = ("auto", "manual-download", "needs-licence", "needs-data-owner", "site-only")
+#: Keys an entry may carry beyond KEYS.
+OPTIONAL_KEYS = ("components", "readme")
+#: ``readme``: the README migration of a shipped folder (absent = done; fleet/readme-brief.md).
+README_STATES = ("legacy", "migrating", "done")
+#: The heading of the legacy README shape (docs/writing-a-readme.md, "Rewriting a legacy README").
+LEGACY_HEADING = re.compile(r"^##\s+In yavih\s*$", re.M)
 
 
 class CheckError(Exception):
@@ -67,8 +75,10 @@ def load_queue(path: Path = QUEUE) -> list[dict]:
     return doc["entries"]
 
 
-def check_queue(entries: list[dict], folders: set[str], *, allow_new: frozenset[str] = frozenset()) -> list[str]:
-    """Every problem of the queue, one line each (empty: valid). ``folders`` are the repository's folder names."""
+def check_queue(entries: list[dict], folders: set[str], *, allow_new: frozenset[str] = frozenset(),
+                legacy: set[str] | None = None) -> list[str]:
+    """Every problem of the queue, one line each (empty: valid). ``folders`` are the repository's folder names;
+    ``legacy`` (when given) the folders whose README.md is still in the legacy shape (:func:`repo_legacy_readmes`)."""
     out: list[str] = []
     names: dict[str, int] = {}
     for i, e in enumerate(entries):
@@ -110,6 +120,22 @@ def check_queue(entries: list[dict], folders: set[str], *, allow_new: frozenset[
                        "src/yavih/suites/ once its components are shipped)")
         if status in ("claimed", "review") and e.get("branch") != f"bench/{n}":
             out.append(f"{where}: a {status} entry names its branch, bench/{n}")
+        unknown = sorted(set(e) - set(KEYS) - set(OPTIONAL_KEYS))
+        if unknown:
+            out.append(f"{where}: unknown keys {unknown}")
+        readme = e.get("readme")
+        if "readme" in e and readme not in README_STATES:
+            out.append(f"{where}: readme must be one of {list(README_STATES)} (absent = done)")
+        if readme in ("legacy", "migrating") and status != "shipped":
+            out.append(f"{where}: readme {readme} is for a shipped benchmark only")
+        if readme == "migrating" and e.get("branch") != f"readme/{n}":
+            out.append(f"{where}: a migrating README names its branch, readme/{n}")
+        if legacy is not None:
+            if n in legacy and readme not in ("legacy", "migrating"):
+                out.append(f"{where}: benchmarks/{n}/README.md still has \"## In yavih\": readme must be legacy or migrating")
+            if n not in legacy and readme in ("legacy", "migrating"):
+                out.append(f"{where}: readme {readme}, but benchmarks/{n}/README.md is not in the legacy shape (set "
+                           "readme: done, or drop the key)")
         exists = n in folders
         if status == "shipped":
             if kind != "benchmark" or not exists:
@@ -168,6 +194,16 @@ def repo_folders(repo: Path = ROOT) -> set[str]:
     return {p.name for p in (repo / "benchmarks").iterdir() if (p / "benchmark.yaml").is_file()}
 
 
+def repo_legacy_readmes(repo: Path = ROOT) -> set[str]:
+    """The folders whose README.md is still in the legacy shape (a "## In yavih" heading)."""
+    out = set()
+    for name in repo_folders(repo):
+        readme = repo / "benchmarks" / name / "README.md"
+        if readme.is_file() and LEGACY_HEADING.search(readme.read_text(encoding="utf-8")):
+            out.add(name)
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python fleet/check.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -198,15 +234,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"shipped: {', '.join(names)}" if names else "nothing to ship")
             return 0
         if a.cmd == "queue":
-            problems = check_queue(entries, repo_folders(), allow_new=frozenset(a.allow_new))
+            problems = check_queue(entries, repo_folders(), allow_new=frozenset(a.allow_new), legacy=repo_legacy_readmes())
             for p in problems:
                 print(p)
             counts: dict[str, int] = {}
+            readmes = {"legacy": 0, "migrating": 0}
             for e in entries:
                 if isinstance(e, dict):
                     counts[str(e.get("status"))] = counts.get(str(e.get("status")), 0) + 1
+                    if e.get("readme") in readmes:
+                        readmes[e["readme"]] += 1
             print(f"queue {'FAILED' if problems else 'ok'}: {len(entries)} entries "
-                  + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+                  + ", ".join(f"{k} {v}" for k, v in sorted(counts.items()))
+                  + f"; readme legacy {readmes['legacy']}, migrating {readmes['migrating']}")
             return 1 if problems else 0
         match = [e for e in entries if isinstance(e, dict) and e.get("name") == a.name]
         if not match:
