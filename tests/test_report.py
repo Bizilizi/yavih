@@ -1024,3 +1024,25 @@ def test_reading_modalities_come_from_input_fields_and_cells():
     assert _stream_modalities(t2a, {}, {"caption": "text"}) == frozenset({"text"})
     assert _stream_modalities(result({"input": {"options": {}}}), {}, {"options": "options"}) == frozenset({"cell:options"})
     assert _stream_modalities(result({"streams": ["audio"], "input": {"audio": {}}}), {"audio": "audio"}) == frozenset({"audio"})
+
+
+def test_metrics_notes_reach_the_report(runs: Path, tmp_path, monkeypatch):
+    """A folder's ``metrics.notes`` (how to read its numbers) are carried per column and printed by the md view."""
+    import yaml
+
+    from yavih import hash_history
+    from yavih import testing as T
+
+    folder = T.make_synthetic_benchmark(tmp_path / "packs", "clf", n_train=8, n_eval=4, media="none")
+    spec = yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))
+    spec["metrics"]["notes"] = ["Gaps below 0.02 at one seed are noise.", "A fold near the floor means a broken extraction."]
+    (folder / "benchmark.yaml").write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+    monkeypatch.setenv("YAVIH_BENCH_PATH", str(tmp_path / "packs"))
+    hash_history.reset()
+    write_result(runs, make_result(bench=folder.name, model="m1"))
+    rep = report([str(runs / "*")], fmt="md", write=False)
+    assert rep.columns[0]["notes"] == spec["metrics"]["notes"]
+    assert "### Notes" in rep.text and f"- {folder.name}: Gaps below 0.02 at one seed are noise." in rep.text
+    assert "- note: A fold near the floor means a broken extraction." in rep.text
+    assert json.loads(tables.render_json(rep))["columns"][0]["notes"] == spec["metrics"]["notes"]
+    hash_history.reset()

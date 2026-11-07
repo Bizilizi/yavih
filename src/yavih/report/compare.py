@@ -183,10 +183,10 @@ def _resolved_spec(name: str, load_yaml) -> Any | None:
 
 
 def _bench_meta(name: str) -> dict[str, Any]:
-    """``{headline, table, tolerance, min_eval_coverage, protocol_version, stream_kinds}`` from the yaml of any folder
-    that resolves here (packaged, project-local, ``$YAVIH_BENCH_PATH``; ``table`` / ``tolerance`` only when
-    ``metrics.table`` / ``metrics.tolerance`` is declared); ``{}`` otherwise (the report then falls back to defaults
-    and heuristics)."""
+    """``{headline, table, tolerance, notes, min_eval_coverage, protocol_version, stream_kinds}`` from the yaml of any
+    folder that resolves here (packaged, project-local, ``$YAVIH_BENCH_PATH``; ``table`` / ``tolerance`` / ``notes``
+    only when ``metrics.table`` / ``metrics.tolerance`` / ``metrics.notes`` is declared); ``{}`` otherwise (the report
+    then falls back to defaults and heuristics)."""
     try:
         from yavih.benchmark import load_yaml
 
@@ -204,6 +204,9 @@ def _bench_meta(name: str) -> dict[str, Any]:
         tolerance = getattr(metrics, "tolerance", None)
         if tolerance:
             out["tolerance"] = {str(k): float(v) for k, v in tolerance.items()}
+        notes = getattr(metrics, "notes", None)
+        if notes:
+            out["notes"] = [str(n) for n in notes]
         splits = getattr(spec, "splits", None)
         mec = getattr(splits, "min_eval_coverage", None)
         if isinstance(mec, (int, float)):
@@ -1001,6 +1004,8 @@ def build_report(records: Sequence[dict], *, fmt: str = "md", seeds: str = "aggr
             "headline": headline,
             # the default markdown columns: metrics.table (in metrics order), else (or when none is present) every metric
             "table": [m for m in metric_names if m in set(meta.get("table") or ())] or list(metric_names),
+            # metrics.notes of the folder (how to read the numbers: floors, noise); [] when it declares none
+            "notes": list(meta.get("notes") or []),
             "population_differs": False,
             "superseded": any(pv < latest.get(bench, pv) for pv in pvs),
             "n_results": len(results),

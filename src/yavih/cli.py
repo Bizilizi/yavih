@@ -1142,12 +1142,20 @@ def cmd_bench_list(ns: argparse.Namespace) -> Envelope:
     return Envelope(data=rows, warnings=warnings, text="\n".join(lines) + "\n")
 
 
+def _metrics_notes(metrics: Mapping[str, Any]) -> list[str]:
+    """``metrics.notes`` of a raw yaml block as the loader reads it: one string or a list, whitespace collapsed."""
+    notes = metrics.get("notes")
+    return [" ".join(str(n).split()) for n in ([notes] if isinstance(notes, str) else list(notes or []))]
+
+
 def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
-    """README text + ``{roles: {role: {nominal, present}}, floors, metrics, source, budget, history}``."""
+    """``{roles: {role: {nominal, present}}, floors, metrics (with ``notes``), source, budget, history}``; the text
+    names README.md (the human page, never printed here: ``--readme-only`` or ``bench show <b> readme``), then the
+    capability, obtain, ``note:`` (``metrics.notes``) and ``extends:`` lines and the JSON summary."""
     bench = _load_bench(ns.name)
     readme_path = Path(bench.folder) / "README.md"
-    readme = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
     if ns.readme_only:
+        readme = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
         return Envelope(data={"name": bench.name, "readme": readme}, paths={"readme": str(readme_path), "folder": str(bench.folder)}, text=readme)
     if getattr(ns, "setup", False):
         # setup.md is the agent's first read per benchmark (the file `yavih bench show <b> setup` prints)
@@ -1182,20 +1190,22 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
         "input_hash": bench.input_hash,
         "scoring_hash": bench.scoring_hash,
         "manifest_hash": bench.manifest_hash,
-        "readme": readme,
         "roles": role_table,
         "floors": list(metrics.get("floors") or []),
-        "metrics": {"headline": metrics.get("headline"), "list": list(metrics.get("list") or []), "controls": list(metrics.get("controls") or []), "chance": dict(metrics.get("chance") or {})},
+        "metrics": {"headline": metrics.get("headline"), "list": list(metrics.get("list") or []), "controls": list(metrics.get("controls") or []),
+                    "chance": dict(metrics.get("chance") or {}), "notes": _metrics_notes(metrics)},
         "source": raw.get("source"),
         "obtain": raw.get("obtain"),
         "budget": raw.get("budget"),
         "external": list(raw.get("external") or []),
         "history": list(raw.get("changelog") or []),
     }
-    summary = json.dumps(_jsonable({k: v for k, v in data.items() if k != "readme"}), indent=2, sort_keys=True)
+    summary = json.dumps(_jsonable(data), indent=2, sort_keys=True)
     ob = data["obtain"] if isinstance(data["obtain"], dict) else {}
+    readme_line = f"readme: {readme_path} (for people; yavih bench show {bench.name} readme)\n" if readme_path.is_file() else ""
     obtain_line = f"obtain: {ob.get('tier')} — {ob.get('how')}\n" if ob else ""
     cap_line = f"capability: {', '.join(data['capability'])}\n" if data["capability"] else ""
+    note_lines = "".join(f"note: {n}\n" for n in data["metrics"]["notes"])
     from yavih.extensions import extends_line, folder_extensions
 
     try:
@@ -1204,8 +1214,8 @@ def cmd_bench_info(ns: argparse.Namespace) -> Envelope:
     except Exception as e:  # noqa: BLE001 - the summary line is information; a folder that cannot say is still shown
         data["extends"] = None
         ext_line = f"extends: unknown ({type(e).__name__}: {e})\n"
-    return Envelope(data=data, paths={"folder": str(bench.folder)},
-                    text=readme + ("\n" if readme and not readme.endswith("\n") else "") + cap_line + obtain_line + ext_line + summary + "\n")
+    return Envelope(data=data, paths={"readme": str(readme_path), "folder": str(bench.folder)},
+                    text=readme_line + cap_line + obtain_line + note_lines + ext_line + summary + "\n")
 
 
 def cmd_bench_extensions(ns: argparse.Namespace) -> Envelope:

@@ -326,6 +326,10 @@ metrics:                           # names: yavih.metrics registry overlaid by e
   ci: {acc: binomial}              # keys in `list`: binomial | bootstrap_clip | pooled_binomial | null, admissible for the metric
   bootstrap: {samples: 2000, seed: 0}    # optional; required when a ci is bootstrap_clip
   aggregation: null                # required iff splits.folds: {over: folds, report: [mean, pstd, per_fold], ci?: <kind>}
+  notes: ["Over 2 000 rows the CI is about ±0.02: gaps below 0.015 at one seed are unresolved."]
+                                   # optional, never hashed: how to read the numbers (floor values, noise, the smallest
+                                   #   gap that means something); one string or a list of at most 8, each at most 200
+                                   #   characters; printed by `yavih bench info` (`note:` lines) and the report
 
 readout_params: {}                 # keys exactly the readout's: clf {}; seq {T}; grid {h, w, out, visual_stream};
                                    #   box {grid, visual_stream, conditioning_stream, shuffled_control, shuffle_seed}

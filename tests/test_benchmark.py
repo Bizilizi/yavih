@@ -244,6 +244,17 @@ def test_load_hashes_match_oracle(tmp_path):
     assert repr(b) == "Benchmark('synth_clf')"
 
 
+def test_metrics_notes_are_short_prose_outside_the_hash(tmp_path):
+    """``metrics.notes``: one string or a list of at most 8, each non-empty and at most 200 characters; never hashed."""
+    b0 = Benchmark.from_dir(make_folder(tmp_path / "a"))
+    b1 = Benchmark.from_dir(make_folder(tmp_path / "b", mutate=lambda s: s["metrics"].__setitem__("notes", "Gaps below 0.02 are noise.")))
+    assert b0.spec.metrics.notes == () and b1.spec.metrics.notes == ("Gaps below 0.02 are noise.",)
+    assert b0.protocol_hash == b1.protocol_hash and b0.input_hash == b1.input_hash
+    for i, bad in enumerate((["x"] * 9, [""], ["x" * 201], [3], {"a": "b"})):
+        with pytest.raises(SchemaError, match="metrics.notes"):
+            Benchmark.from_dir(make_folder(tmp_path / f"bad{i}", mutate=lambda s, v=bad: s["metrics"].__setitem__("notes", v)))
+
+
 def test_source_revision_is_recorded_and_never_hashed(tmp_path):
     """``source.revision``: the pinned release revision is an optional non-empty string, read into
     ``SourceSpec.revision``; like every ``source`` key it is provenance (``bench verify`` guards the staged copy), so
@@ -1539,11 +1550,13 @@ def test_bench_verify_and_info_and_fetch(tmp_path, yavih_home, monkeypatch):
     bad = make_folder(tmp_path / "cur", "synth", mutate=lambda s: s["manifest"]["upstream"]["curation"]["excluded"].__setitem__("leakage", 3))
     assert bench_verify(str(bad), decode_sample=0)["curation_invariants_ok"] is False
     info = bench_info(str(folder), scan=True)
-    assert info["readme"].startswith("# synth") and info["roles"]["train"]["nominal"] == 4
+    assert "readme" not in info and info["readme_path"].endswith("README.md") and info["roles"]["train"]["nominal"] == 4
+    assert info["metrics"]["notes"] == []
     assert "floor" not in info["roles"] and info["floors"] == ["acc_floor"] and info["metrics"]["headline"] == "acc"
     assert info["history"][-1]["version"] == 2 and info["source"]["kind"] == "derived" and info["budget"]["media_gb"] == 0.0
     assert info["external"] == [] and info["input_contract"]["facts"] == [] and info["output_contract"]["shape"] == "fixed"
-    assert bench_info(str(folder), readme_only=True) == {"name": "synth", "readme": info["readme"]}
+    assert bench_info(str(folder), readme_only=True) == {"name": "synth", "readme": Path(info["readme_path"]).read_text(encoding="utf-8")}
+    assert bench_info(str(folder), readme_only=True)["readme"].startswith("# synth")
     assert bench_info(str(folder), setup=True) == {"name": "synth", "setup": "# synth — setup\n"}
     # fetching (the catalog) is tests/test_catalog.py; a classes sha256 mismatch is test_manifest_validation_rules
 

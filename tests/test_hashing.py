@@ -206,6 +206,9 @@ def test_typed_views_exclude_prose_and_display_keys():
     assert hashing.protocol_hashes(**_protocol_kwargs(protocol=dict(BENCH_SPEC["protocol"], train_draw=dict(td, seed=1)))).protocol_hash != a.protocol_hash
     for over in same[1:]:
         assert hashing.protocol_hashes(**_protocol_kwargs(**over)).protocol_hash == base.protocol_hash, over
+    # metrics.notes (how to read the numbers) is prose outside every hash
+    noted = hashing.protocol_hashes(**_protocol_kwargs(metrics=dict(BENCH_SPEC["metrics"], notes=["Gaps below 0.02 at one seed are noise."])))
+    assert (noted.protocol_hash, noted.input_hash, noted.scoring_hash) == (base.protocol_hash, base.input_hash, base.scoring_hash)
     ext = [{"name": "pkg", "pip": "pip install pkg==1.0", "version_pin": "1.0", "used_for": "everything"}]
     e1 = hashing.protocol_hashes(**_protocol_kwargs(external=ext))
     e2 = hashing.protocol_hashes(**_protocol_kwargs(external=[dict(ext[0], pip="pip install --no-deps pkg==1.0", used_for="x")]))

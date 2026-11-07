@@ -193,6 +193,15 @@ def render_md(report) -> str:
     lm = getattr(report, "lm_eval", None) or {}
     if lm:
         out.append(render_lm_eval(lm, show_all=show_all))
+        bench_notes: dict[str, list[str]] = {}
+        for col in report.columns:  # metrics.notes per benchmark, once (a benchmark may have several columns)
+            if col.get("notes"):
+                bench_notes.setdefault(str(col["benchmark"]), list(col["notes"]))
+        if bench_notes:
+            out.append("### Notes")
+            out.append("")
+            out.extend(f"- {_md_escape(b)}: {_md_escape(str(n))}" for b, ns in bench_notes.items() for n in ns)
+            out.append("")
         out.append("# Comparability columns")
         out.append("")
     rows_by_col: dict[str, list[dict[str, Any]]] = {}
@@ -211,6 +220,7 @@ def render_md(report) -> str:
             notes.append(f"{TIE_MARK} = tied with the best value (within the metric's conformance tolerance): not an order")
         if notes:
             out.append("; ".join(notes))
+        out.extend(f"- note: {_md_escape(str(n))}" for n in col.get("notes") or [])  # metrics.notes, one bullet each
         out.append("")
         metrics = list(col.get("metrics") or [])
         if not show_all and col.get("table"):

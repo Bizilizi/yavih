@@ -185,7 +185,7 @@ How features become numbers; none of it reaches the bridge (`hashing.scoring_com
 | `protocol_version` | `benchmark.yaml[protocol_version]`: the declared version of the folder's scoring behaviour (code, yavih's or the folder's, is pinned by it, never hashed) |
 | `protocol` | `hashing.protocol_view`: every `protocol` key as written, `train_draw` restricted to `{cap, seed, balance}` (the draw's description lives in `manifest.upstream.draw`) |
 | `readout_params` | the whole `readout_params` block |
-| `metrics` | `hashing.metrics_view`: `{headline, list, floors, controls, chance, ci, bootstrap, aggregation}`, absent ones as `null`; `table` (report columns) and `tolerance` (the conformance bound) stay out |
+| `metrics` | `hashing.metrics_view`: `{headline, list, floors, controls, chance, ci, bootstrap, aggregation}`, absent ones as `null`; `table` (report columns), `tolerance` (the conformance bound) and `notes` (how to read the numbers, prose) stay out |
 | `external` | `hashing.external_view`: `[{name, version_pin}, …]` sorted by name (`pip` is an install instruction, `used_for` prose) |
 | `targets` | `[{split, kind, file, sha256, index_column}, ...]` sorted by split (`index_column` null when absent), or `null` |
 | `label` | `manifest.label` as written |

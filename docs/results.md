@@ -192,7 +192,9 @@ A reading is expected in a column only when the benchmark has every modality the
 `streams.*.kind`): audio-only benchmarks expect `{a}`-type readings, visual-only `{v}`, audio-visual all. A
 stream that cannot be placed, or a benchmark that is not packaged, keeps every reading expected. Columns note
 `population differs`, a superseded `protocol_version` (every version below the newest seen or packaged is
-listed) and a non-standard config.
+listed) and a non-standard config. A benchmark whose folder declares `metrics.notes` (how to read its numbers:
+floor values, noise, the smallest gap that means something) gets them under its column title as `- note: …` bullets,
+and once per benchmark in a `### Notes` list after view 1; json carries them as `columns[].notes`.
 
 No row is greyed, flagged or footnoted because its bridge declared a `custom` rule, because its weights are
 unfingerprinted (`W_WEIGHTS_UNFINGERPRINTED` is listed once among the report's warnings), or because of any

@@ -389,11 +389,16 @@ def test_bench_info(capsys, fake_benchmark_module):
     rc, env = run_json(capsys, ["bench", "info", "synth_clf"])
     assert rc == 0
     d = env["data"]
-    for k in ("readme", "roles", "floors", "metrics", "source", "budget", "external", "history"):
+    for k in ("roles", "floors", "metrics", "source", "budget", "external", "history"):
         assert k in d
     assert d["roles"]["train"] == {"splits": ["train"], "nominal": 8, "present": 8}
     assert d["roles"]["eval"]["nominal"] == 4 and d["floors"] == ["acc_floor"] and d["metrics"]["list"] == ["acc", "n_eval"]
-    assert d["readme"].startswith("![synth_clf](assets/header.png)") and d["history"][0]["version"] == 1 and d["external"] == []
+    assert d["history"][0]["version"] == 1 and d["external"] == [] and d["metrics"]["notes"] == []
+    # README.md is the human page: named (data paths), never printed by info
+    assert "readme" not in d and env["paths"]["readme"].endswith("README.md")
+    rc = cli.main(["bench", "info", "synth_clf"])
+    out = capsys.readouterr().out
+    assert rc == 0 and out.startswith(f"readme: {env['paths']['readme']} (for people") and "![synth_clf]" not in out
     rc, env = run_json(capsys, ["bench", "info", "synth_clf", "--readme-only"])
     assert rc == 0 and set(env["data"]) == {"name", "readme"}
     rc = cli.main(["bench", "info", "synth_clf", "--readme-only"])

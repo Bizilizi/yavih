@@ -534,6 +534,9 @@ class MetricsSpec:
     table: tuple[str, ...] | None = None
     #: per-metric absolute conformance tolerance (``yavih.conformance``); absent names use the default. Not hashed.
     tolerance: Mapping[str, float] = field(default_factory=dict)
+    #: ``metrics.notes``: how to read the numbers (floor values, noise, what a gap means), one sentence each; printed by
+    #: ``yavih bench info`` and the report. Prose, outside every hash (``hashing.METRICS_HASHED_KEYS``).
+    notes: tuple[str, ...] = field(default=(), compare=False)
 
 
 @dataclass(frozen=True)
@@ -1640,7 +1643,7 @@ def _resolve_metric_names(names: Sequence[str], readout: str, *, sets: Sequence[
 
 def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: SplitsSpec, folder_metrics: Mapping[str, Any] | None = None) -> tuple[MetricsSpec, dict[str, Any]]:
     d = _expect_mapping(v, path)
-    _check_keys(d, path, ["headline", "list", "floors", "controls", "chance", "ci"], ["bootstrap", "aggregation", "table", "tolerance"])
+    _check_keys(d, path, ["headline", "list", "floors", "controls", "chance", "ci"], ["bootstrap", "aggregation", "table", "tolerance", "notes"])
     names = _str_list(d["list"], f"{path}.list")
     floors = _str_list(d["floors"], f"{path}.floors")
     controls = _str_list(d["controls"], f"{path}.controls")
@@ -1721,6 +1724,7 @@ def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: Sp
             if not v >= 0:
                 raise SchemaError(f"{path}.tolerance.{k}: must be >= 0")
             tolerance[k] = float(v)
+    notes = _parse_notes(d.get("notes"), f"{path}.notes")
     spec = MetricsSpec(
         headline=headline,
         list=names,
@@ -1732,8 +1736,34 @@ def _parse_metrics(v: Any, path: str, readout: str, label: LabelSpec, splits: Sp
         aggregation=agg,
         table=table,
         tolerance=tolerance,
+        notes=notes,
     )
     return spec, resolved
+
+
+#: ``metrics.notes`` bounds: at most this many entries, each at most this many characters.
+METRICS_NOTES_MAX, METRICS_NOTE_CHARS = 8, 200
+
+
+def _parse_notes(v: Any, path: str) -> tuple[str, ...]:
+    """``metrics.notes``: absent / null, one string, or a list of strings; each non-empty and at most
+    :data:`METRICS_NOTE_CHARS` characters, at most :data:`METRICS_NOTES_MAX` entries."""
+    if v is None:
+        return ()
+    entries = [v] if isinstance(v, str) else v
+    if not isinstance(entries, list):
+        raise SchemaError(f"{path}: a string or a list of strings, got {type(v).__name__}")
+    if len(entries) > METRICS_NOTES_MAX:
+        raise SchemaError(f"{path}: at most {METRICS_NOTES_MAX} notes, got {len(entries)}")
+    out = []
+    for i, x in enumerate(entries):
+        if not isinstance(x, str) or not x.strip():
+            raise SchemaError(f"{path}[{i}]: a non-empty string")
+        x = " ".join(x.split())
+        if len(x) > METRICS_NOTE_CHARS:
+            raise SchemaError(f"{path}[{i}]: at most {METRICS_NOTE_CHARS} characters, got {len(x)} (split it into two notes)")
+        out.append(x)
+    return tuple(out)
 
 
 def _parse_requires(v: Any, path: str, readout: str, streams: Mapping[str, StreamSpec]) -> RequiresSpec:
@@ -3334,17 +3364,16 @@ def _status_word(bench: Benchmark, *, scan: bool) -> str:
 
 
 def bench_info(ref: str, *, readme_only: bool = False, setup: bool = False, data: dict | None = None, scan: bool = True) -> dict[str, Any]:
-    """``yavih bench info``: README text (``setup.md`` with ``setup``) + ``{roles: {role: {nominal,
-    present}}, floors, metrics, source, budget, external, history}``."""
+    """``yavih bench info``: ``{roles: {role: {nominal, present}}, floors, metrics (with ``notes``), source, budget,
+    external, history, readme_path}``; the README text (the human page) only with ``readme_only``, ``setup.md`` with
+    ``setup``."""
     bench = Benchmark.load(ref, data=data)
     readme_path = bench.folder / "README.md"
-    readme = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
-    setup_path = bench.folder / "setup.md"
-    setup_text = setup_path.read_text(encoding="utf-8") if setup_path.is_file() else ""
     if setup:
-        return {"name": bench.name, "setup": setup_text}
+        setup_path = bench.folder / "setup.md"
+        return {"name": bench.name, "setup": setup_path.read_text(encoding="utf-8") if setup_path.is_file() else ""}
     if readme_only:
-        return {"name": bench.name, "readme": readme}
+        return {"name": bench.name, "readme": readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""}
     status: DataStatus | None = None
     if scan:
         try:
@@ -3367,11 +3396,12 @@ def bench_info(ref: str, *, readme_only: bool = False, setup: bool = False, data
         "protocol_version": bench.spec.protocol_version,
         "manifest_hash": bench.manifest_hash,
         "protocol_hash": bench.protocol_hash,
-        "readme": readme,
+        "readme_path": str(readme_path),
         "roles": roles,
         "floors": list(bench.spec.metrics.floors),
         "controls": list(bench.spec.metrics.controls),
-        "metrics": {"headline": bench.spec.metrics.headline, "list": list(bench.spec.metrics.list), "chance": dict(bench.spec.metrics.chance), "ci": dict(bench.spec.metrics.ci)},
+        "metrics": {"headline": bench.spec.metrics.headline, "list": list(bench.spec.metrics.list), "chance": dict(bench.spec.metrics.chance),
+                    "ci": dict(bench.spec.metrics.ci), "notes": list(bench.spec.metrics.notes)},
         "source": asdict(bench.spec.source),
         "obtain": asdict(bench.spec.obtain) if bench.spec.obtain else None,
         "budget": asdict(bench.spec.budget),
