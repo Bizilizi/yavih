@@ -917,7 +917,7 @@ REQUIRED_TOP_LEVEL_KEYS = {  # benchmark.yaml schema 3
     "manifest", "splits", "fields", "targets", "data", "input_contract", "output_contract", "external", "protocol",
     "metrics", "readout_params", "header",
 }
-README_H2 = ["Description", "Citation", "In yavih"]  # README.md contract
+README_H2 = ["The task", "The data", "How it is scored", "Citation"]  # README.md contract (the human page)
 SETUP_H2 = ["Obtain the data", "Dependencies", "Input contract", "Output contract", "Prepare & verify", "Gotchas"]  # setup.md contract
 
 
@@ -1013,7 +1013,9 @@ def test_make_synthetic_benchmark_folder_is_valid(tmp_path, readout):
     # README.md / setup.md in their contract forms; setup.md ends each contract section with a yaml copy
     readme = (folder / "README.md").read_text()
     assert _headings(readme, 1) == [] and _headings(readme, 2) == README_H2
-    assert "protocol_version" in readme and spec["metrics"]["headline"] in readme
+    from yavih.doctables import glance_block, render_glance
+
+    assert glance_block(readme) == render_glance(folder)  # the generated "at a glance" block, current
     setup = (folder / "setup.md").read_text()
     assert _headings(setup, 1) == [f"{folder.name} — setup"] and _headings(setup, 2) == SETUP_H2
     assert _last_yaml_block(setup, "Input contract") == ic and _last_yaml_block(setup, "Output contract") == oc

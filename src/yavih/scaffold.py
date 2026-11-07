@@ -3,8 +3,9 @@
 The scaffold is a copy of an existing folder's machinery (``--like``: its frozen manifest, classes and bridge
 template, and any ``reader.py`` / ``eval.py`` with a ``# TODO: copied verbatim …`` banner as their first lines; never
 its ``curation.json``, notes, tests, prepare steps or header image) with ``benchmark.yaml`` renamed and reset to
-``protocol_version`` 1, and a README.md, setup.md, ``make_manifest.py``, ``prepare/`` and ``tests/test_folder.py``
-written from the folder contract, plus a ``header:`` block for the README header image
+``protocol_version`` 1, and a README.md (the human page, with its generated "at a glance" block), setup.md,
+``make_manifest.py`` (its docstring the re-freeze recipe), ``prepare/`` and ``tests/test_folder.py`` written from the
+folder contract, plus a ``header:`` block for the README header image
 (``python -m yavih.headers <name>``); ``capability:`` keeps the ``--like`` folder's tags under a ``TODO`` comment. Every fact the new benchmark must supply is marked ``TODO`` (``TODO:`` in
 ``tests/`` and ``prepare/``). The generated ``tests/test_folder.py`` runs the shared checks of
 ``yavih.testing.folder`` and pins the values the scaffold carries; the tests that need the benchmark's own data
@@ -62,30 +63,52 @@ def _yaml_block(obj: Any) -> str:
     return "```yaml\n" + yaml.safe_dump(obj, sort_keys=False, allow_unicode=True).rstrip("\n") + "\n```"
 
 
-def _readme(y: dict[str, Any], like: str) -> str:
-    m = y["metrics"]
+#: The guide every scaffolded README points to (a GitHub URL: a pip-installed user can open it).
+_README_GUIDE = "https://github.com/Bizilizi/yavih/blob/main/docs/writing-a-readme.md"
+
+
+def _readme(y: dict[str, Any], like: str, dest: Path) -> str:
+    """The human page: header image, links, the generated "at a glance" block (from the yaml just written), then the
+    sections of the README contract with a ``TODO`` each. The figure line is an HTML comment until the figures are
+    rendered (``W_README_ASSET`` does not read comments)."""
+    from yavih.doctables import render_glance
+
+    name = y["name"]
     return f"""![{y['header']['name']}](assets/header.png)
 
-TODO: [Paper](https://…) · [Homepage](https://…) · [Dataset](https://…) · [setup.md](setup.md)
+TODO: [Paper](https://…) · [Homepage](https://…) · [Dataset](https://…) · [Licence](https://…) · [setup.md](setup.md)
 
-## Description
-TODO: the task, the data and the official splits, as the benchmark's authors define them.
+{render_glance(dest)}
+
+## The task
+
+TODO: what a model is asked to do, in human terms, for a reader deciding whether this benchmark is for them: one
+example input and the answer it expects. How to write this page: {_README_GUIDE}
+
+<!-- once rendered (python -m yavih.previews {name} --suggest --write, then python -m yavih.previews {name}), un-comment:
+![TODO: what the figure shows](assets/preview.png)
+-->
+
+## The data
+
+TODO: what the recordings are and where they come from, the official splits in prose, the licence in words.
+(Scaffolded from `{like}`: the glance above shows `{like}`'s numbers until this benchmark's manifest replaces them.)
+
+## How it is scored
+
+TODO: the metric and why it fits the task; chance and the floor in words; what is not this benchmark (variants,
+aliases, near-misses), one sentence each.
+
+## Reference numbers
+
+TODO: published numbers with their citation and why they are (not) comparable to a frozen-feature probe; or delete
+this optional section.
 
 ## Citation
+
 ```bibtex
 TODO: the BibTeX entry of the paper
 ```
-
-## In yavih
-TODO: what is scored, on which rows, with which scorer. Scorer `{y['scorer']}`; headline `metrics.headline` =
-`{m['headline']}`; `protocol_version` {y['protocol_version']}. (Scaffolded from `{like}`: every number here is
-`{like}`'s until the manifest and protocol are replaced.) What the bridge gets and returns: see
-[setup.md](setup.md).
-
-TODO: variants and aliases, one sentence each; published reference numbers with their citation, if any.
-
-Re-freezing the manifest: TODO: `python make_manifest.py` must re-freeze `manifest.csv.gz` (and `classes.csv`)
-byte-identically from the public upstream files (the scaffold carries `{like}`'s frozen manifest).
 """
 
 
@@ -421,7 +444,7 @@ def new_benchmark(name: str, *, scorer: str | None = None, like: str | None = No
         _write_yaml()
     except Exception:  # noqa: BLE001 - a scaffold that does not load yet: `bench lint` names both the cause and the hashes
         pass
-    (dest / "README.md").write_text(_readme(y, like_name), encoding="utf-8")
+    (dest / "README.md").write_text(_readme(y, like_name, dest), encoding="utf-8")
     (dest / "setup.md").write_text(_setup(y, like_name), encoding="utf-8")
     (dest / "make_manifest.py").write_text(_MAKE_MANIFEST.format(name=name), encoding="utf-8")
     (dest / "prepare").mkdir()

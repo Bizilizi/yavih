@@ -2,7 +2,7 @@
 
 - ``make_synthetic_benchmark(tmp, readout, n_train, n_eval, media)`` writes a complete schema-2 benchmark
   folder (``benchmark.yaml`` with ``input_contract`` / ``output_contract`` / ``external``,
-  ``README.md`` and ``setup.md`` in the forms ``bench lint`` checks, a ``reader.py`` and ``bridge_template.py``)
+  ``README.md`` (the human page, with its generated "at a glance" block) and ``setup.md`` in the forms ``bench lint`` checks, a ``reader.py`` and ``bridge_template.py``)
   for each readout: ``clf`` K400-like (one mp4), ``seq`` AVE-like (mp4 + wav, per-second labels, facts
   ``num_segments``/``segment_seconds``), ``grid`` NYUv2-like (one png, depth targets over a
   ``target_region`` of the full frame, fact ``target_region``), ``box`` VGG-SS-like (mp4 + wav, boxes in
@@ -500,30 +500,33 @@ def _yaml_block(obj: Any) -> str:
 
 
 def _write_readme(folder: Path, spec: dict[str, Any], *, n_train: int, n_eval: int) -> None:
-    """``README.md`` in the folder-contract form (header image, links, Description, Citation, In yavih)."""
+    """``README.md`` in the folder-contract form, the human page (header image, links, the "at a glance" block rendered
+    from the yaml, bridge template and classes already on disk, The task, The data, How it is scored, Citation)."""
+    from yavih.doctables import render_glance
+
     m = spec["metrics"]
     headline, floor = m["headline"], m["floors"][0]
     text = f"""![{spec['header']['name']}](assets/header.png)
 
 Homepage: `yavih.testing.make_synthetic_benchmark` · [setup.md](setup.md)
 
-## Description
+{render_glance(folder)}
+
+## The task
 A synthetic `{spec['scorer']}` benchmark: every label, box and depth map is a pure function of the row's
-`clip_id`, so `oracle_bridge` can encode it and `random_bridge` cannot. Roles: train = `train` ({n_train} rows),
-eval = `val` ({n_eval} rows).
+`clip_id`, so `oracle_bridge` can encode it and `random_bridge` cannot.
+
+## The data
+Tiny generated media; train = `train` ({n_train} rows), eval = `val` ({n_eval} rows). Alias `{spec['aliases'][0]}`.
+
+## How it is scored
+The headline `{headline}`; `oracle_bridge` under `ProbeConfig.pinned(r).fast()` clears the floor `{floor}`,
+`random_bridge` does not.
 
 ## Citation
 ```bibtex
 @misc{{yavih_synthetic, title = {{yavih synthetic benchmark {spec['name']}}}, note = {{test fixture}}}}
 ```
-
-## In yavih
-Scorer `{spec['scorer']}`; headline `metrics.headline` = `{headline}`, floor `{floor}`. `protocol_version`
-{spec['protocol_version']}. What is handed over (the stored tiny media, raw) is in [setup.md](setup.md). Alias
-`{spec['aliases'][0]}`; no other variant. `oracle_bridge` under `ProbeConfig.pinned(r).fast()` clears `{floor}`;
-`random_bridge` does not.
-
-Re-freezing: `python make_manifest.py` rewrites the folder byte-identically; `pytest tests/` checks it.
 """
     (folder / "README.md").write_text(text, encoding="utf-8")
 
@@ -773,10 +776,10 @@ def make_synthetic_benchmark(
                 elif kind == "image":
                     _write_tiny_image(path, r["clip_id"])
 
-    _write_readme(folder, spec, n_train=n_train, n_eval=n_eval)
     _write_setup(folder, spec)
     (folder / "reader.py").write_text(_READER_PY, encoding="utf-8")
     (folder / "bridge_template.py").write_text(_BRIDGE_TEMPLATE_PY.format(name=name, streams=tuple(spec["fields"])), encoding="utf-8")
+    _write_readme(folder, spec, n_train=n_train, n_eval=n_eval)  # after the yaml, classes.csv and template it summarises
     (folder / "make_manifest.py").write_text(
         _MAKE_MANIFEST_PY.format(readout=readout, n_train=n_train, n_eval=n_eval, media=media, n_classes=n_classes, name=name), encoding="utf-8"
     )
@@ -835,6 +838,10 @@ def make_synthetic_like(tmp: str | os.PathLike, bench: Any, *, n_eval: int = 32,
     if real.spec.readout not in READOUTS:  # a folder scorer of a core family: it scores its own stand-in
         _own_scorer(folder, spec, real)
     path.write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    from yavih.doctables import replace_glance
+
+    readme = folder / "README.md"
+    readme.write_text(replace_glance(readme.read_text(encoding="utf-8"), folder), encoding="utf-8")  # the yaml moved
     if real.spec.readout not in READOUTS:
         from yavih.benchmark import Benchmark
 

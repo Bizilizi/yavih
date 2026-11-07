@@ -15,7 +15,6 @@ import gzip
 import hashlib
 import io
 import os
-import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -162,11 +161,15 @@ def make_stream_benchmark(root: str | os.PathLike, *, name: str = "synth_stream"
         "readout_params": {"groups": {"event": {"loss": "ce", "classes": classes + 1}}},
     }
     (folder / "benchmark.yaml").write_text(yaml.safe_dump(y, sort_keys=False, width=120), encoding="utf-8")
-    (folder / "README.md").write_text(textwrap.dedent(f"""\
-        # {name}
+    from yavih.doctables import render_glance
 
-        Synthetic streaming fixture written by `yavih.testing.stream.make_stream_benchmark`.
-        """), encoding="utf-8")
+    # the human page in the README contract's shape (the glance block rendered from the yaml just written)
+    (folder / "README.md").write_text(
+        f"![{name}](assets/header.png)\n\nHomepage: `yavih.testing.stream.make_stream_benchmark` · [setup.md](setup.md)\n\n"
+        f"{render_glance(folder)}\n\n## The task\nRecognise the class of every second of a flat-colour recording, causally.\n\n"
+        "## The data\nSynthetic recordings, one class per second.\n\n## How it is scored\nBinned accuracy of the causal "
+        "heads.\n\n## Citation\n```bibtex\n@misc{yavih_stream, title = {yavih synthetic stream benchmark}}\n```\n",
+        encoding="utf-8")
     return folder
 
 

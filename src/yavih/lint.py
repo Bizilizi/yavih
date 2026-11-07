@@ -33,10 +33,14 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   count); no spec or a declared figure file absent (``W_PREVIEW_MISSING``); a figure rendered from another spec,
   template or design, or an undeclared ``preview*`` / ``clip*`` file (``W_PREVIEW_STALE``); a file over its size budget
   or ``assets/`` over 10 MB (``W_ASSET_SIZE``). The figure files are warnings: they may be rendered after the merge.
-- ``readme``: the first line is the header image ``![<header.name>](assets/header.png)``, the second paragraph the
-  links line (naming ``setup.md``); the ``##`` sections Description, Citation (with a fenced ``bibtex`` block) and
-  In yavih in that order; "## In yavih" names ``protocol_version``, the headline metric and the re-freeze
-  (``make_manifest.py``); a printed ``protocol_hash`` is the current one.
+- ``readme``: README.md is the human page (nothing an agent needs lives in it). The first line is the header image
+  ``![<header.name>](assets/header.png)``, the second paragraph the links line (naming ``setup.md``), then the
+  generated "at a glance" block before the first ``##`` (``E_README_GLANCE``: exactly one, equal to
+  ``python -m yavih.doctables --glance <name>``); the ``##`` sections The task, The data, How it is scored, the
+  optional Reference numbers, Citation (with a fenced ``bibtex`` block) in that order; a ``](assets/<file>)`` link
+  names an existing file (``W_README_ASSET``); a printed ``protocol_hash`` is the current one. A README still in the
+  legacy shape (a "## In yavih" section) is checked by the legacy rules (Description, Citation, In yavih; "## In
+  yavih" names ``protocol_version``, the headline metric and ``make_manifest``) and reported ``W_README_LEGACY``.
 - ``setup``: H1 ``# <name> — setup``; the six ``##`` sections in order; dependencies carry every ``external[].pip``
   (or say "None"); the contract yaml copies equal ``benchmark.yaml``; ``yavih bench verify <name>``;
   the prepare steps run as ``yavih bench prepare <name> <step>``; ``source.revision`` in "## Obtain the data".
@@ -85,6 +89,8 @@ __all__ = [
     "HEADER_IMAGE",
     "LintReport",
     "OBTAIN_TIERS",
+    "LEGACY_README_SECTIONS",
+    "README_OPTIONAL_SECTIONS",
     "README_SECTIONS",
     "REQUIRED_FILES",
     "RETIRED_HEADINGS",
@@ -102,14 +108,21 @@ __all__ = [
 #: Files every folder holds. ``classes.csv`` is required iff ``manifest.classes`` is set.
 REQUIRED_FILES: tuple[str, ...] = ("README.md", "setup.md", "benchmark.yaml", "manifest.csv.gz",
                                    "bridge_template.py", "make_manifest.py", "tests/test_folder.py")
-README_SECTIONS: tuple[str, ...] = ("Description", "Citation", "In yavih")
+#: The README's ``##`` sections in order (the human page, docs/writing-a-readme.md); the optional ones may stand only
+#: right before ``Citation``.
+README_SECTIONS: tuple[str, ...] = ("The task", "The data", "How it is scored", "Citation")
+README_OPTIONAL_SECTIONS: tuple[str, ...] = ("Reference numbers",)
+#: The legacy README (until the fleet migrates every folder): ``## In yavih`` marks it; ``W_README_LEGACY``.
+LEGACY_README_SECTIONS: tuple[str, ...] = ("Description", "Citation", "In yavih")
+#: Where the human-page guide lives (the ``W_README_LEGACY`` message; a pip-installed user can open it).
+WRITING_A_README_URL = "https://github.com/Bizilizi/yavih/blob/main/docs/writing-a-readme.md"
 SETUP_SECTIONS: tuple[str, ...] = ("Obtain the data", "Dependencies", "Input contract", "Output contract",
                                    "Prepare & verify", "Gotchas")
 #: The README's first line points at the header image (rendered by ``python -m yavih.headers``; GitHub only).
 HEADER_IMAGE = "assets/header.png"
 OBTAIN_TIERS: frozenset[str] = frozenset({"auto", "manual-download", "needs-licence", "needs-data-owner", "site-only"})
 #: Headings neither README.md nor setup.md carries: the yaml ``changelog`` is the version record, and the
-#: re-freeze notes live in README "## In yavih".
+#: re-freeze recipe is ``make_manifest.py``'s module docstring.
 RETIRED_HEADINGS: frozenset[str] = frozenset({"Changelog", "History", "Checklist", "Maintainers"})
 #: Reading tags a bridge template may declare: what the model is given (a = audio, v = video, av = both, t = text).
 READINGS: frozenset[str] = frozenset({"a", "v", "av", "t"})
@@ -500,6 +513,7 @@ def _c_preview(c: _Ctx) -> Iterator[Finding]:
 
 #: A README link or image into the folder's ``assets/`` (``W_README_ASSET`` when the file is absent).
 _ASSET_LINK = re.compile(r"\]\((assets/[^)\s#]+)\)")
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
 
 
 def _retired_headings(text: str, f: str, check: str) -> Iterator[Finding]:
@@ -508,7 +522,7 @@ def _retired_headings(text: str, f: str, check: str) -> Iterator[Finding]:
             if h in RETIRED_HEADINGS:
                 yield _err(check, "E_README" if check == "readme" else "E_SETUP",
                            f"heading {'#' * level} {h}: not part of the folder docs (the benchmark.yaml changelog is the "
-                           "version record; re-freeze notes go in README.md \"## In yavih\")", f)
+                           "version record; the re-freeze recipe is make_manifest.py's docstring)", f)
 
 
 def _paragraphs(text: str) -> list[str]:
@@ -531,7 +545,7 @@ def _c_readme(c: _Ctx) -> Iterator[Finding]:
         yield _err("readme", "E_README", "the second paragraph must be the links line (Paper · Homepage · Dataset · "
                    "[setup.md](setup.md), whichever exist)", f)
     yield from _retired_headings(text, f, "readme")
-    for rel in dict.fromkeys(_ASSET_LINK.findall(text)):
+    for rel in dict.fromkeys(_ASSET_LINK.findall(_HTML_COMMENT.sub("", text))):  # a commented-out figure is not shown
         if rel != HEADER_IMAGE and not (c.folder / rel).is_file():
             yield _warn("readme", "W_README_ASSET", f"{rel} is linked but absent: render it (`python -m yavih.previews {c.name}`) "
                         "or drop the link", f)
@@ -539,11 +553,61 @@ def _c_readme(c: _Ctx) -> Iterator[Finding]:
     if h1:
         yield _err("readme", "E_README", f"no H1 (the header image carries the name), got {[h for _, h in h1]}", f)
     got = [h for _, h in headings(text, 2)]
-    if got != list(README_SECTIONS):
-        yield _err("readme", "E_README", f"## headings {got} != {list(README_SECTIONS)}", f)
+    if LEGACY_README_SECTIONS[-1] in got:
+        yield from _legacy_readme(c, text, got, f)
+    else:
+        allowed = [list(README_SECTIONS), [*README_SECTIONS[:-1], *README_OPTIONAL_SECTIONS, README_SECTIONS[-1]]]
+        if got not in allowed:
+            yield _err("readme", "E_README", f"## headings {got} != {list(README_SECTIONS)} (optional "
+                       f"{list(README_OPTIONAL_SECTIONS)} right before Citation; docs/writing-a-readme.md)", f)
+        elif not fenced_blocks(section(text, 2, "Citation"), "bibtex"):
+            yield _err("readme", "E_README", "## Citation must hold a fenced bibtex block", f)
+        yield from _readme_glance(c, text, f)
+    if c.bench is not None:
+        for h in re.findall(r"protocol_hash`?\s*`?\s*([0-9a-f]{12,64})", text):
+            if not c.bench.protocol_hash.startswith(h):
+                yield _err("readme", "E_README_HASH", f"quotes protocol_hash {h[:12]}…, current {c.bench.protocol_hash[:12]}…", f)
+
+
+def _readme_glance(c: _Ctx, text: str, f: str) -> Iterator[Finding]:
+    """``E_README_GLANCE``: exactly one generated "at a glance" block, before the first ``##``, equal to its render."""
+    from yavih import doctables
+
+    fix = f"`python -m yavih.doctables --glance {c.name} --write`"
+    try:
+        spans = doctables._glance_spans(text)
+    except ValueError as e:
+        yield _err("readme", "E_README_GLANCE", f"the glance block is not closed ({e}); rewrite it with {fix}", f)
+        return
+    if len(spans) != 1:
+        yield _err("readme", "E_README_GLANCE", f"{len(spans)} \"at a glance\" blocks, want exactly one before the first "
+                   f"## (write it with {fix})", f)
+        return
+    h2 = headings(text, 2)
+    if h2 and spans[0][0] > h2[0][0]:
+        yield _err("readme", "E_README_GLANCE", f"the \"at a glance\" block must come before the first ## (## {h2[0][1]}); "
+                   f"move it, or rewrite it with {fix}", f)
+    try:
+        want = doctables.render_glance(c.folder)
+    except Exception as e:  # noqa: BLE001 - an unreadable yaml is the yaml check's finding
+        yield _err("readme", "E_README_GLANCE", f"the glance block cannot be rendered: {e.__class__.__name__}: {e}", f)
+        return
+    if doctables.glance_block(text) != want:
+        yield _err("readme", "E_README_GLANCE", f"the \"at a glance\" block is not the one benchmark.yaml gives: {fix}", f)
+
+
+def _legacy_readme(c: _Ctx, text: str, got: list[str], f: str) -> Iterator[Finding]:
+    """The legacy README (a ``## In yavih`` section): today's rules, until the fleet migrates the folder."""
+    yield _warn("readme", "W_README_LEGACY", "README.md has the legacy shape (## In yavih): rewrite it as the human page "
+                f"of {WRITING_A_README_URL} (floors and noise move to benchmark.yaml metrics.notes, the re-freeze "
+                "recipe to make_manifest.py's docstring; fleet/queue.yaml marks the folder `readme: legacy` until then)", f)
+    if got != list(LEGACY_README_SECTIONS):
+        yield _err("readme", "E_README", f"## headings {got} != {list(LEGACY_README_SECTIONS)} (the legacy shape; the "
+                   f"new one is {list(README_SECTIONS)})", f)
         return
     if not fenced_blocks(section(text, 2, "Citation"), "bibtex"):
         yield _err("readme", "E_README", "## Citation must hold a fenced bibtex block", f)
+    y = c.raw or {}
     proto = section(text, 2, "In yavih")
     pv = y.get("protocol_version")
     if "protocol_version" not in proto or not re.search(rf"{_NUM_L}{pv}{_NUM_R}", proto):
@@ -553,10 +617,6 @@ def _c_readme(c: _Ctx) -> Iterator[Finding]:
         yield _err("readme", "E_README", f"## In yavih must name the headline metric {headline!r}", f)
     if "make_manifest" not in proto:
         yield _err("readme", "E_README", "## In yavih must say how the manifest is re-frozen (make_manifest.py)", f)
-    if c.bench is not None:
-        for h in re.findall(r"protocol_hash`?\s*`?\s*([0-9a-f]{12,64})", text):
-            if not c.bench.protocol_hash.startswith(h):
-                yield _err("readme", "E_README_HASH", f"quotes protocol_hash {h[:12]}…, current {c.bench.protocol_hash[:12]}…", f)
 
 
 @_check("setup")

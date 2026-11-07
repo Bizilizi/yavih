@@ -332,6 +332,54 @@ def test_lint_reports_a_broken_folder(esc50_copy, mutate, code):
     assert code in _codes(esc50_copy)
 
 
+def _new_shape_readme(d) -> None:
+    """Write the README contract's shape into a folder copy: header, links, the generated glance block, the sections."""
+    from yavih.doctables import render_glance
+
+    (d / "README.md").write_text(
+        "![ESC-50](assets/header.png)\n\n[Paper](https://example.org) · [setup.md](setup.md)\n\n" + render_glance(d) + "\n\n"
+        "## The task\n\nName the sound.\n\n## The data\n\nRecordings.\n\n## How it is scored\n\nAccuracy.\n\n"
+        "## Reference numbers\n\nNone comparable.\n\n## Citation\n\n```bibtex\n@misc{x, title = {x}}\n```\n", encoding="utf-8")
+
+
+def _readme_codes(d) -> tuple[set[str], set[str]]:
+    rep = lint.lint_folder(d, checks=["readme"])
+    return {f.code for f in rep.errors}, {f.code for f in rep.warnings}
+
+
+def test_lint_accepts_a_legacy_readme_with_a_warning(esc50_copy):
+    """Until the fleet migrates a folder, its "## In yavih" README is checked by the legacy rules and flagged."""
+    errors, warnings = _readme_codes(esc50_copy)
+    assert not errors and "W_README_LEGACY" in warnings
+
+
+def _replace_in_readme(d, old: str, new: str) -> None:
+    text = (d / "README.md").read_text(encoding="utf-8")
+    assert old in text
+    (d / "README.md").write_text(text.replace(old, new), encoding="utf-8")
+
+
+@pytest.mark.parametrize("mutate, code", [
+    (lambda d: None, None),  # the new shape, as written: clean
+    (lambda d: _replace_in_readme(d, "## The data", "## Data"), "E_README"),
+    (lambda d: _replace_in_readme(d, "## Reference numbers", "## Numbers"), "E_README"),
+    (lambda d: _replace_in_readme(d, "```bibtex", "```text"), "E_README"),
+    (lambda d: _replace_in_readme(d, "<!-- yavih:glance end -->", ""), "E_README_GLANCE"),
+    (lambda d: (d / "README.md").write_text(re.sub(r"<!-- yavih:glance begin.*?end -->\n", "", (d / "README.md").read_text(encoding="utf-8"), flags=re.S), encoding="utf-8"), "E_README_GLANCE"),
+    (lambda d: _edit_yaml(d, lambda y: y["budget"].update({"media_gb": 1.5})), "E_README_GLANCE"),  # the yaml moved on
+    (lambda d: _replace_in_readme(d, "Name the sound.", "Name the sound.\n\n![a figure](assets/nope.png)"), "W_README_ASSET"),
+])
+def test_lint_checks_the_new_readme_shape(esc50_copy, mutate, code):
+    _new_shape_readme(esc50_copy)
+    mutate(esc50_copy)
+    errors, warnings = _readme_codes(esc50_copy)
+    assert "W_README_LEGACY" not in warnings
+    if code is None:
+        assert not errors and not warnings
+    else:
+        assert code in (errors | warnings), (errors, warnings)
+
+
 def _edit_yaml(d, fn):
     y = yaml.safe_load((d / "benchmark.yaml").read_text(encoding="utf-8"))
     fn(y)
@@ -360,8 +408,8 @@ def test_lint_yaml_obtain_budget_and_name(esc50_copy, tmp_path):
 def test_lint_todo_is_a_warning(esc50_copy):
     (esc50_copy / "setup.md").write_text((esc50_copy / "setup.md").read_text(encoding="utf-8") + "\nTODO: say more\n", encoding="utf-8")
     rep = lint.lint_folder(esc50_copy)
-    # W_PREVIEW_MISSING: the folder's figures arrive with its README migration (docs/design-system.md)
-    assert rep.ok and [f.code for f in rep.warnings if f.code != "W_PREVIEW_MISSING"] == ["W_TODO"]
+    # the folder's figures and human page arrive with its README migration (docs/writing-a-readme.md)
+    assert rep.ok and [f.code for f in rep.warnings if f.code not in ("W_PREVIEW_MISSING", "W_README_LEGACY")] == ["W_TODO"]
 
 
 def _notes_findings(folder, rel: str) -> list[lint.Finding]:
