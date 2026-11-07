@@ -18,6 +18,8 @@ What is checked (one ``CHECKS`` entry each, so a test or a caller can run a subs
   ``W_CONFORMANCE_SKIPPED`` when a pinned external package is absent here).
 - ``layout``: the required files, a non-empty ``prepare/``, ``classes.csv`` iff ``manifest.classes``, no
   ``__init__.py`` in the folder or its ``tests/`` (a folder is data + scripts, never a package).
+- ``manifest_script``: ``make_manifest.py`` has a module docstring, the re-freeze recipe ``yavih bench show <name>
+  make_manifest`` prints (``E_MAKE_MANIFEST``); it names ``--check`` (``W_MAKE_MANIFEST_DOC``). Read with ``ast`` only.
 - ``reader``: an optional folder ``reader.py`` accepts ``shard=`` (per-shard canaries); without one the generic
   ``yavih.sample.iter_samples`` reads the folder.
 - ``budget``: ``budget.clips`` and ``manifest.upstream.curation`` agree with the frozen rows.
@@ -378,6 +380,30 @@ def _c_layout(c: _Ctx) -> Iterator[Finding]:
     for rel in ("__init__.py", "tests/__init__.py"):
         if (c.folder / rel).exists():
             yield _err("layout", "E_LAYOUT", f"{rel}: a folder is data + scripts, never a Python package", rel)
+
+
+@_check("manifest_script")
+def _c_manifest_script(c: _Ctx) -> Iterator[Finding]:
+    """``make_manifest.py``'s module docstring is the re-freeze recipe (``yavih bench show <name> make_manifest``):
+    read with ``ast`` only, never imported."""
+    import ast
+
+    f = "make_manifest.py"
+    src = c.text(f)
+    if src is None:
+        return  # layout reports the missing file
+    try:
+        doc = ast.get_docstring(ast.parse(src))
+    except SyntaxError as e:
+        yield _err("manifest_script", "E_MAKE_MANIFEST", f"does not parse: {e.msg} (line {e.lineno})", f)
+        return
+    if not doc or not doc.strip():
+        yield _err("manifest_script", "E_MAKE_MANIFEST", "no module docstring: it is the re-freeze recipe (public inputs "
+                   "and pins, outputs, curation, a Usage:: block naming --check), printed by `yavih bench show "
+                   f"{c.name} make_manifest`", f)
+    elif "--check" not in doc:
+        yield _warn("manifest_script", "W_MAKE_MANIFEST_DOC", "the module docstring never names --check (re-derive, "
+                    "compare with the committed files, write nothing): add it to its Usage:: block", f)
 
 
 @_check("reader")

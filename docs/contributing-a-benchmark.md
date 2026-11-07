@@ -130,8 +130,11 @@ Every key is described in the [schema](benchmark-folder.md#benchmarkyaml). Decid
 `make_manifest.py` re-derives `manifest.csv.gz` and `classes.csv` from the public upstream files, byte for byte.
 Follow the conventions of `benchmarks/esc50/make_manifest.py`:
 
-- **Docstring.** Names every input (upstream file, commit, sha256), the outputs, the curation applied, and a
-  `Usage::` block with the commands below.
+- **Docstring.** The re-freeze recipe: names every input (upstream file, commit, sha256), the outputs, the curation
+  applied, and a `Usage::` block with the commands below, `--check` among them. It is what
+  `yavih bench show <name> make_manifest` prints and what `--help` shows (`argparse.ArgumentParser(description=__doc__)`),
+  so README.md does not repeat it (`bench lint`: `E_MAKE_MANIFEST` without a docstring, `W_MAKE_MANIFEST_DOC` without
+  `--check`).
 - **Pinned inputs.** The upstream sha256s and commit are module constants; a file with another sha256 is refused
   (`SystemExit` naming both digests).
 - **Roots.** `--media-root` defaults to `config.folder_root(HERE, "media_root", args.media_root)`

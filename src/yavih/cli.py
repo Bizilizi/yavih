@@ -1273,7 +1273,7 @@ def cmd_bench_files(ns: argparse.Namespace) -> Envelope:
     folder = bench_folder(ns.name)
     rows = bench_files(ns.name)
     lines = [f"{folder}"] + [f"  {r['kind']:<9}{r['size']:>11}  {r['rel']}" for r in rows]
-    lines.append(f"print one: yavih bench show {ns.name} <readme|setup|yaml|template|probe|classes|prepare/<file>|<path>>; "
+    lines.append(f"print one: yavih bench show {ns.name} <readme|setup|yaml|template|eval|make_manifest|classes|prepare/<file>|<path>>; "
                  f"run a prepare step: yavih bench prepare {ns.name} <step>")
     return Envelope(data={"name": ns.name, "folder": str(folder), "files": rows}, paths={"folder": str(folder)}, text="\n".join(lines) + "\n")
 
@@ -2365,9 +2365,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("name")
     s.set_defaults(func=cmd_bench_files)
 
-    s = bsub.add_parser("show", parents=[common_r], help="print one shipped file: readme|setup|yaml|template|probe|classes|prepare/<file>|<path>")
+    s = bsub.add_parser("show", parents=[common_r], help="print one shipped file: readme|setup|yaml|template|eval|make_manifest|classes|prepare/<file>|<path>")
     s.add_argument("name")
-    s.add_argument("what", metavar="readme|setup|yaml|template|probe|classes|prepare/<file>|<path>")
+    s.add_argument("what", metavar="readme|setup|yaml|template|eval|make_manifest|classes|prepare/<file>|<path>")
     s.set_defaults(func=cmd_bench_show)
 
     s = bsub.add_parser("prepare", parents=[common_r], help="list a benchmark's prepare steps, or run one (FOLDER and YAVIH_BENCH set)")

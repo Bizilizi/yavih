@@ -37,7 +37,7 @@ def test_bench_files_lists_every_shipped_file_with_kind_and_absolute_path(capsys
     assert rc == 0 and env["status"] == "ok"
     files = env["data"]["files"]
     kinds = {f["kind"] for f in files}
-    assert {"readme", "setup", "yaml", "template", "manifest", "classes", "prepare", "test"} <= kinds
+    assert {"readme", "setup", "yaml", "template", "make_manifest", "manifest", "classes", "prepare", "test"} <= kinds
     assert kinds <= set(shipped.FILE_KINDS)
     for f in files:
         p = Path(f["path"])
@@ -56,7 +56,7 @@ def test_python_api_mirrors_the_commands():
 
 
 @pytest.mark.parametrize("what, rel", [("readme", "README.md"), ("setup", "setup.md"), ("yaml", "benchmark.yaml"),
-                                       ("template", "bridge_template.py"), ("classes", "classes.csv"),
+                                       ("template", "bridge_template.py"), ("classes", "classes.csv"), ("make_manifest", "make_manifest.py"),
                                        ("prepare/02_verify.sh", "prepare/02_verify.sh"), ("tests/test_folder.py", "tests/test_folder.py")])
 def test_bench_show_prints_one_file(capsys, what, rel):
     rc, env = _json(capsys, ["bench", "show", "esc50", what])

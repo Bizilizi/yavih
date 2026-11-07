@@ -43,7 +43,7 @@ Related pages: [contributing a benchmark](contributing-a-benchmark.md) (the step
 | `manifest.csv.gz` | yes | Frozen rows; `manifest.sha256` is over the decompressed bytes. |
 | `classes.csv` | iff `manifest.classes` | `index,name[,mid]`. |
 | `bridge_template.py` | yes | The benchmark's streams, a `describe()` with a literal `"model"` and a `reading` in `a`/`v`/`av`/`t`, the `input` block to fill, `used` reporting, `TODO` markers and a "Preprocessing source" docstring slot for the model's own code. |
-| `make_manifest.py` | yes | Re-freezes `manifest.csv.gz` / `classes.csv` byte-identically (through `yavih.freeze`: `gzip_bytes`, `csv_bytes`, `write_if_changed`, `class_balanced_subsample`) and writes the `manifest.upstream.curation` counts it applied. |
+| `make_manifest.py` | yes | Re-freezes `manifest.csv.gz` / `classes.csv` byte-identically (through `yavih.freeze`: `gzip_bytes`, `csv_bytes`, `write_if_changed`, `class_balanced_subsample`) and writes the `manifest.upstream.curation` counts it applied. Its module docstring is the re-freeze recipe ([below](#make_manifestpy)), printed by `yavih bench show <name> make_manifest`. |
 | `prepare/` | yes, non-empty | Prepare-time steps with expected sha256s: download, verify, index builders, materialization, target derivation. |
 | `eval.py` | no | [Hooks](#evalpy-hooks) for the scoring side. |
 | `reader.py` | no | [Folder reader](#readerpy) for what the yaml cannot express. |
@@ -61,7 +61,18 @@ tests with `python -m pytest "$(yavih bench path <name>)/tests" -q -p no:cachepr
 The wheel ships no folder (the core only). A folder's shipped files, what `yavih bench files <name>` lists, are the folder, `prepare/` and `tests/`, minus `assets/`, bytecode and hidden files; a fetched folder is the whole git tree, `assets/` included (`notes/` is never committed). No shipped text file
 of a folder (`*.md`, `*.yaml`, `*.yml`, `*.py`, `*.sh`, `*.txt` in the folder, `prepare/` or `tests/`) may name a
 `notes/` path (`E_NOTES_LINK`). `yavih bench files <name>` lists the shipped files and `yavih bench show <name>
-<what>` prints one (`readme`, `setup`, `yaml`, `template`, `probe`, `classes`, or a path relative to the folder).
+<what>` prints one (`readme`, `setup`, `yaml`, `template`, `eval`, `make_manifest`, `classes`, `conformance`, or a path
+relative to the folder).
+
+### make_manifest.py
+
+The module docstring of `make_manifest.py` is the re-freeze recipe, for the person or agent who re-derives the
+manifest: the public inputs and their pins (upstream revision, file sha256s), the outputs (byte-identical on re-run),
+the curation it applies (exclusions, audits, the seeded train draw), and a `Usage::` block with the command lines,
+`--check` among them (re-derive, compare with the committed files, write nothing). The argument parser takes its
+description from it (`argparse.ArgumentParser(description=__doc__)`, or its first paragraph), so `--help` and
+`yavih bench show <name> make_manifest` say the same. It is not repeated in README.md. `bench lint` reads the file
+with `ast` only: no docstring is `E_MAKE_MANIFEST`, a docstring that never names `--check` is `W_MAKE_MANIFEST_DOC`.
 
 ### prepare/ steps
 
@@ -656,6 +667,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `conformance` | `E_CONFORMANCE_MISSING`, `E_CONFORMANCE_STALE`, `E_CONFORMANCE_DRIFT`, `E_CONFORMANCE_SCHEMA`, `W_CONFORMANCE_SKIPPED` (warning) | `conformance/expected.json` exists, was recorded at the folder's `protocol_version`, and the scoring path reproduces it within tolerance ([conformance](conformance.md)); skipped with a warning when a pinned external package is absent here. |
 | `hashed` | `E_HASHED_PROSE` | No prose (a string of 8+ words or 80+ characters) inside a hashed view: it would fork the hash on a wording edit; prose belongs in `manifest.upstream`, README.md or setup.md. |
 | `layout` | `E_LAYOUT` | `README.md`, `setup.md`, `benchmark.yaml`, `manifest.csv.gz`, `bridge_template.py`, `make_manifest.py`, `tests/test_folder.py` exist; `prepare/` is non-empty; `classes.csv` exists iff `manifest.classes`; no `__init__.py` in the folder or `tests/`. |
+| `manifest_script` | `E_MAKE_MANIFEST`, `W_MAKE_MANIFEST_DOC` (warning) | `make_manifest.py` has a module docstring, the re-freeze recipe ([make_manifest.py](#make_manifestpy)), read with `ast` only; the docstring names `--check`. |
 | `reader` | `E_READER` | An optional `reader.py` loads and its `iter_samples` accepts `shard=`. |
 | `budget` | `E_MANIFEST`, `E_BUDGET`, `E_CURATION` | The manifest reads; `budget.clips` equals the frozen rows per read split; `manifest.upstream.curation` exists, its `per_split.*.listed` equal the frozen rows, and listed plus excluded equals `total_upstream`. |
 | `header` | `E_HEADER`, `W_HEADER_MISSING`, `W_HEADER_STALE` (warnings) | `benchmark.yaml` has a `header: {name, title, venue, abstract}` block (its content is checked by the loader: non-empty strings, an abstract of at most 60 words). Where the header template is at hand (a source checkout; skipped for an installed wheel): `assets/header.png` exists (`W_HEADER_MISSING`), and `assets/header.src.sha256` equals the sha256 of the current header HTML; otherwise the image predates its yaml, chips or template, or it has transparent pixels, an incomplete render (`W_HEADER_STALE`). |

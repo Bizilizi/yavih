@@ -317,6 +317,8 @@ def test_lint_copy_is_clean(esc50_copy):
     (lambda d: (d / "setup.md").write_text((d / "setup.md").read_text(encoding="utf-8") + "\nsee notes/decisions/x.md\n", encoding="utf-8"), "E_NOTES_LINK"),
     (lambda d: (d / "__init__.py").write_text("", encoding="utf-8"), "E_LAYOUT"),
     (lambda d: (d / "make_manifest.py").unlink(), "E_LAYOUT"),
+    # its module docstring is the re-freeze recipe (`bench show <b> make_manifest`)
+    (lambda d: (d / "make_manifest.py").write_text("import sys\n", encoding="utf-8"), "E_MAKE_MANIFEST"),
     (lambda d: (d / "bridge_template.py").write_text(re.sub(r'\s+"reading": "[a-z]+",', "", (d / "bridge_template.py").read_text(encoding="utf-8")), encoding="utf-8"), "E_TEMPLATE"),  # no reading at all (an undeclared one is W_READING_UNKNOWN)
     # the README opens with the header image and carries no changelog / checklist / history section
     (lambda d: (d / "README.md").write_text("# ESC-50\n\n" + (d / "README.md").read_text(encoding="utf-8"), encoding="utf-8"), "E_README"),

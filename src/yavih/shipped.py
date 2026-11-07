@@ -46,7 +46,8 @@ __all__ = [
 ]
 
 #: ``kind`` of a shipped folder file (``yavih bench files``).
-FILE_KINDS: tuple[str, ...] = ("readme", "setup", "yaml", "template", "eval", "manifest", "classes", "conformance", "prepare", "test", "other")
+FILE_KINDS: tuple[str, ...] = ("readme", "setup", "yaml", "template", "eval", "make_manifest", "manifest", "classes", "conformance",
+                               "prepare", "test", "other")
 #: ``yavih bench show <b> <what>``: the short names and the file each one means.
 SHORT_NAMES: dict[str, str] = {
     "readme": "README.md",
@@ -54,6 +55,7 @@ SHORT_NAMES: dict[str, str] = {
     "yaml": "benchmark.yaml",
     "template": "bridge_template.py",
     "eval": "eval.py",
+    "make_manifest": "make_manifest.py",  # its module docstring is the re-freeze recipe
     "classes": "classes.csv",
     "manifest": "manifest.csv.gz",
     "conformance": "conformance/expected.json",
