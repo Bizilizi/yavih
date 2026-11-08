@@ -103,7 +103,8 @@ manifest:
         leakage: 4
         multi_box: 538
         degenerate_box: 2
-      short_clips: 565  # rows with audio (487, prepare/audio_shorter_than_clip_seconds.txt) or video (221) shorter than clip_seconds 10 s
+      short_clips: 565  # rows with audio (487, prepare/audio_shorter_than_clip_seconds.txt) or video (221) shorter than clip_seconds 10 s; 453 train / 112 eval
+      # eval covers 220 of the 221 VGG-SS classes
       leakage_audit: {against: "VGGSound train ytids (metadata/vggsound.csv split==train), source level", excluded: 4}
 
 splits:
@@ -193,8 +194,8 @@ metrics:
     center_in_gt: binomial
   bootstrap: {samples: 2000, seed: 0}
   notes:
-    - "There is no chance level. The floor iou_floor (0.343) predicts the mean train box for every clip; an iou_mean whose interval overlaps 0.343 is not a localization result."
-    - "Through the same metrics the mean box scores acc@0.5 0.186, acc@0.3 0.625 and center_in_gt 0.702: read those next to the model's."
+    - "No chance level. iou_floor (0.343, 95 % CI [0.331, 0.355]) predicts the mean train box for every clip; an iou_mean whose interval overlaps 0.343 is not a localization result."
+    - "The mean train box (cx, cy, w, h) = (0.500, 0.508, 0.506, 0.565) scores acc@0.5 0.186, acc@0.3 0.625 and center_in_gt 0.702: read those next to the model's."
     - "audio_blind = true means shuffling the audio between clips did not hurt by more than 3 McNemar sigma on acc@0.5: then iou_mean measures visual saliency, not audio-visual localization."
     - "At n_eval = 914 the iou_mean bootstrap interval is about ±0.012 and acc@0.5 about ±0.03; a gap below about 0.02 iou_mean needs at least two seeds."
     - "Numbers are not comparable with VGG-SS papers, which score heatmaps against all 5 158 clips (multi-box included) with cIoU and AUC."

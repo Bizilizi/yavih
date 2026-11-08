@@ -30,7 +30,7 @@ and never has to stay in sync with one.
 - Words before identifiers. Say "mean accuracy over the five folds"; the glance table carries `acc_mean`. A
   yavih term (scorer, readout, `protocol_version`) appears only where the reader needs it to compare numbers.
 - Short paragraphs (two to five sentences), a table only where it beats prose, one figure per point.
-- 60 to 120 lines in total, the citation included. A longer page is usually carrying agent material.
+- About 60 to 120 lines in total, the citation included. A longer page is usually carrying agent material.
 - Links only to what anyone can open: the paper, the dataset page, the licence, `setup.md`, and yavih's docs by their
   `https://github.com/Bizilizi/yavih/blob/main/docs/<page>.md` URL (the folder is fetched and shipped without
   `docs/`, `bench lint` enforces it).
@@ -134,7 +134,7 @@ them.
 ````markdown
 ![ESC-50](assets/header.png)
 
-[Paper](https://dl.acm.org/doi/10.1145/2733373.2806390) · [Homepage](https://github.com/karolpiczak/ESC-50) · [Dataset](https://dx.doi.org/10.7910/DVN/YDEPUT) · [setup.md](setup.md)
+[Paper](https://dl.acm.org/doi/10.1145/2733373.2806390) · [Homepage](https://github.com/karolpiczak/ESC-50) · [Dataset](https://dx.doi.org/10.7910/DVN/YDEPUT) · [Licence](https://creativecommons.org/licenses/by-nc/3.0/) · [setup.md](setup.md)
 
 <!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance esc50 --write) -->
 | At a glance | ESC-50 |

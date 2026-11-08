@@ -35,9 +35,9 @@ VGG-SS (Chen, Xie, Afouras, Nagrani, Vedaldi and Zisserman, CVPR 2021) annotates
 split, from 221 sound classes, with one to seven boxes around the visible sound source in the frame at 5.0 s. The
 clips are ten-second YouTube videos with their audio; the annotations are one public JSON file.
 
-VGG-SS is an evaluation set and has no training split. yavih keeps the 4 614 clips with exactly one usable box
+VGG-SS is an evaluation set and has no training split. yavih keeps the 4 618 clips with exactly one usable box
 (538 have several boxes, 2 are degenerate) and drops the 4 whose YouTube source also appears in VGGSound's
-training set. It then splits them 80/20 by source video, stratified by class, into 3 700 training and 914
+training set. It then splits the remaining 4 614 80/20 by source video, stratified by class, into 3 700 training and 914
 evaluation clips, so no YouTube source is on both sides.
 
 The annotations come from the authors' GitHub repository, which states no licence. The videos are VGGSound test

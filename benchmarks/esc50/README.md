@@ -1,6 +1,6 @@
 ![ESC-50](assets/header.png)
 
-[Paper](https://dl.acm.org/doi/10.1145/2733373.2806390) · [Homepage](https://github.com/karolpiczak/ESC-50) · [Dataset](https://dx.doi.org/10.7910/DVN/YDEPUT) · [setup.md](setup.md)
+[Paper](https://dl.acm.org/doi/10.1145/2733373.2806390) · [Homepage](https://github.com/karolpiczak/ESC-50) · [Dataset](https://dx.doi.org/10.7910/DVN/YDEPUT) · [Licence](https://creativecommons.org/licenses/by-nc/3.0/) · [setup.md](setup.md)
 
 <!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance esc50 --write) -->
 | At a glance | ESC-50 |

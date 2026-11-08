@@ -34,7 +34,7 @@ picture agree.
 
 AVE (Tian, Shi, Li, Duan and Xu, ECCV 2018) has 4 143 annotated events in 4 097 YouTube videos of ten seconds,
 drawn from AudioSet. Annotators marked each event as a range of whole seconds in which the source is both heard
-and seen. The videos run at 25 to 30 frames per second with 44.1 kHz audio; a few are shorter than ten seconds.
+and seen. The videos run mostly at 25 to 30 frames per second with 44.1 kHz audio; a few are shorter than ten seconds.
 
 The authors split the events 3 339 / 402 / 402 into train, validation and test, but their splits are not
 video-disjoint (a few videos sit in two of them), and many AVE videos are also in VGGSound's training set, which
@@ -43,7 +43,8 @@ or test video that also appears in AVE train. That leaves 2 624 training events 
 each; the validation split is kept in the manifest but never used.
 
 No licence is recorded for the annotations on the authors' repository or the Hugging Face mirror; the videos are
-YouTube clips under YouTube's terms, for research use. The data is a public download of one 13.4 GB archive.
+YouTube clips under YouTube's terms, for research use. The data is a public download: one 13.4 GB archive, of which the 2 924 videos
+yavih uses are 4 GB.
 
 ## How it is scored
 

@@ -13,8 +13,9 @@ Inputs (all read-only):
 
 Rules: one row per Annotations.txt event whose ``video/<ytid>.mp4`` is a tar member, in Annotations.txt order,
 ``clip_id = <ytid>#<row>``; drop every row whose ytid is in VGGSound train (all splits), then every val/test row
-whose ytid also appears in AVE train (AVE's official splits are not video-disjoint). There is NO train draw: AVE is
-uncapped (``protocol.train_draw: null``); all 2 624 train rows are used.
+whose ytid also appears in AVE train (AVE's official splits are not video-disjoint: 8 videos are in train and test,
+10 in train and val). There is NO train draw: AVE is uncapped (``protocol.train_draw: null``); all 2 624 train rows
+are used.
 
 Outputs:
 
