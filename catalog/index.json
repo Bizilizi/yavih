@@ -80,12 +80,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "c61562ef93c8c73f72ece68a23cf8fed9875135a",
+     "commit": "feb9af68ca6be4af65857a913acb8596e478bd45",
      "core": ">=1.1,<2",
      "path": "benchmarks/ave",
      "protocol_hash": "df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27",
      "protocol_version": 1,
-     "tree": "c6a307079a1869bede93da7febd5d8c7858ecd47"
+     "tree": "426492863dbf5d4e917b13d07730e171a0bd6670"
     }
    ],
    "scorer": "seq",
@@ -242,12 +242,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "6745cafb5affba1bfb747dc204db9b52c564f4be",
+     "commit": "feb9af68ca6be4af65857a913acb8596e478bd45",
      "core": ">=1.1,<2",
      "path": "benchmarks/esc50",
      "protocol_hash": "0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e",
      "protocol_version": 1,
-     "tree": "90f7edd9c5816a6d5a09034a481734afb550abb9"
+     "tree": "914557e0f93dde32d599220183958a37490c566e"
     }
    ],
    "scorer": "clf",
@@ -676,12 +676,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "c6bd3503f390ba68765655087796e504219dd72f",
+     "commit": "feb9af68ca6be4af65857a913acb8596e478bd45",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggss_box",
      "protocol_hash": "f108458e24156e0d49c873b3abb7101f61e077abf664a5282aa43d54b36a7799",
      "protocol_version": 1,
-     "tree": "36ba37a805c842b13249d61fa095603323ada861"
+     "tree": "d9176c6c76ed23f2c05c61ec92e5baced3fc31b3"
     }
    ],
    "scorer": "box",
@@ -719,6 +719,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "dc05b6b73d5c119edc42eabea41b65880f8581f2",
+ "commit": "feb9af68ca6be4af65857a913acb8596e478bd45",
  "repo": "Bizilizi/yavih"
 }
