@@ -1,0 +1,15 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: av
+  split: test
+  rows:
+  - BXmugBgPWcA#447
+- id: clip
+  kind: motion
+  split: test
+  rows:
+  - BXmugBgPWcA#447
+  options:
+    start_s: 1.0
+    seconds: 5.0

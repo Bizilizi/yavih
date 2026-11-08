@@ -35,6 +35,14 @@ Usage::
 
 Every flag defaults to the same yavih config resolution (the folder's ``media_root``, ``[datasets] vggsound``).
 ``--check`` writes nothing and exits 1 if the committed files differ; ``--out DIR`` writes the files elsewhere.
+It needs h5py.
+
+``prepare/05_make_manifest.sh`` runs the check and ``yavih bench verify ave --census``. The optional media census
+must report ``n_errors 0`` and ``short_clip_rows 74`` (= ``manifest.upstream.curation.short_clips``); then the
+folder tests::
+
+    yavih bench prepare ave 04 -- "$(yavih bench path ave)/manifest.csv.gz" "$ROOT/index.json" census.jsonl 24
+    pytest "$(yavih bench path ave)/tests"
 """
 
 from __future__ import annotations
@@ -269,7 +277,7 @@ def check_rows(rows: list[dict[str, str]], names: list[str]) -> collections.Coun
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Freeze the yavih ave manifest from the public AVE annotation and split files")
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--media-root", type=Path, default=None, help="staged AVE root (upstream/, index.json); default: the folder's media_root")
     p.add_argument("--vggsound-csv", type=Path, default=None,
                    help="official VGGSound metadata/vggsound.csv; default $([datasets] vggsound)/metadata/vggsound.csv")

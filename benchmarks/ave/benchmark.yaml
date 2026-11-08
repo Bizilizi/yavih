@@ -184,5 +184,10 @@ metrics:
   ci: {seg_acc: bootstrap_clip, seg_acc_boundary: bootstrap_clip}
   bootstrap: {samples: 2000, seed: 0}
   aggregation: null
+  notes:
+    - "seg_acc_floor (0.172, always background) is low only because 2 194 of 3 248 events span the whole clip: the right clip class on every second scores ~0.83 without localizing."
+    - "Read seg_acc next to clip_acc and seg_acc_boundary (the 104 test rows whose event is shorter than the clip; floor 0.521)."
+    - "316 test clips give about ±2.7 pp sampling error on seg_acc (~±5.5 pp as a 95 % half-width); seg_acc_boundary (n = 104) is ±9.6 pp at p = 0.5."
+    - "Numbers on the unfiltered official test set (402 videos), on part of the clip, or from a fine-tuned encoder are not comparable with these."
 
 readout_params: {T: 10}
