@@ -347,8 +347,18 @@ def _readme_codes(d) -> tuple[set[str], set[str]]:
     return {f.code for f in rep.errors}, {f.code for f in rep.warnings}
 
 
+def _legacy_readme(d) -> None:
+    """Write the legacy shape (Description / Citation / In yavih) into a folder copy."""
+    (d / "README.md").write_text(
+        "![ESC-50](assets/header.png)\n\n[Paper](https://example.org) · [setup.md](setup.md)\n\n"
+        "## Description\n\nSounds.\n\n## Citation\n\n```bibtex\n@misc{x, title = {x}}\n```\n\n"
+        "## In yavih\n\n`protocol_version: 1`, headline `acc_mean`; `make_manifest.py` re-freezes the manifest.\n",
+        encoding="utf-8")
+
+
 def test_lint_accepts_a_legacy_readme_with_a_warning(esc50_copy):
     """Until the fleet migrates a folder, its "## In yavih" README is checked by the legacy rules and flagged."""
+    _legacy_readme(esc50_copy)
     errors, warnings = _readme_codes(esc50_copy)
     assert not errors and "W_README_LEGACY" in warnings
 

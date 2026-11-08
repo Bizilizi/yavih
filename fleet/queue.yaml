@@ -117,7 +117,6 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
-  readme: legacy
 - name: avrobustbench
   title: AVROBUSTBENCH
   kind: benchmark
@@ -327,7 +326,6 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
-  readme: legacy
 - name: finegym_element
   title: FineGym
   kind: benchmark
@@ -807,7 +805,6 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
-  readme: legacy
 - name: vggsound
   title: VGGSound
   kind: benchmark
