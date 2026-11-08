@@ -33,6 +33,16 @@ The rules:
 
 ``--check`` compares the would-be manifest and the yaml's ``budget.clips`` / ``manifest.upstream.curation`` with the
 committed ones instead of writing (exit 1 on drift). numpy is needed; torch is not.
+
+Usage::
+
+    FOLDER=$(yavih bench path vggss_box)
+    python "$FOLDER/make_manifest.py" --check            # byte identity + yaml facts, exit 1 on drift
+    python "$FOLDER/make_manifest.py" --check --census   # + every wav header
+    python "$FOLDER/make_manifest.py"                    # rewrite manifest.csv.gz (in a git checkout)
+    pytest "$FOLDER/tests" -q -p no:cacheprovider        # folder tests; the re-derivation test skips without data
+
+``yavih bench prepare vggss_box 04`` runs the same ``--check``.
 """
 
 from __future__ import annotations
@@ -535,7 +545,7 @@ def yaml_drift(report: Mapping[str, Any], folder: Path = HERE) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--staging-dir", type=Path, default=None, help="dir with vggss.json (default: the folder's annotations_root)")
     p.add_argument("--vggsound-root", type=Path, default=None, help="VGGSound root with video/, audio/, metadata/ (default: the folder's media_root)")
     p.add_argument("--out", type=Path, default=HERE, help="folder to write manifest.csv.gz into (default: this folder)")

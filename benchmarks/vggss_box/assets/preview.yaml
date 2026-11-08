@@ -1,0 +1,15 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: boxes
+  split: eval
+  rows:
+  - 9aR-uBVtrVA_000010
+- id: clip
+  kind: motion
+  split: eval
+  rows:
+  - 9aR-uBVtrVA_000010
+  options:
+    start_s: 4.0
+    seconds: 3.0

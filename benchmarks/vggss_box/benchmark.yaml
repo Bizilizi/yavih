@@ -192,6 +192,12 @@ metrics:
     "acc@0.3": binomial
     center_in_gt: binomial
   bootstrap: {samples: 2000, seed: 0}
+  notes:
+    - "There is no chance level. The floor iou_floor (0.343) predicts the mean train box for every clip; an iou_mean whose interval overlaps 0.343 is not a localization result."
+    - "Through the same metrics the mean box scores acc@0.5 0.186, acc@0.3 0.625 and center_in_gt 0.702: read those next to the model's."
+    - "audio_blind = true means shuffling the audio between clips did not hurt by more than 3 McNemar sigma on acc@0.5: then iou_mean measures visual saliency, not audio-visual localization."
+    - "At n_eval = 914 the iou_mean bootstrap interval is about ±0.012 and acc@0.5 about ±0.03; a gap below about 0.02 iou_mean needs at least two seeds."
+    - "Numbers are not comparable with VGG-SS papers, which score heatmaps against all 5 158 clips (multi-box included) with cIoU and AUC."
 
 readout_params:
   grid: 14
