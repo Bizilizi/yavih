@@ -736,7 +736,8 @@ def _fill_motion(ctx: RenderContext) -> dict[str, Any]:
         ivs = ctx.intervals(0)
     except Exception:  # noqa: BLE001 - the label bar falls back to the row's labels
         pass
-    title = ", ".join(dict.fromkeys([lab for _, _, lab in ivs] or labels)) or ctx.clip_id(0)
+    title = (", ".join(dict.fromkeys([lab for _, _, lab in ivs] or labels))
+             or ctx.extra(0).get("class_name") or ctx.clip_id(0))  # box rows name their class in an extra column
     o = ctx.options
     secs = float(o["seconds"])
     return {"title": title, "chips": [_chip(f"{float(o['start_s']):g}–{float(o['start_s']) + secs:g} s")], "body": ""}

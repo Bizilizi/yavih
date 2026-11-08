@@ -391,3 +391,28 @@ def test_motion_writes_gif_and_mp4(folders, tmp_path, monkeypatch):
     with Image.open(folder / "assets" / "clip.gif") as gif:
         assert gif.size == previews.MOTION_SIZE and gif.n_frames >= 15
     assert _codes(folder)[1] == []
+
+
+class _BoxRowCtx:
+    """A motion row of a box benchmark: no classes.csv label, the class in the ``class_name`` extra column."""
+    options = {"start_s": 4.0, "seconds": 3.0}
+
+    def __init__(self, extra):
+        self._extra = extra
+
+    def labels(self, i):
+        return []
+
+    def intervals(self, i):
+        raise previews.PreviewError("no intervals")
+
+    def extra(self, i):
+        return self._extra
+
+    def clip_id(self, i):
+        return "abc_000010"
+
+
+def test_motion_title_names_a_box_rows_class():
+    assert previews._fill_motion(_BoxRowCtx({"class_name": "lions roaring"}))["title"] == "lions roaring"
+    assert previews._fill_motion(_BoxRowCtx({}))["title"] == "abc_000010"
