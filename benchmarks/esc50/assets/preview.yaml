@@ -1,0 +1,8 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: audio
+  split: '1'
+  rows:
+  - 1-59513-A-0
+  - 1-116765-A-41

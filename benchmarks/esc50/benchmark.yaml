@@ -155,5 +155,11 @@ metrics:
   chance: {acc_mean: 0.02}
   ci: {acc_mean: pooled_binomial}
   aggregation: {over: folds, report: [mean, pstd, per_fold]}
+  notes:
+    - "The floor (always the train-majority class) equals chance, 0.02, because the classes are balanced; an interval that overlaps 0.02 is no result."
+    - "The Wilson 95 % interval over the 2 000 pooled held-out rows is about ±0.022 at 0.5 and ±0.016 at 0.85; one fold of 400 rows is about ±0.035."
+    - "Treat gaps below about 0.015 at one seed as unresolved; run --seeds 0,1,2 before claiming a one-point difference."
+    - "A number near the floor on one fold only (acc_per_fold) means a broken fold extraction: check features validate coverage per fold."
+    - "Published ESC-50 numbers fine-tune the model end to end; a frozen-feature probe is not comparable with them."
 
 readout_params: {}

@@ -30,6 +30,13 @@ Usage::
 ``--media-root`` defaults to the configured ``[data.esc50] media_root`` (``YAVIH_DATA__ESC50__MEDIA_ROOT``).
 ``--no-media`` re-freezes from ``--metadata`` alone (no presence or header checks). ``--check`` exits 1 when
 the re-derived ``manifest.csv.gz`` or ``classes.csv`` differs from the committed files.
+
+Asserted on every run: 5 × 400 rows, 8 per class per fold, 50 classes, the four known cross-fold sources. Writing
+rewrites the folder, so run it in a git checkout of https://github.com/Bizilizi/yavih installed with
+``pip install -e``. The full re-freeze, with the pinned sha256 checks and ``bench verify``, then the folder tests::
+
+    yavih bench prepare esc50 03
+    pytest "$(yavih bench path esc50)/tests"
 """
 
 from __future__ import annotations
@@ -119,7 +126,7 @@ def wav_frames(path: str) -> tuple[int, int, int]:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--media-root", type=Path, default=None, help="the ESC-50 clone (audio/, meta/esc50.csv); default the configured [data.esc50] media_root (YAVIH_DATA__ESC50__MEDIA_ROOT)")
     p.add_argument("--metadata", type=Path, default=None, help="meta/esc50.csv (default: <media-root>/meta/esc50.csv)")
     p.add_argument("--no-media", action="store_true", help="skip presence and WAV-header checks (re-freeze from --metadata alone)")
