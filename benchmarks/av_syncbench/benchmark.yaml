@@ -220,7 +220,7 @@ metrics:
   bootstrap: {samples: 2000, seed: 0}
   notes:
     - "Pairwise accuracy, chance 0.5; a tie (S_pos == S_neg) is wrong, so a constant model scores 0, not 0.5 (tie_rate)."
-    - "Over ~37 700 pairs acc_task_mean's CI is about ±0.005; acc_timbre (818 pairs) about ±0.03, acc_instrument_timbre (229) about ±0.065."
+    - "acc_task_mean's 95 % CI is about ±0.01 (its timbre quarter rests on 818 pairs); acc_timbre about ±0.035, acc_instrument_timbre (229) about ±0.065."
     - "Scored as the authors' toolkit does (fgt7t6g/AV-SyncBench @ 82e1353, copied into pairwise.py): mean diagonal cosine of 0.64 s segments, at most 18 per pair."
     - "acc_offset / acc_jitter / acc_speed are the unweighted means of their levels (the paper's Overall); acc_task_mean, their mean with acc_timbre, is yavih's."
     - "The toolkit's official_0p64 mode scores every segment (no 18 cap); offset-classifiers (Synchformer, SparseSync) use p(offset=0) instead of a cosine: not this scorer."
