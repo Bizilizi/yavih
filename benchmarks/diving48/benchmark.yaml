@@ -58,8 +58,8 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
 budget:
   clips: {train: 15027, test: 1970}
   media_gb: 9.64   # the 16 997 rgb/*.mp4 the manifest reads: 9 635 510 119 B (stat of the staged files)
-  extract_min_per_1k_clips_ref: 1.0  # TODO
-  probe_minutes_ref: {clf: 5}  # TODO
+  extract_min_per_1k_clips_ref: 2.3  # bridge check, DINOv2 ViT-B/14 per frame, 16 frames, RTX 4500 Ada, 4 decode workers: 7.39 clips/s; capped extracts on the shared host ran 3.0 and 2.5 clips/s (storage reads dominated)
+  probe_minutes_ref: {clf: 13}  # clf probe wall 19.7 s on 384 train rows (N=16, D=768, RTX 4500 Ada), scaled x 15027/384
 
 manifest:
   file: manifest.csv.gz
