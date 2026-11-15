@@ -63,10 +63,10 @@ detection.
 
 ## Reference numbers
 
-The paper's model, a pyramid transformer trained end to end on I3D (RGB and optical flow) and VGGish features,
-reaches on the test set mAP 50.6 / 45.8 / 39.8 / 32.4 / 21.1 at tIoU 0.5 / 0.6 / 0.7 / 0.8 / 0.9 and 47.8 on
-average (Geng et al., 2023, Table 2). A frozen-feature probe is a different setting: these numbers are context, not
-a target.
+The paper's model, a pyramid transformer trained on pre-extracted, frozen I3D (RGB and optical flow) and VGGish
+features, reaches on the test set mAP 50.6 / 45.8 / 39.8 / 32.4 / 21.1 at tIoU 0.5 / 0.6 / 0.7 / 0.8 / 0.9 and 47.8
+on average (Geng et al., 2023, Table 2). yavih also reads frozen features, but of the model under test and with its
+small pinned detection head instead of the trained pyramid transformer: these numbers are context, not a target.
 
 ## Citation
 
