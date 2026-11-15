@@ -47,7 +47,8 @@ defaults below are those of the reference implementation (IntegralAction, https:
     norm      the model's pretraining constants with their source (never batch or dataset statistics).
 Gotchas (setup.md "## Gotchas"): one clip, one view (``views`` MUST be 1: no 10-window averaging); train and test
 clips come from different encoders and sizes, never branch on them; the model in ``.eval()``; declare precision
-honestly; labels and class order never reach a bridge.
+honestly; labels and class order never reach a bridge; after importing torchvision call ``av.logging.set_level(None)``
+(torchvision turns on PyAV's Python log callback, which deadlocks decoding with several decode workers).
 """
 
 from __future__ import annotations

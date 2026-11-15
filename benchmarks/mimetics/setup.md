@@ -170,3 +170,7 @@ that YouTube no longer serves.
    400-class list of `k400`.
 6. **Missing test clips.** Coverage below 1 is expected (YouTube removals) and recorded with every number; two
    sites with different downloads score different subsets.
+7. **torchvision and PyAV.** Importing torchvision turns on PyAV's Python log callback
+   (`av.logging.set_level(av.logging.ERROR)`); with several decode workers (`--decode-workers`), a Kinetics-400 file
+   that makes FFmpeg log a message then deadlocks the extraction (every thread waiting, no error). A bridge that
+   imports torchvision calls `av.logging.set_level(None)` after the import.
