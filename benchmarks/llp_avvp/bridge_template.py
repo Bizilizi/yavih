@@ -1,6 +1,6 @@
-"""Bridge skeleton for **unav100** (read setup.md first). Copy, rename, fill the TODOs.
+"""Bridge skeleton for **llp_avvp** (read setup.md first). Copy, rename, fill the TODOs.
 
-``yavih bridge check <file> --bench unav100 --synthetic`` smoke-tests a copy before any data is staged; an
+``yavih bridge check <file> --bench llp_avvp --synthetic`` smoke-tests a copy before any data is staged; an
 unfilled copy fails bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES. A bridge file serves one
 benchmark; each matrix entry (file + args) is one reading of one model.
 
@@ -14,53 +14,56 @@ Preprocessing source: TODO <repo>@<commit> <file>::<function>, e.g. the model's 
     TODO per-clip statistics only if they ARE that recipe; never dataset statistics computed here), audio
     TODO resampler, fbank/mel parameters, audio length and padding, audio normalization statistics.
 
-What UnAV-100 hands ``encode`` (setup.md "Input contract"): per Sample, two RawStreams over the SAME stored
-mp4 (one member of unav_raw_videos.tar, read in place; ``RawStream.open()`` gives a seekable file object, so
-PyAV/torchaudio decode it without extracting anything):
+What LLP hands ``encode`` (setup.md "Input contract"): per Sample, two RawStreams over the SAME stored mp4
+(llp_videos/<ytid>.mp4; ``RawStream.open()`` gives a seekable file object, so PyAV/torchaudio decode it in place):
 
-    s.streams["video"].info: duration_s (10-60 s, 42 s on average), fps (about 12-30), width x height
-                             (up to 1280x720, mixed aspect ratios), container, bytes
-    s.streams["audio"].info: duration_s, sample_rate (44 100), n_samples, channels (1 or 2), container, bytes
-    s.meta["facts"]       == {}   (no label facts: the events live in the manifest, which the bridge never sees)
+    s.streams["video"].info: duration_s (6.8-10.2 s; 683 clips are shorter than 9.9 s), fps, width x height
+                             (mixed resolutions and aspect ratios), container, bytes
+    s.streams["audio"].info: duration_s, sample_rate, n_samples, channels, container, bytes (AAC)
+    s.meta["facts"]       == {"num_segments": 10, "segment_seconds": 1.0}   (labels are per media second)
 
 Nothing is decoded, cut, resized or padded for you. Every model-side choice is yours and is declared in
 ``describe()["input"]``: the temporal rule per stream (which frames / which samples), the
 spatial rule (resize + crop), the audio front end, the normalization constants with their source, and the
 decoder. ``encode`` returns ``(feats, pos, used)``:
 
-    feats  [B, N, D]  the same N and D for every clip (clips last 10 to 60 s: a FIXED token count per clip,
-                      spread over the whole clip, not a fixed token rate)
+    feats  [B, N, D]  the same N and D for every clip
     pos    [B, N, 4]  (stream, t, y, x) in MEDIA coordinates: t = token centre seconds / that stream's
                       info.duration_s; (y, x) = token centre as a fraction of the ORIGINAL frame, or -1;
                       -1 = no axis
     used   B dicts    what you actually fed: {"video": {"times": [pts, ...]},
                                               "audio": {"samples": [[lo, hi], ...], "pad": [left, right]}}
 
-The folder's detection scorer reads ``t`` only: T = 128 bins tile the clip and every token is read at the fraction of the clip it
-lies at. Output contract: ``requires: {pos: [t], streams: []}``: tokens need ``t``; any stream counts, so the
-``a``, ``v`` and ``av`` readings are all eligible. ``(y, x)`` is not used: the placeholder pools each frame's
-patches into one token (``pooling`` below), which keeps a ViT-B feature set at 32 + 32 tokens x 768 per clip
-(~0.9 GB fp16 for the 8 656 train + test clips) instead of 32 x 196 per clip (~80 GB).
+How the scorer reads them: every token goes to the media second ``floor(t * duration_s)`` of its own stream; the
+tokens of a stream are averaged per second (seconds 0-9), and the ten audio and ten video means are what the LLP
+authors' HAN readout sees (it is trained here, on the train clips' video-level labels). A second with no token of a
+stream reads zeros; ``(y, x)`` is not used. Output contract: ``requires: {pos: [t], streams: [], t_bins: 8}``: on
+the median clip at least 8 of the 10 seconds must hold a timed token (of any stream), else ``features validate``
+records ``eligible: false``.
+
+The defaults below are the LLP authors' own features (scripts/extract_frames.py, extract_rgb_feat.py,
+extract_audio.py of YapengTian/AVVP-ECCV20): 80 frames per clip (8 per second) at 224 x 224 (short side 256, centre
+crop, ImageNet mean/std), one pooled feature per frame (ResNet-152's global pool), and the audio at 16 kHz mono in
+ten one-second windows (VGGish's 0.96 s examples). They are a reading of the reference, not protocol: use the
+model's own.
 
 Gotchas (setup.md "Gotchas"; all pass validation silently):
-    * A time-pooled token set (CLS only, learned memory/latent tokens, mean over time) carries no
-      temporal information: the detection probe then sees one instant. Keep per-frame / per-window tokens.
-    * Sample over the WHOLE clip (``uniform`` over ``span: full``, or audio windows over the whole track): a
-      fixed-length window (e.g. the first 10 s) leaves most of a 42 s clip unseen, and those events unfindable.
+    * A time-pooled token set (CLS only, learned memory/latent tokens, mean over time) carries no per-second
+      information: give such tokens t = -1 and expose per-frame / per-window tokens.
     * Report t from the frames you actually decoded (pts / duration_s), not from the times you asked for;
       ``used`` must carry the same pts (E_RULE_MISMATCH tolerance: half a frame + 1 ms).
-    * The audio and video tracks differ in length by up to ~0.2 s; t is a fraction of each stream's OWN
-      duration_s (the probe converts both to seconds).
-    * Mixed resolutions and aspect ratios: a centre crop keeps a different region per clip.
+    * 683 clips last less than 9.9 s (6.8 s at the least) and the two tracks differ in length: never assume
+      10 s. Audio tokens centred in padding you added carry t = -1.
+    * Mixed resolutions and aspect ratios: a centre crop keeps a different region per clip (pos is per_sample).
     * Normalization constants come from the model's pretraining recipe; per-clip statistics only when they
       ARE that recipe (declare them in ``norm`` with their ``source``); batch statistics break batch
       invariance (bridge check E_BATCH_INVARIANCE).
-    * Every UnAV-100 video is a VGGSound source video: a model pretrained on VGGSound has seen 10 s of most
-      train AND test videos. Disclose it next to any number.
+    * Every LLP clip is an AudioSet segment: a model pretrained on AudioSet may have seen the test clips.
+      Disclose it next to any number.
 
-UnAV-100 events are audio-VISUAL: write the ``av`` reading as the headline and the ``a`` and ``v`` readings
-as further matrix entries of this file under one ``model`` name (``--arg reading=a`` / ``v``); all three are
-eligible.
+LLP parses audio AND visual events: write the ``av`` reading as the headline; ``a`` and ``v`` are further matrix
+entries of this file under one ``model`` name (``--arg reading=a`` / ``v``). All three are eligible: a reading that
+hands over one stream feeds it to both of HAN's branches, which then guess the other modality's events from it.
 """
 
 from __future__ import annotations
@@ -71,21 +74,23 @@ import numpy as np
 
 from yavih.bridge import ArgSpec, Bridge, grid_pos
 
-# ---- TODO: the model's choices (placeholders: a ViT-B/16-like video encoder at 224 with tubelet 1 and an
-#      audio encoder over the whole track). Every value here is declared in describe()["input"].
-N_FRAMES = 32  # frames fed per clip; uniform bin centres over the whole clip (1.3 s apart on a 42 s clip)
+# ---- TODO: the model's choices (placeholders: the LLP authors' feature recipe, a frame encoder pooled per frame and
+#      an audio encoder over 1 s windows). Every value here is declared in describe()["input"].
+N_FRAMES = 80  # frames fed per clip: uniform bin centres over the whole clip, 8 per second (the authors' ffmpeg -r 8)
 TUBELET = 1  # frames per temporal token (2 for a tubelet-2 video ViT: T_VIDEO = N_FRAMES // 2)
 T_VIDEO, H_PATCH, W_PATCH = N_FRAMES // TUBELET, 14, 14  # temporal x spatial patch grid of the video tokens
-SIZE = 224  # model input side
-T_AUDIO = 32  # audio tokens: the whole track cut into T_AUDIO equal windows (placeholder front end)
-D_PLACEHOLDER = 4  # TODO: the model's width (768 for ViT-B); the same D for video and audio tokens
+RESIZE_SHORT, SIZE = 256, 224  # short side, then the centre crop the model sees (the authors' ResNet-152 transform)
+AUDIO_RATE = 16000  # the audio front end's rate (the authors' VGGish input: moviepy write_audiofile(fps=16000))
+AUDIO_SECONDS = 10.0  # audio fed: [0, min(duration, 10 s)) right-padded with zeros to 10 s
+T_AUDIO = 10  # audio tokens: one per 1 s window (VGGish: 0.96 s examples)
+D_PLACEHOLDER = 4  # TODO: the model's width (2048 for ResNet-152); the same D for video and audio tokens
 
 
-class UnAV100Bridge(Bridge):
-    name = "TODO-model-unav100"  # optional label of this file, recorded only; the model's name is describe()["model"]
+class LLPAVVPBridge(Bridge):
+    name = "TODO-model-llp_avvp"  # optional label of this file, recorded only; the model's name is describe()["model"]
     batch_size = 8
     dtype = "float16"  # "float16" | "float32" (switch to float32 if bridge check warns about range)
-    pos_mode = "per_sample"  # durations differ between UnAV-100 clips → per-sample t
+    pos_mode = "per_sample"  # durations differ between LLP clips → per-sample t
     streams = ("video", "audio")  # tag order = stream index in pos[:, 0]
     ARGS = {
         "reading": ArgSpec(type=str, default="av", choices=("a", "v", "av"), help="which modality the model sees"),
@@ -118,7 +123,7 @@ class UnAV100Bridge(Bridge):
                 "temporal": {"rule": "uniform", "n": N_FRAMES, "span": "full", "edge": "error"},
                 # TODO: the model's resize/crop. The placeholder below is what _preprocess_video implements
                 # (nearest-neighbour index sampling); replace both with the model's own transform.
-                "spatial": {"resize": {"short": SIZE}, "crop": {"kind": "center", "size": [SIZE, SIZE]},
+                "spatial": {"resize": {"short": RESIZE_SHORT}, "crop": {"kind": "center", "size": [SIZE, SIZE]},
                             "interp": "nearest", "antialias": False},
                 "norm": {"scale": 1 / 255, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225],
                          "source": "TODO: <repo>@<commit> <file> (the model's pretraining recipe)"},
@@ -126,9 +131,9 @@ class UnAV100Bridge(Bridge):
             }
         if "audio" in self.streams:
             out["audio"] = {
-                "temporal": {"rule": "full", "max_s": None, "pad_to_s": None},  # the whole track, no padding
-                "front_end": {"sample_rate": 44100, "resample": "none (TODO: the model's resampler)",
-                              "features": f"TODO (placeholder: log mean power of {T_AUDIO} equal windows)", "channels": "mean",
+                "temporal": {"rule": "full", "max_s": AUDIO_SECONDS, "pad_to_s": AUDIO_SECONDS},
+                "front_end": {"sample_rate": AUDIO_RATE, "resample": "linear interpolation (TODO: the model's resampler)",
+                              "features": f"TODO (placeholder: log mean power of {T_AUDIO} one-second windows)", "channels": "mean",
                               "fit": "decoded samples cut / zero-filled to the declared ranges (AAC priming)"},
                 "norm": {"mean": 0.0, "std": 1.0, "source": "TODO: <repo>@<commit> <file> (pretraining recipe)"},
                 "decoder": decoder,
@@ -148,7 +153,7 @@ class UnAV100Bridge(Bridge):
             "model": "TODO-model",  # the name all of this model's bridges use; results are filed under it
             "layer": self.args["layer"],
             # keep the time axis (pooling over time leaves the probe nothing to localize); space is pooled per frame
-            "pooling": "video: mean over the 14 x 14 patches of each frame (time kept); audio: none",
+            "pooling": "video: mean over the 14 x 14 patches of each frame (time kept); audio: none",  # time must stay
             "views": 1,  # MUST be 1: one deterministic view per clip
             "input": self._input(),
             # DECLARE what you run with; run_extract enforces it (E_PRECISION_UNDECLARED on a null).
@@ -184,9 +189,10 @@ class UnAV100Bridge(Bridge):
                 want = int(sum(int(hi) - int(lo) for lo, hi in ranges))
                 wav = np.concatenate([wav[:want], np.zeros(max(0, want - len(wav)), np.float32)])
                 wav = np.concatenate([np.zeros(int(pad_l), np.float32), wav, np.zeros(int(pad_r), np.float32)])
+                wav = _resample(wav, sr, AUDIO_RATE)  # TODO: the model's resampler (declared in front_end)
                 out["audio"] = {
                     "wav": wav,
-                    "sr": sr,
+                    "sr": AUDIO_RATE,
                     "start": (int(ranges[0][0]) - int(pad_l)) / sr,  # media second of the first fed sample
                     "used": {"samples": [[int(lo), int(hi)] for lo, hi in ranges], "pad": [int(pad_l), int(pad_r)]},
                 }
@@ -249,11 +255,19 @@ class UnAV100Bridge(Bridge):
         return None  # optional: {"peak_gpu_gb": torch.cuda.max_memory_allocated() / 2**30}
 
 
+def _resample(wav: np.ndarray, sr: int, rate: int) -> np.ndarray:
+    """Placeholder resampler: linear interpolation from ``sr`` to ``rate``. TODO: the model's own."""
+    if int(sr) == int(rate) or len(wav) == 0:
+        return wav.astype(np.float32)
+    n = int(round(len(wav) * rate / sr))
+    return np.interp(np.arange(n) * (sr / rate), np.arange(len(wav)), wav).astype(np.float32)
+
+
 def _preprocess_video(frames: np.ndarray) -> np.ndarray:
-    """Placeholder for the declared spatial rule: resize short side → SIZE (nearest), centre crop SIZE²,
+    """Placeholder for the declared spatial rule: resize short side → RESIZE_SHORT (nearest), centre crop SIZE²,
     /255, mean/std. TODO: replace with the model's own transform (and update describe()["input"])."""
     n, h, w, _ = frames.shape
-    scale = SIZE / min(h, w)
+    scale = RESIZE_SHORT / min(h, w)
     nh, nw = max(SIZE, round(h * scale)), max(SIZE, round(w * scale))
     y0, x0 = (nh - SIZE) // 2, (nw - SIZE) // 2
     yi = np.minimum(((np.arange(y0, y0 + SIZE) + 0.5) / scale).astype(np.int64), h - 1)

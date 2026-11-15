@@ -1,229 +1,204 @@
-# llp_avvp: scaffolded from unav100 by `yavih bench new` on 2026-11-15. TODO: every value below is unav100's
-# until this benchmark's manifest, protocol and contracts replace it; run `yavih bench lint` after each edit
-# (it tells you the changelog's protocol_hash / input_hash to write after a protocol edit).
+# yavih benchmark folder: LLP audio-visual video parsing (AVVP). Rows: make_manifest.py from the authors' public
+# annotation files (YapengTian/AVVP-ECCV20); media: the 11 849 ten-second clips of the public HF dataset
+# CserDu123/LLP-dataset. The scorer is the folder's own (eval.py -> avvp.py): the authors' evaluation and their HAN
+# readout. People: README.md; the agent: setup.md.
 schema_version: 3
 name: llp_avvp
 aliases: []
-title: TODO title of llp_avvp (scaffolded from unav100)
-capability:  # TODO: still unav100's; what llp_avvp measures, one or more of audio, visual, audio-visual, temporal, spatial, retrieval, generation, streaming
-- audio-visual
-- temporal
-core: '>=1.1,<2'
+title: LLP audio-visual video parsing (25 classes, per-second audio and visual events, weakly supervised)
+capability: [audio-visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 scorer: llp_avvp
 protocol_version: 1
 changelog:
-- version: 1
-  date: '2026-11-15'
-  invalidates: false
-  reason: 'TODO: scaffolded from unav100 by `yavih bench new`; replace the manifest, protocol, contracts and docs'
-  protocol_hash: 4f0320108f4f83513f37230f8b7c3326b5dce287cfe4bc1e19cfeba98657e318
-  input_hash: 196d66dd237580832a46fd60f53209b552f9ddd1c90101ad25605ef93fee9156
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release, frozen from the LLP annotation files of YapengTian/AVVP-ECCV20 @ fde5611.
+    invalidates: false
+    protocol_hash: ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2
+    input_hash: c1d2cce863af6def3a501a0445be2f37c8ea4ccc0b5cba935c7c87fcf9dc4c99
+    supersedes: []
+
 header:
-  name: llp_avvp
-  title: 'TODO: the title of the paper that introduced the benchmark'
-  venue: 'TODO: authors · venue year'
-  abstract: 'TODO: two or three neutral sentences on the data and the task (at most 60 words).'
+  name: LLP (AVVP)
+  title: "Unified Multisensory Perception: Weakly-Supervised Audio-Visual Video Parsing"
+  venue: "Tian, Li & Xu · ECCV 2020"
+  abstract: >-
+    The Look, Listen and Parse dataset holds 11 849 ten-second YouTube clips of 25 event classes. Training clips
+    carry only video-level labels; 1 849 validation and test clips are annotated second by second, separately for
+    what is heard and what is seen. A model parses each clip into audio, visual and audio-visual events, scored by
+    segment- and event-level F-scores.
+  chips: ["video + audio", "a / v / av event parsing", "11 849 clips", "25 classes", "weak labels for training", "Type@AV F-score"]
+
 source:
   kind: public_url
   urls:
-  - https://huggingface.co/datasets/ttgeng233/UnAV-100
-  - https://github.com/ttgeng233/UnAV
-  - https://unav100.github.io/
-  licence: The HF dataset card (ttgeng233/UnAV-100) declares CC BY-NC-SA 4.0 (non-commercial, share-alike); the project page
-    shows a CC BY 4.0 badge; the code repository is MIT. The media are YouTube videos (VGGSound sources) subject to YouTube's
-    terms. Research use; cite Geng et al., CVPR 2023.
-  revision: daeb88bc14eeff48f8a4ac2836b67f6c350f847b
-  bytes: 65776160133
+    - "https://github.com/YapengTian/AVVP-ECCV20"
+    - "https://huggingface.co/datasets/CserDu123/LLP-dataset"
+    - "https://arxiv.org/abs/2007.10558"
+  revision: "fde56118f2c2e7c19188dfefa2569a37b70054fe"   # the annotation repository; the HF media zip is pinned in prepare/02_media.sh
+  licence: >-
+    LLP annotations and code (YapengTian/AVVP-ECCV20): GNU GPL v3.0, as the repository README states (no LICENSE
+    file in the repository). Media: YouTube videos (AudioSet segments) that stay their uploaders'; the authors
+    distribute none. The HF dataset CserDu123/LLP-dataset that redistributes the cut clips carries an apache-2.0
+    tag, which cannot relicense them: research use only; cite Tian et al., ECCV 2020.
+  bytes: 13439154355          # llp_video.zip (13 438 121 116 B) + the six annotation files (1 033 239 B)
   sha256:
-    data/train.parquet: d8b1302fc12dc22a62ca23b592392cb000d00d2a487a70aa40876dde52742d55
-    data/validation.parquet: 551e1781c8a8fd77cb7a1daf0ad9b71346c615864de7bba6fb5dba3565dadc6b
-    data/test.parquet: 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
-    unav_raw_videos.tar.gz.part_00: aa8dc6798fc8b99d69533b4ebd068a0f659532d13ff82a21a527db5fbdd37f65
-    unav_raw_videos.tar.gz.part_01: d549709123379d9c9f3b63d2aabd31a09f72c0004c50178e0a8b509896122af0
-    unav_raw_videos.tar.gz.part_02: 2f1fae736a5d567519bb6edfa2c79f97571923a6dbb679fb0350adf8df59aeb0
-    unav_raw_videos.tar.gz.part_03: 021ef07d239e735af94a76e46421350788850b2a3b5bfb44b8124b1205cfd6ba
-    unav_raw_videos.tar.gz.part_04: 89c2097a6bab34441302d2f2db65d4e504468a9f7ade713bef4698c6d6223546
-    unav_raw_videos.tar.gz.part_05: f56ad30d4e4bee762f8c9577689a909e93a267785f7e4452fafe5d987e106a1a
-    unav_raw_videos.tar.gz.part_06: 25cea1db67f92036241fcb84a4da430be3b79d9a49a620252cab20f18d141d37
-    unav_raw_videos.tar.gz.part_07: feb5c3f1268c8125d3d9012ef0c37f4e8dc6ddff0493922e3d6dbbc71d7c7677
-    unav_raw_videos.tar.gz.part_08: 064ca3707ed4b234ae935413d4f95dc7bc9e55d716df8f39a00576f40dd142d1
-    unav_raw_videos.tar.gz.part_09: 6b5f72f5892e36aa808c357a365cabe826bafa28438cd308e7596977265f0a9a
-    unav_raw_videos.tar.gz.part_10: 5ddca8ddc839cdf71a6f0d0c8e67bc14400bf8aaf1e9a8f646f7bfba9eefcc69
-    unav_raw_videos.tar.gz.part_11: 815520a0b00649d77f22e6a4abc18b1e971691d6da355ba7bd951e6cbc45c600
-    unav_raw_videos.tar.gz.part_12: d38371218b5f1dcf2babd039b882608ecf4cd24a6863b4f6c6a39dc03eb788d3
-  notes: 'TODO: where the data comes from (the scaffold still describes unav100''s source)'
-obtain:
+    AVVP_train.csv: bbeb83e8af46a85075216b213d3464f92dd4ab71468c852ae454b82cc745c0a4
+    AVVP_val_pd.csv: 1811813b54c5f43c3be0a97bd0971cfb8a93818ca7b3ab96cdc7f4ac37ef37a6
+    AVVP_test_pd.csv: 3f7a2b040e3b67c15d08efef25002bf8c5b2320f11049eb99ae0eb2d62f8eb9b
+    AVVP_eval_audio.csv: d5435664668bec6e7eafb39059d2f424ed2682f6b55395262fc3cb691b7d0778
+    AVVP_eval_visual.csv: e2274af694f3f27e38b840e0cd91a9d8d9ac85280f193e90828d26b22db69abe
+    AVVP_dataset_full.csv: 89f112ffc602279c87cc2b2040c4cd42eaf163a9d7e61cf4e74250a343d21e56
+    llp_video.zip: 36093363b2d6cc540d1da665fd78af73d339cc6e3eeeb0993778b967e75211d3
+  notes: >-
+    The authors publish the annotations and pre-extracted features (Google Drive), not the videos: their
+    scripts/download_dataset.py fetches each clip from YouTube and cuts [start, start + 10 s] (libx264 + aac).
+    CserDu123/LLP-dataset @ 31727951 holds all 11 849 clips cut that way (llp_video.zip; an audio_data.zip of mp3s is
+    not used). Spot checks against an AudioSet copy matched the segments within 30 ms.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
   tier: auto
-  how: 'TODO: who must act before the data can be staged, and how'
+  how: "Nobody acts by hand: prepare/01 fetches the six annotation files from GitHub, 02 downloads and unzips the public HF zip of the 11 849 clips (13.4 GB, no account)"
+
 budget:
-  clips:
-    train: 6489
-    test: 2167
-  media_gb: 52.8
-  extract_min_per_1k_clips_ref: 6.0
-  probe_minutes_ref:
-    llp_avvp: 30
+  clips: {train: 10000, val: 649, test: 1200}
+  media_gb: 13.5              # 13 536 718 753 B: the 11 849 extracted mp4 (every row reads one)
+  extract_min_per_1k_clips_ref: 6.0   # TODO: not measured (the scaffold's value); measured by the trial run
+  probe_minutes_ref: {llp_avvp: 30}   # TODO: not measured yet
+
 manifest:
   file: manifest.csv.gz
-  sha256: b1e2c33ba85d1185f792878bb379533e9b1163cf5bc4e960cc9e18c58d921a19
+  sha256: de4e0c77e724ab5abc433db99d810a1b2d827c9bdbee693cb1c720452217b3c6
   classes: classes.csv
-  classes_sha256: 536278a0a3e1f880d369ad7faf7b6e933b5d48d025a6d0bd5e2727389bfaf6a9
+  classes_sha256: 321326aa194c853244079ba4362d052fa3a840df389ea44edcf2816e28a650eb
   key: clip_id
   label:
-    column: labels
+    column: labels            # the weak video-level labels (the only labels of train)
     kind: multi
-    sep: ;
+    sep: ";"
     class_key: name
     sets: null
     train_set: null
     allow_unknown: false
     empty_ok: false
   columns:
-    rel_media:
-      type: str
-      role: media
-      stream:
-      - video
-      - audio
-    duration_s:
-      type: float
-      role: label_aux
-    events:
-      type: str
-      role: label_aux
+    rel_media: {type: str, role: media, stream: [video, audio]}   # llp_videos/<ytid>.mp4: the media cell of both streams
+    ytid: {type: str, role: extra}             # YouTube id (provenance; never handed over)
+    start_s: {type: float, role: extra}        # segment start in the YouTube video, seconds (as in the filename)
+    audio_events: {type: str, role: label_aux}   # val/test: onset:offset:class_index;... (dense audio labels)
+    visual_events: {type: str, role: label_aux}  # val/test: the same for what is seen
   upstream:
-    source: HF ttgeng233/UnAV-100 @ daeb88bc data/{train,validation,test}.parquet (= the authors' unav100_annotations.json)
-    sha256: 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
-    rows: 10790
-    note: One row per video (10 790 videos, 30 059 events, 100 classes; train 6 489 / validation 2 134 / test 2 167 videos,
-      18 123 / 6 036 / 5 900 events). No curation, no train draw. Every video is a VGGSound video (1 661 test videos in VGGSound
-      train and 506 in VGGSound test, train videos 5 028 and 1 461), so a model pretrained on VGGSound has seen 10 s of most
-      of them; the official splits are kept and the overlap is disclosed, not filtered.
+    source: "YapengTian/AVVP-ECCV20 @ fde5611 data/AVVP_{train,val_pd,test_pd,eval_audio,eval_visual,dataset_full}.csv"
+    sha256: 3f7a2b040e3b67c15d08efef25002bf8c5b2320f11049eb99ae0eb2d62f8eb9b
+    rows: 11849
+    note: >-
+      One row per video in the official splits (train 10 000 with weak labels only; val 649 and test 1 200 with dense
+      audio and visual events), no curation and no draw. Dense rows are matched to videos by exact filename, as the
+      authors' evaluation does: 14 audio and 11 visual rows name no val/test video and are ignored (so
+      19jWnmYnlD8_30_40, whose rows say _30_400, has no ground truth); 5 scored audio rows have offset <= onset and
+      mark nothing. Test videos without audio / visual events: 5 / 121. Every clip is an AudioSet segment: a
+      model pretrained on AudioSet may have seen them.
     upstream_files:
-      ttgeng233/UnAV-100@daeb88bc/data/train.parquet: d8b1302fc12dc22a62ca23b592392cb000d00d2a487a70aa40876dde52742d55
-      ttgeng233/UnAV-100@daeb88bc/data/validation.parquet: 551e1781c8a8fd77cb7a1daf0ad9b71346c615864de7bba6fb5dba3565dadc6b
-      ttgeng233/UnAV-100@daeb88bc/data/test.parquet: 36a7d528772c1be736c105bfc65955255c822e99b7ceded64ef6e1b9c969df45
-      unav100_annotations.json (authors' Google Drive file): 2fdfc587ad36fc405496b5520d967b5df54b2d82027d16d69e968b5cf04d3dba
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_train.csv: bbeb83e8af46a85075216b213d3464f92dd4ab71468c852ae454b82cc745c0a4
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_val_pd.csv: 1811813b54c5f43c3be0a97bd0971cfb8a93818ca7b3ab96cdc7f4ac37ef37a6
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_test_pd.csv: 3f7a2b040e3b67c15d08efef25002bf8c5b2320f11049eb99ae0eb2d62f8eb9b
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_eval_audio.csv: d5435664668bec6e7eafb39059d2f424ed2682f6b55395262fc3cb691b7d0778
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_eval_visual.csv: e2274af694f3f27e38b840e0cd91a9d8d9ac85280f193e90828d26b22db69abe
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_dataset_full.csv: 89f112ffc602279c87cc2b2040c4cd42eaf163a9d7e61cf4e74250a343d21e56
     curation:
-      total_upstream: 10790
+      total_upstream: 11849
       per_split:
-        train:
-          listed: 6489
-          staged: 6489
-          missing: 0
-        validation:
-          listed: 2134
-          staged: 2134
-          missing: 0
-        test:
-          listed: 2167
-          staged: 2167
-          missing: 0
+        train: {listed: 10000, staged: 10000, missing: 0}
+        val: {listed: 649, staged: 649, missing: 0}
+        test: {listed: 1200, staged: 1200, missing: 0}
       excluded: {}
+      short_clips: 683          # clips whose container is shorter than 9.9 s (6.77 s at the least); a fact, nothing is cut or padded
+      leakage_audit: {against: "YouTube-id overlap between the train, val and test files (asserted empty)", excluded: 0}
+      # invariant: 10000 + 649 + 1200 == 11849
+
 splits:
-  train:
-  - train
-  eval:
-  - test
+  train: [train, val]         # train: fitted (weak labels); val: epoch selection on its dense labels, never fitted (avvp.py)
+  eval: [test]
   floor: []
   folds: null
-  unused:
-  - validation
+  unused: []
   min_eval_coverage: 0.95
-fields:
+
+fields:                       # hashed: what is handed over; both streams read the same mp4
   video:
     storage: file
     kind: video
     media_column: rel_media
     root: media_root
-    layout: tar_index
+    layout: dir
     layout_params: {}
     required: true
   audio:
     storage: file
     kind: audio
-    media_column: rel_media
+    media_column: rel_media   # the same mp4 as video (read once)
     root: media_root
-    layout: tar_index
+    layout: dir
     layout_params: {}
     required: true
+
 targets: null
+
 data:
   roots:
     media_root:
-      default: ${data.root}/unav100
-      description: unav_raw_videos.tar (one tar, never extracted) + index.json (members video/<ytid>.mp4 → [shard, offset,
-        size]) + upstream/data/{train,validation,test}.parquet
-  tar_index: index.json
+      default: "${data.root}/llp_avvp"
+      description: "llp_videos/<ytid>.mp4: the 11 849 clips of CserDu123/LLP-dataset llp_video.zip, extracted (prepare/02); download/ holds the zip while it runs"
+    annotations_root:
+      default: "${data.root}/llp_avvp/annotations"
+      prepare_only: true
+      description: >-
+        PREPARE-TIME SOURCE ONLY: the six AVVP_*.csv annotation files (prepare/01) read by make_manifest.py; the
+        frozen manifest already carries every label
+  tar_index: null
   derived: {}
-input_contract:
+
+input_contract:               # hashed; setup.md "## Input contract" ends with a copy
   handed_over:
-    video: the UnAV-100 mp4 (tar member video/<ytid>.mp4 of unav_raw_videos.tar) exactly as stored, read in place; its H.264
-      track (10-60 s, about 12-30 fps, up to 1280x720) is described by info; nothing decoded, cut, resized or padded
-    audio: the same mp4 bytes as video (one tar member, read once); its AAC track (44.1 kHz, mono or stereo) is described
-      by info; nothing decoded, resampled, cut or padded
+    video: "the LLP clip mp4 (llp_videos/<ytid>.mp4 of the extracted CserDu123/LLP-dataset zip) exactly as stored; its H.264 track (6.8-10.2 s) is described by info; nothing decoded, cut, resized or padded"
+    audio: "the same mp4 bytes as video (read once); its AAC track is described by info; nothing decoded, resampled, cut or padded"
   info:
-    video:
-    - duration_s
-    - fps
-    - width
-    - height
-    - container
-    - bytes
-    audio:
-    - duration_s
-    - sample_rate
-    - n_samples
-    - channels
-    - container
-    - bytes
-  facts: []
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: [num_segments, segment_seconds]
   materialize: null
-output_contract:
+
+output_contract:              # hashed; machine-checked by validate; setup.md "## Output contract" ends with a copy
   shape: fixed
   coordinates: media
   target_frame: null
   requires:
-    pos:
-    - t
+    pos: [t]
     streams: []
     grid: null
-    t_bins: null
-external: []
-protocol:
-  clip_seconds: null
+    t_bins: 8
+
+external: []                  # the authors ship no package: their evaluation and HAN are copied into the folder
+
+protocol:                     # label facts only (hashed)
+  clip_seconds: 10.0
   train_draw: null
   views: none
-  tiou_thresholds:
-  - 0.1
-  - 0.2
-  - 0.30000000000000004
-  - 0.4
-  - 0.5
-  - 0.6
-  - 0.7000000000000001
-  - 0.8
-  - 0.9
+  num_segments: 10            # labels per media second 0-9 (the authors' evaluation is fixed to 10 x 1 s)
+  segment_seconds: 1.0
+
 metrics:
-  headline: map_avg
-  list:
-  - map_avg
-  - map@0.5
-  - map_tiou
-  - n_events
-  - n_eval
-  table:
-  - map_avg
-  - map@0.5
-  floors:
-  - map_avg_floor
+  headline: seg_type_av
+  list: [seg_type_av, seg_event_av, seg_a, seg_v, seg_av, evt_type_av, evt_event_av, evt_a, evt_v, evt_av, n_eval]
+  table: [seg_type_av, seg_event_av, evt_type_av, evt_event_av]
+  floors: [seg_type_av_floor, seg_event_av_floor, evt_type_av_floor, evt_event_av_floor]
   controls: []
   chance: {}
-  ci:
-    map_avg: bootstrap_clip
-  bootstrap:
-    samples: 2000
-    seed: 0
+  ci: {seg_type_av: bootstrap_clip, evt_type_av: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
   aggregation: null
-readout_params:
-  T: 128
+  notes:
+    - "TODO"
+
+readout_params: {}

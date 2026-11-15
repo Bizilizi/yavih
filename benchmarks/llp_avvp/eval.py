@@ -1,13 +1,13 @@
-# TODO: copied verbatim from unav100 by `yavih bench new`; replace it with this benchmark's own targets, metrics or authors' scorer (or delete it together with what benchmark.yaml takes from it).
-# Delete this banner once the file is this benchmark's own.
-"""``unav100``: the folder's own temporal-detection scorer and its metrics.
+"""``llp_avvp``: the folder's own scorer and metrics (weakly-supervised audio-visual video parsing on LLP).
 
-The scorer (head, loss, targets, decoding, the ActivityNet detection AP, the floor, the conformance population) is
-``detection.py``, next to this file and byte-identical in every folder that detects timed events (a candidate for
-the core). This file names the folder's event encoding (``start_s:end_s:class``, the UnAV-100
-annotation in seconds) and its metric names: ``map_avg`` (mean AP over tIoU 0.1:0.1:0.9, the UnAV-100 authors'
-average), ``map@0.5``, ``map_tiou`` (per threshold), ``n_events`` and the floor ``map_avg_floor``. The UnAV-100
-authors' evaluation (ActivityNet's ``eval_detection.py``) is not pip-installable; this is a transcription of it.
+The scorer is ``avvp.py`` (next to this file): the LLP authors' evaluation (``avvp_eval_metrics.py``, their
+``utils/eval_metrics.py`` copied byte for byte, called per video as their ``main_avvp.py::eval`` does) and their
+readout (``han.py``, the HAN / MMIL network of ``nets/net_audiovisual.py``, trained with ``main_avvp.py``'s recipe
+on the bridge's per-second pooled features). Source: https://github.com/YapengTian/AVVP-ECCV20 at
+``fde56118f2c2e7c19188dfefa2569a37b70054fe`` (GPL-3.0); the authors ship no pip package, so nothing is imported
+from them. Metrics, in percent as the authors print them: segment-level and event-level F-scores of the audio,
+visual and audio-visual events (``seg_a`` … ``evt_av``), Type@AV (``seg_type_av``, the headline and the authors'
+model-selection criterion; ``evt_type_av``) and Event@AV (``seg_event_av``, ``evt_event_av``).
 Module scope: stdlib, numpy, yavih core.
 """
 
@@ -36,11 +36,9 @@ def _sibling(name: str):
     return sys.modules[mod_name]
 
 
-detection = _sibling("detection.py")
-EVENTS_FORMAT = "start_s:end_s:class"
-PROTOCOL_KEYS = frozenset({"tiou_thresholds"})
-SCORER = detection.make_scorer("llp_avvp", module=__name__, events_format=EVENTS_FORMAT)
-METRICS = detection.make_metrics("llp_avvp", mean="map_avg", per_tiou="map_tiou", at={"map@0.5": 4}, floor="map_avg_floor",
-                                 n_events="n_events")
+avvp = _sibling("avvp.py")
+PROTOCOL_KEYS = frozenset({"num_segments", "segment_seconds"})
+SCORER = avvp.make_scorer("llp_avvp", module=__name__)
+METRICS = avvp.make_metrics("llp_avvp")
 
-__all__ = ["SCORER", "METRICS", "PROTOCOL_KEYS", "EVENTS_FORMAT", "detection"]
+__all__ = ["SCORER", "METRICS", "PROTOCOL_KEYS", "avvp"]

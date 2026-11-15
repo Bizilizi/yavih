@@ -5,62 +5,74 @@
   "eval": 64,
   "floor": 0,
   "folds": 0,
-  "train": 64
+  "train": 128
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "437fe977e04d58b360c12f53be06102851472872",
+  "commit": "846c74d8bfe9d4539d7b4915600224f4286234b2+dirty",
   "externals": {},
   "folder_source": {
-   "eval": "4f5e445ca254c4bcc8d7869ea5153e6af2c06dac34545c84b924ee396db21ee1",
+   "eval": "95fbc985ae304a247a1115d7e275b808eed1a1b2aafb674e32c11d06e4dfb9ec",
    "reader": null
   },
-  "protocol_hash": "4f0320108f4f83513f37230f8b7c3326b5dce287cfe4bc1e19cfeba98657e318",
+  "protocol_hash": "ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2",
   "scorer": {
    "kind": "probe",
    "name": "llp_avvp",
    "version": 1
   },
-  "scoring_hash": "3000bd4ab95edb611dbf56795a994ddd2b240674bf10b2defc6479686e00d70f",
+  "scoring_hash": "74aa8d8a7a5224e6ce12d482b6b7e0ea31c6ef900190fcd2e2f6ad566573e0f2",
   "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {
-  "map@0.5": 0.001,
-  "map_avg": 0.001,
-  "map_avg_floor": 0.001,
-  "map_tiou": 0.001,
+  "evt_a": 0.001,
+  "evt_av": 0.001,
+  "evt_event_av": 0.001,
+  "evt_event_av_floor": 0.001,
+  "evt_type_av": 0.001,
+  "evt_type_av_floor": 0.001,
+  "evt_v": 0.001,
   "n_eval": 0.001,
-  "n_events": 0.001
+  "seg_a": 0.001,
+  "seg_av": 0.001,
+  "seg_event_av": 0.001,
+  "seg_event_av_floor": 0.001,
+  "seg_type_av": 0.001,
+  "seg_type_av_floor": 0.001,
+  "seg_v": 0.001
  },
  "values": {
   "*": {
    "ci95": {
-    "map_avg": [
-     8.935446821505225e-05,
-     0.0010618312335471886
+    "evt_type_av": [
+     0.34611951994764495,
+     0.8050509723686805
+    ],
+    "seg_type_av": [
+     2.0515998195517815,
+     3.332667656723128
     ]
    },
    "controls": {},
    "floors": {
-    "map_avg_floor": 0.01230690932212917
+    "evt_event_av_floor": 5.868055555555555,
+    "evt_type_av_floor": 5.034722222222222,
+    "seg_event_av_floor": 9.565832762462772,
+    "seg_type_av_floor": 8.453798915736158
    },
    "metrics": {
-    "map@0.5": 0.0,
-    "map_avg": 0.00022246984068951403,
-    "map_tiou": [
-     0.0015429264435970521,
-     0.0004593021226085742,
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     0.0
-    ],
+    "evt_a": 0.9479554010804012,
+    "evt_av": 0.11589972527472528,
+    "evt_event_av": 0.7550626663349878,
+    "evt_type_av": 0.5671199942033276,
+    "evt_v": 0.6375048562548563,
     "n_eval": 64,
-    "n_events": 195
+    "seg_a": 3.617066900098424,
+    "seg_av": 1.5620699059981131,
+    "seg_event_av": 3.4762954558718735,
+    "seg_type_av": 2.684781434537887,
+    "seg_v": 2.8752074975171245
    }
   }
  }
