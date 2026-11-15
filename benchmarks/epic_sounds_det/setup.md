@@ -152,6 +152,9 @@ decode workers for 10-s recordings, i.e. it is decode-bound at roughly 200x real
   decoded audio to the declared range so `used` matches what was fed.
 - Segments are short (median 1.0 s, 90 % under 7 s) but some last minutes: a hop above 0.5 s or a window above a few
   seconds blurs most boundaries without failing any check.
+- The readout's `readout_params.T` = 1024 bins span the whole recording, so its time resolution falls with length:
+  about 0.5 s per bin at the mean recording length (501 s), 3.6 s on the longest (3 708 s, train) and at most 1.9 s
+  on validation (0.34 s at its mean). On long recordings one bin is coarser than the median 1.0 s segment.
 - 285 labelled segments end after the recording's duration as EPIC-KITCHENS-100 lists it (`EPIC_100_video_info.csv`;
   by 6.7 minutes on P01_03): they are scored as upstream defines them, and no bridge choice can reach them.
 - Background segments (class 13) are training targets but not scored (the official C10 rule); the paper's Table V
