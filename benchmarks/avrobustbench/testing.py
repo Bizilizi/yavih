@@ -4,8 +4,10 @@ The core clf fixture (``yavih.testing.make_synthetic_like``) writes the media an
 eval rows into this benchmark's shape, so that the folder's own metrics (``eval.py``: per-condition accuracy, ``macc``,
 ``alpha`` / ``rho``, the source-clip bootstrap) run in every trial stage: each eval row becomes one condition of a
 source clip, ``clip_id = val_<source>#<condition>`` over the 16 ``protocol.conditions``, all conditions of a source
-sharing its label, plus the real folder's ``protocol`` keys, ``condition`` column, metrics block and ``eval.py``.
-The core oracle / random bridges serve it (no ``write_bridge``). Module scope: stdlib, yaml, yavih core.
+sharing its label, plus the real folder's ``protocol`` keys, ``condition`` column, metrics block and ``eval.py``;
+the media are rewritten in this benchmark's form (10 frames at 1 fps, 16 kHz audio) so the bridge template's
+rules hold on them. The core oracle / random bridges serve it (no ``write_bridge``). Module scope: stdlib, yaml,
+yavih core; writing the media needs PyAV, soundfile and numpy.
 """
 
 from __future__ import annotations
@@ -20,6 +22,26 @@ from pathlib import Path
 import yaml
 
 from yavih.freeze import csv_bytes, gzip_bytes
+
+
+def _write_media(mp4: Path, wav: Path, clip_id: str) -> None:
+    """Replace the core fixture's tiny files with this benchmark's form: 10 frames of 64 x 64 at 1 fps (H.264 when
+    PyAV has it) and 10 s of 16 kHz mono PCM-16, both seeded by the clip id (the oracle bridge reads no pixels)."""
+    import av
+    import numpy as np
+    import soundfile as sf
+
+    rng = np.random.default_rng(int(hashlib.sha256(clip_id.encode()).hexdigest()[:8], 16))
+    with av.open(str(mp4), "w") as c:
+        st = c.add_stream("libx264" if "libx264" in av.codecs_available else "mpeg4", rate=1)
+        st.width, st.height, st.pix_fmt = 64, 64, "yuv420p"
+        for _ in range(10):
+            img = rng.integers(0, 256, (64, 64, 3), dtype=np.uint8)
+            for p in st.encode(av.VideoFrame.from_ndarray(img, format="rgb24")):
+                c.mux(p)
+        for p in st.encode():
+            c.mux(p)
+    sf.write(str(wav), (0.1 * rng.standard_normal(160000)).astype(np.float32), 16000, subtype="PCM_16")
 
 
 def make_stand_in(work, real, *, n_eval, n_train):
@@ -58,6 +80,12 @@ def make_stand_in(work, real, *, n_eval, n_train):
     spec["metrics"] = {key: m[key] for key in ("headline", "list", "table", "floors", "controls", "chance", "ci", "bootstrap")
                        if key in m}
     spec["metrics"]["chance"] = {key: round(1.0 / len(classes), 6) for key in m.get("chance", {})}
+    spec["input_contract"]["handed_over"] = {
+        "video": "a synthetic 10-frame, 1 fps, 64 x 64 mp4 (10 s), random pixels seeded by the clip id",
+        "audio": "a synthetic 10 s, 16 kHz mono PCM-16 wav of noise seeded by the clip id"}
+    media_root = Path(spec["data"]["roots"]["media_root"]["default"])
+    for r in rows:
+        _write_media(media_root / r["rel_video"], media_root / r["rel_audio"], r["clip_id"])
     shutil.copy2(Path(real.folder) / "eval.py", folder / "eval.py")
     (folder / "benchmark.yaml").write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
     readme = folder / "README.md"

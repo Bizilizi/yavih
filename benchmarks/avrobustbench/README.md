@@ -52,9 +52,12 @@ names the most frequent training class, also about 0.3 %. Next to it come the cl
 accuracy under each corruption and per group, and the two robustness ratios of the paper: absolute robustness, one
 minus the drop, and relative robustness, the corrupted accuracy as a share of the clean one.
 
-The corruption code is the authors' own, with a few changes to make it run and to seed it, and the frame sampling
-is CAV-MAE's. The authors released no scoring code, so the robustness ratios follow the implementation the paper
-cites for them (Schiappa et al., NeurIPS 2022).
+The corruptions are made by the [authors' own code](https://github.com/sarthaxxxxx/AV-C-Robustness-Benchmark), with
+a few changes to make it run and to seed it, and the frame sampling is
+[CAV-MAE's](https://github.com/YuanGongND/cav-mae). The authors released no scoring code: accuracy is yavih's
+classification probe, and the robustness ratios follow the
+[implementation the paper cites for them](https://github.com/Maddy12/VideoLanguageModelRobustness) (Schiappa et
+al., NeurIPS 2022).
 
 Not this benchmark: the authors' downloadable VGGSOUND-2C files, which hold 14 of the 15 corruptions with compressed
 44.1 kHz audio; severities other than 5; and the other three AVROBUSTBENCH datasets (AUDIOSET-2C, KINETICS-2C,
