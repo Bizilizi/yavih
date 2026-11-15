@@ -9,19 +9,19 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "79004b3d7c34fef885c22e45e14049e0c21b6a1f+dirty",
+  "commit": "9faec3b245425da1632d389aeec4891f00a63dcb",
   "externals": {},
   "folder_source": {
    "eval": "8a0ad04ac3fbe83d0a857e661b5c6d5ea8ff54a04f4beac84fe103a790cf3b1f",
    "reader": null
   },
-  "protocol_hash": "55a0776179f61ac7ef36cfbe8dcf01c628d4ad4378ef025040c207056ea264fd",
+  "protocol_hash": "d85f3fea8a15517643015cd7cb37bb9758faad60b51e7e09f36ab2449d566418",
   "scorer": {
    "kind": "stateless",
    "name": "av_syncbench",
    "version": 1
   },
-  "scoring_hash": "468d3ebfa0f54ff5a376e4dfc1a4ff075016b1481e5a71d820cc5625628bea51",
+  "scoring_hash": "baa8eaaed2ca110677d377a0fd53ecc3f959e6de408272271c6e0a79241f8201",
   "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
@@ -32,7 +32,6 @@
   "acc_jitter_l1": 0.001,
   "acc_jitter_l2": 0.001,
   "acc_jitter_l3": 0.001,
-  "acc_mean": 0.001,
   "acc_offset": 0.001,
   "acc_offset_100ms": 0.001,
   "acc_offset_200ms": 0.001,
@@ -50,6 +49,7 @@
   "acc_speed_115": 0.001,
   "acc_speed_120": 0.001,
   "acc_speed_125": 0.001,
+  "acc_task_mean": 0.001,
   "acc_timbre": 0.001,
   "acc_voice_timbre": 0.001,
   "invalid_rate": 0.001,
@@ -71,10 +71,6 @@
      0.15,
      0.6444444444444444
     ],
-    "acc_mean": [
-     0.3299044312169312,
-     0.5529211182336181
-    ],
     "acc_offset": [
      0.36571428571428577,
      0.7468154761904761
@@ -82,6 +78,10 @@
     "acc_speed": [
      0.22238401875901873,
      0.45538392857142834
+    ],
+    "acc_task_mean": [
+     0.3299044312169312,
+     0.5529211182336181
     ],
     "acc_timbre": [
      0.2537815976337061,
@@ -101,7 +101,6 @@
     "acc_jitter_l1": 0.3333333333333333,
     "acc_jitter_l2": 0.5,
     "acc_jitter_l3": 0.3333333333333333,
-    "acc_mean": 0.44388888888888894,
     "acc_offset": 0.5533333333333335,
     "acc_offset_100ms": 0.5,
     "acc_offset_200ms": 0.8333333333333334,
@@ -119,6 +118,7 @@
     "acc_speed_115": 0.5,
     "acc_speed_120": 0.3333333333333333,
     "acc_speed_125": 0.16666666666666666,
+    "acc_task_mean": 0.44388888888888894,
     "acc_timbre": 0.5,
     "acc_voice_timbre": 0.3333333333333333,
     "invalid_rate": 0.008333333333333333,

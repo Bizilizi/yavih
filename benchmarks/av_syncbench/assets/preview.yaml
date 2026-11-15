@@ -1,0 +1,15 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: av_syncbench_pair
+  split: test
+  rows:
+  - 09832c3947a04086a5d4adb53b6c689c_5e25028375
+- id: clip
+  kind: motion
+  split: test
+  rows:
+  - 09832c3947a04086a5d4adb53b6c689c_5e25028375
+  options:
+    start_s: 0.0
+    seconds: 4.0

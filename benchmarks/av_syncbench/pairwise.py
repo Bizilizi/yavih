@@ -1,3 +1,4 @@
+# ruff: noqa: UP006, UP035, UP045  (the copied upstream blocks keep their typing.Dict / List / Optional verbatim)
 """AV-SyncBench's pairwise synchronisation score: the folder's own training-free scorer and its metrics.
 
 Every row is one pair: an original video with its own audio (the positive) and the same video with a perturbed audio
@@ -29,7 +30,7 @@ Provenance (grounding rung 2: the benchmark authors' own evaluation code, not re
       ``floor((min duration + 1e-9) / segment_seconds)`` when each stream's count is computed the same way).
     The metrics (:func:`make_metrics`) aggregate the per-pair decision as the paper's tables do: a task's accuracy
     is the unweighted mean of its levels' accuracies (Table 2 "Overall"); the timbre accuracy pools its pairs; the
-    headline ``acc_mean`` (the mean of the four task accuracies) is yavih's, not the paper's.
+    headline ``acc_task_mean`` (the mean of the four task accuracies) is yavih's, not the paper's.
 Module scope: stdlib, numpy, yavih core.
 """
 
@@ -388,7 +389,7 @@ def run(ctx: Any) -> dict:
             continue
         reader = ctx.reader(s)
         vals = [list(reader.values(k, r, codecs=ctx.bench.codecs)) for k in KEYS]
-        for v, a, e in zip(*vals):
+        for v, a, e in zip(*vals, strict=True):
             try:
                 pos, neg, m = pair_scores(v, a, e, max_segments=cap)
             except ValueError as err:
@@ -412,7 +413,7 @@ def run(ctx: Any) -> dict:
     valid, correct, tie = decisions(outputs)
     results = [PairwiseResult(sample_id=i, task=t, positive_score=float(o[0]), negative_score=float(o[1]), edit_type=t,
                               direction=d or None, category=c or None) for i, t, d, c, o in
-               zip(ids, groups["task"], groups["direction"], groups["category"], outputs)]
+               zip(ids, groups["task"], groups["direction"], groups["category"], outputs, strict=True)]
     upstream = summarize_results(results)["overall"]
     return {**blocks, "probe": {}, "fit": {"score": "mean diagonal cosine over the common complete segments", "decision": "S_pos > S_neg (ties wrong)",
                                            "max_segments": cap, "invalid": int((~valid).sum()), "ties": int(tie.sum()),
@@ -443,7 +444,7 @@ def _population(ctx: Any, tag: str) -> dict[str, Any]:
     rows_all, ids, groups = [], [], {"task": [], "level": [], "direction": [], "category": []}
     for s in ctx.roles["eval"]:
         meta = _row_meta(ctx, s, np.arange(ctx.bench.n_rows(s), dtype=np.int64))
-        keys = [(t, lv if t in TASK_LEVELS else "") for t, lv in zip(meta["task"], meta["level"])]
+        keys = [(t, lv if t in TASK_LEVELS else "") for t, lv in zip(meta["task"], meta["level"], strict=True)]
         by_group: dict[tuple[str, str], list[int]] = defaultdict(list)
         for i, k in enumerate(keys):
             by_group[k].append(i)
@@ -460,7 +461,7 @@ def _population(ctx: Any, tag: str) -> dict[str, Any]:
     rows = np.concatenate(rows_all)
     n = len(rows)
     u = _values(f"{tag}:av_syncbench:scores", (n, 2)) * 2.0 - 1.0
-    bias = np.asarray([(hash_level(t, lv) - 0.5) * 0.4 for t, lv in zip(groups["task"], groups["level"])])
+    bias = np.asarray([(hash_level(t, lv) - 0.5) * 0.4 for t, lv in zip(groups["task"], groups["level"], strict=True)])
     outputs = np.stack([u[:, 0] + bias, u[:, 1]], axis=1)
     outputs[::5, 1] = outputs[::5, 0]  # ties: wrong by the strict rule
     outputs[n // 2] = np.nan  # one invalid pair: left out of every accuracy
@@ -490,14 +491,14 @@ def make_scorer(name: str, *, module: str, version: int = VERSION) -> Scorer:
 
 def metric_names() -> list[str]:
     """Every folder metric, in ``metrics.list`` order (``n_eval`` is the registry's)."""
-    names = ["acc_mean", "acc_offset", "acc_jitter", "acc_speed", "acc_timbre", "acc_voice_timbre", "acc_instrument_timbre", "acc_all"]
+    names = ["acc_task_mean", "acc_offset", "acc_jitter", "acc_speed", "acc_timbre", "acc_voice_timbre", "acc_instrument_timbre", "acc_all"]
     for t in TEMPORAL_TASKS:
         names += [f"acc_{t}_{suffix}" for suffix in TASK_LEVELS[t].values()]
     return names + ["tie_rate", "invalid_rate"]
 
 
 def make_metrics(name: str) -> dict[str, MetricSpec]:
-    """``acc_mean`` (headline: the mean of the four task accuracies), ``acc_<task>`` (a temporal task: the unweighted
+    """``acc_task_mean`` (headline: the mean of the four task accuracies), ``acc_<task>`` (a temporal task: the unweighted
     mean of its levels; ``acc_timbre``: the timbre pairs pooled), the per-level and per-timbre-task accuracies,
     ``acc_all`` (every valid pair pooled: the upstream ``summarize_results`` overall accuracy) and the disclosures
     ``tie_rate`` and ``invalid_rate``. Every accuracy counts valid pairs only; chance is 0.5."""
@@ -515,7 +516,7 @@ def make_metrics(name: str) -> dict[str, MetricSpec]:
         out[metric] = MetricSpec(metric, lambda o, t, p, m, groups=groups: _pooled(o, m, groups), ro,
                                  per_clip=lambda o, t, p, m, groups=groups: _pooled_per_clip(o, m, groups), ci=ci_p, description=desc)
 
-    weighted("acc_mean", _mean_parts(), "the mean of acc_offset, acc_jitter, acc_speed and acc_timbre (yavih's aggregate)")
+    weighted("acc_task_mean", _mean_parts(), "the mean of acc_offset, acc_jitter, acc_speed and acc_timbre (yavih's aggregate)")
     for t in TEMPORAL_TASKS:
         weighted(f"acc_{t}", _task_parts(t), f"{t}: the unweighted mean of its levels' pairwise accuracies (the paper's Overall)")
         for lv, suffix in TASK_LEVELS[t].items():

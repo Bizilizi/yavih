@@ -3,7 +3,7 @@
 The scorer (the mean diagonal cosine of per-segment embeddings, the strict original-beats-perturbed decision, the
 task and level accuracies, the conformance population) is ``pairwise.py``, next to this file, copied and transcribed
 from the AV-SyncBench authors' evaluation toolkit (https://github.com/fgt7t6g/AV-SyncBench @ 82e1353; provenance in
-its docstring). Headline ``acc_mean``: the mean of the offset, jitter, speed and timbre accuracies; chance 0.5.
+its docstring). Headline ``acc_task_mean``: the mean of the offset, jitter, speed and timbre accuracies; chance 0.5.
 Protocol keys: ``segment_seconds`` (the segment grid, handed to the bridge as a fact) and ``max_segments`` (at most
 this many common segments are scored, chosen uniformly). Module scope: stdlib, numpy, yavih core.
 """
