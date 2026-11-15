@@ -1,134 +1,115 @@
-# crema_d: scaffolded from esc50 by `yavih bench new` on 2026-11-15. TODO: every value below is esc50's
-# until this benchmark's manifest, protocol and contracts replace it; run `yavih bench lint` after each edit
-# (it tells you the changelog's protocol_hash / input_hash to write after a protocol edit).
+# yavih benchmark folder — CREMA-D speech emotion recognition in HEAR 2021's five folds (schema 3).
 schema_version: 3
 name: crema_d
 aliases: []
-title: TODO title of crema_d (scaffolded from esc50)
-capability:  # TODO: still esc50's; what crema_d measures, one or more of audio, visual, audio-visual, temporal, spatial, retrieval, generation, streaming
-- audio
-core: '>=1.1,<2'
+title: CREMA-D speech emotion recognition (6 emotions, HEAR 2021 5-fold CV, mean top-1 accuracy)
+capability: [audio]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 header:
-  name: crema_d
-  title: 'TODO: the title of the paper that introduced the benchmark'
-  venue: 'TODO: authors · venue year'
-  abstract: 'TODO: two or three neutral sentences on the data and the task (at most 60 words).'
+  name: CREMA-D
+  title: "CREMA-D: Crowd-sourced Emotional Multimodal Actors Dataset"
+  venue: "Cao et al. · IEEE Transactions on Affective Computing 2014"
+  abstract: >-
+    7 438 short sentences spoken by 91 actors in six emotions (anger, disgust, fear, happiness, neutral,
+    sadness), recorded at 16 kHz. The task is to name a clip's intended emotion; the score is HEAR 2021's
+    top-1 accuracy averaged over its five cross-validation folds.
 scorer: clf
 protocol_version: 1
 changelog:
-- version: 1
-  date: '2026-11-15'
-  invalidates: false
-  reason: 'TODO: scaffolded from esc50 by `yavih bench new`; replace the manifest, protocol, contracts and docs'
-  protocol_hash: 13eb26789e1aa6435bb01bd79063be3be9b4e9527a863d8f3070ea867106fbe5
-  input_hash: 2c7f1e212cd0decc723365ca9a303168131dad9188ff4e7b9476f9c81110eeee
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: f0f44915921495df45a507018ec2dd5010b83dc208ee8c46994aa775afceaa53
+    input_hash: 93319580565d0d248ab06797efa7405f06bf07c0553cfaf624968d71b19ece95
+    supersedes: []
+
 source:
   kind: public_url
   urls:
-  - https://github.com/karolpiczak/ESC-50
-  - https://github.com/karolpiczak/ESC-50.git
-  - https://github.com/karoldvl/ESC-50/archive/master.zip
-  - https://dx.doi.org/10.7910/DVN/YDEPUT
-  licence: CC BY-NC 3.0 for the dataset as a whole; the ESC-10 subset (esc10 == True, 400 clips) CC BY 3.0; per-clip Freesound
-    attributions in the upstream LICENSE file
-  bytes: 645520453
+    - "https://github.com/CheyneyComputerScience/CREMA-D"
+    - "https://github.com/CheyneyComputerScience/CREMA-D.git"
+    - "https://media.githubusercontent.com/media/CheyneyComputerScience/CREMA-D/1658cd342dff90010aa843eaeebd53610a08b1dc/AudioWAV/"
+    - "https://storage.googleapis.com/tfds-data/dataset_info/crema_d/1.0.0/dataset_info.json"
+    - "https://github.com/hearbenchmark/hear-preprocess"
+  licence: "Open Database License (ODbL) 1.0 for the database; Database Contents License (DbCL) 1.0 for its contents (upstream LICENSE.txt)"
+  revision: "1658cd342dff90010aa843eaeebd53610a08b1dc"
+  bytes: 605000000            # TODO: the 7 438 wavs as downloaded (01_download.sh)
   sha256:
-    meta/esc50.csv: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
-    LICENSE: f6aec3a3283a2efdcbb1feff334adad7ab17c097bdec0cbb4eebdb9e16886074
-    audio.sha256sum: 52754b9099c1c48a9fec379bd7dd75dbc6d78387faecc2a9318fc0c43332d398
-  notes: 'TODO: where the data comes from (the scaffold still describes esc50''s source)'
-obtain:
+    processedResults/summaryTable.csv: fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317
+    LICENSE.txt: e76747a4efa4b338914bb3f930b5d3d3c3ac15b886bbabf897f6a19731f987f8
+    tfds/crema_d-1.0.0-dataset_info.json: 5e748e0ecf01210ebcc1e2a4bcb80a59af47b89bfdee6521d18efa4ff0a7b6b0
+    AudioWAV.sha256sum: TODO
+  notes: >-
+    Public GitHub repository of the CREMA-D authors (Git LFS), no account or agreement. The 7 438 wavs TensorFlow
+    Datasets' crema_d 1.0.0 (and so HEAR 2021) uses are unchanged since commit f06ffd7 (2017); pinned commit
+    1658cd3 (2025-03-21). 01_download.sh clones the pointers and fetches each wav from the LFS media endpoint,
+    checked against its pointer's sha256. HEAR's own preprocessed copy of the task is not public (retracted from
+    Zenodo; requester-pays bucket), so make_manifest.py re-derives HEAR's folds from these files.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
   tier: auto
-  how: 'TODO: who must act before the data can be staged, and how'
+  how: "git clone of github.com/CheyneyComputerScience/CREMA-D at the pinned commit plus 7 438 LFS wav downloads (0.6 GB, public), by yavih bench prepare crema_d 01"
 budget:
-  clips:
-    '1': 400
-    '2': 400
-    '3': 400
-    '4': 400
-    '5': 400
-  media_gb: 0.88
-  extract_min_per_1k_clips_ref: 0.2
-  probe_minutes_ref:
-    clf: 3
+  clips: {fold00: 1488, fold01: 1488, fold02: 1488, fold03: 1487, fold04: 1487}
+  media_gb: 0.6               # TODO
+  extract_min_per_1k_clips_ref: 0.2   # TODO
+  probe_minutes_ref: {clf: 3}         # TODO
+
 manifest:
   file: manifest.csv.gz
-  sha256: 4846c6d167ff53e1caf060ce7e9a45c80fff508e05492ef0073639082ee4079c
+  sha256: 9844ba2ee5fbefac529645d714f8f922cce9b8a366824ca5c16450f7de8cf183
   classes: classes.csv
-  classes_sha256: a614223f2aba50003f58a7a2e8ce95579e493b4635b41bc9e19ff0945e9d06ff
+  classes_sha256: 85bbf18ea6375dba383ba4a536b7ce6dbe9d1e17f4603788d01de8dda3cd247f
   key: clip_id
   label:
     column: labels
     kind: single
-    sep: ;
+    sep: ";"
     class_key: name
     sets: null
     train_set: null
     allow_unknown: false
     empty_ok: false
   columns:
-    rel_path:
-      type: str
-      role: media
-      stream: audio
-    src_file:
-      type: str
-      role: extra
-    take:
-      type: str
-      role: extra
-    esc10:
-      type: str
-      role: extra
+    rel_path: {type: str, role: media, stream: audio}
+    actor: {type: str, role: extra}        # CREMA-D actor id (1001–1091); HEAR's folds are drawn over files, so an actor spans several folds
+    sentence: {type: str, role: extra}     # one of the 12 sentence codes (IEO, TIE, …)
+    intensity: {type: str, role: extra}    # LO / MD / HI / XX (unspecified)
+    tfds_split: {type: str, role: extra}   # TFDS crema_d 1.0.0's own speaker-grouped split (train / validation / test)
+    hear_file: {type: str, role: extra}    # HEAR's file stem tfds_id_<slugify(tfds_id)>, to cross-check against HEAR's preprocessed task
   upstream:
-    source: karolpiczak/ESC-50 @ 33c8ce9 meta/esc50.csv
-    sha256: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
-    rows: 2000
-    note: rows = meta/esc50.csv in file order (fold-major, filename order); split = the official fold; no train draw (every
-      training-fold clip is used); src_file/take/esc10 from meta/esc50.csv
+    source: "CheyneyComputerScience/CREMA-D @ 1658cd3 processedResults/summaryTable.csv"
+    sha256: fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317
+    rows: 7442
+    note: "rows = summaryTable.csv FileName order minus TFDS's four skips; split = HEAR's fold (re-derived, make_manifest.py); labels = the emotion code of the file name; no train draw"
     upstream_files:
-      ESC-50/meta/esc50.csv: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
+      CREMA-D/processedResults/summaryTable.csv: fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317
+      tfds-data/dataset_info/crema_d/1.0.0/dataset_info.json: 5e748e0ecf01210ebcc1e2a4bcb80a59af47b89bfdee6521d18efa4ff0a7b6b0
     curation:
-      total_upstream: 2000
+      total_upstream: 7442
       per_split:
-        '1':
-          listed: 400
-          staged: 400
-          missing: 0
-        '2':
-          listed: 400
-          staged: 400
-          missing: 0
-        '3':
-          listed: 400
-          staged: 400
-          missing: 0
-        '4':
-          listed: 400
-          staged: 400
-          missing: 0
-        '5':
-          listed: 400
-          staged: 400
-          missing: 0
-      excluded: {}
-      short_clips: 0
+        fold00: {listed: 1488, staged: 1488, missing: 0}
+        fold01: {listed: 1488, staged: 1488, missing: 0}
+        fold02: {listed: 1488, staged: 1488, missing: 0}
+        fold03: {listed: 1487, staged: 1487, missing: 0}
+        fold04: {listed: 1487, staged: 1487, missing: 0}
+      excluded:
+        "skipped by TFDS crema_d 1.0.0 as absent from GitHub (hence absent from HEAR's task)": 4
+      short_clips: 0              # no protocol clip length (clip_seconds null); 1.3–5.0 s clips, HEAR pads them to 5 s
       leakage_audit:
-        against: 'src_file source-recording groups across the 5 official folds (meta/esc50.csv): 4 groups / 9 clips span two
-          folds, always under different classes; kept'
+        against: "actors across HEAR's 5 folds (drawn over files, not actors): 91 of 91 actors in several folds; kept, HEAR's protocol"
         excluded: 0
+      # invariant: 3 × 1488 + 2 × 1487 + 4 == 7442
+
 splits:
   train: []
   eval: []
   floor: []
-  folds:
-  - '1'
-  - '2'
-  - '3'
-  - '4'
-  - '5'
+  folds: [fold00, fold01, fold02, fold03, fold04]
   unused: []
   min_eval_coverage: 0.95
+
 fields:
   audio:
     storage: file
@@ -138,29 +119,25 @@ fields:
     layout: dir
     layout_params: {}
     required: true
+
 targets: null
+
 data:
   roots:
     media_root:
-      default: ${data.root}/esc50
-      description: 'the ESC-50 git clone: audio/{FOLD}-{SRC}-{TAKE}-{TARGET}.wav (2 000, 44.1 kHz mono PCM_16, 5.000 s), meta/esc50.csv,
-        LICENSE'
+      default: "${data.root}/crema_d"
+      description: "the sparse CREMA-D clone: AudioWAV/<actor>_<sentence>_<emotion>_<intensity>.wav (7 438 wavs, 16 kHz mono PCM_16, 1.3–5.0 s), processedResults/summaryTable.csv, LICENSE.txt, tfds/crema_d-1.0.0-dataset_info.json"
   tar_index: null
   derived: {}
+
 input_contract:
   handed_over:
-    audio: the ESC-50 wav exactly as stored (RIFF PCM_16, 44.1 kHz, mono, 220 500 samples = 5.000 s); nothing decoded, resampled,
-      trimmed or padded
+    audio: "the CREMA-D wav exactly as stored (RIFF PCM_16, 16 kHz, mono, 1.3 to 5.0 s); nothing decoded, resampled, trimmed or padded"
   info:
-    audio:
-    - duration_s
-    - sample_rate
-    - n_samples
-    - channels
-    - container
-    - bytes
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
   facts: []
   materialize: null
+
 output_contract:
   shape: fixed
   coordinates: media
@@ -170,39 +147,23 @@ output_contract:
     streams: []
     grid: null
     t_bins: null
-external: []
+
+external: []                    # HEAR's scorer is copied into hear_score.py (heareval's wheel pins numpy 1.19 and TensorFlow)
+
 protocol:
-  clip_seconds: 5.0
-  train_draw: null
+  clip_seconds: null            # clips vary from 1.3 to 5.0 s; HEAR pads each to 5.0 s in its own preprocessing (a bridge default here)
+  train_draw: null              # uncapped: each fold's probe trains on all clips of the four other folds
   views: none
+
 metrics:
-  headline: acc_mean
-  list:
-  - acc_mean
-  - acc_pstd
-  - acc_per_fold
-  - n_folds
-  - n_eval
-  floors:
-  - acc_floor
+  headline: top1_acc_mean
+  list: [top1_acc_mean, top1_acc_std, top1_acc_per_fold, n_folds, n_eval]
+  floors: [top1_acc_floor]
   controls: []
-  chance:
-    acc_mean: 0.02
-  ci:
-    acc_mean: pooled_binomial
-  aggregation:
-    over: folds
-    report:
-    - mean
-    - pstd
-    - per_fold
+  chance: {top1_acc_mean: 0.1667}
+  ci: {top1_acc_mean: pooled_binomial}
+  aggregation: {over: folds, report: [mean, pstd, per_fold]}
   notes:
-  - The floor (always the train-majority class) equals chance, 0.02, because the classes are balanced; an interval that overlaps
-    0.02 is no result.
-  - The Wilson 95 % interval over the 2 000 pooled held-out rows is about ±0.022 at 0.5 and ±0.016 at 0.85; one fold of 400
-    rows is about ±0.035.
-  - Treat gaps below about 0.015 at one seed as unresolved; run --seeds 0,1,2 before claiming a one-point difference.
-  - 'A number near the floor on one fold only (acc_per_fold) means a broken fold extraction: check features validate coverage
-    per fold.'
-  - Published ESC-50 numbers fine-tune the model end to end; a frozen-feature probe is not comparable with them.
+    - TODO
+
 readout_params: {}

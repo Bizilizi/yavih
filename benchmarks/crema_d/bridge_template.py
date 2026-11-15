@@ -1,7 +1,7 @@
-"""Bridge skeleton for the ``esc50`` benchmark.
+"""Bridge skeleton for the ``crema_d`` benchmark (CREMA-D speech emotion, HEAR 2021's five folds).
 
 Copy this file next to your model code, fill every ``TODO``, then run
-``yavih bridge check <file> --bench esc50 --out esc50.profile.json`` before any extraction
+``yavih bridge check <file> --bench crema_d --out crema_d.profile.json`` before any extraction
 (``--synthetic`` instead of ``--out`` smoke-tests it before any data is staged). An unfilled copy fails
 bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES. A bridge file serves one benchmark; each matrix
 entry (file + args) is one reading of one model. Read ``setup.md`` ("Input contract", "Output contract",
@@ -12,21 +12,26 @@ repository, commit and file:line it came from; ``describe()["input"]["audio"]`` 
 
     TODO (e.g. `torchaudio.compliance.kaldi.fbank(wav16k, htk_compat=True, sample_frequency=16000,
     use_energy=False, window_type="hanning", num_mel_bins=128, dither=0.0, frame_shift=10)`, then the
-    model's PRETRAINING-DATASET mean/std, then how the model's input length is reached: AudioMAE sizes
-    ESC input to 512 frames; AST/BEATs/CAV-MAE pad to 1024 frames …)
+    model's PRETRAINING-DATASET mean/std, then how the model's input length is reached)
 
 What the reader hands you per sample (setup.md "Input contract"):
 
-* ``sample.streams["audio"]`` — the ONLY stream, a ``RawStream`` over the stored wav: ``path``,
+* ``sample.streams["audio"]`` — the ONLY stream, a ``RawStream`` over the stored CREMA-D wav: ``path``,
   ``bytes()``, ``open()`` (seekable; soundfile / torchaudio / PyAV accept it). Nothing is decoded,
   resampled, trimmed or padded for you.
-* ``stream.info`` (guaranteed keys): ``duration_s`` 5.0, ``sample_rate`` 44100, ``n_samples`` 220500,
-  ``channels`` 1, ``container`` "wav", ``bytes``. Use these facts, never a hard-coded constant, so a
-  re-staged corpus cannot silently change what you feed.
-* ``sample.meta == {"facts": {}}``: ESC-50 has no label facts. Never let ``row``, ``clip_id`` or
-  ``split`` (the fold) change what you compute: ``bridge check`` scrambles them.
-* Folds: the extractor runs this bridge once per fold split ``"1"…"5"`` and five probes reuse the
-  features; your features must not depend on the fold or on the batch a clip lands in.
+* ``stream.info`` (guaranteed keys): ``duration_s`` (1.3 to 5.0 s, it varies per clip), ``sample_rate`` 16000,
+  ``n_samples``, ``channels`` 1, ``container`` "wav", ``bytes``. Use these facts, never a hard-coded constant.
+* ``sample.meta == {"facts": {}}``: CREMA-D has no label facts. Never let ``row``, ``clip_id`` or ``split``
+  (the fold) change what you compute: ``bridge check`` scrambles them.
+* Folds: the extractor runs this bridge once per fold split ``"fold00"`` … ``"fold04"`` and five probes reuse
+  the features; your features must not depend on the fold or on the batch a clip lands in.
+
+The default input length here is HEAR 2021's: hear-preprocess trims or zero-pads every CREMA-D clip to exactly
+5.0 s (``hearpreprocess/util/audio.py`` ``trim_pad_wav``: ffmpeg ``apad=whole_dur=5`` then ``atrim=end=5``;
+hearbenchmark/hear-preprocess @ 610d864b2c0f7064eaeced98ee8992d3914d58f1, task ``tfds_crema_d``,
+``sample_duration: 5``) before any model sees it, and resamples with SoX (ffmpeg ``aresample=resampler=soxr``) to
+the model's rate. ``TEMPORAL = {"rule": "full", "max_s": 5.0, "pad_to_s": 5.0}`` declares that; HEAR's choice for
+every model, not the protocol: change it (and declare it) when your model's own recipe differs.
 
 Everything model-side is YOUR decision and is declared in ``describe()["input"]`` (recorded with every
 number, never part of what makes numbers comparable): which samples (temporal rule), resampling, padding,
@@ -39,13 +44,12 @@ fixed ``N`` and ``D``; no network and no writes outside the run directory inside
 
 Gotchas (setup.md "Gotchas") — each passes validation and silently changes the number:
 
-* **Padding to a longer model input.** Zero-padding the 5 s clip to 8–10 s makes >= 3/8 of the input
-  digital silence and skews per-clip normalization. If your model needs a longer input, choose the fill DELIBERATELY: ``{"rule": "full", "pad_to_s": 10.0}`` declares zero
-  padding (checked); any other fill (repeat, reflect) is a ``custom`` rule with a description.
-  Normalize as the model was pretrained: its own constants; per-clip statistics (even over the padded
-  buffer) only when that IS its recipe, declared in ``norm``; never batch or dataset statistics.
-* Resample 44 100 -> the model rate yourself and declare the resampler; never assume 16 kHz input.
-* Do not re-window unless that IS the model's documented ESC recipe (then declare a ``span`` rule).
+* **Variable length.** Clips run from 1.3 to 5.0 s (median about 2.5 s). Pad every clip to the SAME length
+  (5.0 s by default, HEAR's) so ``N`` is fixed; never pad to the longest clip of the batch. Up to three quarters of
+  a padded input can be digital silence: normalize as the model was pretrained, never with per-batch statistics.
+* The wavs are already 16 kHz: a 16 kHz model needs no resampling; any other rate is resampled per clip and
+  the resampler declared.
+* Do not crop to a centred window unless that IS the model's documented recipe (then declare a ``span`` rule).
 * Return the same ``N`` for every sample (fixed-length input -> fixed token count).
 """
 
@@ -58,21 +62,21 @@ import numpy as np
 from yavih.bridge import ArgSpec, Bridge
 
 
-class Esc50Bridge(Bridge):
-    name = "TODO-model-esc50"       # optional label of this file, recorded only
+class CremaDBridge(Bridge):
+    name = "TODO-model-crema_d"       # optional label of this file, recorded only
     batch_size = 32
     dtype = "float16"               # "float16" | "float32" — what encode() returns
-    pos_mode = "none"               # clf needs no pos (output_contract.requires.pos == []); "constant" + _time_pos() is allowed
+    pos_mode = "none"               # clf needs no pos (output_contract.requires.pos == []); "per_sample" + _time_pos() is allowed
     streams = ("audio",)            # stream tags used in pos; the benchmark's only stream
     ARGS = {"layer": ArgSpec(type=int, default=-1, help="the tap (-1 = last block)")}  # every --arg k=v; echoed in describe()["args"]
 
     # audio temporal rule (closed vocabulary; validate re-evaluates it on every row's info):
-    #   {"rule": "full", "max_s": None, "pad_to_s": None}   the whole stored clip, nothing added (default here)
-    #   {"rule": "full", "max_s": 10.0, "pad_to_s": 10.0}   whole clip, right zero-padded to 10 s (AST/BEATs style)
+    #   {"rule": "full", "max_s": None, "pad_to_s": None}   the whole stored clip, nothing added
+    #   {"rule": "full", "max_s": 5.0, "pad_to_s": 5.0}     first 5 s, right zero-padded to 5 s (HEAR; default here)
     #   {"rule": "span", "start_s": "centre", "length_s": 4.0, "pad": "none"}   a centred 4 s cut
     #   {"rule": "custom", "description": "..."}            anything else (repeat padding): a legitimate opt-out,
     #                                                       noted by validate (N_RULE_CUSTOM), never penalized
-    TEMPORAL: dict = {"rule": "full", "max_s": None, "pad_to_s": None}   # TODO
+    TEMPORAL: dict = {"rule": "full", "max_s": 5.0, "pad_to_s": 5.0}   # TODO: HEAR's 5.0 s trim/pad by default
 
     def __init__(self, bench: Any, args: dict | None = None) -> None:
         super().__init__(bench, args)
@@ -81,7 +85,7 @@ class Esc50Bridge(Bridge):
         # refuses any torch.nn.Module left in training mode: E_TRAIN_MODE). Raise
         # yavih.NotApplicable("...") here if the model cannot take audio (a video-only model).
         self.model = None
-        self.model_sr = 16000            # TODO: the model's sample rate (resample 44100 -> model_sr below)
+        self.model_sr = 16000            # TODO: the model's sample rate (resample 16000 -> model_sr below when it differs)
         self.n_t, self.n_f = 1, 1        # TODO: the model's time × frequency token grid (n_t * n_f == N)
 
     def describe(self) -> dict:
@@ -105,7 +109,7 @@ class Esc50Bridge(Bridge):
                         "resample": "TODO e.g. torchaudio.functional.resample(sinc_interp_hann, lowpass_filter_width 6)",
                         "features": "TODO e.g. kaldi_fbank",
                         "n_mels": None, "win_ms": None, "hop_ms": None, "dither": 0.0,
-                        "channels": "mean",          # ESC-50 is mono; say what you would do with more channels
+                        "channels": "mean",          # CREMA-D is mono; say what you would do with more channels
                     },
                     "norm": {"mean": None, "std": None,   # TODO: the model's pretraining constants (per-clip stats only if that IS its recipe)
                              "source": "TODO repo@commit file:line"},
@@ -146,23 +150,23 @@ class Esc50Bridge(Bridge):
         """One clip's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
         # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
         wav, sr, u = self._read(sample.streams["audio"])
-        # TODO: resample sr (44100) -> self.model_sr here too (per clip, deterministic); the stored bytes are released
+        # TODO: resample sr (16000) -> self.model_sr here too when they differ (per clip, deterministic); the stored bytes are released
         # after prepare(), so encode() works from this dict only.
         return {"wav": wav, "sr": sr, "used": {"audio": u}}
 
     def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
         waves = [s.prepared["wav"] for s in samples]   # what prepare() returned, per sample
         used = [s.prepared["used"] for s in samples]
-        # Every clip has the same length here because every stored clip is 220 500 samples; never pad
+        # Every clip has the same length here because TEMPORAL trims and pads each one to 5.0 s; never pad
         # to the batch maximum (instance-wise extraction).
         # TODO: front end, forward (run_extract wraps encode in torch.inference_mode()), take the tap
         # `self.layer`, return tokens [B, N, D] as np.ndarray or a torch tensor; N fixed for every clip.
         _ = waves
         feats = np.zeros((len(samples), self.n_t * self.n_f, 1), dtype=np.float32)  # TODO replace
         pos = None
-        if self.pos_mode == "constant":
-            info = samples[0].streams["audio"].info   # constant pos is legal: every ESC-50 clip is 5.0 s
-            pos = self._time_pos(float(info["duration_s"]))
+        if self.pos_mode == "per_sample":
+            # pos is per clip: the stored durations differ (1.3 to 5.0 s); tokens in the added padding get t = -1
+            pos = np.stack([self._time_pos(float(s.streams["audio"].info["duration_s"])) for s in samples])
         return feats, pos, used
 
     def _time_pos(self, duration_s: float) -> np.ndarray:
@@ -170,7 +174,7 @@ class Esc50Bridge(Bridge):
         in media coordinates: t = token centre / duration_s of the stored clip, -1 for a token
         centred in padding you added; audio has no frame, so y = x = -1. Assumes the model input starts
         at sample 0 (rule ``full``); adapt the centres for a ``span`` rule."""
-        model_seconds = duration_s  # TODO: the seconds the model input covers (pad_to_s when you pad)
+        model_seconds = float(self.TEMPORAL.get("pad_to_s") or duration_s)  # TODO: the seconds the model input covers
         centres = (np.arange(self.n_t) + 0.5) * model_seconds / self.n_t
         t = np.where(centres < duration_s, centres / duration_s, -1.0)
         pos = np.full((self.n_t * self.n_f, 4), -1.0, dtype=np.float32)
