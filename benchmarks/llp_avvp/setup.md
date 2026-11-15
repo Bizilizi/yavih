@@ -154,6 +154,8 @@ Bridge-side mistakes that pass validation:
   statistics fail `bridge check` batch invariance.
 - **Resolution and aspect.** Native frames go up to 1280×720 and mix 4:3, 16:9 and portrait clips; decode dominates
   cost; resize in the bridge.
+- **No `bridge check --synthetic`.** The core's generated stand-in does not cover this folder's own scorer
+  (`E_SYNTHETIC`); check a bridge on the staged clips with `yavih bridge check <file> --bench llp_avvp`.
 - **Extract `val`.** It is a train-role split here (the epoch is chosen on it), not an unused one: a run without its
   features is refused (`E_SPLIT_MISSING`).
 - **Leakage of the pretraining set.** Every clip is an AudioSet segment (train, val and test alike); a model

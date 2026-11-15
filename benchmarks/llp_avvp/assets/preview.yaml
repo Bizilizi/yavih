@@ -1,0 +1,15 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: av
+  split: test
+  rows:
+  - KSRjje7GH44_60_70        # a blender seen throughout but heard only at 8-10 s; speech heard 0-8 s, never seen
+- id: clip
+  kind: motion
+  split: test
+  rows:
+  - KSRjje7GH44_60_70
+  options:
+    start_s: 6.5
+    seconds: 3.0

@@ -25,10 +25,10 @@ header:
   venue: "Tian, Li & Xu · ECCV 2020"
   abstract: >-
     The Look, Listen and Parse dataset holds 11 849 ten-second YouTube clips of 25 event classes. Training clips
-    carry only video-level labels; 1 849 validation and test clips are annotated second by second, separately for
+    carry only video-level labels; the validation and test clips are annotated second by second, separately for
     what is heard and what is seen. A model parses each clip into audio, visual and audio-visual events, scored by
     segment- and event-level F-scores.
-  chips: ["video + audio", "a / v / av event parsing", "11 849 clips", "25 classes", "weak labels for training", "Type@AV F-score"]
+  chips: ["video + audio", "audio-visual video parsing", "11 849 clips", "25 classes", "weak labels for training", "Type@AV F-score"]
 
 source:
   kind: public_url
@@ -199,6 +199,12 @@ metrics:
   bootstrap: {samples: 2000, seed: 0}
   aggregation: null
   notes:
-    - "TODO"
+    - "Percent, as the authors print them. Floor (predict nothing; an empty modality scores 1 on clips without events in it): seg_type_av 8.4, evt_type_av 8.4, seg/evt_event_av 0.0 on test."
+    - "Clip labels painted over all 10 s of both tracks (no timing, no modality) score seg_type_av 63.0, evt_type_av 54.5 on test: read seg_a, seg_v, seg_av and evt_* for the parsing itself."
+    - "1 200 test clips: the per-clip SD of seg_type_av is about 27 pp (measured on the clip-label reference), a 95 % CI of about +-1.5 pp; gaps below 2 pp at one seed are unresolved."
+    - "Scored by the authors' utils/eval_metrics.py and main_avvp.py loop (YapengTian/AVVP-ECCV20 @ fde5611); readout: their HAN, trained with their recipe, epoch chosen on val seg_type_av."
+    - "Reference: the authors' HAN on VGGish + ResNet-152 + R(2+1)D features reports seg_type_av 54.0, evt_type_av 47.7, seg_event_av 55.4 on test (ECCV 2020, Table 1)."
+    - "An a or v reading feeds its one stream to both HAN branches: the other modality's events are then guessed from it, so seg_v of an a reading measures that guess."
+    - "Follow-ups that build on this code (MA, JoMoLD, VALOR) add refined modality labels or other features to the training: their numbers are not this readout's."
 
 readout_params: {}

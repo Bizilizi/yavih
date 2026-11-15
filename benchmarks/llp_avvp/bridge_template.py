@@ -1,7 +1,8 @@
 """Bridge skeleton for **llp_avvp** (read setup.md first). Copy, rename, fill the TODOs.
 
-``yavih bridge check <file> --bench llp_avvp --synthetic`` smoke-tests a copy before any data is staged; an
-unfilled copy fails bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES. A bridge file serves one
+``yavih bridge check <file> --bench llp_avvp`` checks a copy on the staged clips (``--synthetic`` is refused,
+E_SYNTHETIC: the core's generated stand-in has no family for this folder's own scorer); an unfilled copy fails
+bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES. A bridge file serves one
 benchmark; each matrix entry (file + args) is one reading of one model.
 
 The "Preprocessing source" slot below is REQUIRED: paste the model's own input pipeline into it, and make

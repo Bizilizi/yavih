@@ -5,7 +5,7 @@
 <!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance llp_avvp --write) -->
 | At a glance | LLP (AVVP) |
 |---|---|
-| **Task** | A / v / av event parsing, multi-label · audio-visual, temporal |
+| **Task** | Audio-visual video parsing, multi-label · audio-visual, temporal |
 | **Modality** | Video + audio |
 | **Size** | 10 000 train / 649 val / 1 200 test · 25 classes |
 | **Headline** | `seg_type_av` |
@@ -27,9 +27,9 @@ The catch is the supervision: training clips only say which classes occur somewh
 which modality. A model has to learn from these video-level labels to parse the test clips into audio, visual and
 audio-visual events with their seconds.
 
-<!-- once rendered (python -m yavih.previews llp_avvp --chrome <chrome>), un-comment:
-![A test clip's frames, waveform and mel spectrogram on one time axis, with its audio and visual events as bands](assets/preview.png)
--->
+![A test clip: a blender is seen throughout but heard only from 8 s; the speech before it is heard, never seen](assets/preview.png)
+
+![The last seconds of the same clip, with its sound](assets/clip.gif) · [mp4](assets/clip.mp4)
 
 ## The data
 
