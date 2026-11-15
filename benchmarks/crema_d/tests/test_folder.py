@@ -322,6 +322,95 @@ def test_make_manifest_check_staged(capsys: pytest.CaptureFixture):
     assert {k: v["serialized_bytes"] for k, v in report["derived"]["tfds_shard_margins"].items()} == mm.TFDS_NUM_BYTES
 
 
+# ----------------------------------------------------------------------------- make_manifest.py --hear-archive
+
+
+def _hear_task_files(rows: list[dict[str, str]]) -> dict[str, bytes]:
+    """HEAR's fold files as hear-preprocess writes them (``{"<stem>.wav": [label]}``), built from ``rows``."""
+    folds: dict[str, dict[str, list[str]]] = {f: {} for f in FOLDS}
+    for r in rows:
+        folds[r["split"]][f"{r['hear_file']}.wav"] = [r["labels"]]
+    files = {f"{f}.json": json.dumps(v, indent=True).encode() for f, v in folds.items()}
+    files["labelvocabulary.csv"] = ("idx,label\n" + "".join(f"{i},{lab}\n" for i, lab in enumerate(LABELS))).encode()
+    files["task_metadata.json"] = json.dumps({"task_name": "tfds_crema_d", "version": "1.0.0", "mode": "full",
+                                              "split_mode": "new_split_kfold", "nfolds": 5}).encode()
+    return files
+
+
+def _write_hear_tar(path: Path, files: dict[str, bytes]) -> None:
+    import io
+    import tarfile
+
+    with tarfile.open(path, "w:gz") as tar:
+        for name, data in [*files.items(), ("48000/fold00/x.wav", b"RIFF")]:
+            info = tarfile.TarInfo(f"hear-2021.0.6/tasks/tfds_crema_d-1.0.0-full/{name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+
+
+def test_hear_archive_cross_check(tmp_path: Path, rows: list[dict[str, str]], capsys: pytest.CaptureFixture):
+    """``--hear-archive`` passes on fold files that agree with the manifest (a tar.gz or an extracted directory) and
+    fails on one clip in another fold, one relabelled clip, or a clip missing from HEAR."""
+    mm = F.load_module(HERE / "make_manifest.py")
+    files = _hear_task_files(rows)
+    tar = tmp_path / "hear-tfds_crema_d.tar.gz"
+    _write_hear_tar(tar, files)
+    assert mm.main(["--hear-archive", str(tar)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["cross_check"]["same_fold_and_label"] == 7438 and out["cross_check"]["hear_per_fold"] == CLIPS
+    assert out["cross_check"]["labelvocabulary"] == LABELS and out["archive"]["md5"]
+    assert set(out["upstream_files_to_pin"]) == {f"zenodo/6332517/{tar.name}"} | {
+        f"hear2021/tfds_crema_d-1.0.0-full/{n}" for n in files}
+    task = tmp_path / "x" / "tasks" / "tfds_crema_d-1.0.0-full"
+    task.mkdir(parents=True)
+    for n, data in files.items():
+        (task / n).write_bytes(data)
+    assert mm.main(["--hear-archive", str(tmp_path / "x")]) == 0
+    capsys.readouterr()
+
+    def mutated(edit) -> tuple[int, dict]:
+        f = {k: json.loads(v) for k, v in files.items() if k.endswith(".json") and k.startswith("fold")}
+        edit(f)
+        bad = tmp_path / "bad.tar.gz"
+        bad.unlink(missing_ok=True)
+        _write_hear_tar(bad, {**files, **{k: json.dumps(v).encode() for k, v in f.items()}})
+        rc = mm.main(["--hear-archive", str(bad)])
+        return rc, json.loads(capsys.readouterr().out)["cross_check"]
+
+    key = next(iter(json.loads(files["fold00.json"])))
+    rc, cc = mutated(lambda f: f["fold01.json"].__setitem__(key, f["fold00.json"].pop(key)))
+    assert rc == 1 and cc["fold_mismatch"] == 1 and cc["label_mismatch"] == 0
+    rc, cc = mutated(lambda f: f["fold00.json"].__setitem__(key, ["SAD" if f["fold00.json"][key] != ["SAD"] else "ANG"]))
+    assert rc == 1 and cc["label_mismatch"] == 1 and cc["fold_mismatch"] == 0
+    rc, cc = mutated(lambda f: f["fold00.json"].pop(key))
+    assert rc == 1 and cc["missing_from_hear"] == 1
+
+
+def _hear_archive() -> Path | None:
+    import os
+
+    env = os.environ.get("YAVIH_CREMA_D_HEAR_ARCHIVE")
+    if env:
+        return Path(env)
+    if MEDIA_ROOT is not None:
+        p = Path(MEDIA_ROOT) / "hear" / "hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz"
+        return p if p.is_file() else None
+    return None
+
+
+HEAR_ARCHIVE = _hear_archive()
+
+
+@pytest.mark.skipif(HEAR_ARCHIVE is None, reason="HEAR's tfds_crema_d archive (Zenodo 6332517) not staged on this machine")
+def test_hear_archive_staged(capsys: pytest.CaptureFixture):
+    """HEAR's published fold files put every clip of the manifest in the same fold with the same label."""
+    mm = F.load_module(HERE / "make_manifest.py")
+    rc = mm.main(["--hear-archive", str(HEAR_ARCHIVE)])
+    out = json.loads(capsys.readouterr().out)
+    assert out["problems"] == [] and out["cross_check"]["same_fold_and_label"] == 7438, out["cross_check"]
+    assert rc == 0
+
+
 # ----------------------------------------------------------------------------- reader + template on synthetic wavs
 
 

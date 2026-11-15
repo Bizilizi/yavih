@@ -2,9 +2,12 @@
 """Freeze the yavih ``crema_d`` manifest: CREMA-D audio in HEAR 2021's five folds.
 
 Protocol source: HEAR 2021's ``tfds_crema_d`` task (hear-preprocess @ ``610d864``, v2021.1.1:
-``split_mode: new_split_kfold``, ``nfolds: 5``, multiclass, primary score ``top1_acc``). HEAR's preprocessed
-CREMA-D is not downloadable (the Zenodo release retracted the TFDS tasks; the bucket is requester-pays), so the
-folds are re-derived here, step by step, from the public CREMA-D files, with the copied code of ``hear_split.py``:
+``split_mode: new_split_kfold``, ``nfolds: 5``, multiclass, primary score ``top1_acc``). HEAR publishes the
+built task (``hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz``, 1.5 GB, Zenodo record 6332517, version 2021.3: the
+build fixed after hear-preprocess ``a5d6042``; the earlier records 5802571 and 5885750 hold or retract the build with
+the amplitude bug). The manifest does not need that archive: the folds are re-derived here, step by step, from the
+public CREMA-D files, with the copied code of ``hear_split.py``, and ``--hear-archive`` compares the result with
+HEAR's fold files, clip by clip (see "Cross-check against HEAR's task" below):
 
 1. the clip list of the TensorFlow Datasets builder ``crema_d`` 1.0.0: every ``FileName`` of
    ``processedResults/summaryTable.csv`` except the four TFDS skips as absent from GitHub (``1040_ITH_SAD_XX``,
@@ -30,8 +33,8 @@ presence and the header facts).
 Rows, in summaryTable.csv order: ``clip_id`` = ``FileName``; ``labels`` = the emotion code (third field of the
 name; ``classes.csv`` = the six codes sorted, HEAR's ``labelvocabulary.csv`` order); ``split`` = the HEAR fold;
 ``rel_path`` = ``AudioWAV/<FileName>.wav``; extras ``actor``, ``sentence``, ``intensity`` (the name's fields),
-``tfds_split`` (TFDS's own split) and ``hear_file`` (HEAR's file stem, to cross-check against a copy of HEAR's
-preprocessed task). No train draw: every row of the four other folds trains each fold's probe.
+``tfds_split`` (TFDS's own split) and ``hear_file`` (HEAR's file stem, the key of HEAR's fold files, which
+``--hear-archive`` checks). No train draw: every row of the four other folds trains each fold's probe.
 
 Outputs, byte-identical on re-run: ``manifest.csv.gz`` (gzip ``mtime=0``, no file name), ``classes.csv``, and the
 ``manifest.upstream`` block printed as JSON on stdout (paste into ``benchmark.yaml``; ``tests/test_folder.py``
@@ -43,6 +46,21 @@ Usage::
     python "$(yavih bench path crema_d)/make_manifest.py" --media-root "$(yavih config get crema_d.media_root)"
     python "$(yavih bench path crema_d)/make_manifest.py" --check     # re-derive, compare, write nothing
     python "$(yavih bench path crema_d)/make_manifest.py" --no-media --metadata summaryTable.csv --check
+
+Cross-check against HEAR's task (writes nothing; needs neither media nor summaryTable.csv)::
+
+    curl -L -o hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz \
+        "https://zenodo.org/records/6332517/files/hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz?download=1"
+    python "$(yavih bench path crema_d)/make_manifest.py" --hear-archive hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz
+
+It reads ``tasks/tfds_crema_d-1.0.0-full/fold00.json`` … ``fold04.json`` (``{"<hear_file>.wav": [label]}``),
+``labelvocabulary.csv`` and ``task_metadata.json`` from the archive (streamed, nothing extracted; an extracted copy
+works too), checks the archive's md5 against Zenodo's listing, and exits 0 only when every one of the 7 438
+``hear_file`` stems of the committed manifest is in HEAR's fold ``split`` with HEAR's label ``labels``, with no file
+missing or extra. Its JSON names the digests to pin in ``manifest.upstream.upstream_files``
+(``upstream_files_to_pin``). Should the folds ever disagree, HEAR's published fold files are the protocol: freeze
+the manifest from them instead. The folder test ``test_hear_archive_staged`` runs the same check when the archive
+is at ``<media_root>/hear/`` or ``$YAVIH_CREMA_D_HEAR_ARCHIVE``.
 
 ``--media-root`` defaults to the configured ``[data.crema_d] media_root`` (``YAVIH_DATA__CREMA_D__MEDIA_ROOT``).
 ``--no-media`` re-freezes from ``--metadata`` (summaryTable.csv) alone (no wav read). ``--check`` exits 1 when the re-derived ``manifest.csv.gz`` or ``classes.csv`` differs from the committed
@@ -85,6 +103,15 @@ TFDS_INFO_REL = "tfds/crema_d-1.0.0-dataset_info.json"
 NUM_SHARDS = {"train": 16, "validation": 2, "test": 4}
 TFDS_NUM_BYTES = {"train": 1223332734, "validation": 181972381, "test": 365486261}
 EXCLUDED_REASON = "skipped by TFDS crema_d 1.0.0 as absent from GitHub (hence absent from HEAR's task)"
+# HEAR's published task (the fixed build; ``--hear-archive``): Zenodo record 6332517 (version 2021.3, 2022-01-21;
+# also record 5887964, version 2021.2) lists this file at 1 513 054 261 B with this md5. Records 5802571 (2021) and
+# 5885750 (2021.1) hold or retract the build with the pre-a5d6042 amplitude bug (int64 audio cast to int32).
+HEAR_ARCHIVE_NAME = "hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz"
+HEAR_ARCHIVE_MD5 = "8a80e180e44f01a5a43c962de92c1e12"
+HEAR_ARCHIVE_BYTES = 1513054261
+HEAR_ARCHIVE_URL = f"https://zenodo.org/records/6332517/files/{HEAR_ARCHIVE_NAME}"
+HEAR_TASK_DIR = "tfds_crema_d-1.0.0-full"         # hear-preprocess FinalCombine: tasks/<task>-<version>-<mode>/
+HEAR_TASK_FILES = (*(f"{f}.json" for f in FOLDS), "labelvocabulary.csv", "task_metadata.json")
 
 MANIFEST_COLUMNS = ["clip_id", "labels", "split", "rel_path", "actor", "sentence", "intensity", "tfds_split", "hear_file"]
 CLASSES_COLUMNS = ["index", "name"]
@@ -118,6 +145,112 @@ def wav_facts(path: str) -> tuple[int, int, int, str, int]:
         return f.frames, f.samplerate, f.channels, f.subtype, hear_split.packed_int64_payload(data.reshape(-1))
 
 
+def read_hear_task(path: Path) -> tuple[dict[str, bytes], dict | None]:
+    """The fold files of HEAR's published task, from its ``.tar.gz`` (streamed, nothing extracted; the fold files
+    precede the audio) or an extracted copy (the task directory or any directory above it). Returns
+    ``({file name: bytes}, {"bytes", "md5", "sha256"} of the archive, or None for a directory)``."""
+    import tarfile
+
+    found: dict[str, bytes] = {}
+    if path.is_dir():
+        task_dir = path if (path / "fold00.json").is_file() else None
+        if task_dir is None:
+            hits = sorted(path.glob(f"**/{HEAR_TASK_DIR}"))
+            if len(hits) != 1:
+                raise SystemExit(f"{path}: expected one {HEAR_TASK_DIR}/ directory below it, found {len(hits)}")
+            task_dir = hits[0]
+        for name in HEAR_TASK_FILES:
+            if (task_dir / name).is_file():
+                found[name] = (task_dir / name).read_bytes()
+        digests = None
+    else:
+        md5, sha = hashlib.md5(), hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 22), b""):
+                md5.update(chunk)
+                sha.update(chunk)
+        digests = {"bytes": path.stat().st_size, "md5": md5.hexdigest(), "sha256": sha.hexdigest()}
+        with tarfile.open(path, mode="r|gz") as tar:
+            for member in tar:
+                p = Path(member.name)
+                if member.isfile() and p.parent.name == HEAR_TASK_DIR and p.name in HEAR_TASK_FILES:
+                    found[p.name] = tar.extractfile(member).read()
+                    if len(found) == len(HEAR_TASK_FILES):
+                        break
+    missing = [n for n in HEAR_TASK_FILES[:len(FOLDS)] if n not in found]
+    if missing:
+        raise SystemExit(f"{path}: no {', '.join(missing)} in {HEAR_TASK_DIR}/ (is this HEAR's tfds_crema_d task?)")
+    return found, digests
+
+
+def compare_hear_folds(rows: list[dict[str, str]], hear: dict[str, dict[str, list[str]]]) -> dict:
+    """Compare the manifest's ``hear_file`` -> (``split``, ``labels``) with HEAR's fold files
+    (``{fold: {"<stem>.wav": [label]}}``): every clip must sit in the same fold with the same label."""
+    hear_of: dict[str, tuple[str, str]] = {}
+    duplicated = []
+    for fold, entries in hear.items():
+        for filename, labels in entries.items():
+            stem = filename[:-4] if filename.endswith(".wav") else filename
+            if stem in hear_of:
+                duplicated.append(stem)
+            hear_of[stem] = (fold, ";".join(labels))
+    ours = {r["hear_file"]: (r["split"], r["labels"], r["clip_id"]) for r in rows}
+    fold_mismatch = sorted((c, s, hear_of[h][0]) for h, (s, _, c) in ours.items() if h in hear_of and hear_of[h][0] != s)
+    label_mismatch = sorted((c, lab, hear_of[h][1]) for h, (_, lab, c) in ours.items() if h in hear_of and hear_of[h][1] != lab)
+    missing = sorted(h for h in ours if h not in hear_of)
+    extra = sorted(h for h in hear_of if h not in ours)
+    ok = not (fold_mismatch or label_mismatch or missing or extra or duplicated)
+    return {
+        "ok": ok,
+        "manifest_rows": len(ours),
+        "hear_files": len(hear_of),
+        "hear_per_fold": {f: len(v) for f, v in sorted(hear.items())},
+        "same_fold_and_label": sum(1 for h, (s, lab, _) in ours.items() if hear_of.get(h) == (s, lab)),
+        "fold_mismatch": len(fold_mismatch),
+        "label_mismatch": len(label_mismatch),
+        "missing_from_hear": len(missing),
+        "extra_in_hear": len(extra),
+        "duplicated_in_hear": len(duplicated),
+        "examples": {"fold_mismatch": fold_mismatch[:5], "label_mismatch": label_mismatch[:5],
+                     "missing_from_hear": missing[:5], "extra_in_hear": extra[:5]},
+    }
+
+
+def check_hear_archive(path: Path, manifest_path: Path, log) -> int:
+    """``--hear-archive``: the committed manifest against HEAR's published fold files; 0 when all 7 438 agree."""
+    import csv
+    import io
+
+    files, digests = read_hear_task(path)
+    rows = list(csv.DictReader(io.StringIO(gzip.decompress(manifest_path.read_bytes()).decode("utf-8"))))
+    hear = {f: json.loads(files[f"{f}.json"]) for f in FOLDS}
+    result = compare_hear_folds(rows, hear)
+    problems = []
+    if digests is not None and path.name == HEAR_ARCHIVE_NAME and (digests["md5"], digests["bytes"]) != (HEAR_ARCHIVE_MD5, HEAR_ARCHIVE_BYTES):
+        problems.append(f"{path.name} has md5 {digests['md5']} / {digests['bytes']} B, Zenodo lists "
+                        f"{HEAR_ARCHIVE_MD5} / {HEAR_ARCHIVE_BYTES} B (record 6332517)")
+    if "labelvocabulary.csv" in files:
+        vocab = {r["label"] for r in csv.DictReader(io.StringIO(files["labelvocabulary.csv"].decode("utf-8")))}
+        result["labelvocabulary"] = sorted(vocab)
+        if vocab != {r["labels"] for r in rows}:
+            problems.append(f"labelvocabulary.csv {sorted(vocab)} differs from the manifest's labels")
+    if "task_metadata.json" in files:
+        meta = json.loads(files["task_metadata.json"])
+        result["task_metadata"] = {k: meta.get(k) for k in ("task_name", "version", "mode", "split_mode", "nfolds", "embedding_type", "prediction_type")}
+    file_sha = {name: hashlib.sha256(data).hexdigest() for name, data in sorted(files.items())}
+    pin = {f"hear2021/{HEAR_TASK_DIR}/{name}": sha for name, sha in file_sha.items()}
+    if digests is not None:
+        pin = {f"zenodo/6332517/{path.name}": digests["sha256"], **pin}
+    report = {"hear_archive": str(path), "archive": digests, "files_sha256": file_sha, "cross_check": result,
+              "problems": problems, "upstream_files_to_pin": pin}
+    print(json.dumps(report, indent=2))
+    ok = result["ok"] and not problems
+    log(f"--hear-archive: {result['same_fold_and_label']} of {result['manifest_rows']} clips in HEAR's fold with HEAR's label; "
+        f"{result['fold_mismatch']} fold / {result['label_mismatch']} label mismatches, {result['missing_from_hear']} missing, "
+        f"{result['extra_in_hear']} extra; {'agree' if ok else 'DISAGREE'}")
+    return 0 if ok else 1
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--media-root", type=Path, default=None, help="the CREMA-D clone (AudioWAV/, processedResults/); default the configured [data.crema_d] media_root")
@@ -126,11 +259,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--out", type=Path, default=HERE, help="benchmark folder to write (default: this folder)")
     p.add_argument("--check", action="store_true", help="re-derive and compare against the committed manifest.csv.gz and classes.csv; write nothing")
     p.add_argument("--workers", type=int, default=4, help="threads reading wavs")
+    p.add_argument("--hear-archive", type=Path, default=None,
+                   help=f"cross-check only: compare the committed manifest.csv.gz with HEAR's published fold files ({HEAR_ARCHIVE_NAME}, or an extracted copy); writes nothing")
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.hear_archive is not None:
+        return check_hear_archive(args.hear_archive, HERE / "manifest.csv.gz", lambda m: print(f"[make_manifest crema_d] {m}", file=sys.stderr))
     if args.no_media and args.metadata is None:
         raise SystemExit("--no-media needs --metadata (a copy of processedResults/summaryTable.csv)")
     media_root = None
