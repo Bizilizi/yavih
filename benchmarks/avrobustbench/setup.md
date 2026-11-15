@@ -192,6 +192,9 @@ yavih bench prepare avrobustbench 01
 yavih bench prepare avrobustbench 03
 # a validation sample first: 64 eval clips x 16 conditions + 640 train clips (seeded choice)
 yavih bench prepare avrobustbench 04 -- --sample-clips 64 --sample-train 640 --workers 4
+# or exactly the rows a capped run reads (`yavih plan build --sample 64`): the first 64 rows of each split; eval rows
+# are clip-major (a clip's 16 conditions are consecutive), so 64 eval rows = 4 whole clips
+yavih bench prepare avrobustbench 04 -- --first 64 --workers 4
 # then every row (244 736 rows of 34 046 source clips), e.g. as an array of shards, each with its own log:
 #   yavih bench prepare avrobustbench 04 -- --all --shard <i>/<n> --workers 4
 yavih bench prepare avrobustbench 04 -- --all --workers 4
@@ -202,7 +205,9 @@ yavih bench verify avrobustbench --census
 Step 04 exits 0 when every selected row is verified or refused **by design** (`refused`: cv2 cannot read one of the
 10 frame indices, a source wav that is not 16 kHz mono, an audio corruption that cannot run on a very short wav), 1
 on an unexpected failure (logged with `error`), 2 on a build that differs from the pins or missing corruption assets.
-It resumes: rows with a log record of the current recipe and both files present are skipped. Refused rows stay
+It resumes: rows with a log record of the current recipe and both files present are skipped. A capped run
+(`plan build --sample N`) needs `N >= 16`, best a multiple of 16: every metric needs at least one scored row under
+each of the 16 conditions, and the probe refuses (`E_METRICS_INCOMPLETE`) otherwise. Refused rows stay
 missing; `min_eval_coverage` 0.95 absorbs them.
 
 Success: `yavih bench verify avrobustbench` prints `manifest sha ok; labels ok; curation ok` and per split `present`

@@ -29,9 +29,10 @@ own noise file, crop, angle and noise samples, reproducibly. The functions are t
   ``get_wav`` returns it.
 
 Every output is VERIFIED before it is renamed into place: the mp4 decodes (PyAV) to exactly 10 frames of
-224 x 224, and the wav has the source's sample count, 16 kHz and the corruption's channel count. Its sha256s go to the materialization
-log (one JSON line per row, with the recipe sha256 so a changed recipe never reuses an old file), one file per
-writer: ``<derived_root>/_materialize/log[.<i>-of-<n>].jsonl``; readers merge every ``log*.jsonl``.
+224 x 224, and the wav has the source's sample count, 16 kHz and the corruption's channel count. Its sha256s go
+to the materialization log (one JSON line per row, with the recipe sha256 so a changed recipe never reuses an old
+file), one file per writer: ``<derived_root>/_materialize/log[.<i>-of-<n>].jsonl``; readers merge every
+``log*.jsonl``.
 
 Refusals by design (the row stays missing, ``"refused": true`` in its record, exit 0): a source video in which cv2
 cannot read one of the 10 frame indices, a source wav that is not 16 kHz mono, an audio corruption that fails on a
@@ -45,6 +46,9 @@ Usage (``FOLDER=$(yavih bench path avrobustbench)``; ``yavih bench prepare avrob
 
     # a sample: K eval clips under all 16 conditions + T train clips (seeded choice by sha256 of the clip id)
     python "$FOLDER/prepare/04_materialize.py" --sample-clips 64 --sample-train 640 --workers 4
+    # the rows a capped run reads (`yavih plan build --sample 64`): the first 64 rows of each split (eval rows are
+    # clip-major, so 64 eval rows = 4 clips x 16 conditions)
+    python "$FOLDER/prepare/04_materialize.py" --first 64 --workers 4
     # the full run (≈ 245 000 rows), e.g. as a SLURM array of 32 shards (each shard writes its own log):
     python "$FOLDER/prepare/04_materialize.py" --all --shard ${SLURM_ARRAY_TASK_ID}/32 --workers 4
     # what is staged and verified (rows with a current log record and both files present)
@@ -186,6 +190,13 @@ def _rank(text: str) -> str:
 def select(rows: list[dict[str, str]], ns: argparse.Namespace) -> list[dict[str, str]]:
     if ns.all:
         chosen = rows
+    elif ns.first is not None:  # the rows a capped run reads: `yavih plan build --sample N` takes the first N per split
+        seen: dict[str, int] = defaultdict(int)
+        chosen = []
+        for r in rows:
+            if seen[r["split"]] < ns.first:
+                seen[r["split"]] += 1
+                chosen.append(r)
     else:
         by_split: dict[str, list[str]] = defaultdict(list)
         for r in rows:
@@ -370,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--all", action="store_true", help="every manifest row")
     g.add_argument("--sample-clips", type=int, help="this many eval source clips (all their conditions), seeded")
+    g.add_argument("--first", type=int, help="the first N rows of every split (what `plan build --sample N` reads)")
     g.add_argument("--status", action="store_true", help="count verified rows per split / condition and exit")
     ap.add_argument("--sample-train", type=int, default=0, help="with --sample-clips: this many train clips")
     ap.add_argument("--split", action="append", help="restrict to this split (repeatable)")

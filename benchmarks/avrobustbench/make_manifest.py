@@ -15,7 +15,8 @@ Classes = the 309 distinct labels of ``vggsound.csv``, sorted (``index,name``).
 
 Eval rows (split ``test``) = the 14 046 VGGSOUND-2C clips (every one is a ``split == test`` row of
 ``vggsound.csv``; clip id ``<ytid>_<start zero-padded to 6 digits>``, sorted) under each of the 16 conditions of
-``protocol.conditions`` (``clean``, then the 15 corruptions in the paper's order), condition-major: 224 736 rows,
+``protocol.conditions`` (``clean``, then the 15 corruptions in the paper's order), clip-major (a clip's 16 rows are
+consecutive, so the first ``16 k`` rows hold ``k`` whole clips: ``plan build --sample``): 224 736 rows,
 ``clip_id = <clip>#<condition>``, ``rel_video`` / ``rel_audio = media/test/<condition>/<clip>.{mp4,wav}`` (written
 by prepare step 4 under ``derived_root``), ``src_video`` / ``src_audio = {video,audio}/<clip>.{mp4,wav}`` (the
 VGGSound source under ``media_root``). The 1 400 VGGSound test clips the authors did not release are excluded
@@ -154,8 +155,8 @@ def freeze(vggsound_csv: Path, members: Path, derived_root: Path | None, cap: in
     for cid, label in drawn:
         rows.append([f"{cid}#clean", "train", label, "clean", f"media/train/clean/{cid}.mp4",
                      f"media/train/clean/{cid}.wav", f"video/{cid}.mp4", f"audio/{cid}.wav"])
-    for cond in CONDITIONS:
-        for cid in eval_clips:
+    for cid in eval_clips:
+        for cond in CONDITIONS:
             rows.append([f"{cid}#{cond}", "test", test[cid], cond, f"media/test/{cond}/{cid}.mp4",
                          f"media/test/{cond}/{cid}.wav", f"video/{cid}.mp4", f"audio/{cid}.wav"])
     manifest_bytes = csv_bytes(COLUMNS, rows)

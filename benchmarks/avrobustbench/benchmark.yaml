@@ -24,8 +24,8 @@ changelog:
     date: "2026-11-15"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 6dc4c9c389f8b7051855390887adddcbc045bffb744b7470785db37bf22c172f
-    input_hash: 84bcf03679de388f53679d26deeb43d1c3324ad71c9ccba7ed863708faa166d2
+    protocol_hash: 251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11
+    input_hash: d9634cdb5104606235f827bd957a1e8abb6559fb4ac4872d64c374a51d234b81
     supersedes: []
 
 source:
@@ -64,7 +64,7 @@ budget:
 
 manifest:
   file: manifest.csv.gz
-  sha256: a46de92319a7c942f33a39a3d034ab9765e7872a6ef43519e1e89876e7202340
+  sha256: e0c3c4249972c36a026a179c066f888375dcf94b4dffc2d56a5ee4bc0d95eee2
   classes: classes.csv
   classes_sha256: a72a8eae718df5f9571be53b1615f838e14ef8272f1adf7b06eec1d61b32a4bf
   key: clip_id
@@ -90,7 +90,7 @@ manifest:
     draw: "VGGSound vggsound.csv, the split == train rows in file order minus the 7 rows sharing a YouTube id with an eval clip (183 723), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0; 64-65 clips per class"
     note: >-
       rows = 14 046 VGGSOUND-2C clips + 183 730 vggsound.csv train rows. Eval rows are (clip, condition) pairs,
-      clip_id = <clip>#<condition>, 16 conditions (clean + 15 corruptions) x 14 046 clips, condition-major.
+      clip_id = <clip>#<condition>, 16 conditions (clean + 15 corruptions) x 14 046 clips, clip-major (a clip's 16 rows are consecutive).
       total_upstream counts candidate rows: 183 730 train rows + 16 x 15 446 VGGSound test rows = 430 866 = 244 736
       listed + 186 130 excluded (not_in_vggsound2c: the 1 400 VGGSound test clips missing from the authors' release, x
       16; leakage_train_ytid: train rows whose YouTube id is an eval clip's; draw_remainder).

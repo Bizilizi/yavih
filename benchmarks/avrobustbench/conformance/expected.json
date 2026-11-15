@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "475515e3ddc0b23938c4c33847191347d6c55adf+dirty",
+  "commit": "a0333e4fd4500975ac365d3424e54a2a5fc55a5d+dirty",
   "externals": {},
   "folder_source": {
    "eval": "720b9275b4b00a72851a2250cc6937b5727729ed11bb28af0fde46d228dffd43",
    "reader": null
   },
-  "protocol_hash": "6dc4c9c389f8b7051855390887adddcbc045bffb744b7470785db37bf22c172f",
+  "protocol_hash": "251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11",
   "scorer": {
    "kind": "probe",
    "name": "clf",
@@ -57,16 +57,16 @@
    "ci95": {
     "acc_clean": [
      0.0,
-     0.2588329669680317
+     0.22809537235419838
     ],
     "macc": [
      0.0,
-     0.02857142857142857
+     0.0
     ]
    },
    "controls": {},
    "floors": {
-    "macc_floor": 0.0031746031746031746
+    "macc_floor": 0.0
    },
    "metrics": {
     "acc_clean": 0.0,
@@ -75,22 +75,22 @@
     "acc_crowd": 0.0,
     "acc_frost": 0.0,
     "acc_gaussian": 0.0,
-    "acc_impulse": 0.047619047619047616,
-    "acc_interference": 0.05,
+    "acc_impulse": 0.0,
+    "acc_interference": 0.0,
     "acc_rain": 0.0,
-    "acc_shot": 0.08333333333333333,
+    "acc_shot": 0.0,
     "acc_smoke": 0.0,
     "acc_snow": 0.0,
     "acc_spatter": 0.0,
     "acc_speckle": 0.0,
     "acc_underwater": 0.0,
     "acc_wind": 0.0,
-    "alpha": 1.012063492063492,
-    "macc": 0.012063492063492061,
-    "macc_digital": 0.026190476190476188,
+    "alpha": 1.0,
+    "macc": 0.0,
+    "macc_digital": 0.0,
     "macc_environmental": 0.0,
-    "macc_human": 0.0125,
-    "n_clips": 256,
+    "macc_human": 0.0,
+    "n_clips": 255,
     "n_eval": 256,
     "rho": 0.0
    }

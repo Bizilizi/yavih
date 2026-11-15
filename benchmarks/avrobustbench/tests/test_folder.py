@@ -147,7 +147,7 @@ def test_eval_rows_are_clip_condition_pairs(rows: list[dict[str, str]]):
     assert len(by_clip) == EVAL_CLIPS
     assert all(sorted(k for k in v if k != "label") == sorted(CONDITIONS) for v in by_clip.values())
     order = [r["condition"] for r in rows if r["split"] == "test"]
-    assert order == [c for c in CONDITIONS for _ in range(EVAL_CLIPS)]  # condition-major
+    assert order == CONDITIONS * EVAL_CLIPS  # clip-major: the first 16 k rows are k whole clips (plan build --sample)
 
 
 def test_no_ytid_shared_between_train_and_eval(rows: list[dict[str, str]]):
@@ -359,8 +359,9 @@ def synthetic_bench(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rows: list[
     for k in ("MEDIA_ROOT", "DERIVED_ROOT"):
         monkeypatch.delenv(f"YAVIH_DATA__AVROBUSTBENCH__{k}", raising=False)
     test_rows = [r for r in rows if r["split"] == "test"]
-    picked = {0: test_rows[0], EVAL_CLIPS: test_rows[EVAL_CLIPS]}  # clean and gaussian of the first clip
-    assert picked[0]["clip_id"].rpartition("#")[0] == picked[EVAL_CLIPS]["clip_id"].rpartition("#")[0]
+    picked = {0: test_rows[0], 1: test_rows[1]}  # clean and gaussian of the first clip
+    assert picked[0]["clip_id"].rpartition("#")[0] == picked[1]["clip_id"].rpartition("#")[0]
+    assert (picked[0]["condition"], picked[1]["condition"]) == ("clean", "gaussian")
     for k, r in picked.items():
         mp4, wav = tmp_path / r["rel_video"], tmp_path / r["rel_audio"]
         mp4.parent.mkdir(parents=True, exist_ok=True)
