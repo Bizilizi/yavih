@@ -1,0 +1,29 @@
+{
+  "preview_version": 1,
+  "design_version": 1,
+  "figures": {
+    "preview": {
+      "kind": "frames",
+      "split": "test",
+      "rows": [
+        "HCC9JldRsNc"
+      ],
+      "source_sha256": "663f736bfe49fde8cf5a6e657eb7a42bc0eb66f489938e520ae9565269f2df16",
+      "files": {
+        "preview.png": 577039
+      }
+    },
+    "clip": {
+      "kind": "motion",
+      "split": "test",
+      "rows": [
+        "HCC9JldRsNc"
+      ],
+      "source_sha256": "7947f9e867c76fbc2ffb7dfd70d5eb3a7b4c2b8f0861604d13d1ebbf975c4d8a",
+      "files": {
+        "clip.gif": 3205675,
+        "clip.mp4": 1399438
+      }
+    }
+  }
+}
