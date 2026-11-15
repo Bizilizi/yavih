@@ -42,7 +42,10 @@ __all__ = ["METRICS", "pitch_acc", "chroma_acc", "pitch_acc_floor", "chroma_acc_
 # available_scores this task names ("pitch_acc", "chroma_acc"), verbatim. Changes: the module imports of score.py
 # (torch, pandas, sed_eval, dcase_util, sklearn, scipy) are dropped, since these classes use none of them; the
 # typing names they use are imported above; ``partial`` is imported from functools here; the upstream comment
-# marker in ScoreFunction.__init__ is respelled (bench lint counts that word as an unfilled scaffold slot).
+# marker in ScoreFunction.__init__ is respelled (bench lint counts that word as an unfilled scaffold slot); a
+# ``noqa: E721`` is appended to one line, and the file-level ruff directive below keeps the upstream typing
+# spelling (Dict, Tuple, Union, Optional) and the plain ``zip`` calls as they are.
+# ruff: noqa: UP006, UP007, UP035, UP045, B905
 
 from functools import partial  # noqa: E402
 
