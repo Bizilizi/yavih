@@ -64,8 +64,9 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
 budget:
   clips: {train: 10000, val: 649, test: 1200}
   media_gb: 13.5              # 13 536 718 753 B: the 11 849 extracted mp4 (every row reads one)
-  extract_min_per_1k_clips_ref: 6.0   # TODO: not measured (the scaffold's value); measured by the trial run
-  probe_minutes_ref: {llp_avvp: 30}   # TODO: not measured yet
+  extract_min_per_1k_clips_ref: 6.0   # TODO: not measured (the scaffold's value; no model bridge was run here): the trial run measures it
+  probe_minutes_ref: {llp_avvp: 25}   # derived: the HAN fit measured at 24 min (40 epochs x 35 s incl. val scoring, D = 768, random per-second
+                                      # inputs, 10 000 + 649 rows, one shared 24 GB GPU); reading and pooling real features not included
 
 manifest:
   file: manifest.csv.gz
