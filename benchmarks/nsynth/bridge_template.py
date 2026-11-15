@@ -1,7 +1,7 @@
-"""Bridge skeleton for the ``esc50`` benchmark.
+"""Bridge skeleton for the ``nsynth`` benchmark (HEAR's NSynth Pitch 5h task: name the MIDI pitch of a 4 s note).
 
 Copy this file next to your model code, fill every ``TODO``, then run
-``yavih bridge check <file> --bench esc50 --out esc50.profile.json`` before any extraction
+``yavih bridge check <file> --bench nsynth --out nsynth.profile.json`` before any extraction
 (``--synthetic`` instead of ``--out`` smoke-tests it before any data is staged). An unfilled copy fails
 bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES. A bridge file serves one benchmark; each matrix
 entry (file + args) is one reading of one model. Read ``setup.md`` ("Input contract", "Output contract",
@@ -12,21 +12,23 @@ repository, commit and file:line it came from; ``describe()["input"]["audio"]`` 
 
     TODO (e.g. `torchaudio.compliance.kaldi.fbank(wav16k, htk_compat=True, sample_frequency=16000,
     use_energy=False, window_type="hanning", num_mel_bins=128, dither=0.0, frame_shift=10)`, then the
-    model's PRETRAINING-DATASET mean/std, then how the model's input length is reached: AudioMAE sizes
-    ESC input to 512 frames; AST/BEATs/CAV-MAE pad to 1024 frames …)
+    model's PRETRAINING-DATASET mean/std, then how the model's input length is reached)
+
+The reference's own choice (HEAR, hear-preprocess v2021.1.1 ``hearpreprocess/util/audio.py``), a default and
+not part of the protocol: HEAR hands a model the whole 4.000 s note, mono, resampled from 16 kHz to the model's
+own rate by ffmpeg's ``aresample`` filter with ``resampler=soxr``, and asks it for one scene embedding per clip.
+This template keeps the whole clip (rule ``full``) and the model's tokens (``pooling: none``), which the
+attentive ``clf`` probe pools itself.
 
 What the reader hands you per sample (setup.md "Input contract"):
 
-* ``sample.streams["audio"]`` — the ONLY stream, a ``RawStream`` over the stored wav: ``path``,
+* ``sample.streams["audio"]`` — the ONLY stream, a ``RawStream`` over the stored NSynth wav: ``path``,
   ``bytes()``, ``open()`` (seekable; soundfile / torchaudio / PyAV accept it). Nothing is decoded,
   resampled, trimmed or padded for you.
-* ``stream.info`` (guaranteed keys): ``duration_s`` 5.0, ``sample_rate`` 44100, ``n_samples`` 220500,
-  ``channels`` 1, ``container`` "wav", ``bytes``. Use these facts, never a hard-coded constant, so a
-  re-staged corpus cannot silently change what you feed.
-* ``sample.meta == {"facts": {}}``: ESC-50 has no label facts. Never let ``row``, ``clip_id`` or
-  ``split`` (the fold) change what you compute: ``bridge check`` scrambles them.
-* Folds: the extractor runs this bridge once per fold split ``"1"…"5"`` and five probes reuse the
-  features; your features must not depend on the fold or on the batch a clip lands in.
+* ``stream.info`` (guaranteed keys): ``duration_s`` 4.0, ``sample_rate`` 16000, ``n_samples`` 64000,
+  ``channels`` 1, ``container`` "wav", ``bytes``. Use these facts, never a hard-coded constant.
+* ``sample.meta == {"facts": {}}``. Never let ``row``, ``clip_id`` (it spells the pitch: ``…-060-100``)
+  or ``split`` change what you compute: ``bridge check`` scrambles them.
 
 Everything model-side is YOUR decision and is declared in ``describe()["input"]`` (recorded with every
 number, never part of what makes numbers comparable): which samples (temporal rule), resampling, padding,
@@ -39,13 +41,12 @@ fixed ``N`` and ``D``; no network and no writes outside the run directory inside
 
 Gotchas (setup.md "Gotchas") — each passes validation and silently changes the number:
 
-* **Padding to a longer model input.** Zero-padding the 5 s clip to 8–10 s makes >= 3/8 of the input
-  digital silence and skews per-clip normalization. If your model needs a longer input, choose the fill DELIBERATELY: ``{"rule": "full", "pad_to_s": 10.0}`` declares zero
-  padding (checked); any other fill (repeat, reflect) is a ``custom`` rule with a description.
-  Normalize as the model was pretrained: its own constants; per-clip statistics (even over the padded
-  buffer) only when that IS its recipe, declared in ``norm``; never batch or dataset statistics.
-* Resample 44 100 -> the model rate yourself and declare the resampler; never assume 16 kHz input.
-* Do not re-window unless that IS the model's documented ESC recipe (then declare a ``span`` rule).
+* **No pitch shift, no time stretch, no per-clip loudness or pitch normalization.** The label is the
+  pitch: anything that moves the spectrum (a resampler run at the wrong ratio, a "speed" augmentation left
+  on, playing 16 kHz audio as if it were 22.05 kHz) moves the answer by semitones.
+* Resample 16 000 -> the model rate yourself and declare the resampler; never assume the stored rate is the model's.
+* **Padding to a longer model input.** Notes decay: the last second is often near silence. Zero padding to
+  10 s is a declared choice (``{"rule": "full", "pad_to_s": 10.0}``), any other fill is ``custom``.
 * Return the same ``N`` for every sample (fixed-length input -> fixed token count).
 """
 
@@ -58,8 +59,8 @@ import numpy as np
 from yavih.bridge import ArgSpec, Bridge
 
 
-class Esc50Bridge(Bridge):
-    name = "TODO-model-esc50"       # optional label of this file, recorded only
+class NsynthBridge(Bridge):
+    name = "TODO-model-nsynth"       # optional label of this file, recorded only
     batch_size = 32
     dtype = "float16"               # "float16" | "float32" — what encode() returns
     pos_mode = "none"               # clf needs no pos (output_contract.requires.pos == []); "constant" + _time_pos() is allowed
@@ -81,7 +82,7 @@ class Esc50Bridge(Bridge):
         # refuses any torch.nn.Module left in training mode: E_TRAIN_MODE). Raise
         # yavih.NotApplicable("...") here if the model cannot take audio (a video-only model).
         self.model = None
-        self.model_sr = 16000            # TODO: the model's sample rate (resample 44100 -> model_sr below)
+        self.model_sr = 16000            # TODO: the model's sample rate (resample 16000 -> model_sr below)
         self.n_t, self.n_f = 1, 1        # TODO: the model's time × frequency token grid (n_t * n_f == N)
 
     def describe(self) -> dict:
@@ -105,7 +106,7 @@ class Esc50Bridge(Bridge):
                         "resample": "TODO e.g. torchaudio.functional.resample(sinc_interp_hann, lowpass_filter_width 6)",
                         "features": "TODO e.g. kaldi_fbank",
                         "n_mels": None, "win_ms": None, "hop_ms": None, "dither": 0.0,
-                        "channels": "mean",          # ESC-50 is mono; say what you would do with more channels
+                        "channels": "mean",          # NSynth is mono; say what you would do with more channels
                     },
                     "norm": {"mean": None, "std": None,   # TODO: the model's pretraining constants (per-clip stats only if that IS its recipe)
                              "source": "TODO repo@commit file:line"},
@@ -146,14 +147,14 @@ class Esc50Bridge(Bridge):
         """One clip's CPU work, ahead of ``encode``: what this returns arrives as ``sample.prepared``."""
         # Runs in decode_workers threads ahead of encode(): per-sample decoding only, no model, no state across samples.
         wav, sr, u = self._read(sample.streams["audio"])
-        # TODO: resample sr (44100) -> self.model_sr here too (per clip, deterministic); the stored bytes are released
+        # TODO: resample sr (16000) -> self.model_sr here too (HEAR: ffmpeg aresample resampler=soxr) (per clip, deterministic); the stored bytes are released
         # after prepare(), so encode() works from this dict only.
         return {"wav": wav, "sr": sr, "used": {"audio": u}}
 
     def encode(self, samples: list) -> tuple[Any, Any | None, list[dict]]:
         waves = [s.prepared["wav"] for s in samples]   # what prepare() returned, per sample
         used = [s.prepared["used"] for s in samples]
-        # Every clip has the same length here because every stored clip is 220 500 samples; never pad
+        # Every clip has the same length here because every stored clip is 64 000 samples; never pad
         # to the batch maximum (instance-wise extraction).
         # TODO: front end, forward (run_extract wraps encode in torch.inference_mode()), take the tap
         # `self.layer`, return tokens [B, N, D] as np.ndarray or a torch tensor; N fixed for every clip.
@@ -161,7 +162,7 @@ class Esc50Bridge(Bridge):
         feats = np.zeros((len(samples), self.n_t * self.n_f, 1), dtype=np.float32)  # TODO replace
         pos = None
         if self.pos_mode == "constant":
-            info = samples[0].streams["audio"].info   # constant pos is legal: every ESC-50 clip is 5.0 s
+            info = samples[0].streams["audio"].info   # constant pos is legal: every NSynth clip is 4.0 s
             pos = self._time_pos(float(info["duration_s"]))
         return feats, pos, used
 
