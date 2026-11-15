@@ -29,7 +29,7 @@ OUTPUT_CONTRACT = {"shape": "fixed", "coordinates": "media", "target_frame": Non
                    "requires": {"pos": ["t"], "streams": ["audio"], "grid": None, "t_bins": None}}
 EXTERNAL: list[str] = []
 HAS_PROBE = True
-#: the C10 baseline file actionformer_baseline_validation.json scored by probe.official_map (README "## In yavih")
+#: the C10 baseline file actionformer_baseline_validation.json scored by probe.official_map (setup.md "## Dependencies")
 BASELINE_C10 = [16.736838654256243, 15.480657336554968, 14.010561695760487, 12.263180170795609, 10.354604142156187]
 
 
