@@ -1,12 +1,10 @@
-# TODO: copied verbatim from vggsound_retrieval by `yavih bench new`; replace it with this benchmark's own targets, metrics or authors' scorer (or delete it together with what benchmark.yaml takes from it).
-# Delete this banner once the file is this benchmark's own.
-"""``vggsound_retrieval``: the folder's own training-free retrieval scorer and its metrics.
+"""``vggsounder_retrieval``: the folder's own training-free retrieval scorer and its metrics.
 
-The scorer and every metric (ranks, R@k, the median rank, the subset metrics, the conformance population) are
-``retrieval.py``, next to this file. This file names the folder's subset: ``*_cavmae`` are the 1 545 rows flagged
-``cavmae_sync_5pc`` (5 per class, the retrieval datafile of CAV-MAE Sync @ 0add2e7, the subset the CAV-MAE and
-CAV-MAE Sync papers report on) ranked among themselves (``readout_params.subsets: {cavmae: cavmae_sync_5pc}``). Same
-definitions as the full-set metrics; Wilson intervals over the subset's queries for the R@k.
+Instance-level ranks, R@k and the median rank are ``retrieval.py`` (byte-identical to the copy in
+``vggsound_retrieval``); the class-level measures (``cls_map_*``, ``cls_r@k_*``, ``cls_n_no_relevant``), copied from
+DCMH's ``calc_map`` and Roth et al.'s ``c_recall@k``, and the driver that computes both are ``class_level.py``. A
+class-level relevant clip shares at least one audible-and-visible class (``readout_params.classes_column``) with the
+query; the query's own clip is not in its class-level gallery. No subsets (``readout_params.subsets: {}``).
 Module scope: stdlib, numpy, yavih core.
 """
 
@@ -36,8 +34,8 @@ def _sibling(name: str):
 
 
 retrieval = _sibling("retrieval.py")
-SUBSET = "cavmae"
-SCORER = retrieval.make_scorer(Path(__file__).resolve().parent.name, module=__name__)
-METRICS = retrieval.make_metrics(SCORER.name, subsets=(SUBSET,))
+class_level = _sibling("class_level.py")
+SCORER = class_level.make_scorer(Path(__file__).resolve().parent.name, module=__name__, retrieval=retrieval)
+METRICS = {**retrieval.make_metrics(SCORER.name), **class_level.make_metrics(SCORER.name)}
 
-__all__ = ["SCORER", "METRICS", "SUBSET", "retrieval"]
+__all__ = ["SCORER", "METRICS", "retrieval", "class_level"]
