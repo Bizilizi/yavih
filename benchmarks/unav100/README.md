@@ -28,10 +28,11 @@ to 15 s; a model has to report all three segments, each with its own boundaries.
 
 ## The data
 
-UnAV-100 (Geng et al., CVPR 2023) is 10 790 YouTube videos taken from the source videos of VGGSound, 10 to 60 s long
-and 42 s on average, over 126 hours in total. Annotators marked 30 059 audio-visual events of 100 classes covering
-human activities, music, animals, vehicles, tools and natural sounds. A video holds 2.8 events on average and up to
-23; about 60 % of the videos hold more than one event and about 25 % hold events that happen at the same time.
+UnAV-100 (Untrimmed Audio-Visual; Geng et al., CVPR 2023) is 10 790 YouTube videos taken from the source videos of
+VGGSound, 10 to 60 s long and 42.1 s on average, over 126 hours in total. Annotators marked 30 059 audio-visual events
+of 100 classes covering human activities, music, animals, vehicles, tools and natural sounds. A video holds 2.8 events
+on average and up to 23; about 60 % of the videos hold more than one event and about 25 % hold events that happen at
+the same time.
 
 The authors split the videos 3:1:1 with multi-label stratification: 6 489 videos for training, 2 134 for validation
 and 2 167 (5 900 events) for test; numbers are reported on the test set. The annotations and the videos are a
