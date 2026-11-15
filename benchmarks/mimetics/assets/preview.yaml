@@ -4,12 +4,12 @@ figures:
   kind: frames
   split: test
   rows:
-  - 2BVHPrletXY_000208_000214
+  - o1q2BURthvU_000063_000073
 - id: clip
   kind: motion
   split: test
   rows:
-  - 2BVHPrletXY_000208_000214
+  - o1q2BURthvU_000063_000073
   options:
     start_s: 0.0
-    seconds: 4.0
+    seconds: 3.0
