@@ -1,0 +1,18 @@
+{
+  "preview_version": 1,
+  "design_version": 1,
+  "figures": {
+    "preview": {
+      "kind": "audio",
+      "split": "test",
+      "rows": [
+        "brass_acoustic_046-064-127",
+        "guitar_acoustic_010-056-100"
+      ],
+      "source_sha256": "d43b002223d4e003d76e4b032327394ffe7b8c8997313810068d568cddd71c06",
+      "files": {
+        "preview.png": 369711
+      }
+    }
+  }
+}

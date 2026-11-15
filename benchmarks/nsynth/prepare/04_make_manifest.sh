@@ -13,7 +13,7 @@ MEDIA_ROOT="${ROOT:-$(yavih config get nsynth.media_root)}"
 if [ "${1:-}" = "--write" ]; then shift; else set -- --check "$@"; fi
 "$PY" "$FOLDER/make_manifest.py" --media-root "$MEDIA_ROOT" "$@" > /dev/null
 got=$(zcat "$FOLDER/manifest.csv.gz" | sha256sum | cut -d' ' -f1)   # benchmark.yaml pins the DECOMPRESSED bytes
-[ "$got" = MANIFEST_SHA256 ] || { echo "FAIL: manifest sha256 $got" >&2; exit 1; }
+[ "$got" = 949e49b1030370a188f538c71b3150d38017263fc1314cb5f81a47f806f0b7c0 ] || { echo "FAIL: manifest sha256 $got" >&2; exit 1; }
 echo "manifest.csv (decompressed): OK"
-echo "CLASSES_SHA256  $FOLDER/classes.csv" | sha256sum -c -
+echo "1cd9e961bb471b9a7da1adf8dc9b8c952f84eba99d77a476bb356857c3eb1470  $FOLDER/classes.csv" | sha256sum -c -
 YAVIH_DATA__NSYNTH__MEDIA_ROOT="$MEDIA_ROOT" yavih bench verify nsynth --json

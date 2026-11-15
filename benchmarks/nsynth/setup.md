@@ -28,12 +28,12 @@ yavih bench prepare nsynth 04       # make_manifest.py --check from the staged e
 * Sizes: 25.2 GB of archives (the download; keep or delete them after step 02), then 0.64 GB of staged wavs
   (5 000 × 128 044 B) and the three `examples.json` (train 270 MB). Budget about 26 GB of disk while staging.
 * Time: the downloads ran at about 40 MB/s here (about 11 minutes); step 02 reads every archive once
-  (TIMING_EXTRACT).
+  (about 14 minutes here, almost all of it the train archive).
 * Digests of the extracted metadata: `nsynth-train/examples.json` a8182e084aa338d764f64f6a283bd1778d358e913a7074294110e9ec601e0087,
   `nsynth-valid/examples.json` 050e0bf55d1a87eee2abbc3d273c7f525404c0a51ac378561b905f2da31a7286,
   `nsynth-test/examples.json` 74df2dd960c156cd5e8757d8afb1fe30e6a233aa99043a29037e7b54cde6908f. The staged
   wav set's digest (sha256 of `cd <media_root> && export LC_ALL=C && sha256sum nsynth-*/audio/*.wav`) is
-  AUDIO_DIGEST.
+  `d4e890c1dc76f7dbecc13ebfe7f7274cabcde8578c4c15b892d6a60a0794703a`.
 * Data root: `media_root` defaults to `${data.root}/nsynth`. Elsewhere set
   `YAVIH_DATA__NSYNTH__MEDIA_ROOT=/path/to/nsynth`, pass `ROOT=/path/to/nsynth` to a step, or, in
   `~/.config/yavih/config.toml`:

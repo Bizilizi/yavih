@@ -31,6 +31,6 @@ print(dict(c))
 assert c == {(64000, 16000, 1, "PCM_16"): 5000}, "every staged NSynth wav must be 64000 frames, 16 kHz, mono, PCM_16"
 PY
 digest=$(export LC_ALL=C && sha256sum nsynth-*/audio/*.wav | sha256sum | cut -d' ' -f1)
-want=AUDIO_DIGEST
+want=d4e890c1dc76f7dbecc13ebfe7f7274cabcde8578c4c15b892d6a60a0794703a
 [ "$digest" = "$want" ] || { echo "FAIL: audio digest $digest != $want" >&2; exit 1; }
 echo "=== OK: examples.json, 5000 wavs, headers and audio digest match ==="

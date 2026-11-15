@@ -1,0 +1,8 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: audio
+  split: test
+  rows:
+  - brass_acoustic_046-064-127
+  - guitar_acoustic_010-056-100

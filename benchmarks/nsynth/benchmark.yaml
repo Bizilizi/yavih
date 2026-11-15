@@ -43,7 +43,7 @@ source:
     nsynth-train/examples.json: a8182e084aa338d764f64f6a283bd1778d358e913a7074294110e9ec601e0087
     nsynth-valid/examples.json: 050e0bf55d1a87eee2abbc3d273c7f525404c0a51ac378561b905f2da31a7286
     nsynth-test/examples.json: 74df2dd960c156cd5e8757d8afb1fe30e6a233aa99043a29037e7b54cde6908f
-    audio.sha256sum: TODO      # sha256 of `cd <media_root> && export LC_ALL=C && sha256sum nsynth-*/audio/*.wav` (5 000 lines); prepare/03_verify.sh recomputes it
+    audio.sha256sum: d4e890c1dc76f7dbecc13ebfe7f7274cabcde8578c4c15b892d6a60a0794703a      # sha256 of `cd <media_root> && export LC_ALL=C && sha256sum nsynth-*/audio/*.wav` (5 000 lines); prepare/03_verify.sh recomputes it
   notes: >-
     Public Google Cloud Storage downloads, no account or agreement; the md5s are the ones HEAR's
     hearpreprocess pins. 305 979 notes in three instrument-disjoint splits (train 289 205, valid 12 678,
