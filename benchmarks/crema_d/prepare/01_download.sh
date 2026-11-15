@@ -75,3 +75,4 @@ export -f fetch_one
 export ROOT COMMIT MEDIA
 xargs -P "$JOBS" -I{} bash -c 'fetch_one "$@"' _ {} < "$names"
 echo "=== $(date -Is) DONE: $(wc -l < "$names") wavs match their LFS pointers; $(du -sh "$ROOT/AudioWAV" | cut -f1) in AudioWAV ==="
+echo "    AudioWAV/ holds $(find "$ROOT/AudioWAV" -maxdepth 1 -type f | wc -l) files: the 7438 wavs plus the 4 clips TFDS skips, left as 130 B LFS pointer text (not audio; the manifest and step 02 ignore them)"

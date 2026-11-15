@@ -32,6 +32,9 @@ yavih bench prepare crema_d 03    # re-freeze (byte-identical) and yavih bench v
 * Which wavs: every `FileName` of `processedResults/summaryTable.csv` (7 442) except the four that TensorFlow
   Datasets' `crema_d` 1.0.0 skips as absent from GitHub (`1040_ITH_SAD_XX`, `1006_TIE_NEU_XX`, `1013_WSI_DIS_XX`,
   `1017_IWW_FEA_XX`), so exactly HEAR 2021's clips. The MP3 and video files of the repository are not needed.
+* After step 01, `AudioWAV/` holds 7 442 files, not 7 438: the 7 438 wavs plus the four skipped clips as 130 B Git
+  LFS pointer text files (the clone checks out every pointer; step 01 downloads only the listed wavs). They are not
+  audio, the manifest and `02_verify.sh` ignore them, and `ls AudioWAV | wc -l` therefore prints 7442. Leave them.
 * Data root: `media_root` defaults to `${data.root}/crema_d`. Elsewhere set
   `YAVIH_DATA__CREMA_D__MEDIA_ROOT=/path/to/crema_d` or, in `~/.config/yavih/config.toml`:
 
