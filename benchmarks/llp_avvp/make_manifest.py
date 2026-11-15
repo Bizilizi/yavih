@@ -22,9 +22,9 @@ characters, as the authors' dataloader takes them); ``ytid``; ``start_s`` = the 
 ``audio_events`` / ``visual_events`` = every row of the dense file whose ``filename`` EQUALS the video's, in file
 order, as ``onset:offset:class_index``, ``;``-joined (empty for train). That exact match is how the authors'
 evaluation (``main_avvp.py::eval``) reads the files, so their defects are kept as they are: 14 audio and 11 visual
-rows name no val/test video (garbled ids such as ``19jWnmYnlD8_30_400`` for ``19jWnmYnlD8_30_40``, which therefore
-has no ground truth) and are ignored; 6 audio rows have ``offset <= onset`` and mark nothing; 8 audio rows are
-exact duplicates. ``classes.csv`` = ``index,name`` in the authors' category order (``dataloader.py``), the logit
+rows name no val/test video (garbled ids: the ``Clapping`` rows of the val video ``19jWnmYnlD8_30_40`` are filed
+under ``19jWnmYnlD8_30_400``, so its ground truth lacks them) and are ignored; 6 audio rows (5 on val/test videos)
+have ``offset <= onset`` and mark nothing; 8 audio rows are exact duplicates. ``classes.csv`` = ``index,name`` in the authors' category order (``dataloader.py``), the logit
 order of their model.
 
 With a staged media root (``--media-root``, default the configured ``llp_avvp.media_root``) every clip's presence

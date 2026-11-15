@@ -95,8 +95,8 @@ manifest:
     note: >-
       One row per video in the official splits (train 10 000 with weak labels only; val 649 and test 1 200 with dense
       audio and visual events), no curation and no draw. Dense rows are matched to videos by exact filename, as the
-      authors' evaluation does: 14 audio and 11 visual rows name no val/test video and are ignored (so
-      19jWnmYnlD8_30_40, whose rows say _30_400, has no ground truth); 5 scored audio rows have offset <= onset and
+      authors' evaluation does: 14 audio and 11 visual rows name no val/test video and are ignored (the val video
+      19jWnmYnlD8_30_40 loses its Clapping rows, filed under _30_400); 5 scored audio rows have offset <= onset and
       mark nothing. Test videos without audio / visual events: 5 / 121. Every clip is an AudioSet segment: a
       model pretrained on AudioSet may have seen them.
     upstream_files:
@@ -161,8 +161,8 @@ data:
 
 input_contract:               # hashed; setup.md "## Input contract" ends with a copy
   handed_over:
-    video: "the LLP clip mp4 (llp_videos/<ytid>.mp4 of the extracted CserDu123/LLP-dataset zip) exactly as stored; its H.264 track (6.8-10.2 s) is described by info; nothing decoded, cut, resized or padded"
-    audio: "the same mp4 bytes as video (read once); its AAC track is described by info; nothing decoded, resampled, cut or padded"
+    video: "the LLP clip mp4 (llp_videos/<ytid>.mp4 of the extracted CserDu123/LLP-dataset zip) exactly as stored; its H.264 track (6-32 fps, 128x88 to 1280x720, 6.8-10.2 s) is described by info; nothing decoded, cut, resized or padded"
+    audio: "the same mp4 bytes as video (read once); its AAC track (44.1 kHz, mono or stereo, 6.2-10.0 s) is described by info; nothing decoded, resampled, cut or padded"
   info:
     video: [duration_s, fps, width, height, container, bytes]
     audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
