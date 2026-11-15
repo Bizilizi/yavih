@@ -186,5 +186,14 @@ metrics:
   chance: {}
   ci: {}
   aggregation: null
+  notes:
+  - "map_avg is computed by eval.py, a numpy transcription of the official C10 scorer (epic-kitchens/C10-epic-sounds-detection @ 196e7cf), on segments decoded from the folder's detection head."
+  - "Scores are mAP in percent (0 to 100); map_avg drops background segments from the ground truth (the C10 rule), map_avg_paper keeps them (TPAMI 2025 Table V)."
+  - "On the C10 ActionFormer baseline file the two read 13.77 (map_avg) and 13.49 (map_avg_paper): quote the reading that matches the number you compare with."
+  - "map_avg_floor scores the label-only constant output (train class frequencies, median extents), decoded the same way; a map_avg near it means the features localize nothing."
+  - "The pinned decoder keeps at most 100 segments per recording; 23 of the 137 validation recordings hold more, so about 24 % of the scored segments cannot be recalled."
+  - "No confidence interval is reported: 137 recordings, one population; run several seeds (--seeds 0,1,2) before reading a small gap between two models."
+  - "Published numbers (ActionFormer on fine-tuned auditory SlowFast features, 13.5 with background kept) do not come from a frozen-feature probe and are not comparable with it."
+  - "These numbers are on the public validation split; detection-test leaderboard numbers (labels on the challenge server) are a different population."
 readout_params:
   T: 1024
