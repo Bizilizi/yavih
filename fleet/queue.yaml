@@ -2235,8 +2235,7 @@ entries:
   status: shipped
   obtain: null
   blocked_by: null
-  branch: readme/unav100
-  readme: migrating
+  branch: null
 - name: waymo_box_tracking
   title: Waymo Open
   kind: benchmark
@@ -4604,8 +4603,7 @@ entries:
   status: shipped
   obtain: null
   blocked_by: null
-  branch: readme/epic_sounds_det
-  readme: migrating
+  branch: null
 - name: avsync
   title: Audio-visual synchronisation offsets on VGGSound
   kind: benchmark
