@@ -160,5 +160,6 @@ Bridge-side mistakes that pass validation:
   per stream is a reasonable floor.
 - **Per-batch / per-clip normalization** of frames or spectrograms; use the model card's constants (`norm.source`).
 - **Pretraining leakage.** Every UnAV-100 video is a VGGSound source video (the paper collected them from VGGSound's
-  URLs), so a model pretrained on VGGSound has seen 10 s of most train and test videos. The official splits are kept;
-  disclose the overlap next to any number.
+  URLs), so a model pretrained on VGGSound has seen 10 s of most train and test videos (1 661 of the 2 167 test videos
+  and 5 028 of the 6 489 train videos are in VGGSound train, 506 and 1 461 in VGGSound test, checked against
+  VGGSound's `vggsound.csv`). The official splits are kept; disclose the overlap next to any number.
