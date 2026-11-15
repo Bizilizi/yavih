@@ -63,8 +63,9 @@ What the reader hands each bridge per row (the generic reader `yavih.sample.iter
 
 - `video`: a `RawStream` over the **stored VGGSound mp4**, byte for byte (`path`, `open()`, `bytes()`); nothing
   decoded, cut, resized or padded. `info` guarantees `duration_s, fps, width, height, container, bytes` of the video
-  track (from the site census written by `yavih bench verify vggsounder_retrieval --census`, else a header probe).
-  Native sizes are mixed (360p to 720p, some portrait); ~10 s at ~30 fps. The mp4 carries its own AAC track: the
+  track (from the site census written by `yavih bench verify vggsounder_retrieval --census`, else a header probe;
+  `bridge check`'s isolation copies are re-written files whose `duration_s` differs: never derive frame times from
+  it, Gotcha 4). Native sizes are mixed (360p to 720p, some portrait); ~10 s at ~30 fps. The mp4 carries its own AAC track: the
   video embedding must not read it (`E_MODALITY_LEAK`).
 - `audio`: a `RawStream` over the **stored wav** (16 kHz mono 16-bit PCM); nothing decoded, resampled, cut or
   padded. `info` guarantees `duration_s, sample_rate, n_samples, channels, container, bytes`. 530 of the 5 294 wavs
@@ -128,8 +129,15 @@ yavih bench verify vggsounder_retrieval               # later runs
 ```
 
 Success: `manifest sha ok; labels ok; curation ok; … status verified`, `test present 5294/5294`, read and decode
-samples `ok=32 failed=0` (the census probes 10 588 files, about a minute). The manifest's decompressed sha256 is
+samples `ok=32 failed=0`. The census probes 10 588 files: about 6 minutes (measured 375 s, ~43 files/s, 4 decode
+workers, on a shared NFS host); the rate follows the filesystem. The manifest's decompressed sha256 is
 `7dbc0abb50fae18f30745f2c3083efbd3946ea678cbeea711abe3d26a26df6b9`.
+
+Smoke-test a bridge on the staged data: `yavih bridge check <bridge.py> --bench vggsounder_retrieval --out
+<profile.json>` (every gate, isolation included, on real clips; the profile `plan` needs). `yavih bridge check
+--synthetic` is **not supported** for this folder: the folder's own scorer has no core synthetic stand-in, so it
+stops with `E_SYNTHETIC` (`readout must be one of ('clf', 'seq', 'grid', 'box', 'knn') ...`); nothing in the bridge
+can fix that. The folder's scorer is covered without data by `yavih bench trial vggsounder_retrieval --synthetic`.
 
 ## Gotchas
 
@@ -141,8 +149,12 @@ Bridge-side mistakes that pass validation (or fail it late):
 2. **The mp4's audio track.** Decode frames only; take the audio from the wav. A fused model fed the mp4 leaks the
    audio into `video_emb` (`E_MODALITY_LEAK`).
 3. **No fused forward.** Run the two encoders separately, even when the model can run them jointly.
-4. **One deterministic view.** Declare the frames you feed (`explicit` times, `edge: clamp` for shorter clips) and
-   pool as the model's own evaluation does. Random frame sampling fails `E_RERUN_DRIFT`.
+4. **One deterministic view, at absolute times.** Declare the frames you feed (`explicit` times, `edge: clamp` for
+   shorter clips, or a fixed span such as `{"rule": "uniform", "n": 8, "span": [0, 10], "edge": "clamp"}`) and pool
+   as the model's own evaluation does. Random frame sampling fails `E_RERUN_DRIFT`. A rule relative to the clip's
+   duration (`uniform` with `span: full`, `fps` with centring) fails `E_MODALITY_LEAK` in `bridge check`: its copy
+   of the mp4 with the audio track blanked (a re-written Matroska file) reports another `info.duration_s`, so the
+   rule picks other frames and `video_emb` changes although the frames' source did not.
 5. **Short wavs.** 530 wavs end before 10 s. Declare the padding (`full` with `pad_to_s`, or `span` with
    `pad: zeros`) and report it in `used`; normalise with the model's fixed constants, never per-batch statistics.
 6. **Two galleries.** This folder's 5 294 clips are a different gallery from `vggsound_retrieval`'s 15 440 (and from

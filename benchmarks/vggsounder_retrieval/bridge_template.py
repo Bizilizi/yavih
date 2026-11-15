@@ -1,7 +1,10 @@
-"""Bridge skeleton for **vggsounder_retrieval**. Copy, rename, fill the TODOs.
+r'''Bridge skeleton for **vggsounder_retrieval**. Copy, rename, fill the TODOs.
 
-Read ``setup.md`` first (input and output contracts). ``yavih bridge check <file> --bench vggsounder_retrieval
---synthetic`` smoke-tests it before any data is staged; an unfilled copy fails bridge check: E_TEMPLATE_UNFILLED /
+Read ``setup.md`` first (input and output contracts). Smoke-test a filled copy on the staged data with ``yavih bridge
+check <file> --bench vggsounder_retrieval --out <profile>`` (setup.md "Prepare & verify" verifies the data first).
+``bridge check --synthetic`` is NOT supported for this folder's scorer: it stops with ``E_SYNTHETIC`` (the core's
+synthetic stand-in knows only the core scorer families, not a folder's own scorer); the folder itself is covered by
+``yavih bench trial vggsounder_retrieval --synthetic``. An unfilled copy fails bridge check: E_TEMPLATE_UNFILLED /
 E_CONSTANT_FEATURES. A bridge file serves one benchmark; each matrix entry (file + args) is one reading of one model.
 ``vggsounder_retrieval`` is TRAINING-FREE cross-modal retrieval on the VGGSounder test clips whose classes are all
 audible and visible: the folder's scorer (``retrieval.py``, ``class_level.py``) ranks every clip's audio
@@ -16,8 +19,10 @@ that changes fails ``E_MODALITY_LEAK``. So: no fused forward, no normalization o
 audio track; the two embeddings of a clip come from two independent single-modality forwards.
 
 PREPROCESSING SOURCE — paste the model's OWN evaluation preprocessing here, verbatim, with repo, file, function
-and commit; ``describe()["input"]`` below must match it line by line (``bridge check`` warns
-``W_NO_PREPROCESSING_SOURCE`` while this slot is empty):
+and commit, indented under this heading; ``describe()["input"]`` below must match it line by line (``bridge check``
+warns ``W_NO_PREPROCESSING_SOURCE`` while this slot is empty). This module docstring is a raw string quoted with
+three SINGLE quotes, so pasted code keeps its own triple-double-quoted docstrings and backslashes as they are; only a
+pasted line holding three single quotes would close it early (turn such a line into a # comment):
 
     TODO
 
@@ -36,7 +41,7 @@ Gotchas (setup.md "Gotchas"): take the vectors the model's OWN retrieval evaluat
 outputs, pooled as the model pools them for its contrastive loss; CAV-MAE's are its post-projection means, not the
 encoder tokens); one deterministic view (the model's own evaluation frames and audio window); normalization constants
 from the model's own recipe; keep the model in ``.eval()``; declare precision honestly.
-"""
+'''
 
 from __future__ import annotations
 
@@ -47,6 +52,10 @@ import numpy as np
 from yavih.bridge import ArgSpec, Bridge
 
 # TODO: frames the model consumes. Default: 10 frames 1 s apart (0.5 … 9.5 s); edge "clamp" for the shorter clips.
+# Keep the frame times ABSOLUTE: explicit times as here, or a fixed span such as
+# {"rule": "uniform", "n": 8, "span": [0.0, 10.0], "edge": "clamp"}. A rule relative to the clip's duration ("uniform"
+# with "span": "full", "fps" with centring) fails E_MODALITY_LEAK: bridge check's copy of the mp4 with its audio track
+# blanked reports another info["duration_s"], so such a rule picks other frames and video_emb changes.
 N_FRAMES = 10
 FRAME_TIMES = [0.5 + k for k in range(N_FRAMES)]
 # TODO: the model's own eval transform, in the declared-rule vocabulary (yavih.media.rules.crop_region evaluates it).
