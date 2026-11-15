@@ -1,150 +1,156 @@
-# mimetics: scaffolded from k400 by `yavih bench new` on 2026-11-15. TODO: every value below is k400's
-# until this benchmark's manifest, protocol and contracts replace it; run `yavih bench lint` after each edit
-# (it tells you the changelog's protocol_hash / input_hash to write after a protocol edit).
+# mimetics — schema 3. README.md describes the benchmark, setup.md sets it up.
+# Values under `manifest.upstream` and `budget.clips` are produced by make_manifest.py; `make_manifest.py --check`
+# confirms the manifest and classes.
 schema_version: 3
 name: mimetics
 aliases: []
-title: TODO title of mimetics (scaffolded from k400)
-capability:  # TODO: still k400's; what mimetics measures, one or more of audio, visual, audio-visual, temporal, spatial, retrieval, generation, streaming
-- visual
-core: '>=1.1,<2'
+title: Mimetics out-of-context action recognition (713 mimed YouTube clips of 50 Kinetics-400 classes; probe trained on Kinetics-400, video only)
+capability: [visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
 header:
-  name: mimetics
-  title: 'TODO: the title of the paper that introduced the benchmark'
-  venue: 'TODO: authors · venue year'
-  abstract: 'TODO: two or three neutral sentences on the data and the task (at most 60 words).'
+  name: Mimetics
+  title: "Mimetics: Towards Understanding Human Actions Out of Context"
+  venue: "Weinzaepfel & Rogez · IJCV 2021"
+  abstract: >-
+    713 short YouTube clips of people miming actions of 50 Kinetics-400 classes, without the objects or scenes the
+    actions normally involve. A classifier trained on ordinary Kinetics-400 clips of the same classes labels each
+    mimed clip, which measures how far action recognition relies on context rather than body motion.
 scorer: clf
 protocol_version: 1
 changelog:
-- version: 1
-  date: '2026-11-15'
-  invalidates: false
-  reason: 'TODO: scaffolded from k400 by `yavih bench new`; replace the manifest, protocol, contracts and docs'
-  protocol_hash: a23b4e55a4a8d614ac4dde914d3e54c36adaa7036341de5d4137401df5855716
-  input_hash: f3ec044ceaf13a6b3cff7da86c58a4e37d93637ba8e53343bda7c24cc08ee08b
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+    input_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+    supersedes: []
+
 source:
-  kind: torrent
+  kind: public_url
   urls:
-  - https://academictorrents.com/details/184d11318372f70018cf9a72ef867e2fb9ce1d26
-  - magnet:?xt=urn:btih:184d11318372f70018cf9a72ef867e2fb9ce1d26
-  - https://github.com/google-deepmind/kinetics-i3d
-  - https://github.com/cvdfoundation/kinetics-dataset
-  licence: 'Kinetics-400 annotations: CC BY 4.0 (DeepMind). The media are YouTube clips re-encoded by a third party (Academic
-    Torrents upload 2020-11-07, height 256; portrait clips are 256×144, short side 144) and remain subject to YouTube''s terms
-    and the uploaders'' rights; research use only.'
-  bytes: 157312153084
+    - https://europe.naverlabs.com/research/computer-vision/mimetics/
+    - https://europe.naverlabs.com/wp-content/uploads/2019/12/Mimetics_release_v1.0.zip
+    - https://arxiv.org/abs/1912.07249
+    - https://github.com/activitynet/ActivityNet/tree/master/Crawler/Kinetics
+    - https://academictorrents.com/details/184d11318372f70018cf9a72ef867e2fb9ce1d26
+  licence: >-
+    Mimetics v1.0 (NAVER LABS Europe): the release (README, page) states no licence and asks to cite the paper. The
+    Mimetics media are YouTube videos the user downloads and trims, subject to YouTube's terms and the uploaders'
+    rights. The Kinetics-400 train clips: annotations CC BY 4.0 (DeepMind), media the Academic-Torrents _256 re-encode
+    of YouTube clips, research use only (as for the k400 folder).
+  revision: Mimetics_release_v1.0.zip (December 2019, sha256 6ddc9c98c3f720baa5c70f1dc6cc05b80f1a16deb679a728082a698afb8680ab)
+  bytes: 21869
   sha256:
-    kinetics400.zip: 335dd19846e60078204b492c725003cfcbbb3f0bbff4dca525916785bd60e30f
-    kinetics400_validation.zip: 33a69475d026e94b3a2f3ed708152b7beaf04a520b4ee455de0c1c883900483b
-  notes: 'TODO: where the data comes from (the scaffold still describes k400''s source)'
-obtain:
+    "Mimetics_release_v1.0.zip": 6ddc9c98c3f720baa5c70f1dc6cc05b80f1a16deb679a728082a698afb8680ab
+  notes: >-
+    The release is one 21 869 B zip (mimetics_v1.0.csv with the YouTube ids and the start and end seconds of the 713
+    clips in the Kinetics format, two annotation files and a README); the clips are downloaded from YouTube and
+    trimmed with the Kinetics crawler recipe (prepare/02_clips.py). `bytes` is the zip only. The training clips are
+    the 50 Mimetics classes of the Academic-Torrents Kinetics-400 _256 release (infohash
+    184d11318372f70018cf9a72ef867e2fb9ce1d26, 157 GB for the whole release), read in place from the k400 folder's
+    staging.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
   tier: auto
-  how: 'TODO: who must act before the data can be staged, and how'
+  how: "TODO"
 budget:
-  clips:
-    train: 20000
-    val: 13492
-  media_gb: 20.2
-  extract_min_per_1k_clips_ref: 2.0
-  probe_minutes_ref:
-    clf: 20
+  clips: {train: 10000, test: 713}
+  media_gb: 0.0  # TODO
+  extract_min_per_1k_clips_ref: 2.0  # TODO
+  probe_minutes_ref: {clf: 10}  # TODO
+
 manifest:
   file: manifest.csv.gz
-  sha256: a384222a0771aff445031cc655ab6688515d7cd15e762f850adfdc9cd263817f
+  sha256: d18ed97b96b586ef29c30398d6f8a7323273a7513ad273ea9d307c1a33f73208
   classes: classes.csv
-  classes_sha256: aabcc8a9b72ee08dd26da118dd38d90584666bdb64b1032d0eac84e286dc9475
+  classes_sha256: 85f2403f04f872b506b8b95d57c9e5c17e7536f265f601328e54be73b09c13cc
   key: clip_id
   label:
     column: label
     kind: single
-    sep: ;
+    sep: ";"
     class_key: name
     sets: null
     train_set: null
     allow_unknown: false
     empty_ok: false
   columns:
-    rel_media:
-      type: str
-      role: media
-      stream: video
+    rel_media: {type: str, role: media, stream: video}
+    object: {type: str, role: extra}
+    scene: {type: str, role: extra}
+    mime: {type: str, role: extra}
   upstream:
-    source: 'Academic Torrents 184d11318372f70018cf9a72ef867e2fb9ce1d26 (Kinetics-400 _256 release): file listing of train_256
-      + val_256'
-    sha256: c9a7dfd4e9119aa4a033a28e14e2be2bfa22a73b4bcbc6bdce5321bb3baf39a5
-    rows: 260022
-    draw: all 240 618 train mp4 of the Academic-Torrents Kinetics-400 _256 release (classes.csv class order, then file name),
-      class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0
-    note: sha256 of the sorted listing `<split>/<class>/<file>` of all 260 022 train + val files (the staged tree or the zips'
-      central directories; make_manifest.py reads either). Rows are the *.mp4 files (clip_id = file stem, label = class directory),
-      ordered by class (classes.csv) then file name. Train rows are the seeded class-balanced draw of protocol.train_draw
-      over all 240 618 train mp4, 50 per class; val rows are all 13 492 val mp4 (11-48 per class). The 5 912 val .mkv/.webm
-      files are excluded. Every frozen row is an annotated clip of its split with the same label in the Kinetics-400 annotation
-      CSVs (upstream_files; `make_manifest.py --annotations`).
+    source: "Mimetics v1.0 release (Mimetics_release_v1.0.zip, NAVER LABS Europe) + the 50 Mimetics class directories of the Academic-Torrents Kinetics-400 _256 release (184d11318372f70018cf9a72ef867e2fb9ce1d26)"
+    sha256: 78b32467a248c24b7082d9a29d9eb0bf6eeb4462ed8abda290d2036018115044
+    rows: 34819
+    draw: "all 34 106 train mp4 of the 50 Mimetics classes in the Academic-Torrents Kinetics-400 _256 release (classes.csv order, then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 10 000, seed 0"
+    note: >-
+      sha256 is that of mimetics_v1.0.csv (713 rows: label, youtube_id, time_start, time_end); rows = 713 Mimetics
+      clips + 34 106 candidate train files. Test rows are all 713 release clips, clip_id
+      <youtube_id>_<start:06d>_<end:06d> (the Kinetics crawler's file name), with the release's per-clip object, scene
+      and mime flags (mimetics_v1.0_objectsceneannot.txt); they are frozen whether or not the YouTube video still
+      exists. Train rows are the seeded class-balanced draw of protocol.train_draw over the 34 106 train mp4 of the 50
+      classes (listing sha256 in upstream_files), 200 per class. Classes are the release's 50 labels in its order
+      (mimetics_v1.0_clsannot.txt), named as their Academic-Torrents class directories.
     upstream_files:
-      annotations/train.csv: a5f585f790f35c080aa13964f14de63171e909575feb843efc1c29bb5cfc6236
-      annotations/val.csv: 358eaf47e7f80ebf9b17d49eb0635ad5e0fdab98a9cbd75ffdd2ee5d5e5b6944
+      "Mimetics_release_v1.0.zip": 6ddc9c98c3f720baa5c70f1dc6cc05b80f1a16deb679a728082a698afb8680ab
+      "release/mimetics_v1.0.csv": 78b32467a248c24b7082d9a29d9eb0bf6eeb4462ed8abda290d2036018115044
+      "release/mimetics_v1.0_objectsceneannot.txt": a4db94284f22b777442c40ca28318602c8cadb253721e3a1016ba4f1df4b9f63
+      "release/mimetics_v1.0_clsannot.txt": cb18b3435545c247fcef83d90ad25d1aa9225a621eb71ec6d4c7d6cfd0ebfe62
+      "k400_train_listing_50_classes": 9b2af343a935b67dd2b676637eb121bb34a53e1e18bd5b5bcc8593182d617a67
     curation:
-      total_upstream: 260022
+      total_upstream: 34819
       per_split:
-        train:
-          listed: 20000
-          staged: 20000
-          missing: 0
-        val:
-          listed: 13492
-          staged: 13492
-          missing: 0
+        train: {listed: 10000, staged: 10000, missing: 0}
+        test: {listed: 713, staged: 0, missing: 713}
       excluded:
-        draw_remainder: 220618
-        val_non_mp4_container: 5912
-        train_non_mp4_container: 0
-      short_clips: 4555
-      leakage_audit:
-        against: train ytids of the staged K400 train split (raw and torrent-normalized)
-        excluded: 0
+        draw_remainder: 24106
+      leakage_audit: {against: "Kinetics-400 train and val YouTube ids of the Academic-Torrents release (raw and normalised)", excluded: 0}
+
 splits:
-  train:
-  - train
-  eval:
-  - val
+  train: [train]
+  eval: [test]
   floor: []
   folds: null
   unused: []
-  min_eval_coverage: 0.95
+  min_eval_coverage: 0.5
+
 fields:
   video:
     storage: file
     kind: video
     media_column: rel_media
-    root: media_root
+    root: {train: k400_root, test: media_root}
     layout: dir
     layout_params: {}
     required: true
+
 targets: null
+
 data:
   roots:
     media_root:
-      default: ${data.root}/kinetics400
-      description: 'staged Academic-Torrents K400: {train,val}/<class>/<clip_id>.mp4 (val also holds excluded .mkv/.webm);
-        handed over as stored'
+      default: "${data.root}/mimetics"
+      description: "Mimetics staging: release/ (the official zip, unpacked; prepare/01) and clips/<clip_id>.mp4 (the trimmed YouTube clips; prepare/02); test rows read clips/"
+    k400_root:
+      default: "${datasets.kinetics400}"
+      description: "the staged Academic-Torrents Kinetics-400 _256 release, read in place as the k400 folder stages it: train/<class>/<clip_id>.mp4 (train rows)"
   tar_index: null
   derived: {}
+
 input_contract:
   handed_over:
-    video: the Kinetics-400 mp4 exactly as stored in the Academic-Torrents _256 release (h264, 256 pixels high, 138-1424 wide,
-      4 013 portrait; 6-60 fps; train ~10 s, val ~12 s, 4 555 frozen clips shorter than 10 s, min 0.53 s); nothing decoded,
-      cut, resized, padded or normalized
+    video: >-
+      the stored mp4 as is: for train rows a Kinetics-400 clip of the Academic-Torrents _256 release (h264, 256
+      pixels high, about 10 s), for test rows a Mimetics clip as the Kinetics crawler trims it from the YouTube
+      video (h264 re-encode at the downloaded resolution, mostly 360 pixels high, 1 to 10 s); nothing decoded, cut,
+      resized, padded or normalized
   info:
-    video:
-    - duration_s
-    - fps
-    - width
-    - height
-    - container
-    - bytes
+    video: [duration_s, fps, width, height, container, bytes]
   facts: []
   materialize: null
+
 output_contract:
   shape: fixed
   coordinates: media
@@ -154,28 +160,27 @@ output_contract:
     streams: []
     grid: null
     t_bins: null
+
 external: []
+
 protocol:
-  clip_seconds: 10.0
+  clip_seconds: null
   train_draw:
-    cap: 20000
+    cap: 10000
     seed: 0
     balance: class
   views: none
+
 metrics:
   headline: acc
-  list:
-  - acc
-  - n_eval
-  floors:
-  - acc_floor
+  list: [acc, top5, mean_top1, mean_top5, mean_ap, n_eval]
+  table: [acc, top5, mean_ap]
+  floors: [acc_floor]
   controls: []
-  chance:
-    acc: 0.0025
-  ci:
-    acc: binomial
-  bootstrap:
-    samples: 2000
-    seed: 0
+  chance: {acc: 0.02, top5: 0.1, mean_top1: 0.02, mean_top5: 0.1, mean_ap: 0.09}
+  ci: {acc: binomial, top5: binomial}
+  bootstrap: {samples: 2000, seed: 0}
   aggregation: null
+  notes: TODO
+
 readout_params: {}
