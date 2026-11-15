@@ -1,8 +1,9 @@
-"""``vggsound_retrieval``: the folder's own synthetic stand-in and test bridges for ``yavih bench trial --synthetic``.
+"""``av_syncbench``: the folder's own synthetic stand-in and test bridges for ``yavih bench trial --synthetic``.
 
-The clips, the stand-in folder and the bridges are ``xmodal_synth.py`` (next to this file, byte-identical in every
-shared-space folder): the stand-in keeps this folder's name, scorer, metrics, output contract and readout parameters;
-the oracle bridge decodes each clip's code from each modality on its own, the random bridge embeds noise.
+The pairs, the stand-in folder and the bridges are ``sync_synth.py`` (next to this file): the stand-in keeps this
+folder's name, scorer, metrics, protocol, fields and output contract over 3.2 s synthetic videos whose frames and AAC
+track follow one on/off pattern, each paired with a perturbed wav of every (task, level) group; the oracle bridge
+embeds each stream's segments on its own, the random bridge embeds noise.
 Module scope: stdlib, numpy, yaml, yavih core; writing the media needs PyAV.
 """
 
@@ -31,18 +32,17 @@ def _sibling(name: str):
     return sys.modules[mod_name]
 
 
-synth = _sibling("xmodal_synth.py")
-BRIDGES = {"oracle": "OracleRetrievalBridge", "random": "RandomRetrievalBridge", "leaky": "LeakyRetrievalBridge"}
+synth = _sibling("sync_synth.py")
+BRIDGES = {"oracle": "OracleSyncBridge", "random": "RandomSyncBridge"}
 
 
 def make_stand_in(work, real, *, n_eval, n_train):
-    """The stand-in folder (``xmodal_synth.make_stand_in``) over ``n_eval`` synthetic clips."""
+    """The stand-in folder (``sync_synth.make_stand_in``) over ``max(n_eval, 40)`` synthetic pairs."""
     return synth.make_stand_in(work, real, n_eval=n_eval, n_train=n_train)
 
 
 def write_bridge(path, kind, *, D, bench_folder):
-    """The stand-in's ``oracle`` / ``random`` bridge file (``leaky``: the one the isolation gate refuses); ``D`` is
-    ignored (the shared space has 9 dimensions)."""
+    """The stand-in's ``oracle`` / ``random`` bridge file; ``D`` is ignored (the oracle's space has 10 dimensions)."""
     if kind not in BRIDGES:
         raise ValueError(f"write_bridge: kind must be one of {sorted(BRIDGES)}, got {kind!r}")
-    return synth.bridge_source(path, BRIDGES[kind], kind=kind, synth=Path(bench_folder) / "xmodal_synth.py")
+    return synth.bridge_source(path, BRIDGES[kind], kind=kind, synth=Path(bench_folder) / "sync_synth.py")

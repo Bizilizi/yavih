@@ -285,6 +285,41 @@ def _weighted_per_clip(outputs: Any, split_meta: Mapping[str, Any], parts: list[
     return np.where(pop, correct * (w / w.sum()) * pop.sum(), np.nan)
 
 
+def _weighted_interval(parts: list[list[str]]):
+    """``MetricSpec.interval`` of a mean of means: the percentile interval of the metric recomputed on every
+    ``bootstrap_clip`` resample of the rows (``yavih.metrics.intervals.bootstrap_draws``, the shared scheme); each
+    resample re-weights the groups by how often their rows were drawn."""
+
+    def interval(kind: str, outputs: Any, targets: Any, protocol: Any, split_meta: Mapping[str, Any]) -> tuple[float, float]:
+        from yavih.metrics.intervals import _percentile_interval, bootstrap_draws
+
+        valid, correct, _ = decisions(outputs)
+        n = len(valid)
+        items, owner = [], []
+        for j, part in enumerate(parts):
+            for groups in part:
+                m = np.zeros(n, dtype=bool)
+                for g in groups.split("+"):
+                    m |= _mask(split_meta, g, n)
+                items.append(m & valid)
+                owner.append(j)
+        G = np.stack(items, axis=1).astype(np.float64)
+        Gc = G * correct[:, None]
+        owner_a = np.asarray(owner)
+        b = split_meta.get("bootstrap") or {}
+        stats = []
+        for d in bootstrap_draws(n, samples=int(b.get("samples", 2000)), seed=int(b.get("seed", 0))):
+            c = np.bincount(d, minlength=n).astype(np.float64)
+            num, den = c @ Gc, c @ G
+            acc = np.where(den > 0, num / np.maximum(den, 1.0), np.nan)
+            per_part = [acc[owner_a == j] for j in range(len(parts))]
+            per_part = [float(np.nanmean(a)) for a in per_part if np.isfinite(a).any()]
+            stats.append(float(np.mean(per_part)) if per_part else float("nan"))
+        return _percentile_interval(np.asarray(stats))
+
+    return interval
+
+
 def _pooled_per_clip(outputs: Any, split_meta: Mapping[str, Any], groups: tuple[str, ...]) -> np.ndarray:
     valid, correct, _ = decisions(outputs)
     m = np.zeros(len(valid), dtype=bool)
@@ -473,7 +508,8 @@ def make_metrics(name: str) -> dict[str, MetricSpec]:
 
     def weighted(metric: str, parts: list[list[str]], desc: str) -> None:
         out[metric] = MetricSpec(metric, lambda o, t, p, m, parts=parts: _weighted(o, m, parts), ro,
-                                 per_clip=lambda o, t, p, m, parts=parts: _weighted_per_clip(o, m, parts), ci=ci_w, description=desc)
+                                 per_clip=lambda o, t, p, m, parts=parts: _weighted_per_clip(o, m, parts), ci=ci_w,
+                                 interval=_weighted_interval(parts), description=desc)
 
     def pooled(metric: str, groups: tuple[str, ...], desc: str) -> None:
         out[metric] = MetricSpec(metric, lambda o, t, p, m, groups=groups: _pooled(o, m, groups), ro,
