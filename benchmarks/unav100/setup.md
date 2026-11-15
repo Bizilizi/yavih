@@ -1,6 +1,6 @@
 # unav100 — setup
 
-The agent's first read for UnAV-100. `benchmark.yaml` is the machine truth; `README.md` says what the benchmark is.
+The agent's first read for UnAV-100. `benchmark.yaml` is the machine truth; `README.md` is the benchmark's page for people.
 
 ## Obtain the data
 
@@ -32,11 +32,22 @@ KEEP_PARTS=0 yavih bench prepare unav100 02    # cat parts | gunzip -> $ROOT/una
 
 ## Dependencies
 
-None in the probe env: `external: []`. The authors' scorer (`ANETdetection` in `ttgeng233/UnAV@1609deba`
-`libs/utils/metrics.py`) is not an installable package (no `setup.py`, its package imports torch and a C++ NMS
-extension, and it uses `np.float`, removed in numpy 1.24); the folder's `detection.py` (its own scorer)
-transcribes it and reproduces its numbers on the same predictions (including its `np.linspace(0.1, 0.9, 9)`
-thresholds, which is why `protocol.tiou_thresholds` holds 0.30000000000000004 and 0.7000000000000001).
+None in the probe env: `external: []`. The evaluation has two parts, grounded separately:
+
+- **Scorer** (rung 2, the authors' code, copied): the detection mAP is the UnAV-100 authors' `ANETdetection` in
+  `https://github.com/ttgeng233/UnAV` at commit `1609deba`, `libs/utils/metrics.py` (itself ActivityNet's
+  `eval_detection.py`), MIT licence. It is not an installable package (no `setup.py`, its package imports torch
+  and a C++ NMS extension, and it uses `np.float`, removed in numpy 1.24), so `detection.py` (segment tIoU,
+  interpolated precision-recall, greedy matching, `ap_matrix`) transcribes it and reproduces its numbers on the
+  same predictions, including its `np.linspace(0.1, 0.9, 9)` thresholds (which is why `protocol.tiou_thresholds`
+  holds 0.30000000000000004 and 0.7000000000000001). `eval.py` names the metrics; the test split and the
+  thresholds are the authors'.
+- **Readout** (yavih's): the core `dense_query_v1` head with `T = 128` time bins, and in `detection.py` the bin
+  targets, the sigmoid focal plus 1-D GIoU loss, the pinned decoding (score threshold, top 2 000, per-class NMS at
+  tIoU 0.5, 100 segments per clip) and the training schedule. It replaces the paper's detector (a pyramid
+  transformer trained end to end on I3D and VGGish features), and model selection uses the probe's seeded 10 %
+  carve of `train` instead of the official `validation` split. The folder names no upstream project for these
+  pieces.
 
 - Prepare-time tools: `curl`, `gzip`, `tar`, `sha256sum` (steps 01–02); Python 3.10+ stdlib (step 03);
   `pyarrow` for `make_manifest.py` reading the parquets (`pip install pyarrow`; step 04 runs it; or pass
