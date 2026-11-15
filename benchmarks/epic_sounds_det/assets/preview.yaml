@@ -1,0 +1,11 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: audio
+  split: validation
+  rows:
+  - P28_23
+  - P03_26
+  options:
+    start_s: 5.0
+    seconds: 5.0
