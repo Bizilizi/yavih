@@ -93,10 +93,10 @@ def calc_map(sim, query_L, retrieval_L):
 #   "target in recalled_predictions[:k]" becomes "target shares a class with one of recalled_predictions[:k]"; the
 #   per-query hits are returned instead of their mean (recall_at_k = hits.mean()); the neighbours come from the
 #   caller's argsort of the cosine similarities with the query's own clip removed (upstream: faiss IndexFlatIP over
-#   normalised features, dropping the first neighbour, the query itself in a single-modality gallery).
+#   normalised features, dropping the first neighbour, the query itself in a single-modality gallery); zip(strict=True).
 def c_recall_hits(k, target_labels, k_closest_classes_cosine):
     hits = np.asarray([1 if any(target & recalled for recalled in recalled_predictions[:k]) else 0
-                       for target, recalled_predictions in zip(target_labels, k_closest_classes_cosine)], dtype=np.float64)
+                       for target, recalled_predictions in zip(target_labels, k_closest_classes_cosine, strict=True)], dtype=np.float64)
     return hits
 
 

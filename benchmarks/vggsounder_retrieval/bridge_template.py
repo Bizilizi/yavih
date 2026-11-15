@@ -1,9 +1,10 @@
-"""Bridge skeleton for **vggsound_retrieval**. Copy, rename, fill the TODOs.
+"""Bridge skeleton for **vggsounder_retrieval**. Copy, rename, fill the TODOs.
 
-Read ``setup.md`` first (input and output contracts). ``yavih bridge check <file> --bench vggsound_retrieval
+Read ``setup.md`` first (input and output contracts). ``yavih bridge check <file> --bench vggsounder_retrieval
 --synthetic`` smoke-tests it before any data is staged; an unfilled copy fails bridge check: E_TEMPLATE_UNFILLED /
 E_CONSTANT_FEATURES. A bridge file serves one benchmark; each matrix entry (file + args) is one reading of one model.
-``vggsound_retrieval`` is TRAINING-FREE cross-modal retrieval: the folder's scorer (``retrieval.py``) ranks every clip's audio
+``vggsounder_retrieval`` is TRAINING-FREE cross-modal retrieval on the VGGSounder test clips whose classes are all
+audible and visible: the folder's scorer (``retrieval.py``, ``class_level.py``) ranks every clip's audio
 against every clip's video (and back) by cosine similarity in the model's own SHARED space — the vectors a
 contrastive (or other audio-visual-correspondence) objective aligned, after their projection heads. A model without
 such a space has nothing to put here: do not write a bridge for it (two unrelated spaces score at chance).
@@ -55,8 +56,8 @@ AUDIO_TEMPORAL = {"rule": "full", "max_s": 10.0, "pad_to_s": 10.0}
 MODEL_SAMPLE_RATE = 16000
 
 
-class VGGSoundRetrievalBridge(Bridge):
-    name = "TODO-model-vggsound_retrieval-av"  # optional label of this file, recorded only; the model's name is describe()["model"]
+class VGGSounderRetrievalBridge(Bridge):
+    name = "TODO-model-vggsounder_retrieval-av"  # optional label of this file, recorded only; the model's name is describe()["model"]
     batch_size = 8
     dtype = "float32"  # "float16" | "float32"
     outputs = ("audio_emb", "video_emb")
