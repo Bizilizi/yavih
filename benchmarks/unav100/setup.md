@@ -46,7 +46,9 @@ None in the probe env: `external: []`. The evaluation has two parts, grounded se
 - **Readout** (yavih's): the core `dense_query_v1` head with `T = 128` time bins, and in `detection.py` the bin
   targets, the sigmoid focal plus 1-D GIoU loss, the pinned decoding (score threshold, top 2 000, per-class NMS at
   tIoU 0.5, 100 segments per clip) and the training schedule. It replaces the paper's detector (a pyramid
-  transformer trained end to end on I3D and VGGish features), and model selection uses the probe's seeded 10 %
+  transformer trained on pre-extracted, frozen I3D (RGB and flow) and VGGish features): both detectors read frozen
+  features, so the differences are the detector and the features it reads (the model under test's, not I3D and
+  VGGish), and model selection uses the probe's seeded 10 %
   carve of `train` instead of the official `validation` split. The folder names no upstream project for these
   pieces.
 
