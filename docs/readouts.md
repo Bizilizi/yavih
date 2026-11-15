@@ -26,7 +26,7 @@ def probe(run_dir, *, seeds=(0,), readout=None, cfg=None, deadline=None, scratch
 
 | argument | CLI | meaning |
 |---|---|---|
-| `seeds` | `--seeds 0,1,2` | one probe (one `result.json`) per seed |
+| `seeds` | `--seeds 0` (default; one seed) | one probe (one `result.json`) per seed |
 | `readout` | | must equal `benchmark.yaml[readout]` (else `E_READOUT`, exit 1) |
 | `cfg` | | `None` = `ProbeConfig.pinned(readout, bench)`; anything else needs `YAVIH_TESTING=1` |
 | `deadline` | `--deadline slurm\|<epoch_s>` | checked between epochs; see [execution](execution.md) |
@@ -279,6 +279,7 @@ happens in the report ([results](results.md#yavih-report)), never in the probe.
 | `E_METRICS_INCOMPLETE` | 2 | a listed metric, floor, control or interval was not produced |
 | `E_POS_MISSING`, `E_DURATIONS` | 2 | a dense readout got no `pos`; a timed token's stream has no `duration_s` |
 | `E_NO_FEATURES` | 3 | no `features/` directory or no split directory |
+| `E_FEATURES_CLEANED` | 3 | a role split's tars were deleted by the cleanup policy (`[features] keep`) after earlier probes finished; re-extract (`plan build --pending` plans the shards again) |
 | `E_SCRATCH_SPACE` | 3 | scratch free space below 1.1 × the train bytes |
 | `E_EXTERNAL_MISSING`, `E_EXTERNAL_VERSION` | 3 | authors' package absent or mis-versioned |
 | `E_RESULTS_ROOT`, `E_NONSTANDARD_CONFIG`, `E_READOUT`, `E_EVAL_PY` | 1 | no results-store root; non-pinned config outside testing; readout mismatch; `eval.py` failed to import |

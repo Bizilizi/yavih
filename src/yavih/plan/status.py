@@ -1,5 +1,7 @@
-"""``yavih plan status``: ``{done, pending, running, not_ready, preempted, failed, not_applicable,
-by_kind}``; ``preempted`` (exit 4) is resubmittable and never counted as ``failed``.
+"""``yavih plan status``: ``{done, pending, running, not_ready, preempted, failed, not_applicable, cleaned,
+by_kind}``; ``preempted`` (exit 4) is resubmittable and never counted as ``failed``; ``cleaned`` counts the extract
+units whose tars the ``[features] keep`` policy dropped after every probe reading them finished (done; they come back
+as ``pending`` once one of those probes is not done).
 
 A unit's status is decided from its outputs first (a matching DONE marker) and from its
 ``logs/last.json`` otherwise: exit 4 → ``preempted`` (deadline or signal, both resubmittable), exit 3 →
@@ -20,13 +22,13 @@ import os
 import socket
 import time
 
-from yavih.plan.units import Unit, check_done, last_record, read_plan
+from yavih.plan.units import Unit, check_done, last_record, read_plan, resolve_done
 
 __all__ = ["plan_status", "unit_status", "running_alive", "format_status", "STATUS_KEYS", "RUNNING_GRACE_S",
            "REPEAT_THRESHOLD"]
 
 STATUS_KEYS: tuple[str, ...] = ("done", "pending", "running", "not_ready", "preempted", "misconfigured", "failed",
-                                "not_applicable")
+                                "not_applicable", "cleaned")
 #: Consecutive identical exit-3 / exit-4 attempts after which ``plan status`` lists a unit under ``repeated``.
 REPEAT_THRESHOLD = 3
 #: A ``running`` record from another host (pid not checkable) is believed for twice the unit's planned
@@ -63,13 +65,18 @@ def running_alive(rec: dict, *, now: float | None = None, host: str | None = Non
 
 
 def unit_status(unit: Unit) -> tuple[str, int | None]:
-    """``(status, last_exit_code)`` for one unit."""
+    """``(status, last_exit_code)`` for one unit (a ``cleaned`` extract unit is judged without its probes: ``plan
+    status`` resolves it against the plan)."""
     st, rc, _ = _unit_status(unit)
     return st, rc
 
 
-def _unit_status(unit: Unit) -> tuple[str, int | None, dict | None]:
-    got = check_done(unit)
+_UNSET: object = object()
+
+
+def _unit_status(unit: Unit, got: str | None | object = _UNSET) -> tuple[str, int | None, dict | None]:
+    if got is _UNSET:
+        got = check_done(unit)
     rec = last_record(unit)
     rc = rec.get("exit_code") if rec else None
     rc = int(rc) if isinstance(rc, int) else None
@@ -98,19 +105,20 @@ def _streak(rec: dict | None) -> int:
 
 def plan_status(plan_path: str, *, root: str | None = None) -> dict:
     units = read_plan(plan_path, root=root)
+    states = resolve_done(units, stale=False)
     counts = dict.fromkeys(STATUS_KEYS, 0)
     by_kind: dict[str, dict[str, int]] = {}
     rows: list[dict] = []
     stale: list[str] = []
     repeated: list[str] = []
     for u in units:
-        st, rc, rec = _unit_status(u)
+        st, rc, rec = _unit_status(u, states[u.id])
         counts[st] += 1
         by_kind.setdefault(u.kind, dict.fromkeys(STATUS_KEYS, 0))[st] += 1
         row = {"id": u.id, "kind": u.kind, "benchmark": u.benchmark, "bridge": u.bridge, "split": u.split,
                "shard": u.shard, "seed": u.seed, "status": st, "exit_code": rc,
-               "message": (rec or {}).get("message") if st not in ("done", "not_applicable") else None,
-               "log": (rec or {}).get("log") if st not in ("done", "not_applicable") else None,
+               "message": (rec or {}).get("message") if st not in ("done", "not_applicable", "cleaned") else None,
+               "log": (rec or {}).get("log") if st not in ("done", "not_applicable", "cleaned") else None,
                "host": (rec or {}).get("host") if st == "running" else None,
                "attempts": int(((rec or {}).get("history") or {}).get("attempts") or 0) if rec else 0}
         if st in ("not_ready", "preempted") and _streak(rec) >= REPEAT_THRESHOLD:

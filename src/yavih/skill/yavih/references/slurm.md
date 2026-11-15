@@ -44,7 +44,7 @@ one entry per suite `(benchmark, reading)` and the bridge stubs; by hand, one en
 # yavih-bench/matrices/model.yaml
 schema_version: 1
 out: null                    # the configured runs root (`yavih config get runs.root`); a path is relative to this file
-seeds: [0, 1, 2]
+seeds: [0]                   # one probe seed (seed 0); more seeds only when asked for
 shard_minutes: 30            # target wall per extract unit; many small shards, never one unit per GPU
 canaries: 8
 defaults:
@@ -122,7 +122,10 @@ exactly the `preempted` (exit 4) and `not_ready` (exit 3) units, and units kille
 final record (`plan status` lists them under `stale running`). Extract units are keyed by the
 benchmark's input hash and probe units by its protocol hash: after a scoring-side change of a
 benchmark (a `protocol_version` bump, which is how a `eval.py` or metric fix lands once its conformance fixture
-is re-recorded; a pinned package or readout version) `--pending` re-plans the probes and no extraction. A
+is re-recorded; a pinned package or readout version) `--pending` re-plans the probes and no extraction, except the
+shards whose tars the cleanup policy already deleted (`plan status`: `cleaned`; `[features] keep` in `yavih.toml`):
+the probe units delete a run directory's feature tars once all its probes are done, so those shards are extracted
+again first (the loop's `extract` pass). Keep features you will probe again with `yavih features keep … --reason …`. A
 `eval.py` edit by itself moves no hash and re-plans nothing. A `plan.jsonl` written by an older yavih (older plan schema) is refused:
 rebuild it with `plan build` (finished shards are kept). `--time` is `needs.minutes` plus
 20 min: the 15 min `--deadline-margin` plus start-up. `yavih plan calibrate "$R"`

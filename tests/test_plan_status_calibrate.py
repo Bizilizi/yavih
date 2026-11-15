@@ -42,7 +42,7 @@ def test_status_counts_from_markers_and_last_json(tmp_path, monkeypatch):
     st = plan_status(str(p))
     assert (st["done"], st["preempted"], st["failed"], st["not_applicable"], st["not_ready"], st["pending"]) == (1, 1, 1, 1, 1, 1)
     assert st["by_kind"]["extract"] == {"done": 1, "pending": 0, "running": 0, "not_ready": 0, "preempted": 1, "misconfigured": 0,
-                                        "failed": 1, "not_applicable": 0}
+                                        "failed": 1, "not_applicable": 0, "cleaned": 0}
     assert st["by_kind"]["probe"]["not_applicable"] == 1 and st["by_kind"]["report"]["pending"] == 1
     rows = {r["id"]: r for r in st["units"]}
     assert rows[ex[1].id]["status"] == "preempted" and rows[ex[1].id]["exit_code"] == 4

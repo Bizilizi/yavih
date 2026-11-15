@@ -315,9 +315,21 @@ def test_plan_build_exec_report_chain(integration_env, yavih_home, runs_dir, tmp
         env = _json(_ok(_run(["-m", "yavih.cli", "--json", "exec", str(plan), "--index", str(i)], cwd=work, timeout=1200), f"exec {i} {u['kind']}"))
         assert env["status"] == "ok" and env["data"]["status"] == "done", (u["kind"], env["data"])
         assert _unit_path(u, u["done"]).is_file(), (u["kind"], u["done"])
+        if u["kind"] == "probe":  # the default cleanup policy: the run's only probe is done, its feature tars go
+            cleanup = env["data"]["cleanup"]
+            assert cleanup["status"] == "dropped" and cleanup["policy"] == {"keep": False, "source": "default"}, cleanup
+            assert cleanup["files"] == kinds.count("extract") and cleanup["bytes"] > 0, cleanup
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "status", str(plan)], cwd=work), "plan status"))
     st = env["data"]
-    assert st["done"] == st["total"] == len(units) and st["failed"] == 0 and st["not_ready"] == 0 and st["pending"] == 0, st
+    n_ex = kinds.count("extract")
+    assert st["done"] == st["total"] - n_ex and st["cleaned"] == n_ex and st["total"] == len(units), st
+    assert st["failed"] == 0 and st["not_ready"] == 0 and st["pending"] == 0, st
+    run_dir = work / "runs" / name / model / reading
+    # the tars are gone; the sidecars (DONE markers), _meta.json and the cleanup record stay
+    assert not list(run_dir.glob("features/*/shard-*.tar")) and len(list(run_dir.glob("features/*/shard-*.json"))) == n_ex
+    assert list(run_dir.glob("features/*/_meta.json")) and list(run_dir.glob("features/*/_cleaned.json"))
+    val = _json(_run(["-m", "yavih.cli", "--json", "features", "validate", str(run_dir / "features")], cwd=work))
+    assert {e["code"] for e in val["errors"]} == {"E_FEATURES_CLEANED"}, val["errors"]
     report_md = (work / "runs" / "_report" / "report.md").read_text()
     assert model in report_md and "synth_clf" in report_md
     result = json.loads((_unit_path(units[kinds.index("probe")], units[kinds.index("probe")]["done"]).parent / "result.json").read_text())
@@ -329,12 +341,24 @@ def test_plan_build_exec_report_chain(integration_env, yavih_home, runs_dir, tmp
     assert (done["model"], done["reading"]) == (model, reading) and done["features_fingerprint"] == result["features"]["fingerprint"]
     # the probe DONE carries eval_hash and the configuration's describe_sha256 (staleness, not identity)
     assert done["eval_hash"] == result["eval_hash"] and done["describe_sha256"] == prof["describe_sha256"]
-    # a finished unit is skipped, nothing re-run
+    # a finished unit is skipped, nothing re-run (a cleaned shard too: every probe reading it is done)
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "exec", str(plan), "--index", "0"], cwd=work), "exec again"))
-    assert env["status"] == "skipped" and env["data"]["status"] == "skipped"
+    assert env["status"] == "skipped" and env["data"]["status"] == "skipped" and "already cleaned" in env["data"]["message"]
     # --pending emits nothing once everything is done
     env = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "build", str(work / "matrix.yaml"), "--pending", "--format", "count"], cwd=work), "plan pending"))
     assert env["data"]["count"] == 0
+    # a probe that has to run again (its DONE gone) brings the cleaned shards back first: --pending plans them, and
+    # plan run --local re-extracts, probes, and cleans again
+    probe_done = _unit_path(units[kinds.index("probe")], units[kinds.index("probe")]["done"])
+    probe_done.unlink()
+    env = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "build", str(work / "matrix.yaml"), "--pending", "--format", "count"], cwd=work), "pending again"))
+    assert env["data"]["count"] == n_ex + 1, env["data"]
+    env = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "run", str(plan), "--local"], cwd=work, timeout=1200), "plan run"))
+    assert env["data"]["exit_code"] == 0 and env["data"]["counts"].get("done") == n_ex + 1, env["data"]
+    assert probe_done.is_file() and not list(run_dir.glob("features/*/shard-*.tar"))
+    st = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "status", str(plan)], cwd=work), "status again"))["data"]
+    assert st["cleaned"] == n_ex and st["pending"] == 0 and st["failed"] == 0, st
+    assert all(len(json.loads(p.read_text())["cleanups"]) == 2 for p in run_dir.glob("features/*/_cleaned.json"))
 
 
 def test_plan_build_sample_chain(integration_env, yavih_home, runs_dir, tmp_path, monkeypatch):
@@ -381,7 +405,8 @@ def test_plan_build_sample_chain(integration_env, yavih_home, runs_dir, tmp_path
         env = _json(_ok(_run(["-m", "yavih.cli", "--json", "exec", str(plan), "--index", str(i)], cwd=work, timeout=1200), f"exec {i} {u['kind']}"))
         assert env["status"] == "ok" and env["data"]["status"] == "done", (u["kind"], env["data"])
     st = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "status", str(plan)], cwd=work), "plan status"))["data"]
-    assert st["done"] == st["total"] == len(units) and st["failed"] == 0, st
+    # the default cleanup dropped the sampled run's tars after its probe: the extract units count as cleaned
+    assert st["done"] + st["cleaned"] == st["total"] == len(units) and st["cleaned"] == len(extracts) and st["failed"] == 0, st
     run_dir = work / run_rel
     for split in ("train", "val"):
         sd = run_dir / "features" / split

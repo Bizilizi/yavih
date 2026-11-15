@@ -1053,6 +1053,16 @@ def _read_na(split_dir: Path) -> dict | None:
     return _read_json(p) if p.is_file() else None
 
 
+def _cleaned_shards(split_dir: Path) -> int:
+    """How many shards of ``split_dir`` the ``[features] keep`` cleanup dropped: sidecars without their tar next to the
+    cleanup record ``_cleaned.json`` (``yavih.plan.clean``); 0 without the record."""
+    from yavih.io.format import CLEANED_FILE
+
+    if not (split_dir / CLEANED_FILE).is_file():
+        return 0
+    return sum(1 for sc in split_dir.glob("shard-*.json") if not sc.with_suffix(".tar").exists())
+
+
 def check_meta_fresh(split_dir: str | Path, meta: Mapping[str, Any]) -> None:
     """Refuse (``E_META_STALE``) a ``_meta.json`` that no longer describes the shards next to it.
 
@@ -1766,6 +1776,13 @@ def _probe(
             # block and fingerprint would make the current verdict look like the old configuration's result.
             nas[s] = na
             continue
+        cleaned = _cleaned_shards(d)
+        if cleaned:
+            # the _meta.json of a cleaned split still matches its sidecars: refuse before anything reads a tar
+            raise ProbeRefused("E_FEATURES_CLEANED", (
+                f"{s}: {cleaned} shard tars of {d} were dropped by the cleanup policy ([features] keep) after the earlier "
+                f"probes finished; re-extract them first (`yavih plan build <matrix> --pending` plans them again), and "
+                f"`yavih features keep <benchmark>/<model>/<reading> --reason ...` keeps features from now on"), exit_code=3)
         meta = _read_meta(d)
         if meta is None:
             raise ProbeRefused("E_META_MISSING", f"{d / META_FILE} absent: run `yavih features validate` first")

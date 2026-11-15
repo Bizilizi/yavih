@@ -22,6 +22,9 @@ units write a log with the traceback; ``--deadline-margin`` default 900 s (> the
 - Paths and CPUs: ``--root`` re-anchors the plan's relative paths; ``--cpus`` overrides the unit's CPU budget (else it is
   clamped to the CPUs this process may use: affinity mask and cgroup quota, ``yavih.resources``).
 - Pending files: ``--plan-sha`` refuses a pending file that changed since the job was submitted.
+- Cleanup: after a probe unit ends ``done`` / ``skipped`` / ``not_applicable``, the ``[features] keep`` policy is applied
+  to its run directory (``yavih.plan.clean``): when every probe of the plan that reads it is done, the feature tars are
+  dropped (sidecars, ``_meta.json`` and results stay) and the record says so (``last.json`` ``cleanup``).
 """
 
 from __future__ import annotations
@@ -543,7 +546,14 @@ def _history(prev: dict | None) -> dict:
 
 def _run_unit(units_by_id: dict[str, Unit], unit: Unit, *, deadline: float | None,
               env_overrides: dict[str, str] | None = None, cpus: int | None = None) -> dict:
-    from yavih.plan.units import INPUTS_SCHEME, check_done, last_record, resolve_path
+    from yavih.plan.units import (
+        CLEANED,
+        INPUTS_SCHEME,
+        check_done,
+        last_record,
+        needed_by_pending_probe,
+        resolve_path,
+    )
 
     started_t = time.time()
     started = _now_utc()
@@ -588,12 +598,22 @@ def _run_unit(units_by_id: dict[str, Unit], unit: Unit, *, deadline: float | Non
                 f"units of other kinds: pass the full plan with `--deps plan.jsonl`"
             )
             break
-        if check_done(d) is None:
+        got = check_done(d)
+        if got is None:
             status, message = "not_ready", f"dependency {dep} ({d.kind} {d.benchmark} {d.split or ''} {d.shard or ''}) has no matching DONE marker"
+            break
+        if got == CLEANED and check_done(unit) is None:
+            status, message = "not_ready", (
+                f"dependency {dep} ({d.kind} {d.benchmark} {d.split or ''} {d.shard or ''}): its feature tars were dropped by "
+                f"the cleanup policy ([features] keep) after every probe reading them had finished; `plan build --pending` "
+                f"plans that extraction again (run it before this probe); `yavih features keep` keeps features from now on"
+            )
             break
     else:
         # 3. DONE check
         already = check_done(unit)
+        if already == CLEANED and needed_by_pending_probe(unit, units_by_id.values()):
+            already = None  # a probe that reads this shard is not done: extract it again
         launcher: str | None = None
         launcher_error: str | None = None
         if already is None and unit.kind == "extract":
@@ -618,6 +638,11 @@ def _run_unit(units_by_id: dict[str, Unit], unit: Unit, *, deadline: float | Non
                                started=started, started_t=started_t, deadline=deadline, log_path=log_path, history=history)
                 status, message, child_rc = _dispatch(unit, env=env, log_path=log_path, deadline=deadline, cpus=eff_cpus,
                                                       launcher=launcher)
+
+    cleanup: dict | None = None
+    if unit.kind == "probe" and status in ("done", "skipped", "not_applicable"):
+        # 5b. the cleanup policy: the last finished probe of a run directory drops its feature tars ([features] keep)
+        cleanup = _cleanup_after_probe(unit, units_by_id)
 
     exit_code = _exit_for(status, child_rc)
     if exit_code == 0:
@@ -650,6 +675,8 @@ def _run_unit(units_by_id: dict[str, Unit], unit: Unit, *, deadline: float | Non
     }
     if refused_at_start:
         last["refused_at_start"] = True  # plan calibrate never bumps needs.minutes for a start refusal
+    if cleanup is not None:
+        last["cleanup"] = cleanup
     # 6. logs/last.json (shared) + logs/last.<id>.json (per unit: shards of one split share `out`).
     logs = os.path.join(out_dir, "logs")
     try:
@@ -661,10 +688,26 @@ def _run_unit(units_by_id: dict[str, Unit], unit: Unit, *, deadline: float | Non
     return last
 
 
+def _cleanup_after_probe(unit: Unit, units_by_id: dict[str, Unit]) -> dict | None:
+    """The ``[features] keep`` policy after a finished probe unit (``yavih.plan.clean.after_probe``): the summary of what
+    was dropped or kept, ``None`` when the run directory is not finished yet. A failure here never fails the unit: it is
+    logged and recorded as ``{"status": "error"}``."""
+    try:
+        from yavih.plan.clean import after_probe
+
+        rec = after_probe(unit, units_by_id)
+    except Exception as e:  # noqa: BLE001 - the probe's result stands whatever the cleanup does
+        _log(f"[yavih] cleanup of {unit.out}: {type(e).__name__}: {e} (features left in place)")
+        return {"status": "error", "message": f"{type(e).__name__}: {e}"}
+    if rec is not None and rec.get("message"):
+        _log(f"[yavih] {rec['message']}")
+    return rec
+
+
 def _dispatch(unit: Unit, *, env: dict[str, str], log_path: str, deadline: float | None,
               cpus: int | None = None, launcher: str | None = _UNRESOLVED) -> tuple[str, str | None, int | None]:
     """Step 5 for one kind. Returns ``(status, message, child_rc)``."""
-    from yavih.plan.units import check_done
+    from yavih.plan.units import CLEANED, check_done
 
     _PREEMPT.clear()
     _FORWARDED.clear()
@@ -676,6 +719,8 @@ def _dispatch(unit: Unit, *, env: dict[str, str], log_path: str, deadline: float
             got = check_done(unit)
             if got is None:
                 return "failed", f"child exited 0 but {unit.done} is missing or does not match the plan", 5
+            if got == CLEANED:
+                return "failed", f"child exited 0 but the tar next to {unit.done} is missing", 5
             return got, None, 0
         if rc == 1:
             return "misconfigured", f"child exit 1: usage / configuration error, resubmitting will not help (see {log_path})", rc

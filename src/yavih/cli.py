@@ -687,7 +687,8 @@ def cmd_config_show(ns: argparse.Namespace) -> Envelope:
 def cmd_config_get(ns: argparse.Namespace) -> Envelope:
     """``yavih config get KEY``: one resolved value on stdout, for shell scripts (``prepare/*.sh``). KEY is
     ``runs.root``, ``results.root``, ``home.root``, ``scratch.root``, ``data.root``, ``datasets.<name>``,
-    ``resources.<key>`` or ``<benchmark>.<root>`` (a name or alias). Exit 1 when it does not resolve."""
+    ``resources.<key>``, ``features.keep`` (printed as JSON) or ``<benchmark>.<root>`` (a name or alias). Exit 1 when it
+    does not resolve."""
     from yavih import config as _cfg
     from yavih import resources
 
@@ -704,6 +705,10 @@ def cmd_config_get(ns: argparse.Namespace) -> Envelope:
         source = {"runs.root": settings.runs_root_source, "results.root": settings.results_root_source}.get(key, lambda: v.source if v else "default")()
         if value is None:
             raise _cfg.ConfigError(f"{key} is not configured (set [data] root in {settings.edit_hint()} or YAVIH_DATA__ROOT)")
+    elif key == "features.keep":
+        keep = settings.features_keep()
+        value, source = (keep if isinstance(keep, bool) else list(keep)), settings.features_keep_source()
+        return Envelope(data={"key": key, "value": value, "source": source}, text=f"{json.dumps(value)}\n")
     elif head == "datasets":
         value = settings.dataset(tail)
         v = settings.get("datasets", tail)
@@ -2090,6 +2095,77 @@ def cmd_plan_init(ns: argparse.Namespace) -> Envelope:
     return Envelope(data=rec, paths=paths, warnings=warnings, text="\n".join(lines) + "\n")
 
 
+def cmd_features_keep(ns: argparse.Namespace) -> Envelope:
+    """``yavih features keep [PATTERN...] [--all | --none] [--reason TEXT]``: the ``[features] keep`` cleanup policy.
+    Without arguments it prints the policy in force and where it is set. With ``<benchmark>/<model>/<reading>`` globs
+    (``k400`` = ``k400/*/*``), ``--all`` or ``--none`` it writes the policy into the project file
+    (``yavih-bench/yavih.toml``), the reason and date as a comment above it: the override a person asks for is recorded
+    with the project (``yavih.plan.clean.set_features_keep``)."""
+    from yavih import config as _cfg
+    from yavih.plan.clean import policy_of, set_features_keep
+
+    settings = _cfg.load()
+    before = policy_of(settings)
+    pats = list(ns.patterns or [])
+    if not pats and not ns.all and not ns.none:
+        text = f"[features] keep = {json.dumps(before['keep'])}  ({before['source']})\n" + (
+            "  feature tars are dropped once every probe of their run directory is done; "
+            "`yavih features keep <benchmark>/<model>/<reading> --reason ...` keeps some, --all keeps every run's\n"
+            if before["keep"] is False else "")
+        return Envelope(data={**before, "changed": False, "file": None}, text=text)
+    if sum(bool(x) for x in (pats, ns.all, ns.none)) > 1:
+        raise CliError("E_USAGE", "give patterns, --all or --none, not several")
+    if (pats or ns.all) and not (ns.reason or "").strip():
+        raise CliError("E_USAGE", "--reason is required: it is written next to the policy in the project file "
+                       "(who asked to keep these features, and why)")
+    pf = settings.project_file()
+    if pf is None:
+        raise CliError("E_NO_PROJECT", "no project file to record the policy in: run `yavih init` at the repository root "
+                       f"first, or write `[features] keep = ...` into {_cfg.user_config_path(settings.env)[0]} by hand")
+    try:
+        new_pats = [_cfg.normalize_keep_pattern(p) for p in pats]
+    except ValueError as e:
+        raise CliError("E_USAGE", str(e)) from e
+    # what the project file itself says (its top-level [features] table; the strict schema has checked it on load)
+    raw = (pf.data.get("features") or {}).get("keep", False) if isinstance(pf.data, dict) else False
+    current: bool | list[str] = raw if isinstance(raw, bool) else [_cfg.normalize_keep_pattern(p) for p in raw]
+    if ns.all:
+        keep: bool | list[str] = True
+    elif ns.none:
+        keep = False
+    elif current is True:
+        keep = True  # already keeps every run's features
+    else:
+        keep = list(current or [])
+        keep += [p for p in new_pats if p not in keep]
+    changed = keep != current
+    import datetime as _dt
+
+    day = _dt.date.today().isoformat()
+    what = "all" if ns.all else "none (back to the default cleanup)" if ns.none else ", ".join(new_pats)
+    comment = f"{day} yavih features keep {what}" + (f": {ns.reason.strip()}" if (ns.reason or "").strip() else "")
+    if changed:
+        set_features_keep(pf.path, keep, comment=comment)
+    after = policy_of(_cfg.load(refresh=True))
+    warnings = []
+    if after["keep"] != keep:
+        warnings.append(_finding("W_KEEP_OVERRIDDEN", f"{pf.path} now says [features] keep = {json.dumps(keep)}, but "
+                                 f"{after['source']} overrides it here: keep = {json.dumps(after['keep'])}"))
+    text = (f"{'wrote' if changed else 'unchanged:'} [features] keep = {json.dumps(keep)} in {pf.path}"
+            + (f"\n  # {comment}" if changed else "") + "\n")
+    return Envelope(data={**after, "changed": changed, "file": str(pf.path), "written": keep, "comment": comment if changed else None},
+                    warnings=warnings, paths={"config": str(pf.path)}, text=text)
+
+
+def cmd_plan_clean(ns: argparse.Namespace) -> Envelope:
+    """``yavih plan clean <plan.jsonl> [--dry-run]``: the ``[features] keep`` policy over every run directory of the plan
+    (``yavih.plan.clean.clean_plan``): drop the feature tars of those whose probes are all done."""
+    from yavih.plan.clean import clean_plan, format_clean
+
+    data = clean_plan(ns.plan, root=ns.root, dry_run=ns.dry_run)
+    return Envelope(data=data, text=format_clean(data))
+
+
 def cmd_plan_status(ns: argparse.Namespace) -> Envelope:
     """Text mode prints a summary (totals, per kind, the units that need attention with the last line of
     their message); ``--json`` carries every unit row."""
@@ -2480,7 +2556,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_extract)
 
     # features
-    sp = sub.add_parser("features", parents=[common_r], help="validate / inspect / diff / stage feature sets")
+    sp = sub.add_parser("features", parents=[common_r], help="validate / inspect / diff / stage feature sets; keep: the cleanup policy")
     fsub = sp.add_subparsers(dest="subcommand", metavar="<subcommand>")
     fsub.required = True
     s = fsub.add_parser("validate", parents=[common_r])
@@ -2503,6 +2579,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("features_dir", metavar="<features/>")
     s.add_argument("scratch")
     s.set_defaults(func=cmd_features_stage)
+    s = fsub.add_parser("keep", parents=[common_r],
+                        help="the cleanup policy: print it, or record in the project file which features to keep after their probes "
+                             "([features] keep; default: drop the tars once every probe of a run directory is done)")
+    s.add_argument("patterns", nargs="*", metavar="<benchmark>/<model>/<reading>",
+                   help="run directories to keep (globs; k400 = k400/*/*, */mymodel = */mymodel/*); added to the list")
+    s.add_argument("--all", action="store_true", help="keep every run's features (keep = true)")
+    s.add_argument("--none", action="store_true", help="back to the default: drop features once their probes are done (keep = false)")
+    s.add_argument("--reason", default=None, metavar="TEXT", help="why (required with patterns or --all): written as a comment above the policy")
+    s.set_defaults(func=cmd_features_keep)
 
     # eval
     sp = sub.add_parser("eval", parents=[common_r], help="score a validated feature set with the benchmark's scorer (a pinned probe, or the folder's own)")
@@ -2510,7 +2595,7 @@ def build_parser() -> argparse.ArgumentParser:
     psub.required = True
     s = psub.add_parser("run", parents=[common_nr])
     s.add_argument("run_dir")
-    s.add_argument("--seeds", default="0", metavar="0,1,2")
+    s.add_argument("--seeds", default="0", metavar="0")
     s.add_argument("--deadline", default=None, metavar="slurm|<epoch_s>")
     s.add_argument("--scratch", default=None, metavar="DIR")
     s.add_argument("--allow-low-coverage", action="store_true")
@@ -2574,7 +2659,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_registry_check)
 
     # plan
-    sp = sub.add_parser("plan", parents=[common_r], help="build / status / calibrate / run (--local) unit plans")
+    sp = sub.add_parser("plan", parents=[common_r], help="build / status / calibrate / run (--local) / clean unit plans")
     plsub = sp.add_subparsers(dest="subcommand", metavar="<subcommand>")
     plsub.required = True
     s = plsub.add_parser("init", parents=[common_r], help="write a matrix.yaml skeleton and the bridge stubs for one model on a suite")
@@ -2615,6 +2700,12 @@ def build_parser() -> argparse.ArgumentParser:
     s = plsub.add_parser("calibrate", parents=[common_r])
     s.add_argument("runs_root", metavar="<runs_root>")
     s.set_defaults(func=cmd_plan_calibrate)
+    s = plsub.add_parser("clean", parents=[common_r],
+                         help="drop the feature tars of the plan's run directories whose probes are all done ([features] keep policy)")
+    s.add_argument("plan", metavar="<plan.jsonl>")
+    s.add_argument("--root", default=None, metavar="DIR", help="the directory the plan's relative paths mean here (as exec --root)")
+    s.add_argument("--dry-run", action="store_true", help="list what would be dropped and how much it frees; delete nothing")
+    s.set_defaults(func=cmd_plan_clean)
 
     # exec
     sp = sub.add_parser("exec", parents=[common_r], help="run one plan unit")

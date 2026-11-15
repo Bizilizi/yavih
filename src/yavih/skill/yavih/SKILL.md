@@ -93,8 +93,8 @@ bridge on a synthetic audio benchmark (an environment check).
 | 4 bridge | from the repository root (every path in this table is relative to it): `yavih plan init --suite default --model <name>` writes `yavih-bench/matrices/<name>.yaml` and one bridge stub per benchmark, `yavih-bench/bridges/<name>_<b>.py` (a copy of that benchmark's `bridge_template.py`; existing bridges are kept; `--launcher <python>` unless `yavih.toml` names one per site), and prints the step-5 and step-6 commands; one benchmark only: `yavih bridge new <b> --model <name>`. Per bridge: paste the model's preprocessing source into its docstring; fill `describe()`: `model`, `reading`, the `input` rules (a `custom` rule with a one-line description where none fits), `views: 1`, explicit `precision`; decode in `prepare()` (it overlaps the forward pass; `encode()` reads `sample.prepared`); `encode()` returns `(feats, pos, used)`, pos in media coordinates | `describe()` matches the pasted source line by line; `model` is the same string in every bridge of the model |
 | 5 smoke | per matrix entry `<name>-<b>-<r>`: `yavih bridge check yavih-bench/bridges/<name>_<b>.py --bench <b> [--arg reading=<r>] --out yavih-bench/matrices/<name>.profiles/<name>-<b>-<r>.profile.json` (the profile path the matrix names; `plan init` printed each command; `--synthetic` before data is staged, no profile) | rerun bit-identical; batch/order invariance within `1e-5` (or a declared ≤ `1e-3` with a reason); no `E_RULE_MISMATCH`, `E_TIMES_OUT_OF_MEDIA`, `E_NETWORK`, `E_TEMPLATE_UNFILLED`; profile written |
 | 6 extract | `R=$(yavih config get runs.root)` once (the configured runs root; steps 7–9 use `$R`), then `yavih plan build yavih-bench/matrices/<name>.yaml --out $R/_plans/<name>.jsonl` (the command `plan init` printed: plan files live under the runs root, never in `yavih-bench/`; `--sample N` first: a capped trial run); run the units (SLURM: references/slurm.md; no SLURM: `yavih plan run <plan> --local [--slots K]`); `yavih plan status <plan>` | `pending == 0`, `preempted == 0`, `failed == 0` (`not_ready` → fix data/dependency) |
-| 7 validate | `yavih features validate $R/<b>/<model>/<reading>/features` | `ok` per split; coverage 100 % or accepted; `rules checked:` names your rules (`N_RULE_CUSTOM` fine; `W_RULE_UNCHECKED` understood); `eligible for` read (ineligible = recorded `not_applicable`) |
-| 8 eval | `yavih exec <plan> --id <probe unit>` or `yavih eval run $R/<b>/<model>/<reading> --seeds 0,1,2 --log-samples` | `status: ok`; headline above its floor; no `floor_violated` / `audio_blind`; `external` versions recorded |
+| 7 validate | `yavih features validate $R/<b>/<model>/<reading>/features` (before the probes: once every probe of a run directory is done its tars are deleted, see "Features are deleted after their probes"; `E_FEATURES_CLEANED` = the probes already ran, and their validate prologue is recorded in `_meta.json` and each `result.json`) | `ok` per split; coverage 100 % or accepted; `rules checked:` names your rules (`N_RULE_CUSTOM` fine; `W_RULE_UNCHECKED` understood); `eligible for` read (ineligible = recorded `not_applicable`) |
+| 8 eval | `yavih exec <plan> --id <probe unit>` or `yavih eval run $R/<b>/<model>/<reading> --seeds 0 --log-samples` (one probe seed, seed 0) | `status: ok`; headline above its floor; no `floor_violated` / `audio_blind`; `external` versions recorded |
 | 9 report | `yavih report build "$R/*" --out <dir>/report.md` (`--merge-results`: one file per model) | table (`benchmark`, `reading`, `version`, `eval_hash`, `readout`, `metric`, `value`, `ci95`, `floor`) written; `$(yavih config get results.root)/<model>/results_<timestamp>.json` present; every reading of an AV model present; compare only at equal `eval_hash`; `W_BRIDGE_CHANGED` understood; no greyed row presented as a result |
 
 Step 4, the template copy (the model name filled in; every other TODO stays, so `bridge check` refuses the copy with
@@ -169,6 +169,26 @@ become missing); any other exception aborts the shard. `eval` refuses missing au
 with the pip line), stale hashes, train ∩ eval ≠ ∅ and low eval coverage; `report` greys rows below the
 floor (never for a bridge decision). Hashes cover a benchmark's declaration, never code: `yavih bench conformance`
 holds a folder's `protocol_version` to its numbers (references/cli.md).
+
+## Features are deleted after their probes
+
+By default (`[features] keep = false` in `yavih-bench/yavih.toml`), `yavih exec` deletes a run directory's feature tars
+as soon as every probe of it is done. `plan run --local` and SLURM arrays both go through `exec`. The sidecars,
+`_meta.json`, the logs and every result stay, `plan status` counts those extract units `cleaned`, and `plan build
+--pending` plans them again only if a probe needs them (a new seed, a bumped protocol). This is what keeps the
+user's disk from filling up with features read once.
+
+- **The user asks to keep features** (to inspect or diff them, probe again soon, debug a bridge): record it in the
+  project BEFORE the probes finish, in their words:
+  `yavih features keep <benchmark>/<model>/<reading> --reason "<why, who asked>"` (globs: `k400`, `*/mymodel/*`;
+  `--all` keeps everything). It is written into `yavih-bench/yavih.toml` with the date and reason, so it holds for
+  every later run and every person; commit it with the project. `yavih features keep` alone prints the policy in force,
+  and `--none` goes back to the default.
+- Never change `[features] keep` unless asked, and never delete features by hand: the policy does it, and only once
+  every probe is done. Already deleted features come back only by re-extraction (`plan build --pending` + run).
+- Runs probed with `eval run` by hand, or finished earlier: `yavih plan clean $R/_plans/<name>.jsonl --dry-run` lists
+  what would be freed; without `--dry-run` it deletes. Each probe record's `cleanup` key, and one stderr line, say
+  what `exec` deleted.
 
 ## Operational rules
 

@@ -59,6 +59,11 @@ table of `yavih.toml` (one path per cluster, shared by everyone on it), then `mv
 Results stay in `yavih-bench/results` unless `[results] root` moves them too. `yavih doctor` warns
 `W_RUNS_SIZE` when the project-default runs root has grown past 50 GB and repeats these steps.
 
+Features don't pile up by default: `yavih exec` deletes a run directory's feature tars once every probe of it is done
+(`[features] keep = false` in `yavih.toml`; [execution: cleanup](execution.md#cleanup)). To keep some, record it in
+the project: `yavih features keep <benchmark>/<model>/<reading> --reason "..."`. `yavih plan clean <plan>` cleans runs
+that finished before the policy applied, or that were probed by hand.
+
 ## One project per repository
 
 Discovery takes the nearest `yavih-bench/yavih.toml` (else a bare `yavih.toml`) walking up from the

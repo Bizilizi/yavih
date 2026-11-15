@@ -105,6 +105,7 @@ root = "/project/datasets"
 | `[project]` | `yavih` | the version requirement the project expects (`">=1,<2"`); `yavih doctor` warns `W_PROJECT_VERSION` outside it, never fails | none |
 | `[project]` | `bridges`, `matrices`, `suites`, `benchmarks` | relocate one of the project directories (relative to the project file) | `<project dir>/<kind>` |
 | `[project]` | `subprojects` | nested project folders inside the repository that `doctor` must not report as strays | `[]` |
+| `[features]` | `keep` | the cleanup policy: `false` drops a run directory's feature tars once every probe of it is done; `true` keeps every run's features; a list of `"<benchmark>/<model>/<reading>"` globs keeps those run directories ([`[features]`](#features)) | `false` |
 | `[site.<id>]` | `hosts`, `launcher`, `[launchers]` + any table above except `[project]` | per-cluster values | see [Sites](#sites) |
 
 Notes:
@@ -143,6 +144,34 @@ may set it too (a cluster's mirror).
 |---|---|---|
 | `url` | `https://raw.githubusercontent.com/Bizilizi/yavih/main/catalog/index.json` | the index (`https://` or `file://`) |
 | `archive` | `https://codeload.github.com/{repo}/tar.gz/{commit}` | the repository archive at one commit; `{repo}` and `{commit}` are substituted |
+
+### `[features]`
+
+The cleanup policy for feature sets. Features are the bulk of a run and are usually read by one probe and never
+again, so by default yavih deletes them once they have served: after the last probe of a run directory finishes,
+`yavih exec` deletes the run's shard tars and `_stale/` copies. The sidecars, `_layout.json`, `_meta.json`, the logs and
+every probe result stay, and the plan still counts the extraction as done (`cleaned`) until a probe needs the tars
+again ([execution: cleanup](execution.md#cleanup)).
+
+```toml
+[features]
+keep = false                          # the default: drop the tars once every probe of the run directory is done
+```
+
+```toml
+[features]
+# 2026-11-13 yavih features keep k400/*/*, */mymodel/v: feature diff against the v2 checkpoint
+keep = ["k400/*/*", "*/mymodel/v"]    # keep these run directories; true keeps every run's features
+```
+
+A pattern is matched against `<benchmark>/<model>/<reading>` (the run directory under the runs root) with shell
+globs; a shorter pattern is padded with `*` (`k400` = `k400/*/*`, `k400/mymodel` = `k400/mymodel/*`). Any other
+value, or a pattern with more than three parts, is a schema error.
+
+The policy belongs to the project: `yavih features keep <pattern>... --reason "..."` (or `--all`, `--none`) writes
+it into `yavih-bench/yavih.toml` with the date and the reason as a comment, and `yavih features keep` alone prints the
+policy in force and where it is set. A `[site.<id>]` table may override it for one cluster (one with room to keep
+everything); the user file can set it too, below the project file.
 
 ## Data roots
 
@@ -289,6 +318,7 @@ config_key, error}}}}`.
 yavih config get runs.root            # also results.root, scratch.root, home.root, data.root
 yavih config get datasets.vggsound    # [datasets] vggsound, else ${data.root}/vggsound
 yavih config get resources.decode_workers
+yavih config get features.keep        # the cleanup policy, as JSON: false, true or ["k400/*/*", ...]
 MEDIA=$(yavih config get esc50.media_root)   # <benchmark>.<root>, name or alias
 ```
 

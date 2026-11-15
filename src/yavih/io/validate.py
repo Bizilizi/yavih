@@ -49,6 +49,7 @@ from yavih import hashing
 from yavih.fields import spec_streams
 from yavih.hash_history import describe_input_mismatch
 from yavih.io.format import (
+    CLEANED_FILE,
     CONSTANT_POS_MEMBER,
     FEATURE_DTYPES,
     FEATURE_FORMAT_VERSION,
@@ -113,6 +114,7 @@ CODES: dict[str, str] = {
     "E_FORMAT": "error",
     "E_NA_AND_SHARDS": "error",
     "E_SHARD_SET": "error",
+    "E_FEATURES_CLEANED": "error",  # the [features] keep policy dropped the tars after every probe finished
     "W_STALE_TMP": "warning",
     "E_RANGE_TILING": "error",
     "E_HASH_MANIFEST": "error",
@@ -1890,6 +1892,30 @@ def _report_not_applicable(split_dir: Path, split: str, fx: _Findings, view: _Be
     )
 
 
+def _report_cleaned(split_dir: Path, split: str, fx: _Findings, n_sidecars: int) -> ValidationReport:
+    """A split whose tars the ``[features] keep`` policy dropped (``_cleaned.json``): one ``E_FEATURES_CLEANED`` naming
+    when and what to do, instead of an ``E_SHARD_SET`` per shard. ``_meta.json`` is left as it is (the record of the
+    validation the probes read)."""
+    try:
+        with open(split_dir / CLEANED_FILE, encoding="utf-8") as fh:
+            rec = json.load(fh)
+        last = (rec.get("cleanups") or [{}])[-1]
+    except (OSError, ValueError, AttributeError, IndexError, TypeError):
+        last = {}
+    when = last.get("cleaned") or "?"
+    fx.add("E_FEATURES_CLEANED", (
+        f"the {n_sidecars} shard tars of this split were dropped by the cleanup policy ([features] keep) on {when}, after "
+        f"every probe reading them had finished; the sidecars, _meta.json and the probe results stay. To read the features "
+        f"again, re-extract them (`yavih plan build <matrix> --pending` plans those shards again once a probe needs them, or "
+        f"`yavih extract --shard i/n`); `yavih features keep <benchmark>/<model>/<reading> --reason ...` keeps them from now on"),
+        CLEANED_FILE)
+    return ValidationReport(
+        ok=fx.ok, errors=fx.errors, warnings=fx.warnings, notes=fx.notes, split=split, coverage={}, N=0, D=0, dtype="",
+        pos_mode="none", bytes=0, backend_hint="none", eligibility={}, missing_shards=[],
+        shards={"n": n_sidecars, "done": 0, "in_progress": 0, "missing": n_sidecars, "cleaned": True},
+    )
+
+
 # ----------------------------------------------------------------------------- cheap re-run
 
 
@@ -2010,6 +2036,10 @@ def validate_features(
             else:
                 tmp_fresh.append(child)
     na_path = split_dir / NOT_APPLICABLE_FILE
+
+    # ---- E_FEATURES_CLEANED: the cleanup policy dropped every tar of this split (its sidecars and record stay)
+    if sidecar_paths and not tar_paths and (split_dir / CLEANED_FILE).exists():
+        return _report_cleaned(split_dir, split_name, fx, len(sidecar_paths))
 
     # ---- E_FORMAT: sidecars
     shards: list[_Shard] = []

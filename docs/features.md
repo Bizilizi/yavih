@@ -23,8 +23,13 @@ an older format is never reused: validation re-derives it.
   _meta.json                written only by finalize, when validation passes
   NOT_APPLICABLE.json       written instead of shards when the bridge does not apply to the benchmark
   shard-{i:06d}.claim       exists while a writer holds shard i
-  _stale/<utc>/             shards, layouts and _meta.json of another configuration, moved aside (never deleted)
+  _stale/<utc>/             shards, layouts and _meta.json of another configuration, moved aside
+  _cleaned.json             the cleanup record: the tars were deleted after every probe of the run was done
 ```
+
+`_stale/` is never deleted by extraction or validation; the cleanup policy (`[features] keep`,
+[execution: cleanup](execution.md#cleanup)) deletes it, with the shard tars, once every probe of the run directory is
+done. The sidecars stay, so the extraction still counts as done (`cleaned`) until a probe needs the tars again.
 
 By convention `<run_dir>` is `<runs root>/<benchmark>/<model>/<reading>/` (see [execution](execution.md)). Nothing
 reads the benchmark, model or reading back from the path: they are recorded in every sidecar.
@@ -340,7 +345,8 @@ Running a unit `--shard i/n` again is always safe. In order, it:
 The resumption keys (`RESUME_MATCH_KEYS`) are `benchmark.manifest_hash`, `benchmark.input_hash`, `model`,
 `reading`, `bridge.describe_sha256`, `features.dtype` and `features.pos_mode`. A shard written under another
 bridge configuration (another tap, rule, precision or dtype under the same model name) therefore never mixes with
-the current one. Nothing is ever deleted: foreign files are moved to `_stale/`.
+the current one. Resumption never deletes anything: foreign files are moved to `_stale/`. A sidecar whose tar the
+cleanup policy deleted fails the skip check (no tar), so the shard is moved aside and written again.
 
 In the sweeps, a tar without a sidecar and other units' tmp files are left alone, because a sibling unit may be
 between its tar rename and its sidecar write. Sibling array tasks sweeping the same files concurrently skip what
@@ -493,3 +499,4 @@ class FeatureReader:
 | `yavih features inspect <dir>` | diagnostics over the validation sample: per-dimension std histogram, near-constant dimensions, mean absolute value, position summary, dead token positions. It decides nothing. |
 | `yavih features diff <a> <b>` | compares the rows present in two split directories: `rows_compared`, `max_abs`, `max_rel_l2` and a verdict (`identical`, `within_tol`, `differs`, `incompatible`, `empty`) |
 | `yavih features stage <features/> <scratch>` | copies tars, sidecars, `_meta.json` and `NOT_APPLICABLE.json` (never tmp files) to local scratch for `eval run --scratch`, after checking free space (exit 3 when short) |
+| `yavih features keep [<benchmark>/<model>/<reading>...] [--all \| --none] [--reason TEXT]` | prints the cleanup policy (`[features] keep`), or records in the project file which run directories keep their features after their probes ([configuration](configuration.md#features)) |

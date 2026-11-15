@@ -83,11 +83,11 @@ def test_cli_help_lists_the_full_command_tree(capsys):
     # files / show / prepare and bridge new: one command surface for shipped files
     assert subs("bench") == {"list", "info", "extensions", "path", "fetch", "update", "verify", "lint", "new", "files", "show", "prepare", "trial", "conformance", "hash", "migrate", "snapshot"}
     assert subs("bridge") == {"check", "new"}
-    assert subs("features") == {"validate", "inspect", "diff", "stage"}
+    assert subs("features") == {"validate", "inspect", "diff", "stage", "keep"}  # keep: the cleanup policy
     assert subs("eval") == {"run"}
     assert subs("report") == {"build", "paired"}
     assert subs("config") == {"show", "get"}
-    assert subs("plan") == {"init", "build", "status", "calibrate", "run"}  # run --local
+    assert subs("plan") == {"init", "build", "status", "calibrate", "run", "clean"}  # run --local
     assert subs("suite") == {"list", "show", "new", "missing"}
     assert cli.main(["--help"]) == 0
     out = capsys.readouterr().out
@@ -162,6 +162,8 @@ def test_validation_codes_match_the_documented_code_table():
         "N_RULE_CUSTOM",
         # a split whose shards were written by different bridge files
         "W_SOURCE_SHA",
+        # a split whose tars the [features] keep cleanup deleted after its probes
+        "E_FEATURES_CLEANED",
     }
     assert CODES["N_RULE_CUSTOM"] == "note"  # opting out is legitimate, never penalized
     assert set(CODES) == expected

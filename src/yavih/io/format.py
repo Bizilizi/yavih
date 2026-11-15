@@ -32,6 +32,7 @@ __all__ = [
     "parse_member_name",
     "NOT_APPLICABLE_FILE",
     "META_FILE",
+    "CLEANED_FILE",
     "CONSTANT_POS_MEMBER",
     "MEMBER_RE",
     "STALE_DIR",
@@ -50,6 +51,9 @@ SHARD_BYTES_CAP: int = 2 * 1024**3
 
 NOT_APPLICABLE_FILE = "NOT_APPLICABLE.json"
 META_FILE = "_meta.json"
+#: The cleanup record of a split whose shard tars were dropped by the ``[features] keep`` policy (``yavih.plan.clean``):
+#: its sidecars stay, so a finished extraction still counts as done (``cleaned``) until a probe needs the tars again.
+CLEANED_FILE = "_cleaned.json"
 CONSTANT_POS_MEMBER = "_pos.npy"
 #: Mismatching shards are moved to ``_stale/<utc>/``.
 STALE_DIR = "_stale"

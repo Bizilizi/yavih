@@ -72,7 +72,9 @@ neither). At most 20 findings per code are kept; the 21st becomes one "further f
 3. **`NOT_APPLICABLE.json`**: alone, the split is reported complete and not applicable (nothing else is checked);
    next to shards, `E_NA_AND_SHARDS`.
 4. **Shard set** (`E_SHARD_SET`): one `n`, no index missing or out of range, every sidecar with its tar and every
-   tar with its sidecar. Missing indices are listed as `--shard i/n`.
+   tar with its sidecar. Missing indices are listed as `--shard i/n`. A split whose every tar the cleanup policy
+   deleted (`_cleaned.json` next to the sidecars) is one `E_FEATURES_CLEANED` instead, checked right after the
+   inventory, and nothing else is checked.
 5. **Identity of the benchmark**: `E_HASH_MANIFEST`, `E_HASH_INPUT`.
 6. **Tiling** (`E_RANGE_TILING`), on a complete shard set only. A capped run (the split's `_layout.json` has
    `sample: [lo, hi]`, written by `extract --rows lo:hi`) has one shard that must cover exactly `[lo, hi)`; its
@@ -161,6 +163,7 @@ Every code `validate_features` can report. "waivable" says whether a [waiver](#w
 | `E_FORMAT` | error | no | a sidecar is unreadable, not an object, lacks required keys, has a malformed `shard` or `features` block, a `shard.index` other than its file name, or a `format_version` it cannot read (`unsupported format_version N (this yavih reads [4, 5]); re-extract`); a malformed `outputs` block; a declared output schema that is not the benchmark's or does not resolve; `NOT_APPLICABLE.json` is unreadable; `N` or `D` is not an integer of at least 1 for the feature matrix |
 | `E_NA_AND_SHARDS` | error | no | `NOT_APPLICABLE.json` exists together with shards |
 | `E_SHARD_SET` | error | no | sidecars disagree on `n`; a shard index is missing or not below `n`; a sidecar without its tar or a tar without its sidecar; no sidecar at all |
+| `E_FEATURES_CLEANED` | error | no | the split holds sidecars, no tar and the cleanup record `_cleaned.json`: the `[features] keep` policy deleted the tars after every probe finished ([execution: cleanup](execution.md#cleanup)); re-extract to read the features again. Nothing else is checked and `_meta.json` is left as it is |
 | `W_STALE_TMP` | warning | no | a tmp file older than 36 h: a killed task's leftover; delete it or run its shard again |
 | `E_RANGE_TILING` | error | no | on a complete shard set, the `shard.rows` ranges sorted by index do not tile `[0, n_rows)` of the split exactly (empty ranges allowed), or a range's start is not a multiple of `shard.batch_size`; for a capped run (`_layout.json` `sample: [lo, hi]`), a shard's range is not `[lo, hi)` |
 | `E_HASH_MANIFEST` | error | no | a sidecar's `benchmark.manifest_hash` differs from the benchmark's (without a benchmark: differs across sidecars) |

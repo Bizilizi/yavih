@@ -275,7 +275,11 @@ unapplied.
 
 Every artefact carries the hashes it was produced under and the yavih version and commit that wrote it.
 Every write goes through a temporary file and an atomic rename on the same filesystem; a DONE marker
-whose hashes mismatch is treated as absent and the stale output is moved aside, never deleted. A
+whose hashes mismatch is treated as absent and the stale output is moved aside, never deleted by the unit
+that finds it. The one deliberate deletion is the cleanup policy: once every probe of a run directory is
+done, its feature tars and moved-aside copies are deleted (unless the project's `[features] keep` says
+otherwise), while the sidecars, the validation record and the results that name them stay. Features are
+cheap to recompute and expensive to keep; a record of what produced a number is not. A
 permanent incompatibility (pooled features on a dense readout, a model that cannot read a stream) is a
 recorded `not_applicable` with exit 0, never a resubmitted failure and never a number.
 

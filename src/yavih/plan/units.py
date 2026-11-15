@@ -31,6 +31,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from yavih import hashing
+from yavih.io.format import CLEANED_FILE
 from yavih.io.sidecar import identity_value
 from yavih.plan import estimate
 from yavih.plan.matrix import (
@@ -57,6 +58,9 @@ __all__ = [
     "identity_cmd",
     "INPUTS_SCHEME",
     "check_done",
+    "resolve_done",
+    "needed_by_pending_probe",
+    "CLEANED",
     "last_record",
     "is_stale",
     "load_calibration",
@@ -88,6 +92,10 @@ def is_dense(readout: str) -> bool:
     except registry.UnknownScorer:
         return False
 NOT_APPLICABLE_FILE = "NOT_APPLICABLE.json"
+#: :func:`check_done` of an extract unit whose sidecar matches but whose tar the cleanup policy dropped
+#: (``features/<split>/_cleaned.json``, ``yavih.plan.clean``): done while every probe that reads it is done
+#: (:func:`resolve_done`), to run again once one of them is not.
+CLEANED = "cleaned"
 #: Placeholder for the report unit's benchmark/bridge/model/reading fields (it spans every entry).
 REPORT_KEY = "_report"
 LOGS_DIR = "logs"
@@ -378,7 +386,7 @@ def _unit_dsha(unit: Unit) -> str | None:
 
 def check_done(unit: Unit) -> str | None:
     """The unit's DONE marker exists *and its recorded hashes equal the
-    unit's*. Returns ``"done"`` / ``"not_applicable"`` or ``None`` (missing or mismatching → not done).
+    unit's*. Returns ``"done"`` / ``"not_applicable"`` / ``"cleaned"`` or ``None`` (missing or mismatching → not done).
 
     extract: ``shard-{i}.json`` with equal ``benchmark.input_hash`` (which folds the manifest hash in; read through
     the folder changelog's ``supersedes_input``), ``model``, ``reading``, ``bridge.describe_sha256`` (= the profile's), ``shard.index``
@@ -387,6 +395,11 @@ def check_done(unit: Unit) -> str | None:
     ``model``, ``reading`` and ``describe_sha256`` — a reconfigured bridge (same model name, another
     configuration) is re-extracted and re-probed; ``features_fingerprint`` is unknown at plan time and is the
     probe's own gate. report: ``DONE`` present.
+
+    ``"cleaned"`` (:data:`CLEANED`): an extract unit whose matching sidecar is still there but whose tar the cleanup
+    policy dropped (the split holds ``_cleaned.json``). Whether that counts as done depends on the probes that read it:
+    :func:`resolve_done`. A missing tar without the cleanup record is not this state: it stays ``"done"`` here and
+    validation reports it (``E_SHARD_SET``).
 
     A unit without a recorded ``describe_sha256`` (a hand-written record) compares the other keys only.
     """
@@ -406,6 +419,10 @@ def check_done(unit: Unit) -> str | None:
                 and _get(rec, "shard.n") == unit.shard[1]
             )
             if ok:
+                split_dir = os.path.dirname(done_path)
+                if (not os.path.exists(done_path[: -len(".json")] + ".tar")
+                        and os.path.exists(os.path.join(split_dir, CLEANED_FILE))):
+                    return CLEANED
                 return "done"
         na = _load_json(os.path.join(resolve_path(unit, unit.out), NOT_APPLICABLE_FILE))
         if (na is not None and na.get("status") == "not_applicable" and na.get("model") == unit.model
@@ -433,6 +450,37 @@ def check_done(unit: Unit) -> str | None:
             return "not_applicable"
         return "done"
     return "done" if os.path.exists(done_path) else None
+
+
+def resolve_done(units: list[Unit], *, stale: bool = True) -> dict[str, str | None]:
+    """:func:`check_done` of every unit, ``None`` for a stale marker when ``stale`` (:func:`is_stale`: what ``plan build
+    --pending`` reruns), with the cleanup policy's ``cleaned`` extract units resolved against the probes in ``units``:
+    a ``cleaned`` unit stays ``"cleaned"`` (done) while at least one probe of ``units`` depends on it and every such
+    probe is done, and becomes ``None`` (to run again: the probe needs the tars) otherwise."""
+    states: dict[str, str | None] = {}
+    for u in units:
+        got = check_done(u)
+        if got is not None and stale and is_stale(u):
+            got = None
+        states[u.id] = got
+    for u in units:
+        if states[u.id] == CLEANED and needed_by_pending_probe(u, units, states):
+            states[u.id] = None
+    return states
+
+
+def needed_by_pending_probe(unit: Unit, units: Any, states: dict[str, str | None] | None = None) -> bool:
+    """Whether the cleaned extract ``unit`` must be extracted again: a probe of ``units`` that depends on it is not done
+    (``states`` when given, else :func:`check_done` and :func:`is_stale`), or no probe of ``units`` depends on it at all
+    (a pending extract file without its probes: the unit was planned because it is needed)."""
+    dependents = [p for p in units if p.kind == "probe" and unit.id in p.depends_on]
+    if not dependents:
+        return True
+    for p in dependents:
+        got = states.get(p.id) if states is not None and p.id in states else check_done(p)
+        if got is None or (states is None and is_stale(p)):
+            return True
+    return False
 
 
 def last_record(unit: Unit) -> dict | None:
@@ -784,7 +832,8 @@ def plan(
     matrix = load_matrix(matrix_path)
     units = build_units(matrix, shard_minutes=shard_minutes, warnings=warnings, sample=sample)
     if pending:
-        units = [u for u in units if check_done(u) is None or is_stale(u)]
+        states = resolve_done(units)  # a cleaned extraction comes back when a pending probe needs its tars
+        units = [u for u in units if states[u.id] is None]
     if kind is not None:
         units = [u for u in units if u.kind == kind]
     return units

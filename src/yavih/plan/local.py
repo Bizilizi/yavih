@@ -4,7 +4,9 @@ The local runner for a workstation, a single GPU box, a Kubernetes pod or an int
 driver loop, no ``--deps`` bookkeeping. Every unit goes through ``yavih exec``'s own checks (dependencies, DONE,
 deadline headroom, records, logs), so a plan can be finished by a mix of ``plan run --local`` and SLURM arrays.
 
-- A unit starts once every ``depends_on`` unit has a matching DONE marker (extract → probe → report).
+- A unit starts once every ``depends_on`` unit has a matching DONE marker (extract → probe → report). An extract unit
+  whose tars the ``[features] keep`` policy dropped counts as done while every probe of the plan that reads it is
+  done; when one of them is not, it runs again first.
 - ``--slots K``: up to K units at a time, each a separate ``yavih exec --id`` process on the ``g``-th inherited GPU
   (``exec.device_masks``); ``K = 1`` runs the units one after another in this process.
 - A unit that ends ``failed`` / ``misconfigured`` / ``not_ready`` is not retried in this run, and its dependents are
@@ -39,7 +41,7 @@ def run_local(plan_path: str, *, slots: int = 1, deadline: str | float | None = 
     ``{units: [last…], counts: {status: n}, blocked: [id], not_started: [id], already_done, total, status, exit_code}``: exit 0 when
     every unit is done, skipped or not_applicable, else the worst unit's code (3 when units are only blocked or left
     unstarted behind a not-ready dependency, 4 when the deadline stopped the run)."""
-    from yavih.plan.units import check_done, read_plan
+    from yavih.plan.units import CLEANED, check_done, read_plan, resolve_done
 
     if slots < 1:
         raise X.ExecError("--slots must be >= 1")
@@ -54,8 +56,10 @@ def run_local(plan_path: str, *, slots: int = 1, deadline: str | float | None = 
 
     finished: set[str] = set()
     pending: list[Unit] = []
+    # a cleaned extraction ([features] keep) counts as done unless a probe of the plan that reads it is not done
+    states = resolve_done(list(by_id.values()), stale=False)
     for u in units:
-        if check_done(u) is not None:
+        if states[u.id] is not None:
             finished.add(u.id)
         else:
             pending.append(u)
@@ -78,7 +82,8 @@ def run_local(plan_path: str, *, slots: int = 1, deadline: str | float | None = 
                 state = "wait"
                 continue
             dep = by_id.get(d)
-            if dep is not None and d not in results and check_done(dep) is not None:  # a --deps unit done elsewhere
+            # a --deps unit done elsewhere (a cleaned one cannot serve a probe that still has to run)
+            if dep is not None and d not in results and check_done(dep) not in (None, CLEANED):
                 finished.add(d)
                 continue
             # not in the plan, or a --deps unit that is not done: this run cannot produce it (exec would say not_ready)

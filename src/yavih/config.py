@@ -98,6 +98,7 @@ __all__ = [
     "git_root",
     "project_benchmarks_dir",
     "project_config_path",
+    "normalize_keep_pattern",
 ]
 
 DATA_ENV_PREFIX = "YAVIH_DATA__"
@@ -146,7 +147,11 @@ _PLACEHOLDER = re.compile(r"\$\{(data\.root|datasets\.([a-z][a-z0-9_]*))\}")
 #: Allowed scalar keys per table (``[data]`` and ``[datasets]`` are free-form, checked separately).
 _ROOT_TABLES = ("home", "runs", "results", "scratch")
 _RESOURCE_KEYS: dict[str, type] = {"ram_budget_gb": float, "cpus": int, "decode_workers": int}
-_TOP_TABLES = (*_ROOT_TABLES, "data", "datasets", "resources", "launchers", "project", "site", "catalog")
+_TOP_TABLES = (*_ROOT_TABLES, "data", "datasets", "resources", "launchers", "project", "site", "catalog", "features")
+#: ``[features]``: the cleanup policy. ``keep = false`` (the default) lets ``yavih exec`` drop a run directory's feature
+#: shards once every probe of it is done; ``true`` keeps every run's features; a list of ``<benchmark>/<model>/<reading>``
+#: globs keeps the matching run directories (``yavih.plan.clean``, ``yavih features keep``).
+_FEATURES_KEYS: tuple[str, ...] = ("keep",)
 #: ``[catalog]``: where ``yavih bench fetch`` reads the index (``url``) and the repository archive at a commit
 #: (``archive``, with ``{repo}`` and ``{commit}`` placeholders); ``yavih.catalog`` holds the defaults.
 _CATALOG_KEYS: tuple[str, ...] = ("url", "archive")
@@ -795,6 +800,25 @@ class Settings:
         """Every named launcher of the active layers, ``name -> command``."""
         return {k[1]: os.path.expanduser(str(v.value)) for k, v in sorted(self.values.items()) if k[0] == "launchers"}
 
+    def features_keep(self) -> bool | tuple[str, ...]:
+        """``[features] keep``: ``False`` (the default: drop a run's feature shards once every probe of it is done),
+        ``True`` (keep every run's features) or the ``<benchmark>/<model>/<reading>`` globs of the run directories to
+        keep."""
+        v = self.get("features", "keep")
+        return False if v is None else v.value
+
+    def features_keep_source(self) -> str:
+        v = self.get("features", "keep")
+        return v.source if v is not None else "default"
+
+    def keeps_features(self, benchmark: str, model: str, reading: str) -> bool:
+        """Whether the policy keeps the features of the run directory ``<benchmark>/<model>/<reading>``."""
+        keep = self.features_keep()
+        if isinstance(keep, bool):
+            return keep
+        name = f"{benchmark}/{model}/{reading}"
+        return any(fnmatch.fnmatchcase(name, p) for p in keep)
+
     def any_site_launcher(self) -> bool:
         """Whether a DEFAULT ``launcher`` is defined anywhere in the configuration: the active layers (``launcher``,
         ``YAVIH_LAUNCHER``), or the top level or ANY ``[site.<id>]`` table of a config file, active here or not. A
@@ -932,6 +956,8 @@ class Settings:
         vals["launcher"] = {"value": self.launcher(), "source": lv.source if lv else "unset (the unit's own launcher, else the current python)"}
         for name, cmd in self.launchers().items():
             vals[f"launchers.{name}"] = {"value": cmd, "source": self.get("launchers", name).source}
+        keep = self.features_keep()
+        vals["features.keep"] = {"value": keep if isinstance(keep, bool) else list(keep), "source": self.features_keep_source()}
         project: dict[str, Any] | None = None
         pf = self.project_file()
         if pf is not None:
@@ -1096,6 +1122,26 @@ def _schema_entries(
                     col.strict("W_CONFIG_TYPE", f"{label}: [catalog] {k} must be a non-empty string (a URL)")
                     continue
                 out.append((("catalog", k), Value(v.strip(), src("catalog", k))))
+        elif table == "features":
+            for k, v in body.items():
+                if k not in _FEATURES_KEYS:
+                    close = difflib.get_close_matches(str(k), list(_FEATURES_KEYS), n=1, cutoff=0.6)
+                    col.strict("W_CONFIG_UNKNOWN", f"{label}: unknown key [features] {k}" + (f", did you mean {close[0]!r}?" if close else "")
+                               + f"; known: {', '.join(_FEATURES_KEYS)}")
+                    continue
+                if isinstance(v, bool):
+                    out.append((("features", "keep"), Value(v, src("features", "keep"))))
+                    continue
+                if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
+                    col.strict("W_CONFIG_TYPE", f"{label}: [features] keep must be true, false or a list of "
+                                                f"\"<benchmark>/<model>/<reading>\" globs, got {v!r}")
+                    continue
+                try:
+                    pats = tuple(normalize_keep_pattern(x) for x in v)
+                except ValueError as e:
+                    col.strict("W_CONFIG_TYPE", f"{label}: [features] keep: {e}")
+                    continue
+                out.append((("features", "keep"), Value(pats, src("features", "keep"))))
         elif table == "datasets":
             for k, v in body.items():
                 if not _NAME_RE.match(str(k)):
@@ -1121,6 +1167,15 @@ def _schema_entries(
                 else:
                     col.strict("W_CONFIG_UNKNOWN", f"{label}: unknown key [data] {k}; [data] takes 'root' and [data.<benchmark>] tables")
     return out
+
+
+def normalize_keep_pattern(pattern: str) -> str:
+    """A ``[features] keep`` entry as a full ``<benchmark>/<model>/<reading>`` glob: ``k400`` → ``k400/*/*``,
+    ``k400/mymodel`` → ``k400/mymodel/*``. ``ValueError`` for an empty part or more than three parts."""
+    parts = str(pattern).strip().split("/")
+    if not 1 <= len(parts) <= 3 or any(not p.strip() for p in parts):
+        raise ValueError(f"{pattern!r} is not a <benchmark>/<model>/<reading> glob (e.g. \"k400/*/*\", \"*/mymodel/*\")")
+    return "/".join([p.strip() for p in parts] + ["*"] * (3 - len(parts)))
 
 
 def _coerce_resource(key: str, v: Any) -> int | float:

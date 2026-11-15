@@ -137,7 +137,10 @@ repository-wide `git grep`.
 
 Every write goes through a temporary file and `os.replace` on the same filesystem. Units are idempotent:
 a DONE marker carries the hashes it was produced under, a mismatching marker counts as absent, and stale
-output is moved to `_stale/`, never deleted. Every artefact records the yavih version and source commit
+output is moved to `_stale/`, never deleted. The only code that deletes run output is the cleanup policy
+(`yavih.plan.clean`, `[features] keep`): feature tars and `_stale/` of a run directory whose probes are all done,
+after writing the split's `_cleaned.json`; a sidecar without its tar is then `cleaned`, not done, for any unit that
+still needs it. Every artefact records the yavih version and source commit
 that wrote it (`versions.writer_stamp()`).
 
 ## Testing

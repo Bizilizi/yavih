@@ -276,7 +276,8 @@ One JSON object per line, sorted keys:
 - The run directory is `<out>/<benchmark>/<model>/<reading>/` with the canonical benchmark name.
 - `id`, `inputs_hash` and the hashes are defined in [hashing](hashing.md). An extract unit's id,
   `inputs_hash` and DONE check key on the benchmark's `input_hash`, so a scoring-side edit of a
-  benchmark re-plans its probes and no extraction. `inputs_hash` covers only what a unit computes:
+  benchmark re-plans its probes and no extraction (except shards whose tars the cleanup policy already
+  deleted: those come back for the new probes, [cleanup](#cleanup)). `inputs_hash` covers only what a unit computes:
   host paths, the launcher, `env`, `cwd`, worker counts, `--results`, `--waive` and `needs` are left
   out, so moving the project or recalibrating never makes a finished unit stale.
 - A probe unit carries `protocol_hash`, `probe_hash` and `eval_hash`; its `done` is
@@ -306,7 +307,8 @@ yavih plan build matrix.yaml --pending --kind extract --format count   # prints 
 ```
 
 `--pending` keeps only units whose DONE marker is missing or does not match, or whose last record's
-`inputs_hash` differs from the unit's. `--kind` filters after that. With `--out`, `--format count
+`inputs_hash` differs from the unit's, plus the `cleaned` extract units ([cleanup](#cleanup)) that a pending probe
+needs again. `--kind` filters after that. With `--out`, `--format count
 --json` adds the file's `sha256` for `exec --plan-sha`.
 
 `--sample N` plans a capped run ([below](#capped-runs-plan-build---sample-n)).
@@ -402,7 +404,9 @@ For one unit, `exec`:
      `SLURM_TMPDIR`) is checked for space (exit 3 when short) and stale `<unit_id>.<host>.<pid>`
      scratch directories (dead pid, or older than 36 h) are swept. Without a scratch root the probe
      reads the features in place (memmap backend, `W_SIZE`), as `eval run` does;
-7. maps the outcome to a status and an exit code, and writes the final record to
+7. after a probe unit that ended `done`, `skipped` or `not_applicable`, applies the cleanup policy to its run
+   directory ([cleanup](#cleanup)); the record's `cleanup` key says what happened;
+8. maps the outcome to a status and an exit code, and writes the final record to
    `<out>/logs/last.json` and `<out>/logs/last.<id>.json`; it prints
    `[yavih] unit <id> <kind> <status> wall_s=… exit=N` on stderr.
 
@@ -419,6 +423,40 @@ For one unit, `exec`:
 
 `yavih exec` imports only the standard library for extract units, so it can run from a small
 environment while the launcher starts the model environment.
+
+### Cleanup
+
+Features are the bulk of a run, and most are read by one probe and never again. By default
+(`[features] keep = false`, [configuration](configuration.md#features)) `exec` deletes them as soon as they have
+served. After a probe unit finishes, it checks the run directory `<runs root>/<benchmark>/<model>/<reading>/`:
+
+- every probe unit of the plan with that run directory has a matching DONE marker that is not stale;
+- no other unit of the run directory has a `running` record that may still be alive (an extract shard being
+  written again, a probe of another plan); probes whose DONE already matches are finishing, so they don't count;
+- the policy does not keep it (`keep = true`, or a `"<benchmark>/<model>/<reading>"` glob that matches).
+
+Then, per split, it writes `features/<split>/_cleaned.json` (`{cleanups: [{cleaned, by, tars, bytes, stale_bytes,
+policy, writer}]}`) and deletes the shard tars and `features/<split>/_stale/`. The sidecars, `_layout.json`,
+`_meta.json`, `NOT_APPLICABLE.json`, `*.tmp` files, the logs and `probe/` (results and DONE markers) stay. The unit's
+record gets `cleanup: {status: dropped | nothing | kept, run_dir, splits, files, bytes, policy, message}`, and stderr
+gets one line saying how much was freed and how to keep features instead. A failure while cleaning is logged and
+recorded (`cleanup.status: error`); the probe's result stands.
+
+An extract unit whose sidecar matches but whose tar was deleted this way is `cleaned`. It counts as done while every
+probe of the plan that reads it is done. When one of them is not (another seed, a bumped protocol or probe version),
+`plan build --pending` lists the shard again, `plan run --local` and `exec` extract it again before the probe, and a
+probe started over a cleaned dependency exits 3 (`not_ready`) saying so. Features come back by re-extraction, never
+silently from a partial set. `features validate` on a cleaned split reports `E_FEATURES_CLEANED`, and `eval run`
+refuses one with the same code (exit 3).
+
+`yavih plan clean <plan.jsonl> [--root DIR] [--dry-run]` applies the same rule to every run directory of a plan. Use it
+for runs probed with `eval run` by hand, or finished before the policy applied. `--dry-run` lists what would be
+deleted and how much it frees. The result is `{run_dirs: [{run_dir, benchmark, model, reading, status, why, files,
+bytes}], dropped, would_drop, kept, not_finished, nothing, files, bytes, dry_run}`.
+
+To keep features that will be read again (`features inspect` / `diff`, another probe soon, a debugging session), record
+it in the project before the probes finish: `yavih features keep <benchmark>/<model>/<reading> --reason "..."`
+(`--all` for everything). Features already deleted come back only by re-extraction.
 
 ### Deadlines and margins
 
@@ -458,7 +496,7 @@ its own clock, with a checkpoint, before the scheduler's TERM arrives.
 
 | kind | marker | written when |
 |---|---|---|
-| extract | `features/<split>/shard-{i:06d}.json` (the sidecar), or `features/<split>/NOT_APPLICABLE.json` | the tar is renamed into place and the sidecar is complete |
+| extract | `features/<split>/shard-{i:06d}.json` (the sidecar), or `features/<split>/NOT_APPLICABLE.json`; a sidecar whose tar the cleanup deleted (`_cleaned.json` beside it) is `cleaned` ([cleanup](#cleanup)) | the tar is renamed into place and the sidecar is complete |
 | probe | `probe/<eval_hash12>/seed<k>/DONE` = `{result_sha256, protocol_hash, probe_hash, eval_hash, model, reading, describe_sha256, features_fingerprint, yavih_version, created}` | `result.json` passed its schema check with status `ok` or `not_applicable` |
 | report | `<out>/_report/DONE` | `report.md` and `report.json` are written |
 
@@ -486,7 +524,8 @@ refusal. `streak` counts consecutive attempts that ended with the same non-zero 
 ## `yavih plan status`
 
 `yavih plan status plan.jsonl [--root DIR]` decides each unit's state from its outputs first (a
-matching DONE marker → `done` / `not_applicable`) and from its last record otherwise:
+matching DONE marker → `done` / `not_applicable`; an extract unit whose tars the cleanup deleted → `cleaned` while
+every probe reading it is done, else from its record, usually `pending`) and from its last record otherwise:
 
 | state | from the record |
 |---|---|
@@ -500,7 +539,7 @@ matching DONE marker → `done` / `not_applicable`) and from its last record oth
 `repeated` lists units whose last three or more attempts ended with the same exit 3 or 4: resubmitting
 them again will not help, and their message says what to fix. Text mode prints the totals, one line
 per kind and the units that need attention with the last line of their message; `--json` lists every
-unit (`{done, pending, running, not_ready, preempted, misconfigured, failed, not_applicable, total,
+unit (`{done, pending, running, not_ready, preempted, misconfigured, failed, not_applicable, cleaned, total,
 by_kind, stale_running, repeated, units}`).
 
 ## Local runs
@@ -517,7 +556,8 @@ yavih plan run plan.jsonl --local --deadline +8h     # stop starting units 8 h f
 yavih plan status plan.jsonl
 ```
 
-- A unit starts once all its `depends_on` units are done (extract → probe → report).
+- A unit starts once all its `depends_on` units are done (extract → probe → report). A `cleaned` extract unit
+  counts as done unless a probe of the plan that reads it is not; then it runs again first.
 - With `--slots K` the units run as `yavih exec --id` processes, K at a time, each with
   `--cpus` or the usable CPUs divided by K.
 - A unit that ends `failed`, `misconfigured`, `not_ready`, `deadline` or `preempted` is not retried in
