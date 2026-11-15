@@ -171,10 +171,16 @@ isolation:
 
 `yavih bench prepare av_syncbench 03` prints `manifest matches (dc5444fb…)` with `staged: 37743, missing: 0`.
 `yavih bench verify av_syncbench --census` then reports status verified, `test 37743/37743` present, a successful read
-sample and the media-info table written (3 494 mp4 read for two streams, 37 743 wav). Eval coverage below
+sample and the media-info table written (44 731 cells: 3 494 mp4 read for two streams, 37 743 wav; the census
+probes every cell, about 20 minutes at 35 cells/s on a busy network file system). Eval coverage below
 `min_eval_coverage: 0.95` makes the scorer refuse; a partial extraction is the usual cause.
 
 ## Gotchas
+
+- `yavih bridge check <bridge> --bench av_syncbench --synthetic` is refused with `E_SYNTHETIC`: the core's synthetic
+  check covers the core scorers only, not this folder's own pairwise scorer. Check the bridge on the staged data
+  (`yavih bridge check <bridge> --bench av_syncbench --out <profile>`, the line `plan init` prints); the folder's own
+  synthetic stand-in runs through `yavih bench trial av_syncbench --synthetic`, with its oracle bridge, not yours.
 
 - Decode the mp4's audio track to **16-bit PCM at its own rate and layout first** (PyAV `AudioResampler(format="s16")`,
   as `bridge_template.py` `_pcm16` does), then downmix and resample. `bridge check` hands the isolation gate a
