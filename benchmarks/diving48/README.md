@@ -3,14 +3,14 @@
 TODO: [Paper](https://…) · [Homepage](https://…) · [Dataset](https://…) · [Licence](https://…) · [setup.md](setup.md)
 
 <!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance diving48 --write) -->
-| At a glance | diving48 |
+| At a glance | Diving48 |
 |---|---|
-| **Task** | Video classification · visual |
+| **Task** | Video classification · visual, temporal |
 | **Modality** | Video |
-| **Size** | 20 000 train / 24 777 val · 174 classes |
-| **Headline** | Accuracy (`acc`) · chance 0.57 % |
-| **Data** | Official portal; needs a signed licence · 4 GB of media · how: [setup.md](setup.md) |
-| **Licence** | Something-Something v2 (TwentyBN, now distributed by Qualcomm Technologies): free download after registration and acceptance of the dataset licence on the Qualcomm developer portal; research use under those terms, no redistribution of the … |
+| **Size** | 15 027 train / 1 970 test · 48 classes |
+| **Headline** | Accuracy (`acc`) · chance 2.1 % |
+| **Data** | Public download; fetched unattended · 9 GB of media · how: [setup.md](setup.md) |
+| **Licence** | No licence is stated on the official Diving48 page (checked 2026-11-15); the clips are segments of online videos of diving competitions, distributed by UCSD SVCL for research. Cite the ECCV 2018 paper. |
 | **Protocol** | Version 1 · scorer `clf` · needs yavih >=1.1,<2 · `yavih bench fetch diving48` |
 <!-- yavih:glance end -->
 
