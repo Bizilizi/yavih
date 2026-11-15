@@ -13,14 +13,19 @@ file). Changes: ``youtube-dl`` (unmaintained) -> ``yt-dlp`` (``$YTDLP``, else ``
 ``python -m yt_dlp``); the command lists run without a shell; one download per YouTube video, then every clip of that
 video is trimmed from it (560 videos hold the 713 clips); joblib -> a thread pool; the clips are written flat as
 ``<media_root>/clips/<clip_id>.mp4`` (``clip_id`` = ``<youtube_id>_<start:06d>_<end:06d>``, the names of the
-release's ``mimetics_v1.0_objectsceneannot.txt``); a per-clip report is written. The yt-dlp format (``-f mp4``) and
-the ffmpeg trim (``-ss <start> -t <end - start> -c:v libx264 -c:a copy``) are the crawler's.
+release's ``mimetics_v1.0_objectsceneannot.txt``); a per-clip report is written; the trim adds the
+bitstream filter ``-bsf:v setts=pts=PTS-STARTPTS:dts=DTS-STARTPTS`` (ffmpeg >= 4.4), which shifts the encoded
+packets' timestamps so the first video frame of every clip is at pts 0 and changes no frame (without it about one
+clip in five starts at 0.016-0.047 s, the first source frame after ``time_start``, and a frame rule evaluated from 0
+misreads it), and a clip whose first video frame is still not at 0 is reported ``trim_failed`` and not staged. The yt-dlp format
+(``-f mp4``) and the rest of the ffmpeg trim (``-ss <start> -t <end - start> -c:v libx264 -c:a copy``, output seeking)
+are the crawler's.
 
 YouTube videos disappear: a clip whose video is gone is reported ``unavailable`` and is simply not staged
 (``yavih bench verify mimetics`` counts the coverage). Re-running skips clips already staged.
 
 Usage: yavih bench prepare mimetics 02 [-- --root ROOT --workers 4 --limit N]
-Needs yt-dlp (``pip install yt-dlp==2026.10.26``) and ffmpeg with libx264.
+Needs yt-dlp (``pip install yt-dlp==2026.10.26``), ffmpeg >= 4.4 with libx264, and ffprobe.
 """
 
 from __future__ import annotations
@@ -79,7 +84,9 @@ def trim_clip(tmp_filename, output_filename, start_time, end_time):
     """The crawler's trim half of ``download_clip``: ``(status, log)``."""
     part = output_filename + ".part.mp4"
     command = ["ffmpeg", "-y", "-i", tmp_filename, "-ss", str(start_time), "-t", str(end_time - start_time),
-               "-c:v", "libx264", "-c:a", "copy", "-threads", "1", "-loglevel", "panic", part]
+               "-c:v", "libx264", "-c:a", "copy",
+               "-bsf:v", "setts=pts=PTS-STARTPTS:dts=DTS-STARTPTS",  # yavih: the first video frame at pts 0
+               "-threads", "1", "-loglevel", "panic", part]
     try:
         subprocess.check_output(command, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as err:
@@ -88,8 +95,22 @@ def trim_clip(tmp_filename, output_filename, start_time, end_time):
         return False, err.output.decode("utf-8", "replace").strip() or "ffmpeg failed"
     if not os.path.exists(part) or os.path.getsize(part) == 0:
         return False, "ffmpeg wrote no output"
+    start = video_start(part)
+    if start is None or abs(start) > 1e-3:
+        os.remove(part)
+        return False, f"first video frame at {start} s, not 0"
     os.replace(part, output_filename)
     return True, "Downloaded"
+
+
+def video_start(path):
+    """``start_time`` of the first video stream (ffprobe), or None when it cannot be read."""
+    try:
+        out = subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                       "stream=start_time", "-of", "csv=p=0", path], stderr=subprocess.STDOUT)
+        return float(out.decode().strip().splitlines()[0])
+    except (subprocess.CalledProcessError, ValueError, IndexError):
+        return None
 
 
 def do_video(ytid, rows, clips_dir, tmp_root):

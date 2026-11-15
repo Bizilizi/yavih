@@ -1,0 +1,15 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: frames
+  split: test
+  rows:
+  - 2BVHPrletXY_000208_000214
+- id: clip
+  kind: motion
+  split: test
+  rows:
+  - 2BVHPrletXY_000208_000214
+  options:
+    start_s: 0.0
+    seconds: 4.0
