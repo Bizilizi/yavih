@@ -26,7 +26,7 @@ yavih bench prepare crema_d 02    # verify: 7 438 wavs, 16 kHz mono PCM_16 heade
 yavih bench prepare crema_d 03    # re-freeze (byte-identical) and yavih bench verify
 ```
 
-* Size: the 7 438 wavs are TODO bytes (`budget.media_gb`); the sparse clone adds a few MB. Downloads are one
+* Size: the 7 438 wavs are 605 598 660 bytes (`budget.media_gb: 0.606`); the sparse clone adds a few MB. Downloads are one
   HTTP request per wav: about an hour at four parallel downloads on a slow file system, minutes on a local disk.
   Re-running step 01 skips every wav already present with the right sha256.
 * Which wavs: every `FileName` of `processedResults/summaryTable.csv` (7 442) except the four that TensorFlow
@@ -133,7 +133,7 @@ Then `yavih bridge check <bridge.py> --bench crema_d --out crema_d.profile.json`
 
 ## Gotchas
 
-* **The clips differ in length.** 1.3 to 5.0 s, median about 2.5 s. A fixed-length model input pads most clips:
+* **The clips differ in length.** 1.27 to 5.005 s (one clip is longer than 5.0 s), 2.5 s on average. A fixed-length model input pads most clips:
   pad every clip to the same length (HEAR: 5.0 s, the template's default), never to the longest clip of the
   batch (that fails batch invariance) and never with per-batch statistics.
 * **Already 16 kHz.** Resample only when the model's rate differs, per clip, and declare the resampler; HEAR

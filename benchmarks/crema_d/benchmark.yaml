@@ -55,8 +55,8 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
 budget:
   clips: {fold00: 1488, fold01: 1488, fold02: 1488, fold03: 1487, fold04: 1487}
   media_gb: 0.606             # measured: the 7 438 staged wavs, 605 598 660 B
-  extract_min_per_1k_clips_ref: 0.2   # TODO
-  probe_minutes_ref: {clf: 3}         # TODO
+  extract_min_per_1k_clips_ref: 0.5   # measured: wav2vec2-base (95 M), 5.0 s input, one clip per forward, shared 24 GB GPU, 4 decode workers: 207 s of extract wall for 7 438 clips
+  probe_minutes_ref: {clf: 5}         # measured: eval run, five attentive probes on 25 x 768 fp16 tokens, ~5 950 train rows each, shared GPU: 315 s
 
 manifest:
   file: manifest.csv.gz
@@ -168,7 +168,7 @@ metrics:
   notes:
     - "Headline: HEAR's top1_acc (hear-eval-kit Top1Accuracy, copied into hear_score.py) per held-out fold, mean over the 5 folds; top1_acc_std is HEAR's sample std (ddof 1)."
     - "Folds re-derived with copied TFDS crema_d 1.0.0 + hear-preprocess code (hear_split.py); TFDS's wav checksums and split byte counts match; HEAR's own fold files are not public to compare."
-    - "Chance is 1/6; the floor (each fold's train-majority emotion) is about 0.17. An interval that reaches 0.17 is no result."
+    - "Chance is 1/6; the floor (each fold's train-majority emotion, scored on held-out rows) is 0.157. An interval that reaches 0.17 is no result."
     - "Wilson 95 % interval over the 7 438 pooled rows: about ±0.011 at 0.5, ±0.010 at 0.75; one fold of 1 488 rows: about ±0.025. Treat gaps below 0.01 at one seed as unresolved."
     - "HEAR's folds are drawn over files: every actor is in every fold, so speaker identity helps. Speaker-independent CREMA-D numbers are lower and not comparable."
     - "HEAR's leaderboard trains an MLP on 3 folds (the next fold validates, grid search); this probe trains on 4 and carves validation rows from them: close, not identical numbers."

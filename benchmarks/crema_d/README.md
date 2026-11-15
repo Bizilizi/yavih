@@ -44,7 +44,7 @@ held-out clips, and the score is HEAR's top-1 accuracy, averaged over the five f
 ([hear-eval-kit](https://github.com/hearbenchmark/hear-eval-kit)), and the folds are re-derived exactly as
 [hear-preprocess](https://github.com/hearbenchmark/hear-preprocess) and TensorFlow Datasets built them, since HEAR's
 preprocessed copy of CREMA-D is no longer downloadable. With six near-balanced classes, chance is one in six
-(16.7 %); the floor, always answering the most frequent training emotion, is about 17 %.
+(16.7 %); the floor, always answering the most frequent training emotion, is about 16 %.
 
 Not this benchmark: speaker-independent splits (TensorFlow Datasets' own 70/10/20 split by actor, or
 leave-actors-out folds) are harder and give other numbers; so do the audio-visual and
