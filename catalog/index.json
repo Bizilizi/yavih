@@ -626,6 +626,36 @@
    "scorer": "clf",
    "title": "VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes)"
   },
+  "vggsounder_retrieval": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "retrieval"
+   ],
+   "clips": {
+    "test": 5294
+   },
+   "core": ">=1.1,<2",
+   "header_title": "VGGSounder: Audio-Visual Evaluations for Foundation Models",
+   "media_gb": 10.72,
+   "name": "vggsounder_retrieval",
+   "obtain": "needs-data-owner",
+   "path": "benchmarks/vggsounder_retrieval",
+   "protocol_hash": "360f7114ca6bcba9748323213fb408775257e1f376baac18a02052633df6a8b7",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "f2de3334a3576e35c5bdb1732ac4a834de150ea5",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/vggsounder_retrieval",
+     "protocol_hash": "360f7114ca6bcba9748323213fb408775257e1f376baac18a02052633df6a8b7",
+     "protocol_version": 1,
+     "tree": "c2fdc8c15d30fb5dc8cfa18d3629b45d00de3029"
+    }
+   ],
+   "scorer": "vggsounder_retrieval",
+   "title": "VGGSounder audio–video retrieval on the 5 294 test clips whose classes are all audible and visible (A→V and V→A R@1; class-level mAP alongside)"
+  },
   "vggsounder_v2a": {
    "aliases": [],
    "capability": [
@@ -719,6 +749,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "0089aaa9d0751b0a7de27fcbaa53d3c0f8bbb5f4",
+ "commit": "d04744e8fbc75be2494831fe09fb3611ebb69e66",
  "repo": "Bizilizi/yavih"
 }
