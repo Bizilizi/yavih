@@ -217,5 +217,14 @@ metrics:
     samples: 2000
     seed: 0
   aggregation: null
+  notes:
+    - "The number is computed by detection.py, a transcription of the UnAV-100 authors' ANETdetection (ttgeng233/UnAV@1609deba libs/utils/metrics.py), on segments decoded from yavih's dense probe."
+    - "map_avg is the mean over tIoU 0.1 to 0.9 (the paper's Avg.); ActivityNet's own average uses tIoU 0.5 to 0.95, so the two averages are not comparable."
+    - "map_tiou holds one value per threshold; the paper's mAP@0.5 to 0.9 columns are its last five values."
+    - "The floor map_avg_floor predicts, for every clip, the train frequency of each class per bin and the median train extents; detection mAP has no chance value."
+    - "A map_avg near map_avg_floor means the tokens carry no usable time: check that t spreads over the whole clip and that tokens are not pooled over time."
+    - "The detector is yavih's pinned probe, not the paper's trained pyramid transformer, and model selection uses a 10 % carve of train instead of the official validation split."
+    - "Every video is a VGGSound source video (1 661 of 2 167 test videos are in VGGSound train); disclose this overlap with any number from a model pretrained on VGGSound."
+    - "The paper's end-to-end model reaches 47.8 average mAP on test (Geng et al., CVPR 2023, Table 2); a frozen-feature probe is not comparable with it."
 readout_params:
   T: 128
