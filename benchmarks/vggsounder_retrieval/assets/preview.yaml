@@ -1,0 +1,15 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: retrieval
+  split: test
+  rows:
+  - 6DwlcJyDyxc_000290
+- id: clip
+  kind: motion
+  split: test
+  rows:
+  - 6DwlcJyDyxc_000290
+  options:
+    start_s: 0.0
+    seconds: 3.0
