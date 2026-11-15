@@ -31,6 +31,12 @@ Usage::
 ``--media-root`` defaults to the configured ``[data.epic_sounds_det] media_root``; ``--metadata`` (the directory
 holding the four CSVs) defaults to ``<media-root>/annotations``. ``--no-media`` skips the presence check of
 ``audio/*.m4a``. ``--check`` exits 1 when the re-derived files differ from the committed ones.
+
+The four upstream files are pinned by sha256 (``UPSTREAM_FILES``) and the run refuses any other bytes; the re-derived
+``manifest.csv.gz`` and ``classes.csv`` must be byte-identical to the committed ones. On a staged copy,
+``yavih bench prepare epic_sounds_det 03`` runs ``--check`` against ``<media_root>/annotations`` and counts the staged
+audio per split. ``tests/test_folder.py`` runs ``--no-media --check`` on the staged annotation files when they are
+present (skipped otherwise) and checks the pin refusal on files of the wrong bytes.
 """
 
 from __future__ import annotations

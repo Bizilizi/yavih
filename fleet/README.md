@@ -6,6 +6,7 @@ wheel or is read by yavih itself.
 | file | what |
 |---|---|
 | [worker-brief.md](worker-brief.md) | the prompt for one worker agent: the footprint rule (`benchmarks/<name>/` only), extending through the folder, the obtain-tier policy, the checks, the trial verdicts, the report template |
+| [grounding.md](grounding.md) | whose implementation a folder's evaluation is built on: the official package imported, the official scripts or a well-recognised project's code copied into the folder, and how each is acknowledged |
 | [readme-brief.md](readme-brief.md) | the prompt for one README migration worker: rewrite a shipped folder's legacy README as the human page, move its agent material to `metrics.notes`, the `make_manifest.py` docstring and setup.md, no hash moves |
 | [queue.yaml](queue.yaml) | one entry per candidate benchmark: its reserved folder name, survey class, suggested route and status |
 | [check.py](check.py) | `footprint` (a branch changes one folder only), `queue` (the queue is valid against `benchmarks/`, `readme` marks included), `entry` (one entry, for a brief) |

@@ -1,7 +1,7 @@
 # epic_sounds_det — setup
 
-The agent's first read for EPIC-SOUNDS sound detection. `benchmark.yaml` is the machine truth; `README.md` says
-what the benchmark is.
+The agent's first read for EPIC-SOUNDS sound detection. `benchmark.yaml` is the machine truth; `README.md` is the
+benchmark's page for people.
 
 ## Obtain the data
 
@@ -39,9 +39,26 @@ Step 02 resumes partial downloads (HTTP Range) and skips staged files; rerun it 
 
 ## Dependencies
 
-None. `external: []`: the authors' scorer (C10 `EvaluationCode/audio_based_interaction_detection.py`, sha256
-`7c2c2509…4338`) is a script, not a package, and needs `np.float` (numpy < 1.24); `eval.py` transcribes it in numpy
-(README "## In yavih").
+None. `external: []`: no package outside yavih core and numpy is imported to score. Where each part of the
+evaluation comes from:
+
+- Scorer: official code, transcribed (not a released wheel). The EPIC-SOUNDS authors' C10 detection challenge
+  scorer, `EvaluationCode/audio_based_interaction_detection.py` of https://github.com/epic-kitchens/C10-epic-sounds-detection
+  at commit `196e7cf2c4f17946279fb57d9ff24516b7403344` (sha256 `7c2c2509…4338`, `eval.py` `SCORER_SHA256`), itself
+  adapted from ActivityNet's `eval_detection.py`. It is a script, not a package, pins numpy 1.19 / pandas 1.1 and
+  uses `np.float` (removed in numpy 1.24), so `eval.py` carries a line-by-line numpy transcription of its scoring
+  path (`ANETdetection`, `compute_average_precision_detection`, `segment_iou`, `interpolated_prec_rec`) without
+  pandas, keeping its tie order (`argsort()[::-1]`) and its background rule (class 13 dropped from the ground
+  truth). `map_avg_paper` is the same computation with background kept (the paper's Table V). The folder test pins
+  the transcription against the C10 baseline file `actionformer_baseline_validation.json` (fetched by step 01):
+  16.74 / 15.48 / 14.01 / 12.26 / 10.35 (13.77) under the C10 rule and 16.48 / 15.15 / 13.70 / 11.99 / 10.12
+  (13.49) with background kept, the published ActionFormer validation row of Table V.
+- Readout: `detection.py`, byte-identical in every folder that detects timed events (`unav100`,
+  `perception_test_sound_loc`, `perception_test_action_loc`, `epic_sounds_det`). The head is the core
+  `dense_query_v1` (layout `time:T`, `T = readout_params.T` = 1024); the folder file carries the dense targets, the
+  loss (sigmoid focal loss, alpha 0.25, gamma 2, plus `1 - GIoU` of the 1-D extents), the pinned decoder (score
+  threshold 0.001, top 2 000, per-class NMS at tIoU 0.5, 100 segments per recording) and the label-only floor. The
+  folder does not name an upstream project for this head, loss or decoder.
 
 - Step 02 needs PyAV (`pip install av`, the `yavih[media]` extra) and network access; step 01 needs `curl` and
   `sha256sum`. The census (`yavih bench verify epic_sounds_det --census`) needs `yavih[media]`.
@@ -135,6 +152,9 @@ decode workers for 10-s recordings, i.e. it is decode-bound at roughly 200x real
   decoded audio to the declared range so `used` matches what was fed.
 - Segments are short (median 1.0 s, 90 % under 7 s) but some last minutes: a hop above 0.5 s or a window above a few
   seconds blurs most boundaries without failing any check.
+- The readout's `readout_params.T` = 1024 bins span the whole recording, so its time resolution falls with length:
+  about 0.5 s per bin at the mean recording length (501 s), 3.6 s on the longest (3 708 s, train) and at most 1.9 s
+  on validation (0.34 s at its mean). On long recordings one bin is coarser than the median 1.0 s segment.
 - 285 labelled segments end after the recording's duration as EPIC-KITCHENS-100 lists it (`EPIC_100_video_info.csv`;
   by 6.7 minutes on P01_03): they are scored as upstream defines them, and no bridge choice can reach them.
 - Background segments (class 13) are training targets but not scored (the official C10 rule); the paper's Table V

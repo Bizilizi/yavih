@@ -126,10 +126,10 @@ entries:
   text_fields: false
   parents: []
   survey_note: Corrupted AV clf, probe on clean train; needs prepare-time corruption; zero-shot variants B2
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/avrobustbench
 - name: bear
   title: BEAR
   kind: suite
@@ -248,10 +248,10 @@ entries:
   - twlv_i
   - videoglue
   survey_note: 48-class dive clf
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/diving48
 - name: ego_exo4d
   title: Ego-Exo4D
   kind: suite
@@ -533,10 +533,10 @@ entries:
   text_fields: false
   parents: []
   survey_note: Test-only mimed actions; probe trained on K400 classes
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/mimetics
 - name: moments_in_time
   title: Moments in Time
   kind: benchmark
@@ -579,10 +579,10 @@ entries:
   - icme2025_audio
   - x_ares
   survey_note: Pitch/instrument clf
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/nsynth
 - name: physion_ocp
   title: Physion
   kind: benchmark
@@ -706,10 +706,10 @@ entries:
   - maeb
   - x_ares
   survey_note: Keyword clf
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/speech_commands
 - name: temporal50_static50
   title: Temporal-50 / Static-50
   kind: benchmark
@@ -1095,10 +1095,10 @@ entries:
   - maeb
   - x_ares
   survey_note: Speech emotion clf
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/crema_d
 - name: dover_quality
   title: DOVER (quality assessment)
   kind: benchmark
@@ -2055,10 +2055,10 @@ entries:
   text_fields: false
   parents: []
   survey_note: Segment-level multi-label AV parsing
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/llp_avvp
 - name: lrs3_asr
   title: LRS3-TED
   kind: benchmark
@@ -2236,7 +2236,6 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
-  readme: legacy
 - name: waymo_box_tracking
   title: Waymo Open
   kind: benchmark
@@ -2642,10 +2641,10 @@ entries:
   text_fields: false
   parents: []
   survey_note: Zero-shot cosine/offset consistency tests
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/av_syncbench
 - name: avut_qa
   title: AVUT
   kind: benchmark
@@ -4605,7 +4604,6 @@ entries:
   obtain: null
   blocked_by: null
   branch: null
-  readme: legacy
 - name: avsync
   title: Audio-visual synchronisation offsets on VGGSound
   kind: benchmark
@@ -4648,3 +4646,16 @@ entries:
   blocked_by: null
   branch: null
   readme: legacy
+- name: vggsounder_retrieval
+  title: VGGSounder audio-visual retrieval
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Training-free A->V and V->A retrieval on the VGGSounder test clips whose labels are all both audible and visible (5 294); instance-level headline, class-level alongside; the maintainer's design
+  status: shipped
+  obtain: needs-data-owner
+  blocked_by: null
+  branch: bench/vggsounder_retrieval

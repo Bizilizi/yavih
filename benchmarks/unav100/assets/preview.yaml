@@ -1,0 +1,15 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: frames
+  split: test
+  rows:
+  - HCC9JldRsNc
+- id: clip
+  kind: motion
+  split: test
+  rows:
+  - HCC9JldRsNc
+  options:
+    start_s: 1.0
+    seconds: 3.5

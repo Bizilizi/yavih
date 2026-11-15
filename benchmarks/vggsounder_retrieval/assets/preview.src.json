@@ -1,0 +1,29 @@
+{
+  "preview_version": 1,
+  "design_version": 1,
+  "figures": {
+    "preview": {
+      "kind": "retrieval",
+      "split": "test",
+      "rows": [
+        "6DwlcJyDyxc_000290"
+      ],
+      "source_sha256": "95c18ce2de0d69e51817979283a8e55dbadfd2b27eeceed8ca821df991513404",
+      "files": {
+        "preview.png": 488676
+      }
+    },
+    "clip": {
+      "kind": "motion",
+      "split": "test",
+      "rows": [
+        "6DwlcJyDyxc_000290"
+      ],
+      "source_sha256": "9eac2201dcdc3c43c93eddef8748a8f83f2f1fa1b6ea6f1cbeb4e66dd11cf393",
+      "files": {
+        "clip.gif": 3763349,
+        "clip.mp4": 1710499
+      }
+    }
+  }
+}

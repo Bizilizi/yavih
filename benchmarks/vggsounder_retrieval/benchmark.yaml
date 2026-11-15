@@ -1,0 +1,203 @@
+# yavih benchmark folder — VGGSounder audio-visual retrieval (schema 3). Values under `manifest`, `budget.clips` and
+# the `cls_*` entries of `metrics.chance` are printed by make_manifest.py; `make_manifest.py --check` re-derives them.
+schema_version: 3
+name: vggsounder_retrieval
+aliases: []
+title: VGGSounder audio–video retrieval on the 5 294 test clips whose classes are all audible and visible (A→V and V→A R@1; class-level mAP alongside)
+capability: [audio-visual, retrieval]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+header:
+  name: VGGSounder retrieval
+  title: "VGGSounder: Audio-Visual Evaluations for Foundation Models"
+  venue: "Zverev et al. · ICCV 2025; retrieval protocol of CAV-MAE (Gong et al. · ICLR 2023)"
+  abstract: >-
+    The VGGSounder test clips in which every labelled class is both heard and seen. Each clip is split into its
+    video and its audio; given one, retrieve the other among all 5 294 clips by similarity in the model's shared
+    embedding space, with no training. Recall at 1, 5 and 10 and the median rank, plus class-level mAP.
+  chips: ["video + audio", "cross-modal retrieval", "5 294 clips", "shared embedding space", "av", "R@1 (A→V, V→A)"]
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+scorer: vggsounder_retrieval
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 360f7114ca6bcba9748323213fb408775257e1f376baac18a02052633df6a8b7   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 06b6ca12dc9a455bc661789548bbdc4b63e6eb6487198138a2a24b372a0c3daa
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://www.robots.ox.ac.uk/~vgg/data/vggsound/
+    - https://github.com/Bizilizi/VGGSounder
+    - https://pypi.org/project/vggsounder/1.0/
+  licence: >-
+    VGGSound: CC BY 4.0 (the listing; the media are YouTube clips fetched by the user, subject to YouTube's terms).
+    VGGSounder annotations and package: Apache-2.0 (github.com/Bizilizi/VGGSounder LICENCE).
+  bytes: 407_000_000_000
+  sha256:
+    "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    "vggsounder==1.0/vggsounder/data/vggsounder.csv": 400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06
+  notes: >-
+    Media = the VGGSound corpus staged as loose files (199 176 mp4 + 199 176 wav; `bytes` is that total), the same
+    tree the `vggsounder` folder reads. The frozen rows touch 5 294 test clips (budget.media_gb). The rows are
+    frozen from the label file of the vggsounder 1.0 wheel on PyPI and the official VGGSound listing.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-data-owner
+  how: "VGGSound media from YouTube (clips decay: prefer an existing copy of the corpus, e.g. the one the vggsounder folder reads) and vggsound.csv from the official page; the labels come from the vggsounder 1.0 wheel on PyPI"
+budget:
+  clips: {test: 5294}
+  media_gb: 10.72   # measured: the 5 294 mp4 (9.03 GB) + wav (1.69 GB) of the frozen rows
+  extract_min_per_1k_clips_ref: 2.0   # TODO
+  probe_minutes_ref: {vggsounder_retrieval: 0.5}   # measured: 0.28 min to rank and score 5 294 x 512-d embeddings (CPU), plus reading and bootstrap
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 7dbc0abb50fae18f30745f2c3083efbd3946ea678cbeea711abe3d26a26df6b9
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+  columns:
+    labels_av: {type: str, role: extra}
+    rel_video: {type: str, role: media, stream: video}
+    rel_audio: {type: str, role: media, stream: audio}
+  upstream:
+    source: "vggsounder 1.0 package data/vggsounder.csv (the default variant): the clips whose classes are all audible and visible (modality AV only), minus VGGSound-train ytids (vggsound.csv)"
+    sha256: 400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06
+    rows: 12014
+    note: >-
+      Rows = the VGGSounder test clips (the vggsounder 1.0 package's 12 014 videos, default variant, minus the 6
+      whose YouTube id is a VGGSound-train id: the `vggsounder` folder's 12 008 test rows) that have at least one
+      class marked audible-and-visible (`AV`) and none marked audible-only (`A`) or visible-only (`V`), in the
+      package's file order, one split `test`: 5 294 clips over 308 classes (1 to 697 clips per class; 1 to 13
+      classes per clip). `labels_av` = the clip's AV classes, `;`-joined in file order: the class-level relevance of
+      the `cls_*` metrics, never handed over. No further curation: same-source clips (270 clips of 135 YouTube
+      videos), the speech classes (697 clips of "male speech, man speaking") and rare classes (50 with fewer than
+      10 clips) are kept.
+    upstream_files:
+      "vggsounder/data/vggsounder.csv": 400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06
+      "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    curation:
+      total_upstream: 12014
+      per_split:
+        test: {listed: 5294, staged: 5294, missing: 0}
+      excluded:
+        leakage: 6
+        no_av_class: 2125
+        a_or_v_only_class: 4589
+      leakage_audit: {against: "VGGSound train ytids (vggsound.csv split==train)", excluded: 6}
+
+splits:
+  train: []
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_video
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_audio
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${datasets.vggsound}"
+      description: "VGGSound root: video/<clip_id>.mp4, audio/<clip_id>.wav (16 kHz mono), metadata/vggsound.csv (the tree the vggsounder folder reads)"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the VGGSound mp4 exactly as stored (H.264, native and mixed frame size, ~10 s at ~30 fps, with its own AAC
+      track, which the video embedding must not read); nothing decoded, cut, resized or padded
+    audio: >-
+      the VGGSound wav exactly as stored (16 kHz mono 16-bit PCM, nominal 10 s; some files shorter); nothing
+      resampled, trimmed or padded
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+  schema:
+    audio_emb: {type: array, dtype: [float16, float32], shape: [D], stats: true}   # the clip's audio embedding in the shared space
+    video_emb: {type: array, dtype: [float16, float32], shape: [D], stats: true}   # the clip's video embedding in the same space
+  isolation:   # bridge check's modality-isolation gate (E_MODALITY_LEAK): each key reads only the listed stream
+    audio_emb: [audio]
+    video_emb: [video]
+
+external: []
+
+protocol:
+  clip_seconds: 10.0
+  train_draw: null
+  views: none
+
+metrics:
+  headline: "r@1"
+  list: ["r@1", "r@1_a2v", "r@5_a2v", "r@10_a2v", medr_a2v, "r@1_v2a", "r@5_v2a", "r@10_v2a", medr_v2a,
+         cls_map_a2v, cls_map_v2a, "cls_r@1_a2v", "cls_r@5_a2v", "cls_r@10_a2v", "cls_r@1_v2a", "cls_r@5_v2a", "cls_r@10_v2a",
+         cls_n_no_relevant, n_eval]
+  table: ["r@1", "r@1_a2v", "r@1_v2a", cls_map_a2v, cls_map_v2a]
+  floors: []
+  controls: []
+  chance: {"r@1": 0.000189, "r@1_a2v": 0.000189, "r@5_a2v": 0.000944, "r@10_a2v": 0.00189, "r@1_v2a": 0.000189, "r@5_v2a": 0.000944, "r@10_v2a": 0.00189,
+           "cls_r@1_a2v": 0.0359, "cls_r@1_v2a": 0.0359, "cls_r@5_a2v": 0.1492, "cls_r@5_v2a": 0.1492, "cls_r@10_a2v": 0.2466, "cls_r@10_v2a": 0.2466}
+  ci:
+    "r@1": bootstrap_clip
+    "r@1_a2v": binomial
+    "r@5_a2v": binomial
+    "r@10_a2v": binomial
+    "r@1_v2a": binomial
+    "r@5_v2a": binomial
+    "r@10_v2a": binomial
+    cls_map_a2v: bootstrap_clip
+    cls_map_v2a: bootstrap_clip
+    "cls_r@1_a2v": binomial
+    "cls_r@1_v2a": binomial
+  bootstrap: {samples: 2000, seed: 0}
+  notes:
+    - "Headline r@1 = mean of r@1_a2v and r@1_v2a; 5 294 queries, each against all 5 294 clips of the other modality; only its own clip counts. Chance k / 5 294 (r@1 0.000189); no floor."
+    - "Instance ranks: retrieval.py as in vggsound_retrieval (CAV-MAE protocol, cosine, average tie rank); CAV-MAE's compute_metrics differs only for tied (degenerate) embeddings."
+    - "Noise: the Wilson 95 % interval of r@1_a2v at n = 5 294 is about ±0.008 at 0.1 and ±0.013 at 0.4; treat r@1 gaps below about 0.015 as unresolved."
+    - "Class level (cls_*): own clip removed from the gallery (5 293 candidates); relevant = shares a labels_av class. Ties take numpy.argsort's order. Copied code: class_level.py."
+    - "cls_map_*: DCMH calc_map (Jiang & Li, CVPR 2017; jiangqy/DCMH-CVPR2017 @ 67d0e84). cls_r@k_*: c_recall@k of Roth et al. (ICML 2020; Confusezius/Revisiting_Deep_Metric_Learning_PyTorch)."
+    - "Class chance (random ranking): cls_r@1 0.036, @5 0.149, @10 0.247; cls_map ≈ 0.036. cls_n_no_relevant = 1: one clip shares no class and scores AP 0 (DCMH keeps it in the mean)."
+    - "Kept in v1: 697 'male speech' + 285 'female speech' clips weigh on cls_*; 270 clips from 135 YouTube videos, where retrieving a sibling clip is an instance-level miss."
+    - "Not applicable: a model without a shared audio-visual space. Mean-pooled tokens of two unaligned towers score at chance; write no bridge for such a model."
+
+readout_params:
+  subsets: {}   # retrieval.py's subset mechanism, unused here
+  classes_column: labels_av   # the class-level relevance: each row's ';'-joined audible-and-visible classes
