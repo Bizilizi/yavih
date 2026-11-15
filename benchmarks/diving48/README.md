@@ -28,11 +28,9 @@ frame says little: two dives that differ by half a somersault or one twist look 
 through takeoff, flight and entry. The benchmark was built to measure exactly that, which is why yavih tags it
 temporal as well as visual.
 
-<!-- once rendered (python -m yavih.previews diving48 --chrome <chrome>), un-comment:
-![Frames of one Diving48 test clip over time, with its dive type](assets/preview.png)
+![Six frames of one test clip, a back dive with one and a half somersaults and one and a half twists, from takeoff to entry](assets/preview.png)
 
-![One Diving48 dive in motion](assets/clip.gif) · [mp4](assets/clip.mp4)
--->
+![The same dive in motion](assets/clip.gif) · [mp4](assets/clip.mp4)
 
 ## The data
 
