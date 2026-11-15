@@ -22,7 +22,7 @@ ROOT=/path/to/datasets/speech_commands yavih bench prepare speech_commands 01
 ROOT=/path/to/datasets/speech_commands yavih bench prepare speech_commands 02
 #   cuts HEAR's 789 one-second _silence_ clips from the six background-noise recordings into $ROOT/hear_silence/
 #   and checks them: hear_silence/SHA256SUMS sha256 == 9e3cef9ceb50fcba95cf909e4e4215aa0e22a05f8b991ae61785e5ea212c8533
-YAVIH_DATA__SPEECH_COMMANDS__MEDIA_ROOT=/path/to/datasets/speech_commands yavih bench prepare speech_commands 03
+ROOT=/path/to/datasets/speech_commands yavih bench prepare speech_commands 03
 #   make_manifest.py --check against the staged media, then yavih bench verify speech_commands --census
 ```
 
