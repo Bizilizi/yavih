@@ -26,8 +26,11 @@ yavih bench prepare vggsounder_retrieval 03   # yavih bench verify vggsounder_re
    5 294 frozen clips exist (`VGGSOUND_ROOT=/path` overrides the configured root).
 2. `02_make_manifest.sh`: `make_manifest.py --check` (`yavih bench show vggsounder_retrieval make_manifest` prints
    the recipe). Its input is `vggsounder/data/vggsounder.csv` of `vggsounder==1.0` (sha256
-   `400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06`), fetched with `pip download --no-deps`
-   unless `VGGSOUNDER_CSV=/path/to/vggsounder.csv` is set.
+   `400979ea3dee34bed145d3fd96966e16689352df63b645c4730caf8eb2cacb06`), fetched with
+   `pip download --no-deps --python-version 3.11 --only-binary=:all: vggsounder==1.0` unless
+   `VGGSOUNDER_CSV=/path/to/vggsounder.csv` is set. vggsounder 1.0 requires Python >= 3.11: without those two flags,
+   pip on Python 3.10 finds only 0.1.x and the step fails. With them it fetches the 3.11 wheel whatever the
+   interpreter (only its data file is read, nothing is installed).
 3. `03_verify.sh`: `yavih bench verify vggsounder_retrieval --census`.
 
 Disk budget: the frozen rows touch 5 294 clips = **10.72 GB** (9.03 GB mp4 + 1.69 GB wav, 10 588 files) inside the
@@ -50,7 +53,7 @@ own code, per part:
 
 `yavih doctor --bench vggsounder_retrieval` lists no external package. Prepare-time tools only: Python and pip
 (`make_manifest.py` and step 02 read the `vggsounder==1.0` wheel's data file; `pip download --no-deps
-vggsounder==1.0`, never imported for scoring). The bridge decodes with its own stack or with `yavih.media.decode`
+--python-version 3.11 --only-binary=:all: vggsounder==1.0`, never imported for scoring). The bridge decodes with its own stack or with `yavih.media.decode`
 (PyAV, soundfile: `pip install av soundfile`).
 
 ## Input contract

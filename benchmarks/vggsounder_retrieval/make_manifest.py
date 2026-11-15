@@ -3,7 +3,7 @@
 
 Inputs (read only, nothing is downloaded; sha256-pinned, a different file is refused):
 
-- ``data/vggsounder.csv`` of the ``vggsounder`` 1.0 package on PyPI (``pip download --no-deps vggsounder==1.0``;
+- ``data/vggsounder.csv`` of the ``vggsounder`` 1.0 package on PyPI (``pip download --no-deps --python-version 3.11 --only-binary=:all: vggsounder==1.0``;
   ``video_id,label,modality,background_music,static_image,voice_over``, one line per (video, class); the default
   variant without background-music clips, 12 014 videos; sha256 ``400979ea…``). The same file the ``vggsounder``
   folder freezes its test rows from;
@@ -31,7 +31,8 @@ The rules:
 
 Usage::
 
-    pip download --no-deps vggsounder==1.0 -d /tmp/vs && unzip -o /tmp/vs/vggsounder-1.0-py3-none-any.whl -d /tmp/vs
+    # vggsounder 1.0 requires Python >=3.11: the flags fetch its wheel (only the data file is read) from any interpreter
+    pip download --no-deps --python-version 3.11 --only-binary=:all: vggsounder==1.0 -d /tmp/vs && unzip -o /tmp/vs/vggsounder-1.0-py3-none-any.whl -d /tmp/vs
     python "$(yavih bench path vggsounder_retrieval)/make_manifest.py" --metadata /tmp/vs/vggsounder/data/vggsounder.csv --check
     python "$(yavih bench path vggsounder_retrieval)/make_manifest.py" --metadata /tmp/vs/vggsounder/data/vggsounder.csv   # re-freeze (git checkout)
     python "$(yavih bench path vggsounder_retrieval)/make_manifest.py" --no-media --metadata vggsounder.csv --vggsound-csv vggsound.csv --check
