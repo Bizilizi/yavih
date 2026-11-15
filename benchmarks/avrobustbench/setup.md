@@ -129,7 +129,7 @@ input_contract:
     fps: 1
     code_sha256:   # prepare/corruptions.py (authors' code, copied) and prepare/cavmae_frames.py (CAV-MAE, copied)
       corruptions: 9754ffd0edd9332389c45f114514df85bc206da371366bafe7443271abb1783b
-      cavmae_frames: f0b1f55ac0e5517debcf9f413d7a74aea0757ecaec4c9b474cbdf5fbb4bb2c43
+      cavmae_frames: 8a151d5b899d449f9ef922e287437f074e0a8233558f4cd838172a3dae6c95cc
     assets:   # the upstream corruptions/ directory, prepare/03_corruption_assets.sh (146 files, sha256 list)
       commit: f6c3f2e12de918373a36575f8fec14d84adc4707
       files: 146

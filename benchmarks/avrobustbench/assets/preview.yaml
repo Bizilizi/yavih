@@ -1,0 +1,27 @@
+schema_version: 1
+figures:
+# the main figure: one eval clip (bowling impact) at 4 s, clean and under seven corruptions (preview.py kind)
+- id: preview
+  kind: avrobustbench_conditions
+  split: test
+  rows:
+  - 2_C5yMbxKpY_000011#clean
+  - 2_C5yMbxKpY_000011#gaussian
+  - 2_C5yMbxKpY_000011#snow
+  - 2_C5yMbxKpY_000011#frost
+  - 2_C5yMbxKpY_000011#spatter
+  - 2_C5yMbxKpY_000011#rain
+  - 2_C5yMbxKpY_000011#smoke
+  - 2_C5yMbxKpY_000011#crowd
+  options:
+    time_s: 4.0
+# the same clip's audio, clean and under the rain corruption (noise mixed at 0 dB SNR)
+- id: audio
+  kind: audio
+  split: test
+  rows:
+  - 2_C5yMbxKpY_000011#clean
+  - 2_C5yMbxKpY_000011#rain
+  options:
+    seconds: 5.0
+    start_s: 0.0

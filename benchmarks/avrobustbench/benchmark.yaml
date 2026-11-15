@@ -24,8 +24,8 @@ changelog:
     date: "2026-11-15"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 605667719c9a74ed3a98b046cb552d3aac5cb70f52c7a89de29c385c01e97ea9
-    input_hash: 5c95df797b5b6dc019f6f077e2b7229e8b5e3d289caaba1e5a9dd6e76ee3069e
+    protocol_hash: 6dc4c9c389f8b7051855390887adddcbc045bffb744b7470785db37bf22c172f
+    input_hash: 84bcf03679de388f53679d26deeb43d1c3324ad71c9ccba7ed863708faa166d2
     supersedes: []
 
 source:
@@ -179,7 +179,7 @@ input_contract:
     fps: 1
     code_sha256:   # prepare/corruptions.py (authors' code, copied) and prepare/cavmae_frames.py (CAV-MAE, copied)
       corruptions: 9754ffd0edd9332389c45f114514df85bc206da371366bafe7443271abb1783b
-      cavmae_frames: f0b1f55ac0e5517debcf9f413d7a74aea0757ecaec4c9b474cbdf5fbb4bb2c43
+      cavmae_frames: 8a151d5b899d449f9ef922e287437f074e0a8233558f4cd838172a3dae6c95cc
     assets:   # the upstream corruptions/ directory, prepare/03_corruption_assets.sh (146 files, sha256 list)
       commit: f6c3f2e12de918373a36575f8fec14d84adc4707
       files: 146
@@ -250,7 +250,7 @@ metrics:
     - "Corruptions are the authors' code (prepare/corruptions.py, MIT) at severity 5, seeded per row; frames and crop follow CAV-MAE (10 frames, 224 px)."
     - "Upstream defects kept: gaussian audio uses SNR = severity dB (5 dB), others the 0 dB of severity 5; frost never picks frost6.jpg. wind_visual crashes upstream and runs as its previous commit."
     - "Paper numbers: in-memory frames and wavs (no re-encode), models fine-tuned or probed on all VGGSound train. Here frames are crf-23 H.264 and the probe sees 20 000 clips."
-    - "The authors' released VGGSOUND-2C mp4s (no frost, AAC 44.1 kHz audio) are not these media; numbers on them are not comparable bit for bit."
+    - "Not the authors' released VGGSOUND-2C mp4s (no frost, AAC audio). Frames match them in statistics for 13 corruptions; their impulse and speckle are far weaker than the code's severity 5."
     - "Clip ids end in #<condition>: a bridge must never read them (bridge check scrambles clip_id)."
 
 readout_params: {}

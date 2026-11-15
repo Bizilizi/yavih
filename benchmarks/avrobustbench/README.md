@@ -26,6 +26,8 @@ and its 15 corrupted versions.
 
 ![One VGGSound clip, clean and under several of the 15 audio-visual corruptions](assets/preview.png)
 
+![The same clip's audio, clean and under the rain corruption: waveform over mel spectrogram](assets/preview-audio.png)
+
 ## The data
 
 VGGSOUND-2C is one of the four datasets of AVROBUSTBENCH (Maharana et al., NeurIPS 2025 Datasets and Benchmarks).

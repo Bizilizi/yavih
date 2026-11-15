@@ -1,3 +1,4 @@
+# ruff: noqa: I001  (upstream import order kept, so the file diffs cleanly against its source)
 # Copied from CAV-MAE (Gong et al., ICLR 2023), the frame extraction the AVROBUSTBENCH README names as its
 # preprocessing ("To extract the frames and audio from the videos ... please refer to this repo"):
 #   repository https://github.com/YuanGongND/cav-mae

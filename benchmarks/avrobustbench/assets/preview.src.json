@@ -1,0 +1,36 @@
+{
+  "preview_version": 1,
+  "design_version": 1,
+  "figures": {
+    "preview": {
+      "kind": "avrobustbench_conditions",
+      "split": "test",
+      "rows": [
+        "2_C5yMbxKpY_000011#clean",
+        "2_C5yMbxKpY_000011#gaussian",
+        "2_C5yMbxKpY_000011#snow",
+        "2_C5yMbxKpY_000011#frost",
+        "2_C5yMbxKpY_000011#spatter",
+        "2_C5yMbxKpY_000011#rain",
+        "2_C5yMbxKpY_000011#smoke",
+        "2_C5yMbxKpY_000011#crowd"
+      ],
+      "source_sha256": "ec469958ed1ec912fd0a25f133c9829cc0fd7347b3b9c63eb741a840261942e7",
+      "files": {
+        "preview.png": 1359660
+      }
+    },
+    "audio": {
+      "kind": "audio",
+      "split": "test",
+      "rows": [
+        "2_C5yMbxKpY_000011#clean",
+        "2_C5yMbxKpY_000011#rain"
+      ],
+      "source_sha256": "0c879d0f72f51bcfea1a25e8fd504ad2d2ccc153a9702e79d5ba23f0480458be",
+      "files": {
+        "preview-audio.png": 573293
+      }
+    }
+  }
+}
