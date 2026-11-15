@@ -162,8 +162,9 @@ input_contract:
       (none for clean), encoded as a 1 fps, 10.0 s H.264 yuv420p mp4 (crf 23, no audio track)
     audio: >-
       the row's materialized wav: the VGGSound 16 kHz mono wav through the row's audio corruption at severity 5 (none
-      for clean), written as 16-bit PCM at 16 kHz mono with the source's length (nominal 10 s; ~11 % of clips are
-      shorter, down to ~1 s); nothing resampled, trimmed or padded
+      for clean), written as 16-bit PCM at 16 kHz with the source's length (nominal 10 s; ~11 % of clips are
+      shorter, down to ~1 s); mono, except most crowd rows (2 channels: 7 of the 8 crowd noise recordings are stereo
+      and the authors' add_noise broadcasts the clip onto them); nothing resampled, trimmed or padded
   info:
     video: [duration_s, fps, n_frames, width, height, container, bytes]
     audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
