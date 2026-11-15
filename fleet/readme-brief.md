@@ -20,9 +20,10 @@ told agents to where agents read it. The integrator picks the folders marked `re
 ## The prompt
 
 ```text
-You are rewriting the README of ONE benchmark folder of yavih, a frozen-feature benchmark harness for video, audio
-and audio-visual models: benchmarks/<NAME>/ in the repository checked out at <WORKTREE> (branch readme/<NAME>, from
-<BASE>). Other agents rewrite other folders in parallel; an integrator merges your branch after an independent review.
+You are rewriting the README of ONE benchmark folder of yavih, a benchmark harness of frozen evaluation protocols for
+video, audio and audio-visual models: benchmarks/<NAME>/ in the repository checked out at <WORKTREE> (branch
+readme/<NAME>, from <BASE>). Other agents rewrite other folders in parallel; an integrator merges your branch after an
+independent review.
 
 The queue entry of your benchmark:
 <ENTRY>

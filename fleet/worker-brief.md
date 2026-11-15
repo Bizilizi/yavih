@@ -18,9 +18,10 @@ reports in batches ([integrate](integrate.md)).
 ## The prompt
 
 ```text
-You are adding ONE benchmark to yavih, a frozen-feature benchmark harness for video, audio and audio-visual models:
-the folder benchmarks/<NAME>/ in the repository checked out at <WORKTREE> (branch bench/<NAME>, from <BASE>). Many
-agents add other benchmarks in parallel; an integrator merges your branch after an independent review.
+You are adding ONE benchmark to yavih, a benchmark harness of frozen evaluation protocols for video, audio and
+audio-visual models: the folder benchmarks/<NAME>/ in the repository checked out at <WORKTREE> (branch bench/<NAME>,
+from <BASE>). Many agents add other benchmarks in parallel; an integrator merges your branch after an independent
+review.
 
 The queue entry for your benchmark (what the survey knows about it and the suggested route):
 <ENTRY>
@@ -77,6 +78,18 @@ worker:
 Before writing code, find the benchmark's official protocol: paper, official splits and annotation files, metric,
 licence, where the media comes from. Freeze the manifest only from public upstream files anyone can download.
 
+GROUNDING. Do not write the evaluation from the paper's text when an implementation exists: fleet/grounding.md is
+the rule; read it before you design the scorer. In short: each part of the evaluation (the scorer; a training-free
+procedure; a trained readout) is grounded on its own. Only the authors' code released as a wheel on PyPI is
+imported (an `external` entry, `yavih.external.require`); never add an install from a git URL. Any other code of
+the authors, or, where there is none for that part, the code of a well-recognised and recent project that
+implements it for this benchmark, is copied into your folder, as much of it as the benchmark needs and as it is,
+whatever its licence, so the folder runs without the upstream repository. A trained readout that no well-recognised
+project publishes is not yours to design: report `core request: a standard readout for <task family>`. Every copied file names its project, repository, commit, path, licence and
+your changes in a comment, and the README, setup.md and `metrics.notes` acknowledge it. What the reference chose
+for its own model (frames, crops, audio front end) is the default of bridge_template.py, not protocol.
+Reproducing the reference's published number is not required. Name the candidates you considered in your report.
+
 DATA AND OBTAIN TIER. Decide the tier first (benchmark.yaml `obtain.tier`, docs/contributing-a-benchmark.md step 2):
   - auto (fetchable unattended): stage it under <DATA_ROOT>/<NAME> with the folder's own prepare steps. If the full
     data exceeds <DISK_CAP_GB> GB, stage what fits for the trial (a sample of every split) and say so.
@@ -114,6 +127,8 @@ run the footprint check, and end with this report, filled in exactly:
 - blocked_by: <the exact unblocking action, or none>
 - obtain tier: <tier>; data staged: <what, where, GB, or none and why>
 - route: <scorer route taken; why, if it differs from the queue entry's>
+- grounding (one line per part: scorer | procedure | readout): rung <1-4>; <project> <repository URL> @ <commit>;
+  licence <licence>; <upstream files> -> <folder files>; candidates considered: <name: why not>, ...
 - commits: <hashes, one line each>
 - footprint: <the footprint check's last line>
 - lint / folder tests / ruff: <outcome each>

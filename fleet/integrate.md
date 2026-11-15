@@ -43,6 +43,10 @@ benchmark's paper, and writes one verdict per branch. Give it the branch names, 
 this list; it runs everything itself:
 
 - the protocol is the paper's: splits, labels, metric, headline, floors; the route is justified;
+- every part of the evaluation is grounded as [grounding](grounding.md) says: the rung is the first that applies, only
+  a released official wheel is imported (no install from a git URL), copied code names its source in a comment and is
+  recognisable against the upstream file at the named commit, a copied defect is described and not silently fixed,
+  and the README, setup.md and `metrics.notes` acknowledge the source;
 - `python benchmarks/<name>/make_manifest.py --check` reproduces the frozen manifest from the public files, and the
   curation sums hold (`yavih bench lint <name>`);
 - `yavih bench lint <name>`, the folder's tests and `ruff check benchmarks/<name>` pass on the branch;
