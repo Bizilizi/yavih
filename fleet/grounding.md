@@ -94,10 +94,10 @@ reference model's published number is not required: it is often impossible, and 
   (a parser that accepts an empty answer). Nothing is fixed silently: the defect is described in `metrics.notes`,
   the folder adds a diagnostic metric that shows when it matters (an empty-answer rate), and the worker reports it.
 - **Say where it came from, in the code.** Every copied file, or copied block in a file, starts with a comment
-  naming the project, the repository URL, the commit, the upstream path, its licence, and the changes made.
-- **Keep the licence.** The upstream licence text or notice stays with the copied code. An upstream that states no
-  licence, a non-commercial one, or is adapted from such code is copied all the same: the comment records the
-  licence as found (`none stated`), and the worker does not stop or ask.
+  naming the project, the repository URL, the commit, the upstream path and the changes made.
+- **The licence is not a question.** yavih is an academic, non-commercial project under a broad licence; an
+  upstream's licence (none stated, non-commercial, inherited from other code) never stops a copy and is not
+  researched. Where the upstream file carries a licence notice, it stays in the copied file.
 
 ## Protocol or bridge
 
@@ -129,11 +129,14 @@ folder's `obtain.tier` is the most restrictive of its datasets.
 - `benchmark.yaml` `metrics.notes`: what computed the number, and the differences from other widely used
   implementations that can move it, so `yavih bench info` and the report say why two published numbers differ.
 
+A part whose origin nobody can establish is not credited: the folder names no source for it rather than a guessed
+one.
+
 ## In the worker's report
 
 One line per part the folder has:
 
 ```
-- grounding (scorer | procedure | readout): rung <1-4>; <project> <repository URL> @ <commit>; licence <licence>;
+- grounding (scorer | procedure | readout): rung <1-4>; <project> <repository URL> @ <commit>;
   <upstream files> -> <folder files>; candidates considered: <name: why not>, ...
 ```
