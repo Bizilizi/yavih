@@ -1,0 +1,182 @@
+# diving48: scaffolded from ssv2 by `yavih bench new` on 2026-11-15. TODO: every value below is ssv2's
+# until this benchmark's manifest, protocol and contracts replace it; run `yavih bench lint` after each edit
+# (it tells you the changelog's protocol_hash / input_hash to write after a protocol edit).
+schema_version: 3
+name: diving48
+aliases: []
+title: TODO title of diving48 (scaffolded from ssv2)
+capability:  # TODO: still ssv2's; what diving48 measures, one or more of audio, visual, audio-visual, temporal, spatial, retrieval, generation, streaming
+- visual
+core: '>=1.1,<2'
+header:
+  name: diving48
+  title: 'TODO: the title of the paper that introduced the benchmark'
+  venue: 'TODO: authors · venue year'
+  abstract: 'TODO: two or three neutral sentences on the data and the task (at most 60 words).'
+scorer: clf
+protocol_version: 1
+changelog:
+- version: 1
+  date: '2026-11-15'
+  invalidates: false
+  reason: 'TODO: scaffolded from ssv2 by `yavih bench new`; replace the manifest, protocol, contracts and docs'
+  protocol_hash: 9e96314469eb460fa7b166c2768b2429f9f109a31234767faa25924394486e55
+  input_hash: 2d333d08242c751281a9a26ca7ef37151e211a4e1e3952a58ae3ef74ee921c16
+source:
+  kind: manual_portal
+  urls:
+  - https://developer.qualcomm.com/software/ai-datasets/something-something
+  - https://arxiv.org/abs/1706.04261
+  licence: 'Something-Something v2 (TwentyBN, now distributed by Qualcomm Technologies): free download after registration
+    and acceptance of the dataset licence on the Qualcomm developer portal; research use under those terms, no redistribution
+    of the videos. Read the current terms on the portal before staging. The Hugging Face repo HuggingFaceM4/something_something_v2
+    hosts NO media (loading script only).'
+  bytes: 19450115851
+  sha256:
+    20bn-something-something-download-package-labels.zip: 8e9859f2862c3626dd1cd013dbc0bccccc12ab48d7c18812e3f302988d6f2c0c
+    20bn-something-something-v2-00: aab5bf3badcdf58aed2ac4b6c219a910ea97069b346bcb3ab19202b42dc8f0aa
+    20bn-something-something-v2-01: 65b505fd26e7e72b745421d33508a5b5fcb7544c6b5510e39aa754282bad8d24
+    labels/labels.json: d98d8b657a5d418d7c05dbf630dedd34763025b3d764ceef19bbfd1dc654f54f
+    labels/train.json: b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b
+    labels/validation.json: fbdd69ac72b40b9e3ed3aaf484e1575777152565caed693b0ced2d4959fd3958
+    labels/test.json: 60702636202db04cf60c76c76905d821b8fb281376fc1ee4e140087afe108560
+    labels/test-answers.csv: 82fe3127545b172d5e1a92641e5192bccfbea689d4b793d79f091239ce5cd2ad
+  notes: 'TODO: where the data comes from (the scaffold still describes ssv2''s source)'
+obtain:
+  tier: needs-licence
+  how: 'TODO: who must act before the data can be staged, and how'
+budget:
+  clips:
+    train: 20000
+    val: 24777
+  media_gb: 4.02
+  extract_min_per_1k_clips_ref: 0.5
+  probe_minutes_ref:
+    clf: 5
+manifest:
+  file: manifest.csv.gz
+  sha256: 80def82d6f17565978e963312f048e92732dcb85fca2626bd26c462cc4ec4777
+  classes: classes.csv
+  classes_sha256: cc184f05f25ec403848bbbb3b92cba9c0a103de986d5c7e7396bb49bb9c66552
+  key: clip_id
+  label:
+    column: label
+    kind: single
+    sep: ;
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media:
+      type: str
+      role: media
+      stream: video
+  upstream:
+    source: official labels/{labels,train,validation}.json of the Something-Something v2 release
+    sha256: b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b
+    rows: 193690
+    draw: official labels/train.json sha256 b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b, class-balanced
+      draw (yavih.freeze.class_balanced_subsample), cap 20000, seed 0
+    note: 'train rows are the seeded class-balanced draw of protocol.train_draw over the 168 913 upstream train rows (yavih.freeze.class_balanced_subsample,
+      torch.Generator seed 0; 154 classes x 115, 18 x 116, and the two classes that run out: ''Poking a hole into some substance''
+      91, ''Spilling something behind something'' 111), in ascending upstream (train.json) order; the 148 913 rows not drawn
+      are excluded.draw_remainder. val rows are all 24 777 upstream validation rows in validation.json order. clip_id = numeric
+      video id; label = template with [ ] stripped; rel_media = 20bn-something-something-v2/<id>.webm.'
+    upstream_files:
+      labels/labels.json: d98d8b657a5d418d7c05dbf630dedd34763025b3d764ceef19bbfd1dc654f54f
+      labels/train.json: b24e46090960a49d732a0d3633fd939030b4eb717e16728871a3180b8704192b
+      labels/validation.json: fbdd69ac72b40b9e3ed3aaf484e1575777152565caed693b0ced2d4959fd3958
+    curation:
+      total_upstream: 193690
+      per_split:
+        train:
+          listed: 20000
+          staged: 20000
+          missing: 0
+        val:
+          listed: 24777
+          staged: 24777
+          missing: 0
+      excluded:
+        draw_remainder: 148913
+      short_clips: 0
+      leakage_audit: null
+splits:
+  train:
+  - train
+  eval:
+  - val
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+targets: null
+data:
+  roots:
+    media_root:
+      default: ${data.root}/ssv2
+      description: 'SSv2 release root: 20bn-something-something-v2/<id>.webm (220 847 flat files, 19 GB; the manifest uses
+        44 777) and labels/{labels,train,validation,test}.json + test-answers.csv.'
+  tar_index: null
+  derived: {}
+input_contract:
+  handed_over:
+    video: the SSv2 webm exactly as stored (vp9, 12 fps nominal with leading offsets and holes in ~8 % of clips, height 240,
+      width 240-483, no audio track, 0.83-14.17 s, median 4.0 s), byte for byte; nothing decoded, cut, re-timed, resized or
+      cropped
+  info:
+    video:
+    - duration_s
+    - fps
+    - n_frames
+    - width
+    - height
+    - container
+    - bytes
+  facts: []
+  materialize: null
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+external: []
+protocol:
+  clip_seconds: null
+  train_draw:
+    cap: 20000
+    seed: 0
+    balance: class
+  views: none
+metrics:
+  headline: acc
+  list:
+  - acc
+  - n_eval
+  floors:
+  - acc_floor
+  controls: []
+  chance:
+    acc: 0.005747
+  ci:
+    acc: binomial
+  bootstrap:
+    samples: 2000
+    seed: 0
+  aggregation: null
+readout_params: {}
