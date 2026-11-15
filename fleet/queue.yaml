@@ -2235,8 +2235,8 @@ entries:
   status: shipped
   obtain: null
   blocked_by: null
-  branch: null
-  readme: legacy
+  branch: readme/unav100
+  readme: migrating
 - name: waymo_box_tracking
   title: Waymo Open
   kind: benchmark
@@ -2642,10 +2642,10 @@ entries:
   text_fields: false
   parents: []
   survey_note: Zero-shot cosine/offset consistency tests
-  status: todo
+  status: claimed
   obtain: null
   blocked_by: null
-  branch: null
+  branch: bench/av_syncbench
 - name: avut_qa
   title: AVUT
   kind: benchmark
@@ -4604,8 +4604,8 @@ entries:
   status: shipped
   obtain: null
   blocked_by: null
-  branch: null
-  readme: legacy
+  branch: readme/epic_sounds_det
+  readme: migrating
 - name: avsync
   title: Audio-visual synchronisation offsets on VGGSound
   kind: benchmark
@@ -4648,3 +4648,16 @@ entries:
   blocked_by: null
   branch: null
   readme: legacy
+- name: vggsounder_retrieval
+  title: VGGSounder audio-visual retrieval
+  kind: benchmark
+  survey_class: null
+  survey_reasons: []
+  route: folder-stateless
+  text_fields: false
+  parents: []
+  survey_note: Training-free A->V and V->A retrieval on the VGGSounder test clips whose labels are all both audible and visible (5 294); instance-level headline, class-level alongside; the maintainer's design
+  status: claimed
+  obtain: null
+  blocked_by: null
+  branch: bench/vggsounder_retrieval
