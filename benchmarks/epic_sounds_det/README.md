@@ -1,18 +1,73 @@
 ![EPIC-SOUNDS detection](assets/header.png)
 
-[Paper](https://arxiv.org/abs/2302.00646) · [Homepage](https://epic-kitchens.github.io/epic-sounds/) · [Dataset](https://github.com/epic-kitchens/epic-sounds-annotations) · [setup.md](setup.md)
+[Paper](https://arxiv.org/abs/2302.00646) · [Homepage](https://epic-kitchens.github.io/epic-sounds/) · [Dataset](https://github.com/epic-kitchens/epic-sounds-annotations) · [Licence](https://creativecommons.org/licenses/by-nc/4.0/) · [setup.md](setup.md)
 
-## Description
+<!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance epic_sounds_det --write) -->
+| At a glance | EPIC-SOUNDS detection |
+|---|---|
+| **Task** | Temporal detection, multi-label · audio, temporal |
+| **Modality** | Audio |
+| **Size** | 495 train / 137 validation · 44 classes |
+| **Headline** | mAP averaged over tIoU thresholds (`map_avg`) |
+| **Data** | Public download; fetched unattended · 6.3 GB of media · how: [setup.md](setup.md) |
+| **Licence** | EPIC-SOUNDS annotations and EPIC-KITCHENS-100 videos are both CC BY-NC 4.0 (non-commercial; credit the authors). Cite Huh et al. (TPAMI 2025) and Damen et al. (IJCV 2022). |
+| **Protocol** | Version 1 · scorer `epic_sounds_det` (the folder's own) · needs yavih >=1.1,<2 · `yavih bench fetch epic_sounds_det` · alias `epic_sounds_detection` |
+<!-- yavih:glance end -->
 
-EPIC-SOUNDS annotates the audio of the untrimmed egocentric kitchen recordings of EPIC-KITCHENS-100 (100 hours,
-700 recordings of 45 kitchens) with the temporal extent and a class of every audible interaction: 78.4 k
-categorised segments in 44 classes (collisions by material pair, scrub / scrape, cut / chop, open / close, water,
-footstep, background, ...) and 39.2 k uncategorised ones. Two challenges are defined on it. In sound recognition
-the segment boundaries are given and only the class is predicted. In sound detection, the task here, the model
-sees the whole recording and predicts every (start, end, class) triple; it is scored by mean average precision
-over the classes, averaged over temporal IoU thresholds 0.1, 0.2, 0.3, 0.4 and 0.5. The official splits are
-train (495 recordings, 60 055 segments) and validation (137 recordings, 8 035 segments) with public labels, and
-two test splits whose labels are held by the challenge server (detection test: 23 recordings).
+## The task
+
+Listen to a whole, untrimmed recording of someone working in their kitchen, from ten seconds to an hour long, and
+find every audible interaction in it: when it starts, when it ends and what it is. A pan lid clanks onto the hob (a
+metal-only collision), a cupboard door opens and shuts (open / close), a knife works through a carrot (cut / chop),
+the tap runs (water). Each answer is a (start, end, class) triple with a confidence, and one recording can hold
+hundreds of them; the median sound lasts about a second, but some last minutes.
+
+![Five-second excerpts of two validation recordings, waveform over mel spectrogram, with the classes labelled in each recording](assets/preview.png)
+
+## The data
+
+EPIC-SOUNDS (Huh, Chalk, Kazakos, Damen and Zisserman, TPAMI 2025) annotates the audio of EPIC-KITCHENS-100, 100
+hours of head-mounted camera recordings in 45 kitchens (Damen et al., IJCV 2022). Annotators marked the temporal
+extent of every audible interaction, and the sounds were grouped into 44 classes: collisions named by the materials
+that meet (metal-only, metal / ceramic, plastic / wood, ...), scrub / scrape, cut / chop, open / close, water, pour,
+footstep, rustle, beep, sizzling / boiling, a background class and more. The release holds 78.4 k categorised
+segments and 39.2 k segments that could not be placed in a class.
+
+The official splits are train (495 recordings, 60 055 segments) and validation (137 recordings, 8 035 segments),
+whose labels are public, and two test splits whose labels stay on the challenge server (23 recordings for
+detection). Here a detector learns on train and is scored on validation; the test splits are not used. The audio
+is the 48 kHz stereo track of each EPIC-KITCHENS-100 video, kept as recorded. Annotations and videos are both
+licensed CC BY-NC 4.0: free for non-commercial use, with credit to the authors. The data is a public download
+without an account, but each video is fetched in full (1.1 TB in all) to keep its audio (6 GB in all).
+
+## How it is scored
+
+A predicted segment is a hit when it has the right class and overlaps a not yet matched true segment of the same
+recording by at least a given temporal IoU. Average precision is computed per class over all validation
+recordings, averaged over the classes, and averaged again over the IoU thresholds 0.1, 0.2, 0.3, 0.4 and 0.5; the
+headline is that mean, in percent. Mean average precision is the standard detection score because it rewards both
+finding every sound and ranking confident, well-placed segments first. The official challenge leaves the
+background class out of the ground truth; the paper's Table V keeps it; both readings are reported.
+
+The number is computed by a transcription of the EPIC-SOUNDS authors' own challenge scorer,
+[`audio_based_interaction_detection.py`](https://github.com/epic-kitchens/C10-epic-sounds-detection/tree/196e7cf2c4f17946279fb57d9ff24516b7403344/EvaluationCode)
+of the C10 detection challenge, itself adapted from the ActivityNet detection evaluation.
+
+yavih scores frozen features: a fixed temporal detection head is trained on the model's audio tokens, so the score
+measures how well the features place sounds in time, not how well a detector can be fine-tuned. Detection has no
+chance level; the floor is a detector that knows only the training labels (how often each class sounds and how
+long it lasts) and never hears the audio.
+
+Not this benchmark: EPIC-SOUNDS sound recognition, where the segment boundaries are given and only the class is
+predicted, is a different task with a different score; and numbers on the detection test split come from the
+challenge server, on other recordings.
+
+## Reference numbers
+
+The paper reports ActionFormer on auditory SlowFast features fine-tuned on EPIC-SOUNDS at 16.5 / 15.2 / 13.7 / 12.0
+/ 10.1 mAP at IoU 0.1 to 0.5 on validation, 13.5 on average, with background kept (Huh et al., TPAMI 2025, Table
+V); the same predictions score 13.8 under the challenge's rule. They come from a detector trained on
+fine-tuned features and are not comparable with a frozen-feature probe.
 
 ## Citation
 
@@ -34,37 +89,3 @@ two test splits whose labels are held by the challenge server (detection test: 2
   year    = {2022}
 }
 ```
-
-## In yavih
-
-One row per untrimmed recording: train 495 (role `train`) and validation 137 (role `eval`); no train draw. Scorer
-`epic_sounds_det`, the folder's own temporal-detection scorer (see below); headline `map_avg`, the official C10 score: mean AP
-over the 43 non-background classes and tIoU 0.1 to 0.5, in percent, with `map@0.1` ... `map@0.5` and
-`map_avg_paper` (background kept, the paper's Table V convention). Floor `map_avg_floor` (a label-only prior
-detector); no chance value, no interval. `protocol_version` 1. The bridge gets the whole recording's AAC track
-(m4a, 10 s to 62 min) and returns one fixed `[N, D]` token set with media times `t`; see [setup.md](setup.md).
-
-The scorer is the folder's own (`eval.py` and `detection.py`; `yavih bench info epic_sounds_det` names it on its
-`extends:` line), shared byte for byte with the other folders that detect timed events. A dense query head
-(`dense_query_v1`) with `T = 1024` time queries tiles each recording (`readout_params.T`: 0.5 s per bin at the mean
-recording length, 3.6 s on the longest) and reads every token at the fraction of the recording it lies at; per bin
-it predicts the 44 class logits and the distances to the segment start and end (sigmoid focal loss plus a 1-D GIoU
-loss). A pinned decoder (score threshold, top 2 000, per-class NMS at tIoU 0.5, 100 segments per recording) turns the
-outputs into scored segments, which the official scorer below scores on the validation recordings. The floor is the
-label-only constant output (per bin the train frequency of each class and the median train extents), decoded and
-scored the same way.
-
-The official scorer (C10 `audio_based_interaction_detection.py`) is not installable and needs numpy < 1.24, so
-`eval.py` transcribes it in numpy, including its tie order and the background rule. Scoring the C10 baseline
-file `actionformer_baseline_validation.json` with it gives 16.48 / 15.15 / 13.70 / 11.99 / 10.12 (average 13.49)
-with background kept, the published ActionFormer validation row (16.5 / 15.2 / 13.7 / 12.0 / 10.1, 13.5; Huh et
-al., TPAMI 2025, Table V), and 16.74 / 15.48 / 14.01 / 12.26 / 10.35 (13.77) under the C10 rule. Those numbers come
-from fine-tuned auditory SlowFast features with ActionFormer, not from a frozen-feature probe.
-
-Not this benchmark: the EPIC-SOUNDS recognition task (segment boundaries given), and the detection test split
-(labels on the challenge server only).
-
-Re-freezing the manifest: `make_manifest.py` derives `manifest.csv.gz` and `classes.csv` byte-identically from
-the two public label CSVs (and counts the two test files), pinned by sha256 at epic-sounds-annotations `57a922f`;
-`python make_manifest.py --no-media --metadata <dir> --check` re-derives without media, and `tests/test_folder.py`
-runs it on a copy rebuilt from the committed manifest.
