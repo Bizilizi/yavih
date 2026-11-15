@@ -38,8 +38,8 @@ test clips (12 014 minus 6 whose YouTube video also feeds the VGGSound training 
 class that is both audible and visible and none that is only one of the two; they span 308 of the 309 classes.
 
 Nothing else is removed. The classes are unbalanced: "male speech, man speaking" holds 697 clips and 50 classes
-have fewer than ten. Most clips carry one or two classes, a few up to thirteen. 270 clips come in groups of two to
-four from the same YouTube video.
+have fewer than ten. Most clips carry one or two classes, a few up to thirteen. 270 clips come in pairs from the
+same YouTube video (135 videos).
 
 The VGGSound listing is CC BY 4.0 and the VGGSounder labels Apache-2.0; the media are YouTube clips that each user
 fetches, under YouTube's terms. There is one split, `test`.
