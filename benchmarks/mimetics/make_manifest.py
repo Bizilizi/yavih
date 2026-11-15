@@ -162,7 +162,7 @@ def test_rows(release: dict, names: list[str]) -> list[dict[str, str]]:
     for r in release["rows"]:
         if r["split"] != "test" or r["label"] not in index or len(r["youtube_id"]) != 11:
             raise SystemExit(f"mimetics_v1.0.csv: unexpected row {r}")
-        cid = "%s_%06d_%06d" % (r["youtube_id"], int(r["time_start"]), int(r["time_end"]))
+        cid = f"{r['youtube_id']}_{int(r['time_start']):06d}_{int(r['time_end']):06d}"
         if cid not in release["annot"]:
             raise SystemExit(f"objectsceneannot lacks {cid}")
         obj, scene, mime = release["annot"][cid]

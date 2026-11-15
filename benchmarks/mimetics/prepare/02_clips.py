@@ -56,7 +56,7 @@ def ytdlp_command() -> list[str]:
 
 def construct_video_filename(row, clips_dir, trim_format="%06d"):
     """Given a dataset row, this function constructs the output filename for a given video (crawler, flat dir)."""
-    basename = "%s_%s_%s.mp4" % (row["youtube_id"], trim_format % int(row["time_start"]), trim_format % int(row["time_end"]))
+    basename = "%s_%s_%s.mp4" % (row["youtube_id"], trim_format % int(row["time_start"]), trim_format % int(row["time_end"]))  # noqa: UP031 (the crawler's line, as is)
     return os.path.join(clips_dir, basename)
 
 
@@ -64,7 +64,7 @@ def download_video(video_identifier, tmp_dir, num_attempts=5):
     """The crawler's download half of ``download_clip``: ``(path | None, log)``."""
     assert isinstance(video_identifier, str), "video_identifier must be string"
     assert len(video_identifier) == 11, "video_identifier must have length 11"
-    tmp_filename = os.path.join(tmp_dir, "%s.%%(ext)s" % uuid.uuid4())
+    tmp_filename = os.path.join(tmp_dir, "%s.%%(ext)s" % uuid.uuid4())  # noqa: UP031 (the crawler's line, as is)
     command = ytdlp_command() + ["--quiet", "--no-warnings", "-f", "mp4", "-o", tmp_filename, URL_BASE + video_identifier]
     attempts = 0
     while True:
@@ -76,7 +76,7 @@ def download_video(video_identifier, tmp_dir, num_attempts=5):
                 return None, err.output.decode("utf-8", "replace").strip()
         else:
             break
-    found = glob.glob("%s*" % tmp_filename.split(".")[0])
+    found = glob.glob("%s*" % tmp_filename.split(".")[0])  # noqa: UP031 (the crawler's line, as is)
     return (found[0], "Downloaded") if found else (None, "yt-dlp wrote no file")
 
 
