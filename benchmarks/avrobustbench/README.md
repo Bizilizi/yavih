@@ -10,7 +10,7 @@
 | **Size** | 20 000 train / 224 736 test · 309 classes |
 | **Headline** | `macc` · chance 0.32 % |
 | **Readings** | Audio · video · audio+video |
-| **Data** | Derived from another dataset; media on request from the data owner · 1 GB of media · how: [setup.md](setup.md) |
+| **Data** | Derived from another dataset; media on request from the data owner · 121 GB of media · how: [setup.md](setup.md) |
 | **Licence** | Derived from VGGSound (annotations CC BY 4.0; the media are YouTube clips fetched by the user, subject to YouTube's terms). Corruption code and noise/overlay assets: AVROBUSTBENCH repository, MIT (its noise recordings come from ESC-50 and … |
 | **Protocol** | Version 1 · scorer `clf` · needs yavih >=1.1,<2 · `yavih bench fetch avrobustbench` · alias `vggsound_2c` |
 <!-- yavih:glance end -->

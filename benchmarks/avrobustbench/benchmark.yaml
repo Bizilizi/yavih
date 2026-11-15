@@ -58,8 +58,14 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
   how: "needs the VGGSound corpus (YouTube clips decay: prefer an existing copy); the corrupted clips are then made locally by prepare steps 3-4 (authors' code, public assets)"
 budget:
   clips: {train: 20000, test: 224736}
-  media_gb: 1.0   # TODO: measured on the staged sample, scaled
-  extract_min_per_1k_clips_ref: 2.0   # TODO: measure
+  # media_gb: the materialized mp4 + wav per row, mean bytes per (split, condition) over the 1 342 verified rows of a
+  # staged sample (52 eval clips x 16 conditions, 510 train clips) x the frozen rows: train 7.8 + test 112.9 GB. The
+  # VGGSound source media the manifest touches (34 046 clips, 68 092 files) are 70.5 GB, prepare-only (media_root).
+  media_gb: 120.6
+  # 1000 / clips_per_s / 60 from `bridge check` (ResNet-50 frames + STFT audio budget bridge, reading av, 30.2
+  # clips/s at 4 decode workers, n = 32, a shared 24 GB GPU). A capped extract of 320 test rows on the same, heavily
+  # loaded machine ran at 1.42 clips/s wall (read 22.5 s, prepare 10.5 s, encode 9.6 s of 226 s).
+  extract_min_per_1k_clips_ref: 0.6
   probe_minutes_ref: {clf: 30}   # TODO: measure
 
 manifest:
