@@ -151,5 +151,12 @@ Then `yavih bridge check <bridge.py> --bench nsynth --out nsynth.profile.json` m
   (`guitar_acoustic_010-060-100` is pitch 60): a bridge never reads them (`bridge check` scrambles ids).
 * **Vocabulary.** The logit index is `classes.csv`: names `21` … `108`, index = pitch − 21. `chroma_acc` is HEAR's
   class-index-mod-12 rule, which is the pitch class only because the vocabulary is contiguous.
+* **Six test notes are the same audio.** NSynth itself stores byte-identical PCM under six of the 500 test notes,
+  all `brass_acoustic_046` (pitches 85, 98, 99, 100, 104 and 108: test rows 130-135; and two valid notes,
+  pitches 88 and 90). Any deterministic bridge writes identical features for them, 6 of 500 = 1.2 %, above
+  validate's 1 % limit, so `yavih features validate` reports `E_DUPLICATE_CLIPS` naming rows `[130, 131, 132, 133,
+  134, 135]`. `bridge_template.py` carries the waiver in `describe()["waive"]` (recorded with every number); keep
+  it. A message naming any other row means the bridge ignores its input. HEAR scores the six rows as they are, so
+  at most one of them can be right: the ceiling of `pitch_acc` and `chroma_acc` is 495/500 = 0.99.
 * **The test split is HEAR's 500-note draw, not NSynth's 4 096-note test set.** Do not stage or score the full test
   set: its numbers are another benchmark (HEAR's 50h mode keeps all 4 060 in-range test notes).

@@ -180,5 +180,7 @@ metrics:
     - "The readout is yavih's attentive clf probe (val carved from train), not HEAR's MLP grid (1-2 x 1024 hidden, 4 lrs, 2 inits, picked on valid): not comparable with HEAR's leaderboard."
     - "valid (500) is unused: it holds the same 53 instruments as test (train shares none), so training on it would leak test instruments; HEAR only selects on it."
     - "Not HEAR's 50h variant (40 000 train notes, all 4 060 in-range test notes) nor NSynth's 4 096-note test set: their numbers are other benchmarks."
+    - "Six test notes (brass_acoustic_046, pitches 85 98 99 100 104 108; rows 130-135) are byte-identical audio in NSynth, kept as HEAR draws them: at most one is right, so both metrics top out at 0.99."
+    - "Those six rows make validate report E_DUPLICATE_CLIPS (6/500 > 1 %); bridge_template.py waives it in describe(). A duplicate on any other row is a bridge bug."
 
 readout_params: {}

@@ -115,6 +115,12 @@ class NsynthBridge(Bridge):
             },
             "precision": {"autocast": None, "matmul_precision": "highest", "allow_tf32": False, "deterministic": True},
             "args": {"layer": self.layer},
+            # The data, not the model: NSynth stores byte-identical audio under six of HEAR's 500 test notes
+            # (brass_acoustic_046, pitches 85 98 99 100 104 108; test rows 130-135), so any deterministic bridge
+            # writes identical features for them, 1.2 % of the sample, above validate's 1 % (setup.md "Gotchas").
+            # Keep this waiver; a validate message naming any other row is a bug in your bridge.
+            "waive": {"E_DUPLICATE_CLIPS": "NSynth stores byte-identical audio for 6 test notes (brass_acoustic_046 "
+                                           "pitches 85/98/99/100/104/108, test rows 130-135); upstream data, not the bridge"},
         }
 
     @staticmethod

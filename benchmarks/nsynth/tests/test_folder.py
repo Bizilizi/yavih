@@ -428,3 +428,31 @@ def test_reader_smoke_real_media(isolated: Path):
         raw = st.bytes()
         assert len(raw) == WAV_BYTES and raw[:4] == b"RIFF" and raw[8:12] == b"WAVE"
         assert s.meta == {"facts": {}}
+
+
+# ----------------------------------------------------------------------------- NSynth's duplicated audio
+
+
+DUPLICATE_TEST_NOTES = {130: "brass_acoustic_046-085-127", 131: "brass_acoustic_046-098-075",
+                        132: "brass_acoustic_046-099-127", 133: "brass_acoustic_046-100-025",
+                        134: "brass_acoustic_046-104-050", 135: "brass_acoustic_046-108-050"}
+
+
+def test_duplicate_test_notes_are_the_waived_rows(rows: list[dict[str, str]]):
+    """The rows setup.md, metrics.notes and the template's waiver name are these six test notes."""
+    test = [r["clip_id"] for r in rows if r["split"] == "test"]
+    assert {i: test[i] for i in DUPLICATE_TEST_NOTES} == DUPLICATE_TEST_NOTES
+    src = (HERE / "bridge_template.py").read_text(encoding="utf-8")
+    assert '"waive": {"E_DUPLICATE_CLIPS":' in src and "130-135" in src
+
+
+@pytest.mark.skipif(MEDIA_ROOT is None, reason="NSynth media not staged on this machine")
+def test_duplicate_audio_in_staged_media(rows: list[dict[str, str]]):
+    """Byte-identical PCM among the staged notes: exactly the six test notes and two valid notes, none in train."""
+    groups: dict[str, dict[str, list[str]]] = {}
+    for r in rows:
+        pcm = (MEDIA_ROOT / r["rel_path"]).read_bytes()[44:]
+        groups.setdefault(r["split"], {}).setdefault(hashlib.sha256(pcm).hexdigest(), []).append(r["clip_id"])
+    dups = {s: sorted(sorted(v) for v in g.values() if len(v) > 1) for s, g in groups.items()}
+    assert dups == {"train": [], "test": [sorted(DUPLICATE_TEST_NOTES.values())],
+                    "valid": [["brass_acoustic_046-088-050", "brass_acoustic_046-090-050"]]}
