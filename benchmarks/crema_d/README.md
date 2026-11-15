@@ -21,9 +21,7 @@ happiness, sadness, or a neutral reading. The words carry no emotion ("It's elev
 jacket"): the same twelve sentences are spoken in every emotion, so only the voice (pitch, energy, timing, voice
 quality) tells them apart. Every clip has exactly one answer.
 
-<!-- once rendered (python -m yavih.previews crema_d --chrome <chrome>), un-comment:
-![Two CREMA-D clips, waveform over mel spectrogram, each with its emotion](assets/preview.png)
--->
+![One actor saying "Don't forget a jacket" in anger and in sadness: waveform over mel spectrogram](assets/preview.png)
 
 ## The data
 
