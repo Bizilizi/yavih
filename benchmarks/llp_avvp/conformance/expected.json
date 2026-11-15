@@ -1,0 +1,67 @@
+{
+ "benchmark": "llp_avvp",
+ "generator": 1,
+ "population": {
+  "eval": 64,
+  "floor": 0,
+  "folds": 0,
+  "train": 64
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "437fe977e04d58b360c12f53be06102851472872",
+  "externals": {},
+  "folder_source": {
+   "eval": "4f5e445ca254c4bcc8d7869ea5153e6af2c06dac34545c84b924ee396db21ee1",
+   "reader": null
+  },
+  "protocol_hash": "4f0320108f4f83513f37230f8b7c3326b5dce287cfe4bc1e19cfeba98657e318",
+  "scorer": {
+   "kind": "probe",
+   "name": "llp_avvp",
+   "version": 1
+  },
+  "scoring_hash": "3000bd4ab95edb611dbf56795a994ddd2b240674bf10b2defc6479686e00d70f",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "map@0.5": 0.001,
+  "map_avg": 0.001,
+  "map_avg_floor": 0.001,
+  "map_tiou": 0.001,
+  "n_eval": 0.001,
+  "n_events": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "map_avg": [
+     8.935446821505225e-05,
+     0.0010618312335471886
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "map_avg_floor": 0.01230690932212917
+   },
+   "metrics": {
+    "map@0.5": 0.0,
+    "map_avg": 0.00022246984068951403,
+    "map_tiou": [
+     0.0015429264435970521,
+     0.0004593021226085742,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "n_eval": 64,
+    "n_events": 195
+   }
+  }
+ }
+}
