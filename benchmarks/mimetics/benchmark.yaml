@@ -59,7 +59,7 @@ budget:
   clips: {train: 10000, test: 713}
   media_gb: 5.6  # measured: the 10 000 K400 train files (5.25 GB) + 422 staged Mimetics clips (0.35 GB)
   extract_min_per_1k_clips_ref: 1.1  # measured: ResNet-18 per frame (8 x 7 x 7 tokens), shared 24 GB GPU, 4 decode workers, 10 422 clips in 678.6 s
-  probe_minutes_ref: {clf: 10}  # TODO
+  probe_minutes_ref: {clf: 10}  # measured: 9.5 min (fit 551 s, 10 epochs), seed 0, ResNet-18 tokens (392 x 512), shared 24 GB GPU, peak ~13 GB
 
 manifest:
   file: manifest.csv.gz
