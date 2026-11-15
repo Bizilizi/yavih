@@ -57,8 +57,8 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
   how: "nobody: prepare/01 fetches the 22 kB release, prepare/02 downloads and trims the clips from YouTube (some videos are gone); the train clips come from the k400 folder's staged Kinetics-400"
 budget:
   clips: {train: 10000, test: 713}
-  media_gb: 0.0  # TODO
-  extract_min_per_1k_clips_ref: 2.0  # TODO
+  media_gb: 5.6  # measured: the 10 000 K400 train files (5.25 GB) + 422 staged Mimetics clips (0.35 GB)
+  extract_min_per_1k_clips_ref: 1.1  # measured: ResNet-18 per frame (8 x 7 x 7 tokens), shared 24 GB GPU, 4 decode workers, 10 422 clips in 678.6 s
   probe_minutes_ref: {clf: 10}  # TODO
 
 manifest:
@@ -104,7 +104,7 @@ manifest:
       total_upstream: 34819
       per_split:
         train: {listed: 10000, staged: 10000, missing: 0}
-        test: {listed: 713, staged: 0, missing: 713}
+        test: {listed: 713, staged: 422, missing: 291}
       excluded:
         draw_remainder: 24106
       leakage_audit: {against: "Kinetics-400 train and val YouTube ids of the Academic-Torrents release (raw and normalised)", excluded: 0}
@@ -145,7 +145,7 @@ input_contract:
     video: >-
       the stored mp4 as is: for train rows a Kinetics-400 clip of the Academic-Torrents _256 release (h264, 256
       pixels high, about 10 s), for test rows a Mimetics clip as the Kinetics crawler trims it from the YouTube
-      video (h264 re-encode at the downloaded resolution, mostly 360 pixels high, 1 to 10 s); nothing decoded, cut,
+      video (h264 re-encode at the downloaded resolution, 128 to 2160 pixels high, 1 to 10 s); nothing decoded, cut,
       resized, padded or normalized
   info:
     video: [duration_s, fps, width, height, container, bytes]
@@ -187,7 +187,8 @@ metrics:
     - "mean_top1, mean_top5, mean_ap are the paper's Table 6/9 metrics, written from its text: per-class means; AP = mean 1/rank of the label (ties in its favour). Compare them with the paper."
     - "The probe is 50-way, trained on K400 clips of the 50 classes (paper Table 9; IntegralAction's Kinetics50). The paper's main 400-way numbers (Table 6) are far lower and not comparable."
     - "IntegralAction scores 596 clips: it drops clips shorter than its 57-frame window and averages 10 windows per clip. yavih scores every staged clip with one view."
-    - "YouTube removals: STAGED_TEST/713 clips were staged on DOWNLOAD_DATE. n_eval and coverage are part of every result; numbers on different subsets can differ by a few points."
-    - "Near 25 % on ~STAGED_TEST clips the binomial 95 % CI of acc is about +-CI_PTS points: gaps below that at one seed are unresolved."
-    - "Floor acc_floor: the train draw is balanced (200 per class), so the floor answers class 0 (archery, 19 clips): about 2.7 %; chance is 2 %."
+    - "YouTube removals: 422/713 clips (312 of 560 videos) were staged on 2026-11-15 before YouTube's bot check refused the site; some of the rest are removed or private."
+    - "n_eval and coverage are part of every result: numbers on different subsets of the 713 clips can differ by a few points."
+    - "Near 25 % on ~420 clips the binomial 95 % CI of acc is about +-4 points (+-3.2 on all 713): gaps below that at one seed are unresolved."
+    - "Floor acc_floor: the train draw is balanced (200 per class), so the floor answers class 0 (archery): 19/713 = 2.7 % on all clips, 17/422 = 4.0 % here; chance is 2 %."
 readout_params: {}

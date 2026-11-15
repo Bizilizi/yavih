@@ -21,7 +21,8 @@ What ``prepare`` and ``encode`` receive per Sample ``s`` (setup.md "## Input con
     s.streams["video"].info  {"duration_s", "fps", "width", "height", "container", "bytes"} non-null on every
         row ("n_frames" may be null). Train rows: Academic-Torrents Kinetics-400 _256 mp4 (h264, 256 high, ~10 s,
         some shorter). Test rows: the YouTube clips as prepare/02 trims them (h264 re-encoded by ffmpeg/libx264 at
-        the downloaded size, mostly 360 high, 1-10 s: 59 clips of 1 s and 134 of 2 s in the release list).
+        the downloaded size, 128 to 2160 high (median 720 here, some portrait), 1-10 s: 59 clips of 1 s and 134 of
+        2 s in the release list).
     s.meta == {"facts": {}}  (no facts; never read row / clip_id / split — bridge check scrambles them)
 
 What ``encode`` returns (setup.md "## Output contract"): ``(feats [B, N, D], pos, used)``

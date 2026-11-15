@@ -19,7 +19,7 @@ Two data roots, two sources (`source.kind: public_url`; `obtain.tier: auto`, nob
    Academic-Torrents Kinetics-400 `_256` release (infohash `184d11318372f70018cf9a72ef867e2fb9ce1d26`), read in place
    as the `k400` benchmark stages it: `train/<class>/<clip_id>.mp4`. If it is not staged yet, stage it with the k400
    folder (`yavih bench fetch k400`, then `yavih bench prepare k400 01` and `02`: a 157 GB torrent download; read
-   `yavih bench show k400 setup`). Only the 10 000 drawn train files (STAGED_TRAIN_GB GB) are read. Point
+   `yavih bench show k400 setup`). Only the 10 000 drawn train files (5.25 GB) are read. Point
    `mimetics.k400_root` at an existing copy instead of making a second one.
 
 ```bash
@@ -34,19 +34,24 @@ yavih bench verify mimetics --census  # presence per split, a decode sample, the
 - `02_clips.py [--workers 4] [--limit N]` downloads each YouTube video once (`yt-dlp -f mp4`, five attempts) and cuts
   every clip of it with ffmpeg (`-ss <start> -t <end - start> -c:v libx264 -c:a copy`, plus a timestamp shift so the
   first video frame is at 0; ffmpeg >= 4.4 with libx264). Clips already staged are skipped, so it can be re-run to
-  retry failures. It writes `<media_root>/download_report.csv` (clip, status, message, UTC time). It took about
-  DOWNLOAD_HOURS hours with 4 workers here.
-- **YouTube videos disappear.** On DOWNLOAD_DATE, STAGED_TEST of the 713 clips could still be downloaded here
+  retry failures. It writes `<media_root>/download_report.csv` (clip, status, message, UTC time). Each video costs
+  one download and one trim per clip; an unavailable video costs five attempts. A pass over the 560 videos takes
+  on the order of an hour with 4 workers.
+- **YouTube videos disappear.** On 2026-11-15, 422 of the 713 clips (312 of the 560 videos) were downloaded here
   (`curation.per_split.test` records that census); the others report `unavailable` (removed, private or
-  region-blocked videos). A missing test clip is simply absent: the probe scores the clips present and records
-  the coverage; it refuses below `splits.min_eval_coverage` (MIN_COV) unless `--allow-low-coverage` is given. Never
+  region-blocked videos, and, from some point of that run on, YouTube's bot check below, so 422 is a lower bound
+  of what is still online). A missing test clip is simply absent: the probe scores the clips present and records
+  the coverage; it refuses below `splits.min_eval_coverage` (0.5) unless `--allow-low-coverage` is given. Never
   substitute another upload of a video.
 - YouTube may also refuse a datacenter address ("Sign in to confirm you're not a bot"): those clips report
   `unavailable` with that message; re-run from another address, or with yt-dlp's own cookie options in `$YTDLP`.
+  Here it began partway through the first run and refused every later video: when the count of staged clips
+  stops growing, stop the step (it only records refusals), wait, and re-run it; staged clips are skipped.
 
-Disk: the release is 22 kB; the staged Mimetics clips take TEST_MB MB (`<media_root>/clips/`); the download
+Disk: the release is 22 kB; the 422 staged Mimetics clips take 353 MB (`<media_root>/clips/`); the download
 needs room for one full YouTube video per worker at a time under `<media_root>/tmp/` (removed at the end). The
-frozen rows touch MEDIA_GB GB in all (`budget.media_gb`). Nothing is materialized or derived (`data.derived: {}`).
+frozen rows touch 5.6 GB in all here (`budget.media_gb`: 5.25 GB of Kinetics-400 train clips and 0.35 GB of Mimetics
+clips; about 0.6 GB with all 713). Nothing is materialized or derived (`data.derived: {}`).
 
 ## Dependencies
 
@@ -81,12 +86,12 @@ per-clip `object` / `scene` / `mime` flags never reach the bridge.
 The guaranteed `info` keys are non-null on every row: `duration_s` (the video stream's), `fps`, `width`, `height`,
 `container`, `bytes`; `n_frames` may be null. Facts of the staged rows (`yavih bench verify mimetics --census`):
 
-| fact | train (Kinetics-400, 10 000) | test (Mimetics, STAGED_TEST staged) |
+| fact | train (Kinetics-400, 10 000) | test (Mimetics, 422 staged) |
 |---|---|---|
-| container / codec | CENSUS_TRAIN_CODEC | CENSUS_TEST_CODEC |
-| size | CENSUS_TRAIN_SIZE | CENSUS_TEST_SIZE |
-| fps | CENSUS_TRAIN_FPS | CENSUS_TEST_FPS |
-| duration (video stream) | CENSUS_TRAIN_DUR | CENSUS_TEST_DUR |
+| container / codec | mp4 / h264 | mp4 / h264 (libx264 re-encode) |
+| size | 256 high, 144 to 454 wide (454 x 256 for 46 %) | 128 to 2160 high (480: 123, 720: 98, 1080: 87; some portrait) |
+| fps | 6 to 59.94 (29.97 or 30 for 66 %) | 6 to 60 (29.97, 25 or 30 for 78 %) |
+| duration (video stream) | 0.5 to 10.13 s (median 10.0; 44 under 2.13 s) | 0.97 to 10.06 s (median 4.0; 119 under 2.13 s) |
 
 The bridge decides, and declares in `describe()["input"]["video"]`:
 - **temporal**: which frames. The template's default is the reference's: 8 frames 8 stored frames apart (an `fps`
@@ -100,7 +105,7 @@ handed_over:
   video: >-
     the stored mp4 as is: for train rows a Kinetics-400 clip of the Academic-Torrents _256 release (h264, 256
     pixels high, about 10 s), for test rows a Mimetics clip as the Kinetics crawler trims it from the YouTube
-    video (h264 re-encode at the downloaded resolution, mostly 360 pixels high, 1 to 10 s); nothing decoded, cut,
+    video (h264 re-encode at the downloaded resolution, 128 to 2160 pixels high, 1 to 10 s); nothing decoded, cut,
     resized, padded or normalized
 info:
   video: [duration_s, fps, width, height, container, bytes]
@@ -146,7 +151,7 @@ yavih bench verify mimetics --census
 yavih bridge check my_mimetics_bridge.py --bench mimetics --out mimetics.profile.json
 ```
 
-A pass prints `train present 10000/10000` and `test present STAGED_TEST/713` (or however many your download got),
+A pass prints `train present 10000/10000` and `test present 422/713` (or however many your download got),
 a decode sample with 0 failures, and with `--census` the media-info table. `bridge check` must report a
 bit-identical rerun and batch and order invariance; its smoke sample may report `W_MISSING_ROWS` for test clips
 that YouTube no longer serves.
@@ -154,7 +159,7 @@ that YouTube no longer serves.
 ## Gotchas
 
 1. **Two kinds of media in one benchmark.** Train clips are Kinetics-400 re-encodes 256 pixels high, ~10 s; test
-   clips are fresh YouTube trims, mostly 360 pixels high, 1-10 s. One preprocessing for both; never branch on the
+   clips are fresh YouTube trims, 128 to 2160 pixels high, 1-10 s. One preprocessing for both; never branch on the
    size or the duration. The domain gap is part of the task.
 2. **Short test clips.** 59 release clips last 1 s and 134 last 2 s. A fixed-length window (the template's 2.13 s)
    is clamped to the last frame on them (`edge: "clamp"`); `edge: "error"` fails with `E_TIMES_OUT_OF_MEDIA`. Never

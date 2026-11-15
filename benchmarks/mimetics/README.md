@@ -9,7 +9,7 @@
 | **Modality** | Video |
 | **Size** | 10 000 train / 713 test · 50 classes |
 | **Headline** | Accuracy (`acc`) · chance 2 % |
-| **Data** | Public download; fetched unattended · 0 GB of media · how: [setup.md](setup.md) |
+| **Data** | Public download; fetched unattended · 5.6 GB of media · how: [setup.md](setup.md) |
 | **Licence** | Mimetics v1.0 (NAVER LABS Europe): the release (README, page) states no licence and asks to cite the paper. The Mimetics media are YouTube videos the user downloads and trims, subject to YouTube's terms and the uploaders' rights. … |
 | **Protocol** | Version 1 · scorer `clf` · needs yavih >=1.1,<2 · `yavih bench fetch mimetics` |
 <!-- yavih:glance end -->

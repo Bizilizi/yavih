@@ -93,7 +93,7 @@ K400_LISTING_SHA256 = "9b2af343a935b67dd2b676637eb121bb34a53e1e18bd5b5bcc8593182
 K400_LISTING_ROWS = 34106
 #: Census of the staged clips at freeze time (prepare/02_clips.py on that date): how many of the 713 Mimetics
 #: clips could still be downloaded from YouTube. Recorded in ``curation.per_split.test``.
-STAGED_AT_FREEZE = {"date": "TBD", "staged": 0}
+STAGED_AT_FREEZE = {"date": "2026-11-15", "staged": 422}
 
 _SFX = re.compile(r"^(.*)_(\d{6})_(\d{6})$")  # K400 train file stem: <ytid>_<start6>_<end6>
 _YT = re.compile(r"^youtube-(.+)-(\d+)-(\d+)$")  # 36 K400 files: youtube-<ytid>-<start>-<end>
