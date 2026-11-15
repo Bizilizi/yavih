@@ -1,10 +1,310 @@
 index,name
-0,-2.0
-1,-1.5
-2,-1.0
-3,-0.5
-4,0.0
-5,0.5
-6,1.0
-7,1.5
-8,2.0
+0,air conditioning noise
+1,air horn
+2,airplane
+3,airplane flyby
+4,alarm clock ringing
+5,"alligators, crocodiles hissing"
+6,ambulance siren
+7,arc welding
+8,baby babbling
+9,baby crying
+10,baby laughter
+11,baltimore oriole calling
+12,barn swallow calling
+13,basketball bounce
+14,bathroom ventilation fan running
+15,beat boxing
+16,"bee, wasp, etc. buzzing"
+17,"bird chirping, tweeting"
+18,bird squawking
+19,bird wings flapping
+20,black capped chickadee calling
+21,blowtorch igniting
+22,bouncing on trampoline
+23,bowling impact
+24,bull bellowing
+25,canary calling
+26,cap gun shooting
+27,car engine idling
+28,car engine knocking
+29,car engine starting
+30,car passing by
+31,cat caterwauling
+32,cat growling
+33,cat hissing
+34,cat meowing
+35,cat purring
+36,cattle mooing
+37,"cattle, bovinae cowbell"
+38,cell phone buzzing
+39,chainsawing trees
+40,cheetah chirrup
+41,chicken clucking
+42,chicken crowing
+43,child singing
+44,"child speech, kid speaking"
+45,children shouting
+46,chimpanzee pant-hooting
+47,chinchilla barking
+48,chipmunk chirping
+49,chopping food
+50,chopping wood
+51,church bell ringing
+52,civil defense siren
+53,cow lowing
+54,coyote howling
+55,cricket chirping
+56,crow cawing
+57,cuckoo bird calling
+58,cupboard opening or closing
+59,cutting hair with electric trimmers
+60,dinosaurs bellowing
+61,disc scratching
+62,dog barking
+63,dog baying
+64,dog bow-wow
+65,dog growling
+66,dog howling
+67,dog whimpering
+68,"donkey, ass braying"
+69,door slamming
+70,driving buses
+71,driving motorcycle
+72,driving snowmobile
+73,duck quacking
+74,eagle screaming
+75,eating with cutlery
+76,electric grinder grinding
+77,"electric shaver, electric razor shaving"
+78,elephant trumpeting
+79,eletric blender running
+80,elk bugling
+81,"engine accelerating, revving, vroom"
+82,female singing
+83,"female speech, woman speaking"
+84,ferret dooking
+85,fire crackling
+86,fire truck siren
+87,fireworks banging
+88,firing cannon
+89,firing muskets
+90,"fly, housefly buzzing"
+91,foghorn
+92,footsteps on snow
+93,forging swords
+94,fox barking
+95,francolin calling
+96,frog croaking
+97,gibbon howling
+98,goat bleating
+99,golf driving
+100,goose honking
+101,hail
+102,hair dryer drying
+103,hammering nails
+104,"heart sounds, heartbeat"
+105,hedge trimmer running
+106,helicopter
+107,horse clip-clop
+108,horse neighing
+109,ice cracking
+110,"ice cream truck, ice cream van"
+111,lathe spinning
+112,lawn mowing
+113,lighting firecrackers
+114,lions growling
+115,lions roaring
+116,lip smacking
+117,machine gun shooting
+118,magpie calling
+119,male singing
+120,"male speech, man speaking"
+121,metronome
+122,missile launch
+123,mosquito buzzing
+124,"motorboat, speedboat acceleration"
+125,mouse clicking
+126,mouse pattering
+127,mouse squeaking
+128,mynah bird singing
+129,ocean burbling
+130,opening or closing car doors
+131,opening or closing car electric windows
+132,opening or closing drawers
+133,orchestra
+134,otter growling
+135,owl hooting
+136,parrot talking
+137,penguins braying
+138,people babbling
+139,people battle cry
+140,people belly laughing
+141,people booing
+142,people burping
+143,people cheering
+144,people clapping
+145,people coughing
+146,people crowd
+147,people eating
+148,people eating apple
+149,people eating crisps
+150,people eating noodle
+151,people farting
+152,people finger snapping
+153,people gargling
+154,people giggling
+155,people hiccup
+156,people humming
+157,people marching
+158,people nose blowing
+159,people running
+160,people screaming
+161,people shuffling
+162,people slapping
+163,people slurping
+164,people sneezing
+165,people sniggering
+166,people sobbing
+167,people whispering
+168,people whistling
+169,pheasant crowing
+170,pig oinking
+171,"pigeon, dove cooing"
+172,planing timber
+173,plastic bottle crushing
+174,playing accordion
+175,playing acoustic guitar
+176,playing badminton
+177,playing bagpipes
+178,playing banjo
+179,playing bass drum
+180,playing bass guitar
+181,playing bassoon
+182,playing bongo
+183,playing bugle
+184,playing castanets
+185,playing cello
+186,playing clarinet
+187,playing congas
+188,playing cornet
+189,playing cymbal
+190,playing darts
+191,playing didgeridoo
+192,playing djembe
+193,playing double bass
+194,playing drum kit
+195,playing electric guitar
+196,playing electronic organ
+197,playing erhu
+198,playing flute
+199,playing french horn
+200,playing glockenspiel
+201,playing gong
+202,playing guiro
+203,playing hammond organ
+204,playing harmonica
+205,playing harp
+206,playing harpsichord
+207,playing hockey
+208,playing lacrosse
+209,playing mandolin
+210,"playing marimba, xylophone"
+211,playing oboe
+212,playing piano
+213,playing saxophone
+214,playing shofar
+215,playing sitar
+216,playing snare drum
+217,playing squash
+218,"playing steel guitar, slide guitar"
+219,playing steelpan
+220,playing synthesizer
+221,playing tabla
+222,playing table tennis
+223,playing tambourine
+224,playing tennis
+225,playing theremin
+226,playing timbales
+227,playing timpani
+228,playing trombone
+229,playing trumpet
+230,playing tuning fork
+231,playing tympani
+232,playing ukulele
+233,playing vibraphone
+234,"playing violin, fiddle"
+235,playing volleyball
+236,playing washboard
+237,playing zither
+238,police car (siren)
+239,police radio chatter
+240,popping popcorn
+241,printer printing
+242,pumping water
+243,"race car, auto racing"
+244,"railroad car, train wagon"
+245,raining
+246,rapping
+247,reversing beeps
+248,ripping paper
+249,roller coaster running
+250,rope skipping
+251,"rowboat, canoe, kayak rowing"
+252,running electric fan
+253,sailing
+254,scuba diving
+255,sea lion barking
+256,sea waves
+257,sharpen knife
+258,sheep bleating
+259,shot football
+260,singing bowl
+261,singing choir
+262,skateboarding
+263,skidding
+264,skiing
+265,sliding door
+266,sloshing water
+267,slot machine
+268,smoke detector beeping
+269,snake hissing
+270,snake rattling
+271,splashing water
+272,spraying water
+273,squishing water
+274,stream burbling
+275,strike lighter
+276,striking bowling
+277,striking pool
+278,"subway, metro, underground"
+279,swimming
+280,tap dancing
+281,tapping guitar
+282,telephone bell ringing
+283,thunder
+284,toilet flushing
+285,tornado roaring
+286,tractor digging
+287,train horning
+288,train wheels squealing
+289,train whistling
+290,turkey gobbling
+291,typing on computer keyboard
+292,typing on typewriter
+293,underwater bubbling
+294,using sewing machines
+295,vacuum cleaner cleaning floors
+296,"vehicle horn, car horn, honking"
+297,volcano explosion
+298,warbler chirping
+299,waterfall burbling
+300,whale calling
+301,wind chime
+302,wind noise
+303,wind rustling leaves
+304,wood thrush calling
+305,woodpecker pecking tree
+306,writing on blackboard with chalk
+307,yodelling
+308,zebra braying

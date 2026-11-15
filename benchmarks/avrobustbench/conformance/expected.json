@@ -3,61 +3,96 @@
  "generator": 1,
  "population": {
   "eval": 256,
-  "floor": 64,
+  "floor": 0,
   "folds": 0,
   "train": 256
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "437fe977e04d58b360c12f53be06102851472872",
+  "commit": "946cbe85e60319f956d7d7ec6b560a5a1776a721",
   "externals": {},
   "folder_source": {
-   "eval": "0de9921546857c976dbbda2b7ef7de9a6a8d389fe8e8ee23e720fa4b7decdc33",
+   "eval": "720b9275b4b00a72851a2250cc6937b5727729ed11bb28af0fde46d228dffd43",
    "reader": null
   },
-  "protocol_hash": "067145ff0b3680be20d0496626a3644ff2bd77450b49cafc09ac17ffa8b332dd",
+  "protocol_hash": "605667719c9a74ed3a98b046cb552d3aac5cb70f52c7a89de29c385c01e97ea9",
   "scorer": {
    "kind": "probe",
    "name": "clf",
    "version": 1
   },
-  "scoring_hash": "64ce376bb210333291d83099d28b27297cca5cb1972b77176d49f82d6332e9a8",
+  "scoring_hash": "5d8ace9058caba8c47c7fe21e8f5eb85e1104cb931848f039e5514050d86ae12",
   "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {
-  "acc": 0.001,
-  "acc_coarse5": 0.001,
-  "acc_floor": 0.001,
-  "acc_floor_arm": 0.001,
-  "acc_tol1": 0.001,
-  "floor_violated": 0.001,
-  "mae_seconds": 0.001,
-  "n_coarse5": 0.001,
-  "n_eval": 0.001
+  "acc_clean": 0.001,
+  "acc_compression": 0.001,
+  "acc_concert": 0.001,
+  "acc_crowd": 0.001,
+  "acc_frost": 0.001,
+  "acc_gaussian": 0.001,
+  "acc_impulse": 0.001,
+  "acc_interference": 0.001,
+  "acc_rain": 0.001,
+  "acc_shot": 0.001,
+  "acc_smoke": 0.001,
+  "acc_snow": 0.001,
+  "acc_spatter": 0.001,
+  "acc_speckle": 0.001,
+  "acc_underwater": 0.001,
+  "acc_wind": 0.001,
+  "alpha": 0.001,
+  "macc": 0.001,
+  "macc_digital": 0.001,
+  "macc_environmental": 0.001,
+  "macc_floor": 0.001,
+  "macc_human": 0.001,
+  "n_clips": 0.001,
+  "n_eval": 0.001,
+  "rho": 0.001
  },
  "values": {
   "*": {
    "ci95": {
-    "acc": [
-     0.06702402222215342,
-     0.14018486224554
+    "acc_clean": [
+     0.0,
+     0.2588329669680317
+    ],
+    "macc": [
+     0.0,
+     0.02857142857142857
     ]
    },
-   "controls": {
-    "acc_floor_arm": 0.09375,
-    "floor_violated": false
-   },
+   "controls": {},
    "floors": {
-    "acc_floor": 0.09765625
+    "macc_floor": 0.0031746031746031746
    },
    "metrics": {
-    "acc": 0.09765625,
-    "acc_coarse5": 0.1554054054054054,
-    "acc_tol1": 0.27734375,
-    "mae_seconds": 1.380859375,
-    "n_coarse5": 148,
-    "n_eval": 256
+    "acc_clean": 0.0,
+    "acc_compression": 0.0,
+    "acc_concert": 0.0,
+    "acc_crowd": 0.0,
+    "acc_frost": 0.0,
+    "acc_gaussian": 0.0,
+    "acc_impulse": 0.047619047619047616,
+    "acc_interference": 0.05,
+    "acc_rain": 0.0,
+    "acc_shot": 0.08333333333333333,
+    "acc_smoke": 0.0,
+    "acc_snow": 0.0,
+    "acc_spatter": 0.0,
+    "acc_speckle": 0.0,
+    "acc_underwater": 0.0,
+    "acc_wind": 0.0,
+    "alpha": 1.012063492063492,
+    "macc": 0.012063492063492061,
+    "macc_digital": 0.026190476190476188,
+    "macc_environmental": 0.0,
+    "macc_human": 0.0125,
+    "n_clips": 256,
+    "n_eval": 256,
+    "rho": 0.0
    }
   }
  }
