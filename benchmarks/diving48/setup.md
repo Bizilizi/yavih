@@ -9,7 +9,7 @@ of diving competitions and are distributed for research; cite the ECCV 2018 pape
 
 | file | share | bytes | sha256 |
 |---|---|---|---|
-| `Diving48_rgb.tar.gz` | `https://nextcloud.nrp-nautilus.io/s/eqKMRFHqNCrP77L/download` | 10 287 167 940 | `TODO` |
+| `Diving48_rgb.tar.gz` | `https://nextcloud.nrp-nautilus.io/s/eqKMRFHqNCrP77L/download` | 10 287 167 940 | `24e1cf350f2ec16fd1212ed57c90c148aab2c40fe61f43a7c4a68b8b0ae7c3e0` |
 | `Diving48_V2_train.json` | `https://nextcloud.nrp-nautilus.io/s/Z3CfTwcnTtp5d4p/download` | 1 586 934 | `62bcff1537b24162b1c9be49f376b8f9b6fccd222734f10d4a5d545b38c00e93` |
 | `Diving48_V2_test.json` | `https://nextcloud.nrp-nautilus.io/s/mfr5pfaSNp5Zx8X/download` | 207 545 | `658fe0d84ebea61414548bb69a996d668d9f249a82919e276ffc0f424d9371a3` |
 | `Diving48_vocab.json` | `https://nextcloud.nrp-nautilus.io/s/oWjtCkbw9G4qdSy/download` | 3 094 | `cc4238904e3ab274ae3ab36d26a09afd41e8c7891aa1f7c773d43fecb9388696` |
@@ -21,13 +21,13 @@ Use the **V2** files (`Diving48_V2_train.json`, `Diving48_V2_test.json`), not th
 yavih bench prepare diving48                    # lists the prepare steps
 yavih bench prepare diving48 01                 # download the four files into the media root, check sizes + sha256
 CONNECTIONS=4 yavih bench prepare diving48 01   # the same, the archive as 4 parallel byte ranges (faster)
-yavih bench prepare diving48 02                 # extract rgb/ (TODO files), check the count and the tree digest
+yavih bench prepare diving48 02                 # extract rgb/ (18 404 files), check the count and the tree digest
 KEEP_ARCHIVE=0 yavih bench prepare diving48 02  # the same, then delete the archive
 yavih bench prepare diving48 03                 # make_manifest.py --check with presence, then bench verify --census
 ```
 
-* Disk: 10.3 GB for the archive, TODO GB once extracted (`budget.media_gb` counts the 16 997 files the manifest
-  reads); about 20 GB while both exist. The archive can be deleted after step 02 (`KEEP_ARCHIVE=0`).
+* Disk: 10.3 GB for the archive, 10.3 GB once extracted (18 404 mp4, 10 313 555 478 B; `budget.media_gb: 9.64` counts
+  the 16 997 files the manifest reads); about 21 GB while both exist. The archive can be deleted after step 02 (`KEEP_ARCHIVE=0`).
 * Time: the download depends on the share; one connection ran at 2 to 15 MB/s here, `CONNECTIONS=4` helps.
   Extraction takes a few minutes; the tree digest of step 02 reads every file once (`VERIFY_DIGEST=0` skips it).
 * Data root: `media_root` defaults to `${data.root}/diving48`. Elsewhere set
@@ -64,7 +64,7 @@ own stack (the template uses yavih's PyAV helpers, the `[media]` extra).
 
 One stream, `video` (`kind: video`, `layout: dir`, manifest column `rel_media` = `rgb/<clip_id>.mp4` under
 `media_root`). Per row the reader hands over a `RawStream` over the stored mp4, byte for byte (`path`, `bytes()`,
-`open()`): TODO census facts. Nothing is decoded, cut, re-timed, resized or cropped, and no statistic is computed.
+`open()`): h264, 640 x 480, no audio track, 1.0-16.96 s (median 4.08 s), 25 to 823 frames, at the source's own rate: 25 fps for 8 743 clips, 60 for 6 092, about 30 (29.83-30) for 2 027, 24.92 for 135; every clip's `n_frames` is its annotation's `end_frame` + 1. Nothing is decoded, cut, re-timed, resized or cropped, and no statistic is computed.
 
 * Guaranteed `info` keys: `duration_s`, `fps`, `n_frames`, `width`, `height`, `container` (`mp4`), `bytes`, from the
   site census (`$YAVIH_HOME/media_info/diving48-<manifest_hash12>.jsonl.gz`) or a live header probe.
@@ -79,7 +79,7 @@ One stream, `video` (`kind: video`, `layout: dir`, manifest column `rel_media` =
 
 ```yaml
 handed_over:
-  video: "the Diving48 mp4 exactly as stored (TODO census facts), byte for byte; nothing decoded, cut, re-timed, resized or cropped"
+  video: "the Diving48 mp4 exactly as stored (h264, 640 x 480, no audio track, 1.0-16.96 s (median 4.08 s), 25 to 823 frames, at the source's own rate: 25 fps for 8 743 clips, 60 for 6 092, about 30 (29.83-30) for 2 027, 24.92 for 135), byte for byte; nothing decoded, cut, re-timed, resized or cropped"
 info:
   video: [duration_s, fps, n_frames, width, height, container, bytes]
 facts: []
@@ -132,13 +132,14 @@ Then `yavih bridge check <bridge.py> --bench diving48 --out diving48.profile.jso
   labels differ from V1); a manifest or a published number on V1 (15 943 / 2 096) is another benchmark.
 * **Class 30 has no clip.** `Forward Dive NoTwis STR` is in the 48-class vocabulary but in neither V2 file. The
   probe keeps its logit (48-way, as VideoGLUE); nothing to do in the bridge, but do not "fix" `classes.csv`.
-* **Frame rates differ per clip** (TODO census). A stride counted in frames covers a different span of the dive on
+* **Frame rates differ per clip** (25 fps for 8 743 clips, 60 for 6 092, about 30 for 2 027, 24.92
+  for 135). A stride counted in frames covers a different span of the dive on
   each clip; the template states times in seconds (`fps` rule). Read `info["fps"]` and `duration_s` per clip, never
   assume 25 fps, and report the pts you fed.
-* **The window can miss part of the dive.** VideoGLUE's 16 x stride 4 window is 2.56 s at 25 fps; many clips are
-  longer (TODO median), so a centred window may cut the takeoff or the entry. `{"rule": "uniform", "n": 16, "span":
+* **The window can miss part of the dive.** VideoGLUE's 16 x stride 4 window is 2.56 s at 25 fps; the median clip is
+  4.08 s and the longest 16.96 s (60-fps clips: 2.56 s of media is only 154 frames), so a centred window may cut the takeoff or the entry. `{"rule": "uniform", "n": 16, "span":
   "full"}` covers the whole clip. Either is legal: use what your model was evaluated with and declare it.
-* **Short clips.** A clip shorter than the window (TODO shortest) gets its last frame repeated under `edge: "clamp"`;
+* **Short clips.** A clip shorter than the window (2 192 clips are under 2.56 s, the shortest 1.0 s) gets its last frame repeated under `edge: "clamp"`;
   do not loop or pad to the batch maximum.
 * **4:3 frames.** Every clip is 640 x 480; short side 256 + centre crop 224 keeps 66 % of the width. Declare the
   crop; do not adapt it per clip.

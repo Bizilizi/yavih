@@ -130,7 +130,10 @@ def test_pins_agree(spec: dict):
         assert spec["source"]["sha256"][name] == sha
     step1 = (HERE / "prepare" / "01_download.sh").read_text(encoding="utf-8")
     for name, sha in spec["source"]["sha256"].items():
-        assert re.search(rf"^{re.escape(name)} \S+ \d+ {sha}$", step1, re.M), name
+        if name != "rgb.sha256sum":
+            assert re.search(rf"^{re.escape(name)} \S+ \d+ {sha}$", step1, re.M), name
+    step2 = (HERE / "prepare" / "02_extract.sh").read_text(encoding="utf-8")
+    assert f"WANT_DIGEST={spec['source']['sha256']['rgb.sha256sum']}" in step2 and "WANT_FILES=18404" in step2
     step3 = (HERE / "prepare" / "03_make_manifest.sh").read_text(encoding="utf-8")
     assert spec["manifest"]["sha256"] in step3 and spec["manifest"]["classes_sha256"] in step3
 

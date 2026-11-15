@@ -28,7 +28,7 @@ FILES="
 Diving48_V2_train.json Z3CfTwcnTtp5d4p 1586934 62bcff1537b24162b1c9be49f376b8f9b6fccd222734f10d4a5d545b38c00e93
 Diving48_V2_test.json mfr5pfaSNp5Zx8X 207545 658fe0d84ebea61414548bb69a996d668d9f249a82919e276ffc0f424d9371a3
 Diving48_vocab.json oWjtCkbw9G4qdSy 3094 cc4238904e3ab274ae3ab36d26a09afd41e8c7891aa1f7c773d43fecb9388696
-Diving48_rgb.tar.gz eqKMRFHqNCrP77L 10287167940 RGB_SHA256
+Diving48_rgb.tar.gz eqKMRFHqNCrP77L 10287167940 24e1cf350f2ec16fd1212ed57c90c148aab2c40fe61f43a7c4a68b8b0ae7c3e0
 "
 
 ok() { [ -f "$1" ] && [ "$(stat -c %s "$1")" = "$2" ] && echo "$3  $1" | sha256sum -c --quiet - >/dev/null 2>&1; }
@@ -48,6 +48,10 @@ ranged() {  # name url bytes: CONNECTIONS parallel byte ranges, each resumed unt
     ) &
   done
   wait
+  local got=0
+  for i in $(seq 0 $((n - 1))); do got=$((got + $(stat -c %s "$name.part$i" 2>/dev/null || echo 0))); done
+  # an incomplete range is kept and resumed on the next run
+  [ "$got" -eq "$bytes" ] || { echo "FAIL: $name: $got of $bytes B after retries; rerun the step to resume" >&2; exit 1; }
   for i in $(seq 0 $((n - 1))); do cat "$name.part$i"; done > "$name.tmp"
   rm -f "$name".part*
   mv "$name.tmp" "$name"
@@ -55,7 +59,6 @@ ranged() {  # name url bytes: CONNECTIONS parallel byte ranges, each resumed unt
 
 echo "$FILES" | while read -r name share bytes sha; do
   [ -n "$name" ] || continue
-  [ "$sha" = RGB_SHA256 ] && sha=$RGB_SHA256
   if ok "$name" "$bytes" "$sha"; then echo "=== $name present: size and sha256 ok"; continue; fi
   url="$NC/$share/download"
   echo "=== $(date -Is) downloading $name ($bytes B)"

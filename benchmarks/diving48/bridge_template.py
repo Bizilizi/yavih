@@ -11,9 +11,9 @@ INPUT CONTRACT (what ``prepare`` and ``encode`` receive; setup.md "Input contrac
 
     st = sample.streams["video"]          # RawStream, kind "video": the stored Diving48 mp4, byte for byte
     st.path / st.open() / st.bytes()      # the file; nothing decoded, cut, re-timed, resized or cropped
-    st.info = {"duration_s": D,           # container duration (setup.md "Input contract" has the range)
-               "fps": f,                  # avg_frame_rate of THIS clip: 25, 30, 29.97, 60, ... (varies per clip)
-               "n_frames": n,             # frames of the video track
+    st.info = {"duration_s": D,           # container duration, 1.0-16.96 s, median 4.08 s
+               "fps": f,                  # avg_frame_rate of THIS clip: 25 (8 743), 60 (6 092), ~30 (2 027), 24.92 (135)
+               "n_frames": n,             # frames of the video track, 25-823
                "width": 640, "height": 480,
                "container": "mp4", "bytes": ...}
     sample.meta == {"facts": {}}          # no label facts; labels, split and manifest never reach you
@@ -50,9 +50,9 @@ Gotchas (setup.md "Gotchas"), in the order they bite:
      of the dive on each clip. Declare times in seconds (the ``fps`` rule below) or an index rule you mean; never
      assume 25 fps. Report the pts you actually fed.
   2. A dive lasts longer than the 2.56 s default window on many clips (takeoff, flight and entry; median clip
-     about 5.8 s): the centred window can miss the takeoff or the entry. ``{"rule": "uniform", "n": 16,
+     4.08 s, longest 16.96 s): the centred window can miss the takeoff or the entry. ``{"rule": "uniform", "n": 16,
      "span": "full"}`` covers the whole clip; choose what your model was evaluated with and declare it.
-  3. Clips shorter than the window (down to about 1 s): ``edge: "clamp"`` repeats the last frame. Allowed; do not
+  3. Clips shorter than the window (2 192 clips under 2.56 s, down to 1.0 s): ``edge: "clamp"`` repeats the last frame. Allowed; do not
      loop or pad to the batch maximum.
   4. Every clip is 640x480 (4:3): short side 256 + centre crop 224 keeps 66 % of the width and 87.5 % of the
      height; the diver is often near the frame's edge on takeoff. Declare it, do not "fix" it per clip.

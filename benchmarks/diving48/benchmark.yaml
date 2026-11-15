@@ -40,22 +40,24 @@ source:
   revision: "Diving48 V2 annotations (2020-10-30 update) + 2018 RGB release"
   bytes: 10289136668
   sha256:
-    "Diving48_rgb.tar.gz": "TODO"
+    "Diving48_rgb.tar.gz": "24e1cf350f2ec16fd1212ed57c90c148aab2c40fe61f43a7c4a68b8b0ae7c3e0"
     "Diving48_V2_train.json": "62bcff1537b24162b1c9be49f376b8f9b6fccd222734f10d4a5d545b38c00e93"
     "Diving48_V2_test.json": "658fe0d84ebea61414548bb69a996d668d9f249a82919e276ffc0f424d9371a3"
     "Diving48_vocab.json": "cc4238904e3ab274ae3ab36d26a09afd41e8c7891aa1f7c773d43fecb9388696"
+    "rgb.sha256sum": "c5aaecb78e29f96d81749fd7c36a7e5a79887cf106814ecd51f523b2d9bfd536"
   notes: >-
     The official page links Nextcloud shares (migrated 2023-09-30): Diving48_rgb.tar.gz (10 287 167 940 B,
     rgb/<vid_name>.mp4), the V1 train/test JSONs, Diving48_vocab.json (3 094 B), and the V2 train/test JSONs
     (1 586 934 B and 207 545 B, manually cleaned, poorly segmented clips removed). `bytes` = the RGB archive +
-    the three JSON files read. The optical-flow archive (6.9 GB) and the V1 JSONs are not used.
+    the three JSON files read. rgb.sha256sum = sha256 of `cd rgb && LC_ALL=C sha256sum *.mp4` over the 18 404
+    extracted files (10 313 555 478 B). The optical-flow archive (6.9 GB) and the V1 JSONs are not used.
 
 obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
   tier: auto
   how: "Public download from the official Nextcloud shares (10.3 GB archive + three JSON files); yavih bench prepare diving48 01-03 runs unattended"
 budget:
   clips: {train: 15027, test: 1970}
-  media_gb: 9.0  # TODO: measured on the staged rgb/ files the manifest touches
+  media_gb: 9.64   # the 16 997 rgb/*.mp4 the manifest reads: 9 635 510 119 B (stat of the staged files)
   extract_min_per_1k_clips_ref: 1.0  # TODO
   probe_minutes_ref: {clf: 5}  # TODO
 
@@ -125,16 +127,16 @@ data:
     media_root:
       default: "${data.root}/diving48"
       description: >-
-        Diving48 root: rgb/<vid_name>.mp4 (the rgb/ directory of Diving48_rgb.tar.gz, 18 000+ files; the
-        manifest uses 16 997) next to Diving48_V2_train.json, Diving48_V2_test.json and Diving48_vocab.json.
+        Diving48 root: rgb/<vid_name>.mp4 (the rgb/ directory of Diving48_rgb.tar.gz, 18 404 files, 10.3 GB;
+        the manifest uses 16 997) next to Diving48_V2_train.json, Diving48_V2_test.json and Diving48_vocab.json.
   tar_index: null
   derived: {}
 
 input_contract:
   handed_over:
     video: >-
-      the Diving48 mp4 exactly as stored (TODO census facts), byte for byte; nothing decoded, cut, re-timed,
-      resized or cropped
+      the Diving48 mp4 exactly as stored (h264, 640 x 480, no audio track, 1.0-16.96 s (median 4.08 s), 25 to 823 frames, at the source's own rate: 25 fps for 8 743 clips, 60 for 6 092, about 30 (29.83-30) for 2 027, 24.92 for 135), byte for byte; nothing decoded, cut, re-timed, resized or
+      cropped
   info:
     video: [duration_s, fps, n_frames, width, height, container, bytes]
   facts: []

@@ -9,7 +9,7 @@
 | **Modality** | Video |
 | **Size** | 15 027 train / 1 970 test · 48 classes |
 | **Headline** | Accuracy (`acc`) · chance 2.1 % |
-| **Data** | Public download; fetched unattended · 9 GB of media · how: [setup.md](setup.md) |
+| **Data** | Public download; fetched unattended · 9.6 GB of media · how: [setup.md](setup.md) |
 | **Licence** | No licence is stated on the official Diving48 page (checked 2026-11-15); the clips are segments of online videos of diving competitions, distributed by UCSD SVCL for research. Cite the ECCV 2018 paper. |
 | **Protocol** | Version 1 · scorer `clf` · needs yavih >=1.1,<2 · `yavih bench fetch diving48` |
 <!-- yavih:glance end -->

@@ -6,7 +6,7 @@
 #   KEEP_ARCHIVE=0 yavih bench prepare diving48 02          # delete the 10.3 GB archive once the tree checks out
 #
 # Layout after this step (what benchmark.yaml `data.roots.media_root` describes):
-#   <ROOT>/rgb/<vid_name>.mp4                     RGB_FILES files, one flat directory
+#   <ROOT>/rgb/<vid_name>.mp4                     18 404 files (10 313 555 478 B), one flat directory
 #   <ROOT>/Diving48_V2_{train,test}.json, Diving48_vocab.json    (step 01)
 # The archive holds every clip of the 2018 release; the frozen manifest reads the 16 997 V2 clips among them.
 # The check: the number of mp4 files and the digest of the tree, sha256 of
@@ -16,8 +16,8 @@ set -euo pipefail
 ROOT="${ROOT:-$(yavih config get diving48.media_root)}"
 KEEP_ARCHIVE="${KEEP_ARCHIVE:-1}"
 VERIFY_DIGEST="${VERIFY_DIGEST:-1}"
-WANT_FILES=RGB_FILES
-WANT_DIGEST=RGB_DIGEST
+WANT_FILES=18404
+WANT_DIGEST=c5aaecb78e29f96d81749fd7c36a7e5a79887cf106814ecd51f523b2d9bfd536
 cd "$ROOT"
 
 if [ -d rgb ] && [ "$(find rgb -maxdepth 1 -name '*.mp4' | wc -l)" -eq "$WANT_FILES" ]; then
