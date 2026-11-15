@@ -1,0 +1,208 @@
+# speech_commands: scaffolded from esc50 by `yavih bench new` on 2026-11-15. TODO: every value below is esc50's
+# until this benchmark's manifest, protocol and contracts replace it; run `yavih bench lint` after each edit
+# (it tells you the changelog's protocol_hash / input_hash to write after a protocol edit).
+schema_version: 3
+name: speech_commands
+aliases: []
+title: TODO title of speech_commands (scaffolded from esc50)
+capability:  # TODO: still esc50's; what speech_commands measures, one or more of audio, visual, audio-visual, temporal, spatial, retrieval, generation, streaming
+- audio
+core: '>=1.1,<2'
+header:
+  name: speech_commands
+  title: 'TODO: the title of the paper that introduced the benchmark'
+  venue: 'TODO: authors · venue year'
+  abstract: 'TODO: two or three neutral sentences on the data and the task (at most 60 words).'
+scorer: clf
+protocol_version: 1
+changelog:
+- version: 1
+  date: '2026-11-15'
+  invalidates: false
+  reason: 'TODO: scaffolded from esc50 by `yavih bench new`; replace the manifest, protocol, contracts and docs'
+  protocol_hash: 01b2bc46e7dec6fd4f4983f74c27f3b7ab0f63686c0098b1f1b6c01d1947ba49
+  input_hash: 737232e190b882939265049de7f4ba777d27c1d49a056385e368d6faea107d98
+source:
+  kind: public_url
+  urls:
+  - https://github.com/karolpiczak/ESC-50
+  - https://github.com/karolpiczak/ESC-50.git
+  - https://github.com/karoldvl/ESC-50/archive/master.zip
+  - https://dx.doi.org/10.7910/DVN/YDEPUT
+  licence: CC BY-NC 3.0 for the dataset as a whole; the ESC-10 subset (esc10 == True, 400 clips) CC BY 3.0; per-clip Freesound
+    attributions in the upstream LICENSE file
+  bytes: 645520453
+  sha256:
+    meta/esc50.csv: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
+    LICENSE: f6aec3a3283a2efdcbb1feff334adad7ab17c097bdec0cbb4eebdb9e16886074
+    audio.sha256sum: 52754b9099c1c48a9fec379bd7dd75dbc6d78387faecc2a9318fc0c43332d398
+  notes: 'TODO: where the data comes from (the scaffold still describes esc50''s source)'
+obtain:
+  tier: auto
+  how: 'TODO: who must act before the data can be staged, and how'
+budget:
+  clips:
+    '1': 400
+    '2': 400
+    '3': 400
+    '4': 400
+    '5': 400
+  media_gb: 0.88
+  extract_min_per_1k_clips_ref: 0.2
+  probe_minutes_ref:
+    clf: 3
+manifest:
+  file: manifest.csv.gz
+  sha256: 4846c6d167ff53e1caf060ce7e9a45c80fff508e05492ef0073639082ee4079c
+  classes: classes.csv
+  classes_sha256: a614223f2aba50003f58a7a2e8ce95579e493b4635b41bc9e19ff0945e9d06ff
+  key: clip_id
+  label:
+    column: labels
+    kind: single
+    sep: ;
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_path:
+      type: str
+      role: media
+      stream: audio
+    src_file:
+      type: str
+      role: extra
+    take:
+      type: str
+      role: extra
+    esc10:
+      type: str
+      role: extra
+  upstream:
+    source: karolpiczak/ESC-50 @ 33c8ce9 meta/esc50.csv
+    sha256: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
+    rows: 2000
+    note: rows = meta/esc50.csv in file order (fold-major, filename order); split = the official fold; no train draw (every
+      training-fold clip is used); src_file/take/esc10 from meta/esc50.csv
+    upstream_files:
+      ESC-50/meta/esc50.csv: ca660da60191a97de289983a05821c9382d852a38a2ba8428980816b68cf6246
+    curation:
+      total_upstream: 2000
+      per_split:
+        '1':
+          listed: 400
+          staged: 400
+          missing: 0
+        '2':
+          listed: 400
+          staged: 400
+          missing: 0
+        '3':
+          listed: 400
+          staged: 400
+          missing: 0
+        '4':
+          listed: 400
+          staged: 400
+          missing: 0
+        '5':
+          listed: 400
+          staged: 400
+          missing: 0
+      excluded: {}
+      short_clips: 0
+      leakage_audit:
+        against: 'src_file source-recording groups across the 5 official folds (meta/esc50.csv): 4 groups / 9 clips span two
+          folds, always under different classes; kept'
+        excluded: 0
+splits:
+  train: []
+  eval: []
+  floor: []
+  folds:
+  - '1'
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  unused: []
+  min_eval_coverage: 0.95
+fields:
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_path
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+targets: null
+data:
+  roots:
+    media_root:
+      default: ${data.root}/esc50
+      description: 'the ESC-50 git clone: audio/{FOLD}-{SRC}-{TAKE}-{TARGET}.wav (2 000, 44.1 kHz mono PCM_16, 5.000 s), meta/esc50.csv,
+        LICENSE'
+  tar_index: null
+  derived: {}
+input_contract:
+  handed_over:
+    audio: the ESC-50 wav exactly as stored (RIFF PCM_16, 44.1 kHz, mono, 220 500 samples = 5.000 s); nothing decoded, resampled,
+      trimmed or padded
+  info:
+    audio:
+    - duration_s
+    - sample_rate
+    - n_samples
+    - channels
+    - container
+    - bytes
+  facts: []
+  materialize: null
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+external: []
+protocol:
+  clip_seconds: 5.0
+  train_draw: null
+  views: none
+metrics:
+  headline: acc_mean
+  list:
+  - acc_mean
+  - acc_pstd
+  - acc_per_fold
+  - n_folds
+  - n_eval
+  floors:
+  - acc_floor
+  controls: []
+  chance:
+    acc_mean: 0.02
+  ci:
+    acc_mean: pooled_binomial
+  aggregation:
+    over: folds
+    report:
+    - mean
+    - pstd
+    - per_fold
+  notes:
+  - The floor (always the train-majority class) equals chance, 0.02, because the classes are balanced; an interval that overlaps
+    0.02 is no result.
+  - The Wilson 95 % interval over the 2 000 pooled held-out rows is about ±0.022 at 0.5 and ±0.016 at 0.85; one fold of 400
+    rows is about ±0.035.
+  - Treat gaps below about 0.015 at one seed as unresolved; run --seeds 0,1,2 before claiming a one-point difference.
+  - 'A number near the floor on one fold only (acc_per_fold) means a broken fold extraction: check features validate coverage
+    per fold.'
+  - Published ESC-50 numbers fine-tune the model end to end; a frozen-feature probe is not comparable with them.
+readout_params: {}
