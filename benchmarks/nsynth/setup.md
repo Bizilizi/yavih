@@ -130,7 +130,7 @@ yavih bench verify nsynth --json
 ```
 
 No derived files, no prepare-time transform. Success: `status verified`, `train present 4000/4000`, `test
-present 500/500`, `decode sample ok=30 failed=0`; with `--json`, `labels_ok`,
+present 500/500`, `read sample ok=32 failed=0`, `decode sample ok=32 failed=0`; with `--json`, `labels_ok`,
 `manifest_sha_ok` and `curation_invariants_ok` are true and `unknown_labels` is 0.
 
 Then `yavih bridge check <bridge.py> --bench nsynth --out nsynth.profile.json` must report

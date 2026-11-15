@@ -56,8 +56,10 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
 budget:
   clips: {train: 4000, test: 500}   # read splits only; valid (500, unused) is staged by prepare 02 too
   media_gb: 0.64              # PCM bytes of the 5 000 staged wavs (5 000 x 128 044 B); the valid 500 included; the archives are 25.2 GB
-  extract_min_per_1k_clips_ref: 0.2   # TODO measure
-  probe_minutes_ref: {clf: 3}         # TODO measure
+  extract_min_per_1k_clips_ref: 0.7   # AST AudioSet (ViT-B, 4 s, 480 tokens) bridge check: 24.5 clips/s, 4 decode workers, RTX 4500 Ada;
+                                      # the full train shard on the same shared GPU under CPU load took 692 s / 4 000 = 2.9
+  probe_minutes_ref: {clf: 0.8}       # full clf probe (seed 0) on the AST tokens: 19.1 min wall for N x D = 480 x 768,
+                                      # divided by the planner's clamp(N*D / (16*768), 1, 24) = 24; RTX 4500 Ada
 
 manifest:
   file: manifest.csv.gz
