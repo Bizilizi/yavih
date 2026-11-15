@@ -41,14 +41,17 @@ Database License, with its contents under the Database Contents License; 0.6 GB 
 
 Each fold is held out once: a probe trained on frozen features of the other four folds names the emotion of the
 held-out clips, and the score is HEAR's top-1 accuracy, averaged over the five folds. The scoring code is HEAR's own
-([hear-eval-kit](https://github.com/hearbenchmark/hear-eval-kit)), and the folds are re-derived exactly as
-[hear-preprocess](https://github.com/hearbenchmark/hear-preprocess) and TensorFlow Datasets built them, since HEAR's
-preprocessed copy of CREMA-D is no longer downloadable. With six near-balanced classes, chance is one in six
-(16.7 %); the floor, always answering the most frequent training emotion, is about 16 %.
+([hear-eval-kit](https://github.com/hearbenchmark/hear-eval-kit)), and the folds are re-derived from the public CREMA-D
+files exactly as [hear-preprocess](https://github.com/hearbenchmark/hear-preprocess) and TensorFlow Datasets built
+them, so the benchmark does not need HEAR's 1.5 GB build of the task; that build is public on
+[Zenodo](https://doi.org/10.5281/zenodo.6332517), and the folds can be checked against it clip by clip. With six
+near-balanced classes, chance is one in six (16.7 %); the floor, always answering the most frequent training
+emotion, is 15.7 %.
 
 Not this benchmark: speaker-independent splits (TensorFlow Datasets' own 70/10/20 split by actor, or
 leave-actors-out folds) are harder and give other numbers; so do the audio-visual and
-video-only CREMA-D tasks, and scores against the crowd's perceived emotion. HEAR's own leaderboard trains an MLP on
+video-only CREMA-D tasks, and scores against the crowd's perceived emotion. Scores computed on HEAR's first CREMA-D release, withdrawn in
+January 2022 for an audio-amplitude bug in its preprocessing, are not comparable either. HEAR's own leaderboard trains an MLP on
 three folds with a grid search where this probe trains on four, so its numbers are close relatives, not the same
 numbers.
 

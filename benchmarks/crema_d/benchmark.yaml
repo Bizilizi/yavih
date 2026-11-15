@@ -46,8 +46,10 @@ source:
     Public GitHub repository of the CREMA-D authors (Git LFS), no account or agreement. The 7 438 wavs TensorFlow
     Datasets' crema_d 1.0.0 (and so HEAR 2021) uses are unchanged since commit f06ffd7 (2017); pinned commit
     1658cd3 (2025-03-21). 01_download.sh clones the pointers and fetches each wav from the LFS media endpoint,
-    checked against its pointer's sha256; 02_verify.sh checks every wav against TFDS's own manual checksums. HEAR's own preprocessed copy of the task is not public (retracted from
-    Zenodo; requester-pays bucket), so make_manifest.py re-derives HEAR's folds from these files.
+    checked against its pointer's sha256; 02_verify.sh checks every wav against TFDS's own manual checksums. make_manifest.py re-derives HEAR's folds from these files;
+    HEAR's own build of the task is public (Zenodo record 6332517, hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz,
+    1.5 GB, md5 8a80e180e44f01a5a43c962de92c1e12), and make_manifest.py --hear-archive compares its fold files with
+    the manifest clip by clip (not run at freeze time: Zenodo refused the freezing machine's network).
 
 obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
   tier: auto
@@ -79,7 +81,7 @@ manifest:
     sentence: {type: str, role: extra}     # one of the 12 sentence codes (IEO, TIE, …)
     intensity: {type: str, role: extra}    # LO / MD / HI / XX (unspecified)
     tfds_split: {type: str, role: extra}   # TFDS crema_d 1.0.0's own speaker-grouped split (train / validation / test)
-    hear_file: {type: str, role: extra}    # HEAR's file stem tfds_id_<slugify(tfds_id)>, to cross-check against HEAR's preprocessed task
+    hear_file: {type: str, role: extra}    # HEAR's file stem tfds_id_<slugify(tfds_id)>, the key of HEAR's fold files (make_manifest.py --hear-archive)
   upstream:
     source: "CheyneyComputerScience/CREMA-D @ 1658cd3 processedResults/summaryTable.csv"
     sha256: fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317
@@ -166,13 +168,12 @@ metrics:
   ci: {top1_acc_mean: pooled_binomial}
   aggregation: {over: folds, report: [mean, pstd, per_fold]}
   notes:
-    - "Headline: HEAR's top1_acc (hear-eval-kit Top1Accuracy, copied into hear_score.py) per held-out fold, mean over the 5 folds; top1_acc_std is HEAR's sample std (ddof 1)."
-    - "Folds re-derived with copied TFDS crema_d 1.0.0 + hear-preprocess code (hear_split.py); TFDS's wav checksums and split byte counts match; HEAR's own fold files are not public to compare."
-    - "Chance is 1/6; the floor (each fold's train-majority emotion, scored on held-out rows) is 0.157. An interval that reaches 0.17 is no result."
+    - "Headline: HEAR's top1_acc (hear-eval-kit Top1Accuracy, copied into hear_score.py) per held-out fold, mean of 5; top1_acc_std is the sample std (ddof 1). HEAR's mAP, d_prime, aucroc: not computed."
+    - "Folds re-derived with copied TFDS + hear-preprocess code (hear_split.py); TFDS's checksums and byte counts match. Not yet checked clip by clip against HEAR's build (make_manifest.py --hear-archive)."
+    - "Chance is 1/6 (0.167). The floor (each fold's train-majority emotion on held-out rows) is 0.157 on the full set; under --sample, the run's top1_acc_floor. An interval reaching the floor is no result."
     - "Wilson 95 % interval over the 7 438 pooled rows: about ±0.011 at 0.5, ±0.010 at 0.75; one fold of 1 488 rows: about ±0.025. Treat gaps below 0.01 at one seed as unresolved."
     - "HEAR's folds are drawn over files: every actor is in every fold, so speaker identity helps. Speaker-independent CREMA-D numbers are lower and not comparable."
     - "HEAR's leaderboard trains an MLP on 3 folds (the next fold validates, grid search); this probe trains on 4 and carves validation rows from them: close, not identical numbers."
-    - "HEAR also reports mAP, d_prime and aucroc for this task (secondary scores); they are not computed here."
+    - "HEAR's pre-2022 CREMA-D build (Zenodo 5802571) had an audio-amplitude bug and was retracted (fixed in hear-preprocess a5d6042): CREMA-D numbers computed on that build are not comparable."
     - "HEAR feeds every model 5.0 s clips (trim or zero-pad) resampled with soxr; here that is the bridge template's default, declared per model, not part of the protocol."
-
 readout_params: {}
