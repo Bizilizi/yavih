@@ -35,13 +35,14 @@ KEEP_PARTS=0 yavih bench prepare unav100 02    # cat parts | gunzip -> $ROOT/una
 None in the probe env: `external: []`. The evaluation has two parts, grounded separately:
 
 - **Scorer** (rung 2, the authors' code, copied): the detection mAP is the UnAV-100 authors' `ANETdetection` in
-  `https://github.com/ttgeng233/UnAV` at commit `1609deba`, `libs/utils/metrics.py` (itself ActivityNet's
-  `eval_detection.py`), MIT licence. It is not an installable package (no `setup.py`, its package imports torch
-  and a C++ NMS extension, and it uses `np.float`, removed in numpy 1.24), so `detection.py` (segment tIoU,
-  interpolated precision-recall, greedy matching, `ap_matrix`) transcribes it and reproduces its numbers on the
-  same predictions, including its `np.linspace(0.1, 0.9, 9)` thresholds (which is why `protocol.tiou_thresholds`
-  holds 0.30000000000000004 and 0.7000000000000001). `eval.py` names the metrics; the test split and the
-  thresholds are the authors'.
+  `https://github.com/ttgeng233/UnAV` at commit `1609deba`, `libs/utils/metrics.py` (by its header, modified from the
+  EPIC-Kitchens C2-Action-Detection `EvaluationCode/evaluate_detection_json_ek100.py`, itself adapted from
+  ActivityNet's `eval_detection.py`), MIT licence. It is not an installable package (no `setup.py`, its package
+  imports torch and a C++ NMS extension, and it uses `np.float`, removed in numpy 1.24), so `detection.py` (segment
+  tIoU, interpolated precision-recall, greedy matching, `ap_matrix`) transcribes it and reproduces its numbers on the
+  same predictions, including its `np.linspace(0.1, 0.9, 9)` thresholds (which is why `protocol.tiou_thresholds` holds
+  0.30000000000000004 and 0.7000000000000001). `eval.py` names the metrics; the test split and the thresholds are the
+  authors'.
 - **Readout** (yavih's): the core `dense_query_v1` head with `T = 128` time bins, and in `detection.py` the bin
   targets, the sigmoid focal plus 1-D GIoU loss, the pinned decoding (score threshold, top 2 000, per-class NMS at
   tIoU 0.5, 100 segments per clip) and the training schedule. It replaces the paper's detector (a pyramid
