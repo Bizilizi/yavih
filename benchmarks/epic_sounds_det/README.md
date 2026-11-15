@@ -27,11 +27,11 @@ hundreds of them; the median sound lasts about a second, but some last minutes.
 ## The data
 
 EPIC-SOUNDS (Huh, Chalk, Kazakos, Damen and Zisserman, TPAMI 2025) annotates the audio of EPIC-KITCHENS-100, 100
-hours of head-mounted camera recordings in 45 kitchens (Damen et al., IJCV 2022). Annotators marked the temporal
-extent of every audible interaction, and the sounds were grouped into 44 classes: collisions named by the materials
-that meet (metal-only, metal / ceramic, plastic / wood, ...), scrub / scrape, cut / chop, open / close, water, pour,
-footstep, rustle, beep, sizzling / boiling, a background class and more. The release holds 78.4 k categorised
-segments and 39.2 k segments that could not be placed in a class.
+hours of head-mounted camera recordings (700 videos) in 45 kitchens (Damen et al., IJCV 2022). Annotators marked the
+temporal extent of every audible interaction, and the sounds were grouped into 44 classes: collisions named by the
+materials that meet (metal-only, metal / ceramic, plastic / wood, ...), scrub / scrape, cut / chop, open / close,
+water, pour, footstep, rustle, beep, sizzling / boiling, a background class and more. The release holds 78.4 k
+categorised segments and 39.2 k segments that could not be placed in a class.
 
 The official splits are train (495 recordings, 60 055 segments) and validation (137 recordings, 8 035 segments),
 whose labels are public, and two test splits whose labels stay on the challenge server (23 recordings for
