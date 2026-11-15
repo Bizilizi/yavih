@@ -18,9 +18,11 @@ yavih bench prepare crema_d 01    # root = $(yavih config get crema_d.media_root
 #   sha256 LICENSE.txt                       == e76747a4efa4b338914bb3f930b5d3d3c3ac15b886bbabf897f6a19731f987f8
 #   TFDS's dataset_info.json of crema_d 1.0.0 -> tfds/crema_d-1.0.0-dataset_info.json
 #   sha256                                   == 5e748e0ecf01210ebcc1e2a4bcb80a59af47b89bfdee6521d18efa4ff0a7b6b0
+#   TFDS's manual checksums of crema_d (size + sha256 per wav) -> tfds/crema_d-manual_checksums.txt
+#   sha256                                   == 66b5d959dcee997321baf9080c80022a6937279419446db3a9d4827d839b0abb
 #   7 438 wavs from https://media.githubusercontent.com/media/CheyneyComputerScience/CREMA-D/<commit>/AudioWAV/<name>.wav,
 #   each checked against the sha256 and size of its LFS pointer (JOBS=4 parallel downloads by default)
-yavih bench prepare crema_d 02    # verify: 7 438 wavs, 16 kHz mono PCM_16 headers, the audio tree digest
+yavih bench prepare crema_d 02    # verify: 7 438 wavs, 16 kHz mono PCM_16 headers, TFDS's sha256 per wav, the tree digest
 yavih bench prepare crema_d 03    # re-freeze (byte-identical) and yavih bench verify
 ```
 

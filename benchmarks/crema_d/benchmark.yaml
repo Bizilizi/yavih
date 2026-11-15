@@ -31,20 +31,22 @@ source:
     - "https://github.com/CheyneyComputerScience/CREMA-D.git"
     - "https://media.githubusercontent.com/media/CheyneyComputerScience/CREMA-D/1658cd342dff90010aa843eaeebd53610a08b1dc/AudioWAV/"
     - "https://storage.googleapis.com/tfds-data/dataset_info/crema_d/1.0.0/dataset_info.json"
+    - "https://storage.googleapis.com/tfds-data/manual_checksums/crema_d.txt"
     - "https://github.com/hearbenchmark/hear-preprocess"
   licence: "Open Database License (ODbL) 1.0 for the database; Database Contents License (DbCL) 1.0 for its contents (upstream LICENSE.txt)"
   revision: "1658cd342dff90010aa843eaeebd53610a08b1dc"
-  bytes: 605000000            # TODO: the 7 438 wavs as downloaded (01_download.sh)
+  bytes: 605598660            # the 7 438 wavs (= the sum of TFDS's manual checksums sizes); the sparse clone adds a few MB
   sha256:
     processedResults/summaryTable.csv: fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317
     LICENSE.txt: e76747a4efa4b338914bb3f930b5d3d3c3ac15b886bbabf897f6a19731f987f8
     tfds/crema_d-1.0.0-dataset_info.json: 5e748e0ecf01210ebcc1e2a4bcb80a59af47b89bfdee6521d18efa4ff0a7b6b0
-    AudioWAV.sha256sum: TODO
+    tfds/crema_d-manual_checksums.txt: 66b5d959dcee997321baf9080c80022a6937279419446db3a9d4827d839b0abb   # TFDS's size + sha256 of every wav it downloaded; 02_verify.sh checks all 7 438
+    AudioWAV.sha256sum: e183e6db23361d1d13a307b87e08b1d31ceba20e652ab5825ae769789a2b23c3   # sha256 of `sha256sum` over the 7 438 wavs, C-locale name order (02_verify.sh)
   notes: >-
     Public GitHub repository of the CREMA-D authors (Git LFS), no account or agreement. The 7 438 wavs TensorFlow
     Datasets' crema_d 1.0.0 (and so HEAR 2021) uses are unchanged since commit f06ffd7 (2017); pinned commit
     1658cd3 (2025-03-21). 01_download.sh clones the pointers and fetches each wav from the LFS media endpoint,
-    checked against its pointer's sha256. HEAR's own preprocessed copy of the task is not public (retracted from
+    checked against its pointer's sha256; 02_verify.sh checks every wav against TFDS's own manual checksums. HEAR's own preprocessed copy of the task is not public (retracted from
     Zenodo; requester-pays bucket), so make_manifest.py re-derives HEAR's folds from these files.
 
 obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
@@ -52,7 +54,7 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
   how: "git clone of github.com/CheyneyComputerScience/CREMA-D at the pinned commit plus 7 438 LFS wav downloads (0.6 GB, public), by yavih bench prepare crema_d 01"
 budget:
   clips: {fold00: 1488, fold01: 1488, fold02: 1488, fold03: 1487, fold04: 1487}
-  media_gb: 0.6               # TODO
+  media_gb: 0.606             # measured: the 7 438 staged wavs, 605 598 660 B
   extract_min_per_1k_clips_ref: 0.2   # TODO
   probe_minutes_ref: {clf: 3}         # TODO
 
@@ -165,7 +167,7 @@ metrics:
   aggregation: {over: folds, report: [mean, pstd, per_fold]}
   notes:
     - "Headline: HEAR's top1_acc (hear-eval-kit Top1Accuracy, copied into hear_score.py) per held-out fold, mean over the 5 folds; top1_acc_std is HEAR's sample std (ddof 1)."
-    - "Folds re-derived with copied TFDS crema_d 1.0.0 + hear-preprocess split_k_folds code (hear_split.py); TFDS shard sizes checked, HEAR's own fold files are not public to compare."
+    - "Folds re-derived with copied TFDS crema_d 1.0.0 + hear-preprocess code (hear_split.py); TFDS's wav checksums and split byte counts match; HEAR's own fold files are not public to compare."
     - "Chance is 1/6; the floor (each fold's train-majority emotion) is about 0.17. An interval that reaches 0.17 is no result."
     - "Wilson 95 % interval over the 7 438 pooled rows: about ±0.011 at 0.5, ±0.010 at 0.75; one fold of 1 488 rows: about ±0.025. Treat gaps below 0.01 at one seed as unresolved."
     - "HEAR's folds are drawn over files: every actor is in every fold, so speaker identity helps. Speaker-independent CREMA-D numbers are lower and not comparable."

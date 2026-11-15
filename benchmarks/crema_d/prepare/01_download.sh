@@ -9,9 +9,9 @@
 #   JOBS=4 yavih bench prepare crema_d 01          # parallel downloads (default 4)
 #
 # Size: the sparse clone (AudioWAV pointers, processedResults/, LICENSE.txt) is a few MB; the 7 438 wavs are
-# 605 MB (16 kHz mono PCM_16). Re-running skips every wav already present with the right sha256.
+# 0.6 GB (16 kHz mono PCM_16). Re-running skips every wav already present with the right sha256.
 # Layout written: $ROOT/AudioWAV/<name>.wav (the pointer replaced by the wav), $ROOT/processedResults/summaryTable.csv,
-# $ROOT/LICENSE.txt.
+# $ROOT/LICENSE.txt, $ROOT/tfds/{crema_d-1.0.0-dataset_info.json,crema_d-manual_checksums.txt}.
 set -euo pipefail
 ROOT="${ROOT:-$(yavih config get crema_d.media_root)}"
 JOBS="${JOBS:-4}"
@@ -32,6 +32,21 @@ fi
 [ "$(git -C "$ROOT" rev-parse HEAD)" = "$COMMIT" ] || { echo "FAIL: $ROOT is not at $COMMIT" >&2; exit 1; }
 echo "fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317  $ROOT/processedResults/summaryTable.csv" | sha256sum -c -
 echo "e76747a4efa4b338914bb3f930b5d3d3c3ac15b886bbabf897f6a19731f987f8  $ROOT/LICENSE.txt" | sha256sum -c -
+
+# TensorFlow Datasets' own records of crema_d 1.0.0 (public GCS objects): its dataset_info.json (shard lengths and
+# serialized bytes per split; make_manifest.py checks them) and its manual checksums (size + sha256 of every wav it
+# downloaded; 02_verify.sh checks them).
+mkdir -p "$ROOT/tfds"
+fetch_meta() {   # $1 url, $2 destination, $3 sha256
+  if [ ! -f "$2" ] || [ "$(sha256sum "$2" | cut -d' ' -f1)" != "$3" ]; then
+    curl -fsSL --retry 5 --retry-delay 3 -o "$2" "$1"
+  fi
+  echo "$3  $2" | sha256sum -c -
+}
+fetch_meta https://storage.googleapis.com/tfds-data/dataset_info/crema_d/1.0.0/dataset_info.json \
+  "$ROOT/tfds/crema_d-1.0.0-dataset_info.json" 5e748e0ecf01210ebcc1e2a4bcb80a59af47b89bfdee6521d18efa4ff0a7b6b0
+fetch_meta https://storage.googleapis.com/tfds-data/manual_checksums/crema_d.txt \
+  "$ROOT/tfds/crema_d-manual_checksums.txt" 66b5d959dcee997321baf9080c80022a6937279419446db3a9d4827d839b0abb
 
 # The wav names the manifest lists: column 2 (FileName) of summaryTable.csv minus the four names TFDS's crema_d
 # builder skips as absent from GitHub (1040_ITH_SAD_XX 1006_TIE_NEU_XX 1013_WSI_DIS_XX 1017_IWW_FEA_XX).

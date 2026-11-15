@@ -9,7 +9,7 @@
 | **Modality** | Audio |
 | **Size** | 1 488 fold fold00 / 1 488 fold fold01 / 1 488 fold fold02 / 1 487 fold fold03 / 1 487 fold fold04 · 6 classes |
 | **Headline** | `top1_acc_mean` · chance 17 % |
-| **Data** | Public download; fetched unattended · 0.6 GB of media · how: [setup.md](setup.md) |
+| **Data** | Public download; fetched unattended · 0.61 GB of media · how: [setup.md](setup.md) |
 | **Licence** | Open Database License (ODbL) 1.0 for the database; Database Contents License (DbCL) 1.0 for its contents (upstream LICENSE.txt) |
 | **Protocol** | Version 1 · scorer `clf` · needs yavih >=1.1,<2 · `yavih bench fetch crema_d` |
 <!-- yavih:glance end -->
