@@ -49,7 +49,7 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
   how: "two public tar.gz archives from download.tensorflow.org (2.5 GB, no account), extracted by prepare/01; prepare/02 cuts HEAR's silence clips"
 budget:
   clips: {train: 16000, valid: 2000, test: 4890}
-  media_gb: 0.72                    # measured: bytes of the 22 890 wavs of train + valid + test (make_manifest.py); all staged files 3.5 GB
+  media_gb: 0.72                    # measured: bytes of the 22 890 wavs of train + valid + test (make_manifest.py); the whole staged root is 3.4 GB
   extract_min_per_1k_clips_ref: 0.2  # TODO
   probe_minutes_ref: {clf: 5}        # TODO
 

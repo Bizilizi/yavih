@@ -1,45 +1,78 @@
-![speech_commands](assets/header.png)
+![Speech Commands](assets/header.png)
 
-TODO: [Paper](https://…) · [Homepage](https://…) · [Dataset](https://…) · [Licence](https://…) · [setup.md](setup.md)
+[Paper](https://arxiv.org/abs/1804.03209) · [HEAR](https://hearbenchmark.com) · [Dataset](http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz) · [Licence](https://creativecommons.org/licenses/by/4.0/) · [setup.md](setup.md)
 
 <!-- yavih:glance begin (generated from benchmark.yaml: python -m yavih.doctables --glance speech_commands --write) -->
-| At a glance | speech_commands |
+| At a glance | Speech Commands |
 |---|---|
 | **Task** | Sound classification · audio |
 | **Modality** | Audio |
-| **Size** | 2 000 in folds 1–5 (400 each) · 50 classes |
-| **Headline** | Mean accuracy over the folds (`acc_mean`) · chance 2 % |
-| **Data** | Public download; fetched unattended · 0.88 GB of media · how: [setup.md](setup.md) |
-| **Licence** | CC BY-NC 3.0 for the dataset as a whole; the ESC-10 subset (esc10 == True, 400 clips) CC BY 3.0; per-clip Freesound attributions in the upstream LICENSE file |
+| **Size** | 16 000 train / 2 000 valid / 4 890 test · 12 classes |
+| **Headline** | `top1_acc` · chance 8.3 % |
+| **Data** | Public download; fetched unattended · 0.72 GB of media · how: [setup.md](setup.md) |
+| **Licence** | CC BY 4.0 (Speech Commands v0.02, Google; the archives' LICENSE file) |
 | **Protocol** | Version 1 · scorer `clf` · needs yavih >=1.1,<2 · `yavih bench fetch speech_commands` |
 <!-- yavih:glance end -->
 
 ## The task
 
-TODO: what a model is asked to do, in human terms, for a reader deciding whether this benchmark is for them: one
-example input and the answer it expects. How to write this page: https://github.com/Bizilizi/yavih/blob/main/docs/writing-a-readme.md
+Hear one second of audio and say which of twelve answers it is: one of ten short commands ("yes", "no", "up",
+"down", "left", "right", "on", "off", "stop", "go"), some other word ("bird", "sheila", "seven", … all folded
+into `_unknown_`), or no speech at all (`_silence_`, background noise such as running water or a dishwasher).
+This is the keyword-spotting task a voice interface runs on device, in the form the HEAR 2021 benchmark of
+audio representations evaluates it.
 
-<!-- once rendered (python -m yavih.previews speech_commands --suggest --write, then python -m yavih.previews speech_commands), un-comment:
-![TODO: what the figure shows](assets/preview.png)
--->
+![Two Speech Commands clips, waveform over mel spectrogram, each with its class](assets/preview.png)
 
 ## The data
 
-TODO: what the recordings are and where they come from, the official splits in prose, the licence in words.
-(Scaffolded from `esc50`: the glance above shows `esc50`'s numbers until this benchmark's manifest replaces them.)
+Speech Commands v0.02 (Pete Warden, Google, 2018) is 105 829 one-second recordings of 35 words, spoken by 2 618
+volunteers through their own browsers and microphones, so the audio quality varies; each clip is 16 kHz mono and
+at most one second long. Six longer background recordings come with it. A separate test archive of 4 890 clips
+holds the ten commands, unknown words and silence in near-equal parts (about 408 each), from speakers never
+heard in training.
+
+HEAR (Turian et al., 2022) builds its task from these two archives: the test archive is the test set; the
+release's validation list plus silence cut from one background recording is the validation split; everything
+else, plus silence cut from the other five recordings, is the training split. Its "5 hour" variant, used here,
+keeps a fixed random 16 000 training and 2 000 validation clips (five hours together). The recordings are
+licensed CC BY 4.0 and are a public download of 2.5 GB.
 
 ## How it is scored
 
-TODO: the metric and why it fits the task; chance and the floor in words; what is not this benchmark (variants,
-aliases, near-misses), one sentence each.
+A probe trained on HEAR's five hours of clips names the class of each of the 4 890 test clips, and the score
+is top-1 accuracy, computed by HEAR's own scorer (`Top1Accuracy` from
+[hear-eval-kit](https://github.com/hearbenchmark/hear-eval-kit), copied into this folder). The test set is
+balanced over the twelve classes, so accuracy is meaningful and chance is one in twelve (8.3 %); the floor, a
+model that always answers the most frequent training class (`_unknown_`, 63 % of the training clips), also
+scores 8.3 % on the balanced test set.
 
-## Reference numbers
-
-TODO: published numbers with their citation and why they are (not) comparable to a frozen-feature probe; or delete
-this optional section.
+yavih scores frozen features with its own attentive probe, whereas HEAR trains a small grid-searched MLP on one
+embedding per clip, so numbers from the HEAR leaderboard are not these numbers. Not this benchmark either: HEAR's
+"full" variant (all 95 613 training and validation clips), the 35-word classification task, and Speech Commands
+v0.01 (30 words); each gives different numbers.
 
 ## Citation
 
 ```bibtex
-TODO: the BibTeX entry of the paper
+@article{warden2018speech,
+  title   = {Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition},
+  author  = {Warden, Pete},
+  journal = {arXiv preprint arXiv:1804.03209},
+  year    = {2018}
+}
+
+@inproceedings{turian2022hear,
+  title     = {{HEAR}: Holistic Evaluation of Audio Representations},
+  author    = {Turian, Joseph and Shier, Jordie and Khan, Humair Raj and Raj, Bhiksha and Schuller, Bj{\"o}rn W. and
+               Steinmetz, Christian J. and Malloy, Colin and Tzanetakis, George and Velarde, Gissel and McNally, Kirk and
+               Henry, Max and Pinto, Nicolas and Noufi, Camille and Clough, Christian and Herremans, Dorien and
+               Fonseca, Eduardo and Engel, Jesse and Salamon, Justin and Esling, Philippe and Manocha, Pranay and
+               Watanabe, Shinji and Jin, Zeyu and Bisk, Yonatan},
+  booktitle = {Proceedings of the NeurIPS 2021 Competitions and Demonstrations Track},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {176},
+  pages     = {125--145},
+  year      = {2022}
+}
 ```

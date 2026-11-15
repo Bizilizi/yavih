@@ -1,0 +1,18 @@
+{
+  "preview_version": 1,
+  "design_version": 1,
+  "figures": {
+    "preview": {
+      "kind": "audio",
+      "split": "test",
+      "rows": [
+        "_unknown__seven_d1bf406b_nohash_1.wav",
+        "stop_4c6167ca_nohash_0"
+      ],
+      "source_sha256": "d177e7f932a8f73022e779600b86027e09cc392765b33a42e2f4dc4894b56525",
+      "files": {
+        "preview.png": 342073
+      }
+    }
+  }
+}

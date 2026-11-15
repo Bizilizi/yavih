@@ -19,7 +19,7 @@ What the reader hands you per sample (setup.md "Input contract"):
 * ``sample.streams["audio"]`` — the ONLY stream, a ``RawStream`` over the stored wav: ``path``,
   ``bytes()``, ``open()`` (seekable; soundfile / torchaudio / PyAV accept it). Nothing is decoded,
   resampled, trimmed or padded for you.
-* ``stream.info`` (guaranteed keys): ``duration_s`` (at most 1.0; about one clip in ten is shorter),
+* ``stream.info`` (guaranteed keys): ``duration_s`` (at most 1.0; about one clip in thirteen is shorter),
   ``sample_rate`` 16000, ``n_samples`` (at most 16 000), ``channels`` 1, ``container`` "wav", ``bytes``.
   Use these facts, never a hard-coded constant.
 * ``sample.meta == {"facts": {}}``: no label facts. Never let ``row``, ``clip_id`` or ``split`` change
@@ -44,7 +44,7 @@ inside ``encode``.
 
 Gotchas (setup.md "Gotchas") — each passes validation and silently changes the number:
 
-* **Clip length varies.** About one stored clip in ten is shorter than 1.0 s, so pad every clip to the SAME
+* **Clip length varies.** About one stored clip in thirteen is shorter than 1.0 s, so pad every clip to the SAME
   model length (HEAR: 1.0 s of zeros at the end), never to the batch maximum, or ``N`` changes from clip to clip.
 * **Padding further.** A model built for 10 s input fed 1 s + 9 s of zeros is mostly digital silence; size the
   input to the clip when the model allows it, and declare whatever fill you choose.
