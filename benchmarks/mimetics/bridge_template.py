@@ -1,12 +1,13 @@
-"""Bridge skeleton for **k400** — Kinetics-400 single-label action classification, video only. Read
+"""Bridge skeleton for **mimetics** — mimed-action classification (50 Kinetics-400 classes), video only. Read
 ``setup.md`` first (input and output contracts). Copy, rename, fill the TODOs, then
-``yavih bridge check my_k400_bridge.py --bench k400 --out k400.profile.json`` (``--synthetic`` instead of
+``yavih bridge check my_mimetics_bridge.py --bench mimetics --out mimetics.profile.json`` (``--synthetic`` instead of
 ``--out`` smoke-tests it before any data is staged). An unfilled copy fails
 bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES.
 
-A bridge file serves one benchmark; each matrix entry (file + args) is one reading of one model. K400 hands over one stream, ``video`` (no audio
-stream is part of the protocol), so ``describe()["reading"]`` is ``"v"``; an audio-only model raises
-``yavih.NotApplicable("k400 has no audio stream")`` from ``__init__``.
+A bridge file serves one benchmark; each matrix entry (file + args) is one reading of one model. Mimetics hands over
+one stream, ``video`` (no audio stream is part of the protocol), so ``describe()["reading"]`` is ``"v"``; an
+audio-only model raises ``yavih.NotApplicable("mimetics has no audio stream")`` from ``__init__``. The same bridge
+encodes the train rows (Kinetics-400 clips of the 50 classes) and the test rows (the mimed clips): one rule for both.
 
 PREPROCESSING SOURCE — paste the model's own EVAL input pipeline here, verbatim, with repo, file, function and
 commit; ``describe()["input"]`` must match it line by line (``bridge check`` warns W_NO_PREPROCESSING_SOURCE
@@ -15,37 +16,38 @@ while this slot is empty):
 
 What ``prepare`` and ``encode`` receive per Sample ``s`` (setup.md "## Input contract"):
     s.streams["video"]  RawStream, kind "video": the stored mp4, undecoded. ``.path`` (layout dir) or
-        ``.open()`` (works for every layout, incl. tar_index) or ``.bytes()``. Decode it yourself — with the
-        model's own stack or ``yavih.media.decode`` (``[media]`` extra) — and declare the decoder.
+        ``.open()`` or ``.bytes()``. Decode it yourself (the model's own stack or ``yavih.media.decode``, the
+        ``[media]`` extra) and declare the decoder.
     s.streams["video"].info  {"duration_s", "fps", "width", "height", "container", "bytes"} non-null on every
-        row ("n_frames" may be null). This release (census of the 33 492 frozen files): h264, height 256, width
-        138-1424 (mostly 454 or 340; 4 013 portrait, mostly 144 wide x 256 high), 6-60 fps (mostly 29.97/30);
-        train ~10 s, val ~12 s, 4 555 frozen clips < 10 s (min 0.53 s). duration_s is the VIDEO stream's (the
-        container runs up to 2.6 s longer on 1 415 files).
+        row ("n_frames" may be null). Train rows: Academic-Torrents Kinetics-400 _256 mp4 (h264, 256 high, ~10 s,
+        some shorter). Test rows: the YouTube clips as prepare/02 trims them (h264 re-encoded by ffmpeg/libx264 at
+        the downloaded size, mostly 360 high, 1-10 s: 59 clips of 1 s and 134 of 2 s in the release list).
     s.meta == {"facts": {}}  (no facts; never read row / clip_id / split — bridge check scrambles them)
 
 What ``encode`` returns (setup.md "## Output contract"): ``(feats [B, N, D], pos, used)``
     feats  the same N, D for every clip of every split;
     pos    ``None`` with pooled features (``pos_mode = "none"``), else per-clip ``[B, N, 4]`` = (stream, t, y, x)
            in MEDIA coordinates: t = seconds / info["duration_s"], (y, x) = fractions of the ORIGINAL frame
-           (``grid_pos(..., t_centres=..., region=crop_region(...))``). Durations and frame sizes differ between
-           clips, so token positions are ``per_sample``. clf needs no positions (``requires.pos: []``), but
-           correct ones cost nothing and keep the features usable by any probe;
+           (``grid_pos(..., t_centres=..., region=crop_region(...))``). clf needs no positions (``requires.pos:
+           []``), but correct ones cost nothing;
     used   one dict per clip: ``{"video": {"times": [pts of the frames fed, in feed order]}}``; validate
            re-evaluates the declared temporal rule on the clip's facts and refuses a mismatch (E_RULE_MISMATCH).
 
-Decisions that are yours (declare them in ``describe()["input"]["video"]``; recorded with every number):
-    temporal  default below: ``uniform`` n=16 over the whole clip (``span: "full"``: never out of media, the val
-              clips' extra 2 s included). Alternative: ``span: [0.0, 10.0], edge: "clamp"`` (late times on the
-              4 555 short clips get the last frame). ``edge: "error"`` with a
-              fixed span fails on those clips (E_TIMES_OUT_OF_MEDIA).
-    spatial   default below: resize short side to 256, centre-crop 224 (portrait clips are UPSCALED from 144).
-    norm      the model's pretraining constants with their source (per-clip statistics only when they ARE its
-              recipe; never batch or dataset statistics); e.g. V-JEPA / VideoMAE use ImageNet mean/std, some
-              models x*2-1 ([-1, 1]).
-Gotchas (setup.md "## Gotchas"): one clip, one view (no 16x8x3 multi-view averaging, ``views`` MUST be 1);
-no batch statistics or padding to the batch maximum; the model in ``.eval()``; declare precision honestly;
-labels and class order never reach a bridge.
+Decisions that are yours (declare them in ``describe()["input"]["video"]``; recorded with every number). The
+defaults below are those of the reference implementation (IntegralAction, https://github.com/mks0601/IntegralAction_RELEASE
+@ 50bc02ae8ad30d55628d6aecbd46f2dfa6173117, ``main/config.py``: ``frame_per_seg = 8``, ``frame_interval = 8``,
+``video_shape = (256,)``, ``input_img_shape = (224, 224)``; ``common/utils/preprocessing.py``: ``load_video``,
+``augmentation`` at test time), reduced to the one view a yavih bridge declares:
+    temporal  8 frames, 8 stored frames apart (3.75 per second at 30 fps), one window centred on the clip
+              (``start: "centre_clamped"``); the reference averages 10 such windows evenly spread over the clip
+              and drops the clips shorter than its window (57 frames), yavih scores them: on a clip shorter than
+              8 / 3.75 = 2.13 s the late times are clamped to the last frame (``edge: "clamp"``).
+              Alternative for a model with its own clip length: ``{"rule": "uniform", "n": 16, "span": "full"}``.
+    spatial   resize the short side to 256, centre-crop 224 (the reference's test crop).
+    norm      the model's pretraining constants with their source (never batch or dataset statistics).
+Gotchas (setup.md "## Gotchas"): one clip, one view (``views`` MUST be 1: no 10-window averaging); train and test
+clips come from different encoders and sizes, never branch on them; the model in ``.eval()``; declare precision
+honestly; labels and class order never reach a bridge.
 """
 
 from __future__ import annotations
@@ -56,18 +58,17 @@ import numpy as np
 
 from yavih.bridge import ArgSpec, Bridge, grid_pos  # , fingerprint_state_dict
 
-# TODO: the frame count and token grid of the model (16 frames, tubelet 2 -> 8 temporal tokens; 224/16 = 14).
-N_FRAMES = 16
-TUBELET = 2
-T_TOK, H_TOK, W_TOK = N_FRAMES // TUBELET, 14, 14
+# TODO: the frame count and token grid of the model (the reference: 8 frames, a 2D ResNet per frame -> 8 x 7 x 7).
+N_FRAMES = 8
+TUBELET = 1
+T_TOK, H_TOK, W_TOK = N_FRAMES // TUBELET, 7, 7
 
 # Declared rules. Edit these to match the PREPROCESSING SOURCE; describe() and encode() both read them,
 # so what is declared is what runs.
-TEMPORAL = {"rule": "uniform", "n": N_FRAMES, "span": "full"}
-# a fixed-rate window instead, e.g.
-#   {"rule": "fps", "fps": 4, "n": N_FRAMES, "start": "centre_clamped", "phase": 0, "edge": "clamp"}
-# = a 4 s window centred on the clip (start = max(0, (duration_s - 4) / 2)), frames at start + k/4
-# (phase 0 = window start; the default phase 0.5 = bin centres start + (k + 0.5)/4).
+# The reference's window: 8 frames 8 stored frames apart (3.75 per second at 30 fps), centred on the clip
+# (start = max(0, (duration_s - 8 / 3.75) / 2)), frames at start + k / 3.75; clamped on clips shorter than 2.13 s.
+TEMPORAL = {"rule": "fps", "fps": 3.75, "n": N_FRAMES, "start": "centre_clamped", "phase": 0, "edge": "clamp"}
+# the whole clip instead: {"rule": "uniform", "n": N_FRAMES, "span": "full"}
 SPATIAL = {"resize": {"short": 256}, "crop": {"kind": "center", "size": [224, 224]}, "interp": "bilinear", "antialias": True}
 NORM = {
     "scale": 1 / 255,
@@ -77,8 +78,8 @@ NORM = {
 }
 
 
-class K400Bridge(Bridge):
-    name = "TODO-model-k400"  # optional label of this file, recorded only
+class MimeticsBridge(Bridge):
+    name = "TODO-model-mimetics"  # optional label of this file, recorded only
     batch_size = 8
     dtype = "float16"  # "float16" | "float32" (switch to float32 when bridge check warns about range)
     pos_mode = "per_sample"  # "none" for pooled features (pooling mean/cls -> N = 1, return pos None)
@@ -137,7 +138,7 @@ class K400Bridge(Bridge):
         except Exception as e:  # noqa: BLE001 — a corrupt file is a missing row, not a bridge bug
             from yavih import MediaUndecodable
 
-            raise MediaUndecodable([sample.clip_id], f"k400 video decode failed: {e!r}") from e
+            raise MediaUndecodable([sample.clip_id], f"mimetics video decode failed: {e!r}") from e
         # TODO: resize short side -> 256 (bilinear, antialias), centre-crop 224, * scale, (x - mean) / std here too (CPU,
         #       per clip); the stored bytes are released after prepare(), so encode() works from this dict only.
         return {"frames": frames, "pts": pts, "used": {"video": {"times": [float(t) for t in pts]}}}
