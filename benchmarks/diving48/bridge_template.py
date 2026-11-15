@@ -1,36 +1,43 @@
-"""Bridge template for ``ssv2`` — Something-Something-v2 temporal action classification.
+"""Bridge template for ``diving48`` — Diving48 fine-grained dive classification (V2 splits, 48 classes).
 
-Read ``setup.md`` first (``yavih bench info ssv2 --setup``). Copy this file next to your model code, paste the
+Read ``setup.md`` first (``yavih bench show diving48 setup``). Copy this file next to your model code, paste the
 model's own preprocessing source below, fill every ``TODO``, then run
-``yavih bridge check my_ssv2_bridge.py --bench ssv2 --out ssv2.profile.json``; before any data
-is staged, ``yavih bridge check my_ssv2_bridge.py --bench ssv2 --synthetic`` smoke-tests it on tiny generated
-media. An unfilled copy fails bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES. A bridge file serves one
-benchmark; each matrix entry (file + args) is one reading of one model.
+``yavih bridge check my_diving48_bridge.py --bench diving48 --out diving48.profile.json``; before any data is
+staged, ``yavih bridge check my_diving48_bridge.py --bench diving48 --synthetic`` smoke-tests it on tiny
+generated media. An unfilled copy fails bridge check: E_TEMPLATE_UNFILLED / E_CONSTANT_FEATURES. A bridge file
+serves one benchmark; each matrix entry (file + args) is one reading of one model.
 
 INPUT CONTRACT (what ``prepare`` and ``encode`` receive; setup.md "Input contract"). One stream per row::
 
-    st = sample.streams["video"]          # RawStream, kind "video": the stored SSv2 webm, byte for byte
+    st = sample.streams["video"]          # RawStream, kind "video": the stored Diving48 mp4, byte for byte
     st.path / st.open() / st.bytes()      # the file; nothing decoded, cut, re-timed, resized or cropped
-    st.info = {"duration_s": D,           # container duration, 0.83-14.17 s, median 4.0 s; = last pts + 1/12
-               "fps": 12.0,               # avg_frame_rate; NOT the true rate of every clip (gaps, gotcha 2)
-               "n_frames": n,             # packet count from the site census (webm headers have none), 5-142
-               "width": W, "height": 240, # W from 240 to 483 (427 for 59 %, 320 for 20 %): widths vary per clip
-               "container": "webm", "bytes": ...}
-    sample.meta == {"facts": {}}          # no label facts on ssv2; labels, split and manifest never reach you
+    st.info = {"duration_s": D,           # container duration (setup.md "Input contract" has the range)
+               "fps": f,                  # avg_frame_rate of THIS clip: 25, 30, 29.97, 60, ... (varies per clip)
+               "n_frames": n,             # frames of the video track
+               "width": 640, "height": 480,
+               "container": "mp4", "bytes": ...}
+    sample.meta == {"facts": {}}          # no label facts; labels, split and manifest never reach you
 
 OUTPUT CONTRACT (setup.md "Output contract"). ``encode`` returns ``(feats, pos, used)``:
   feats  [B, N, D], one fixed (N, D) for every row of both splits (clf: any N, pooled N = 1 is fine);
-  pos    optional on ssv2 (``requires.pos: []``); when written, MEDIA coordinates: t = token time / D,
-         (y, x) = fractions of the ORIGINAL 240p frame. Widths vary, so a centre crop covers a different part
-         of each clip: ``pos_mode = "per_sample"`` with ``region = crop_region(...)`` per clip (below);
+  pos    optional on diving48 (``requires.pos: []``); when written, MEDIA coordinates: t = token time / D,
+         (y, x) = fractions of the ORIGINAL 640x480 frame inside the crop region (below);
   used   per clip ``{"video": {"times": [pts of the frames fed, in feed order]}}``; validate re-evaluates the
          declared temporal rule on ``st.info`` and compares (E_RULE_MISMATCH, E_TIMES_OUT_OF_MEDIA).
 
-Everything model-side is YOUR declared decision, recorded in ``describe()["input"]``:
-frame count and times (``uniform`` bin centres here; ``index_linspace`` is the frame-index alternative), resize, crop,
-interpolation, normalisation constants with their source, decoder. Instance-wise only: no batch statistics,
-no padding to the batch maximum, one deterministic view, no cache keyed on clip id (``bridge check`` hard-checks
-rerun, batch and order invariance).
+Everything model-side is YOUR declared decision, recorded in ``describe()["input"]``: frame count and times,
+resize, crop, interpolation, normalisation constants with their source, decoder. Instance-wise only: no batch
+statistics, no padding to the batch maximum, one deterministic view, no cache keyed on clip id (``bridge check``
+hard-checks rerun, batch and order invariance).
+
+DEFAULTS = the reference's (VideoGLUE, Yuan et al.; tensorflow/models official/projects/videoglue @
+19f287775ae950e22a9b5fb82727e72cff2e3664, Apache-2.0; configs/yaml/vmae/frozen/vc_vmae_vit3d_diving48.yaml and
+datasets/video_classification.py ``_build``): 16 frames at a temporal stride of 4 decoded frames from one clip in
+the middle of the video (VideoGLUE's ``num_test_clips: 1`` path), short side resized to 256 (``min_resize``), a
+224 centre crop, pixels scaled to [0, 1] (``zero_centering_image: false``). Stated in seconds so it holds for every
+frame rate: 16 frames at 6.25 Hz (stride 4 at 25 fps, the most common rate) from a 2.56 s window centred on the
+clip. VideoGLUE's own scores average 4 clips x 3 crops; a yavih bridge feeds one view. These are the reference's
+choices for ITS models, not protocol: replace them with your model's own recipe and declare it.
 
 Preprocessing source of the model (paste VERBATIM — the transform pipeline / processor config / video data
 config the checkpoint was evaluated with, with repo and commit; ``describe()["input"]`` must match it line by
@@ -39,19 +46,18 @@ line):
     TODO
 
 Gotchas (setup.md "Gotchas"), in the order they bite:
-  1. SSv2 is 240p: short side 224 + centre crop 224 keeps the middle 56 % of a 427-wide clip's width; a
-     short side of 256 (an upscale) keeps 49 % of the width and 87.5 % of the height. Declare it, do not "fix" it
-     per clip.
-  2. Frame times are not k / fps. 1 315 of the 44 777 clips start at pts > 0 (up to 1.417 s) and 2 762 have
-     holes inside (largest 3.08 s); 3 769 clips hold fewer frames than D * 12. Report the pts you actually
-     fed; never synthesize times from indices. ``index_linspace`` (t = idx / fps) is wrong on exactly those
-     3 769 clips (setup.md "Gotchas").
-  3. Short clips (n_frames down to 5): 16 uniform times on a 0.83-s clip repeat frames (nearest pts). Allowed;
-     do not pad, loop or resample to a fixed duration, and never pad to the batch maximum.
-  4. Normalisation constants come from the model's own pretraining recipe (ImageNet mean/std, or x*2-1);
-     per-clip statistics only when they ARE the model's own recipe (then declare them in ``norm`` with their
-     ``source``); never batch or dataset statistics.
-  5. ``.eval()`` yourself; declare precision honestly (``run_extract`` enforces it); ``weights_sha256`` must be
+  1. Frame rates differ per clip (25, 30, 29.97, 60, ... fps): a stride counted in frames covers a different span
+     of the dive on each clip. Declare times in seconds (the ``fps`` rule below) or an index rule you mean; never
+     assume 25 fps. Report the pts you actually fed.
+  2. A dive lasts longer than the 2.56 s default window on many clips (takeoff, flight and entry; median clip
+     about 5.8 s): the centred window can miss the takeoff or the entry. ``{"rule": "uniform", "n": 16,
+     "span": "full"}`` covers the whole clip; choose what your model was evaluated with and declare it.
+  3. Clips shorter than the window (down to about 1 s): ``edge: "clamp"`` repeats the last frame. Allowed; do not
+     loop or pad to the batch maximum.
+  4. Every clip is 640x480 (4:3): short side 256 + centre crop 224 keeps 66 % of the width and 87.5 % of the
+     height; the diver is often near the frame's edge on takeoff. Declare it, do not "fix" it per clip.
+  5. Normalisation constants come from the model's own pretraining recipe; never batch or dataset statistics.
+  6. ``.eval()`` yourself; declare precision honestly (``run_extract`` enforces it); ``weights_sha256`` must be
      the real ``fingerprint_state_dict`` (a null one is recorded as W_WEIGHTS_UNFINGERPRINTED).
 """
 
@@ -64,20 +70,21 @@ import numpy as np
 from yavih.bridge import ArgSpec, Bridge, grid_pos  # , fingerprint_state_dict
 from yavih.media.rules import crop_region, rule_times
 
-# TODO: the model's clip geometry.
-N_FRAMES = 16  # frames per clip fed to the model (SSv2 median clip: 48 frames at 12 fps)
+# TODO: the model's clip geometry (defaults: VideoGLUE's ViT-B/16 VideoMAE setting).
+N_FRAMES = 16  # frames per clip fed to the model
+SAMPLE_HZ = 6.25  # frames per second of media: VideoGLUE's temporal stride 4 at 25 fps
 TUBELET = 2  # temporal patch size (1 for per-frame image encoders); token time bins = N_FRAMES // TUBELET
-RESIZE = 224  # short side after resize (the source is 240p: anything > 240 is an upscale)
+RESIZE = 256  # short side after resize (VideoGLUE min_resize)
 CROP = 224  # centre crop side
 PATCH = 16  # spatial patch size
 GRID = CROP // PATCH  # token grid side (14)
 
 
-class Ssv2Bridge(Bridge):
-    name = "TODO-model-ssv2"  # optional label of this file, recorded only
+class Diving48Bridge(Bridge):
+    name = "TODO-model-diving48"  # optional label of this file, recorded only
     batch_size = 8  # TODO: what fits; describe()["batch_size"] must equal this
     dtype = "float16"  # switch to "float32" when bridge check warns about range
-    pos_mode = "per_sample"  # widths vary → the crop region differs per clip; "none" for pooled features
+    pos_mode = "per_sample"  # (y, x) of the crop are the same for every clip, t depends on the clip; "none" for pooled features
     streams = ("video",)  # stream tags used in pos (tag index 0 = video)
     ARGS = {
         # every --arg k=v the bridge consumes, with its type and default; echoed in describe()["args"]
@@ -86,18 +93,13 @@ class Ssv2Bridge(Bridge):
 
     # Declared rules. validate re-evaluates TEMPORAL on every row's info (E_RULE_MISMATCH) and checks
     # that every token centre lies inside crop_region(SPATIAL, width, height).
-    TEMPORAL = {"rule": "uniform", "n": N_FRAMES, "span": "full", "edge": "error"}  # bin centres (k + 0.5) D / n
-    # frame-index alternative: {"rule": "index_linspace", "n": N_FRAMES} (see gotcha 2 for its caveat)
-    # a fixed-rate window instead, e.g.
-    #   {"rule": "fps", "fps": 4, "n": 16, "start": "centre_clamped", "phase": 0, "edge": "clamp"}
-    # = a 4 s window centred on the clip (start = max(0, (duration_s - 4) / 2)), frames at start + k/4
-    # (phase 0 = window start; the default phase 0.5 = bin centres start + (k + 0.5)/4). Add
-    # "duration_from": "frame_count" to centre on n_frames / fps instead of the webm's duration_s (the two
-    # differ on ~7% of SSv2 clips, whose webm timestamps have gaps).
+    # 16 frames at start + k / 6.25 s, k = 0..15, start = max(0, (duration_s - 2.56) / 2): VideoGLUE's middle clip.
+    TEMPORAL = {"rule": "fps", "fps": SAMPLE_HZ, "n": N_FRAMES, "start": "centre_clamped", "phase": 0, "edge": "clamp"}
+    # the whole clip instead (gotcha 2): {"rule": "uniform", "n": N_FRAMES, "span": "full", "edge": "error"}
     SPATIAL = {"resize": {"short": RESIZE}, "crop": {"kind": "center", "size": [CROP, CROP]}, "interp": "bilinear", "antialias": True}
     NORM = {
         "scale": 1 / 255,
-        "mean": [0.485, 0.456, 0.406],  # TODO: the model's own constants
+        "mean": [0.485, 0.456, 0.406],  # TODO: the model's own constants (VideoGLUE feeds [0, 1] pixels)
         "std": [0.229, 0.224, 0.225],  # TODO
         "source": "TODO: <repo>@<commit> <file> (the model's pretraining recipe)",
     }
@@ -127,7 +129,7 @@ class Ssv2Bridge(Bridge):
             "batch_size": self.batch_size,
             "streams": list(self.streams),
             "pos_mode": self.pos_mode,
-            "reading": "v",  # SSv2 has no audio track (a | v | av across benchmarks)
+            "reading": "v",  # Diving48 clips have no audio track (a | v | av across benchmarks)
             "model": "TODO-model",  # the name all of this model's bridges use; results are filed under it
             "layer": self.args["layer"],
             "pooling": "none",  # "none" keeps tokens for the attentive probe; "mean"/"cls" collapse to N = 1
@@ -149,8 +151,8 @@ class Ssv2Bridge(Bridge):
     # ------------------------------------------------------------------ one clip, instance-wise
 
     def _clip(self, st: Any) -> tuple[np.ndarray, np.ndarray]:
-        """The declared frames of one clip: uint8 [N_FRAMES, 240, W, 3] RGB and their pts (media seconds)."""
-        times = rule_times(self.TEMPORAL, st.info)  # (k + 0.5) * D / n from this clip's facts
+        """The declared frames of one clip: uint8 [N_FRAMES, 480, 640, 3] RGB and their pts (media seconds)."""
+        times = rule_times(self.TEMPORAL, st.info)  # start + k / 6.25 from this clip's facts (clamped to the clip)
         frames, pts = self._frames_at(st, times)  # nearest stored frame by pts; pts are what you REPORT
         return frames, np.asarray(pts, dtype=np.float64)
 
@@ -159,7 +161,7 @@ class Ssv2Bridge(Bridge):
         if self.model is not None:
             # TODO: the model's own transform, exactly as pasted above, then the forward pass, e.g.
             # import torch, torch.nn.functional as F
-            # x = torch.from_numpy(frames).to("cuda").permute(0, 3, 1, 2).float()          # [T, 3, 240, W]
+            # x = torch.from_numpy(frames).to("cuda").permute(0, 3, 1, 2).float()          # [T, 3, 480, 640]
             # h, w = x.shape[-2:]; s = RESIZE / min(h, w)
             # x = F.interpolate(x, size=(round(h * s), round(w * s)), mode="bilinear", antialias=True, align_corners=False)
             # top, left = (x.shape[-2] - CROP) // 2, (x.shape[-1] - CROP) // 2
