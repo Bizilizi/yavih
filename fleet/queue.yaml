@@ -4655,7 +4655,7 @@ entries:
   text_fields: false
   parents: []
   survey_note: Training-free A->V and V->A retrieval on the VGGSounder test clips whose labels are all both audible and visible (5 294); instance-level headline, class-level alongside; the maintainer's design
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: needs-data-owner
   blocked_by: null
   branch: bench/vggsounder_retrieval
