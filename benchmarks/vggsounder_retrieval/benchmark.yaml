@@ -51,7 +51,7 @@ budget:
   clips: {test: 5294}
   media_gb: 10.72   # measured: the 5 294 mp4 (9.03 GB) + wav (1.69 GB) of the frozen rows
   extract_min_per_1k_clips_ref: 2.0   # TODO
-  probe_minutes_ref: {vggsounder_retrieval: 1}   # TODO training-free
+  probe_minutes_ref: {vggsounder_retrieval: 0.5}   # measured: 0.28 min to rank and score 5 294 x 512-d embeddings (CPU), plus reading and bootstrap
 
 manifest:
   file: manifest.csv.gz
