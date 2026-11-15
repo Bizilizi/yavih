@@ -24,9 +24,13 @@ With a staged media root (``--media-root``, default the configured ``unav100.med
 read from ``<media_root>/index.json`` (the tar index of step 03); ``--no-media`` skips it (staged == listed).
 
 Outputs, byte-identical on re-run: ``manifest.csv.gz`` (gzip ``mtime=0``), ``classes.csv``, and the
-``manifest.upstream`` block printed as JSON on stdout (paste into ``benchmark.yaml``).
+``manifest.upstream`` block printed as JSON on stdout (paste into ``benchmark.yaml``). The prepare step 04 runs
+``--check`` against the staged parquets, and ``tests/test_folder.py`` re-derives both files from rows rebuilt from
+the committed manifest.
 
 Usage::
+
+    yavih bench prepare unav100 04                                              # --check on the staged root, then bench verify --census
 
     python "$(yavih bench path unav100)/make_manifest.py"                       # media_root from the config
     python "$(yavih bench path unav100)/make_manifest.py" --check               # re-derive, compare, write nothing
