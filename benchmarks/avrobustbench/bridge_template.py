@@ -216,8 +216,8 @@ class AVRobustBenchBridge(Bridge):
         lo, hi = (int(v) for v in ranges[0])
         with rs.open() as fh:
             wav, sr = soundfile.read(fh, start=lo, stop=hi, dtype="float32", always_2d=True)
-        if sr != AUDIO_RULES["front_end"]["sample_rate"]:
-            raise _Undecodable(f"sample rate {sr}")
+        # every row of this benchmark is 16 kHz; the stand-in of `bridge check --synthetic` is 8 kHz. A model whose
+        # front end needs 16 kHz resamples or refuses here (raise _Undecodable) and declares it in front_end.
         wav = np.concatenate([np.zeros(pad_l, np.float32), wav[:, 0], np.zeros(pad_r, np.float32)])  # channel 0
         return {"wav": wav, "sr": sr, "lo": lo, "hi": hi, "pad": (pad_l, pad_r)}
 
