@@ -50,8 +50,8 @@ obtain:   # who must act before the data can be staged here (yavih bench list); 
 budget:
   clips: {train: 16000, valid: 2000, test: 4890}
   media_gb: 0.72                    # measured: bytes of the 22 890 wavs of train + valid + test (make_manifest.py); the whole staged root is 3.4 GB
-  extract_min_per_1k_clips_ref: 0.2  # TODO
-  probe_minutes_ref: {clf: 5}        # TODO
+  extract_min_per_1k_clips_ref: 0.25  # measured with an AST-shaped ViT-B (random weights, 108 x 768 tokens), RTX 4500 Ada, 4 decode workers: bridge check 120.9 clips/s = 0.14; the full extraction of the 22 890 clips 572 s = 0.42 (shared GPU, network FS); 0.25 is within 2x of both
+  probe_minutes_ref: {clf: 20}        # measured: the clf probe on those 108 x 768 features, 18 000 train / 4 890 eval, 17.1 min (unit wall 21.2 min), RTX 4500 Ada
 
 manifest:
   file: manifest.csv.gz
