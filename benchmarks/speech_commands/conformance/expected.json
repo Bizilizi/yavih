@@ -2,61 +2,51 @@
  "benchmark": "speech_commands",
  "generator": 1,
  "population": {
-  "eval": 320,
+  "eval": 256,
   "floor": 0,
-  "folds": 5,
-  "train": 256
+  "folds": 0,
+  "train": 512
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": null,
+  "commit": "6c4efdf60f68f336a2e201c562fd2564f43ff182",
   "externals": {},
   "folder_source": {
-   "eval": null,
+   "eval": "16fcee9c01d95a3b3fcb05c0e7fc82de2ce2fa1e3ef3514dbb86ded37132129a",
    "reader": null
   },
-  "protocol_hash": "01b2bc46e7dec6fd4f4983f74c27f3b7ab0f63686c0098b1f1b6c01d1947ba49",
+  "protocol_hash": "36bc64df609d131ebb21c8dd1d0754801bd09110e0f5c87bf086106f92863593",
   "scorer": {
    "kind": "probe",
    "name": "clf",
    "version": 1
   },
-  "scoring_hash": "f9a35dc54bac0354dcf07a6a40e35f8866aa89c202dae096e16f15a41a0b9771",
+  "scoring_hash": "8b7b967f6c58b412023598afc69e4eeca47ef802b148e4ce087d3c9ead634cc5",
   "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {
-  "acc_floor": 0.001,
-  "acc_mean": 0.001,
-  "acc_per_fold": 0.001,
-  "acc_pstd": 0.001,
   "n_eval": 0.001,
-  "n_folds": 0.001
+  "n_train": 0.001,
+  "top1_acc": 0.001,
+  "top1_acc_floor": 0.001
  },
  "values": {
   "*": {
    "ci95": {
-    "acc_mean": [
-     0.006692053178920694,
-     0.03604941318891062
+    "top1_acc": [
+     0.03285229140400938,
+     0.08968958072528235
     ]
    },
    "controls": {},
    "floors": {
-    "acc_floor": 0.015625
+    "top1_acc_floor": 0.0703125
    },
    "metrics": {
-    "acc_mean": 0.015625,
-    "acc_per_fold": [
-     0.015625,
-     0.0,
-     0.0,
-     0.015625,
-     0.046875
-    ],
-    "acc_pstd": 0.01711632992203644,
-    "n_eval": 320,
-    "n_folds": 5
+    "n_eval": 256,
+    "n_train": 512,
+    "top1_acc": 0.0546875
    }
   }
  }
