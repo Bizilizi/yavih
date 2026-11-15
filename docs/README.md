@@ -1,7 +1,7 @@
 # yavih documentation
 
-Repository documentation for yavih, a frozen-feature benchmark harness for video, audio and audio-visual
-encoders. Start with the project [README](../README.md); [Quickstart by hand](quickstart.md) walks through every step without an agent. The agent-facing
+Repository documentation for yavih, a benchmark harness of frozen evaluation protocols for video, audio and
+audio-visual models. Start with the project [README](../README.md); [Quickstart by hand](quickstart.md) walks through every step without an agent. The agent-facing
 documentation ships with the package as a skill (`yavih skill show`, source in
 [`src/yavih/skill/yavih/`](../src/yavih/skill/yavih/SKILL.md)).
 

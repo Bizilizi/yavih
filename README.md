@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Bizilizi/yavih/main/assets/header.png" alt="yavih — frozen-feature benchmark harness for video and audio models" width="100%">
+  <img src="https://raw.githubusercontent.com/Bizilizi/yavih/main/assets/header.png" alt="yavih — benchmark harness of frozen evaluation protocols for video and audio models" width="100%">
 </p>
 
 <p align="center">
@@ -11,9 +11,10 @@
 
 <h3 align="center">A growing library of video, audio and audio-visual benchmarks.<br>One harness, one protocol — and your coding agent does the wiring.</h3>
 
-**yavih** (Yet Another Video Harness) evaluates frozen video, audio and audio-visual encoders. You bring a model;
-yavih brings the benchmarks, the data recipes, the probes and the guarantees that your numbers mean the same thing
-as everyone else's.
+**yavih** (Yet Another Video Harness) evaluates video, audio and audio-visual models on frozen protocols. An encoder
+is scored through its frozen features and a standard probe; a model that generates or answers is scored on its own
+outputs (today: text-to-audio and video-to-audio generation). You bring a model; yavih brings the benchmarks, the data
+recipes, the probes and scorers, and the guarantees that your numbers mean the same thing as everyone else's.
 
 <p align="center"><img src="https://raw.githubusercontent.com/Bizilizi/yavih/main/assets/readme/agent.gif" alt="An agent benchmarks a model with yavih from one sentence" width="100%"></p>
 
@@ -40,8 +41,8 @@ rest runs.
 <td width="50%" valign="top">
 
 ### 🗂 Many benchmarks, one harness
-Classification, temporal, spatial, sync and dense tasks across audio, video and audio-visual data, all behind the
-same commands. Pick a ready-made suite or define your own.
+Classification, temporal, spatial, sync, dense, retrieval and generation tasks across audio, video and audio-visual
+data, all behind the same commands. Pick a ready-made suite or define your own.
 
 </td>
 <td width="50%" valign="top">
@@ -56,8 +57,8 @@ from, what the model receives, what it must return, and how to check each step.
 <td width="50%" valign="top">
 
 ### 🔒 Same protocol, same data — provably
-Every benchmark is frozen: the clips, the labels, the probe and the metric. A short hash names that exact protocol,
-and two numbers are compared only when their hashes match. No silent drift, no "our split".
+Every benchmark is frozen: the clips, the labels, the probe or scorer and the metric. A short hash names that exact
+protocol, and two numbers are compared only when their hashes match. No silent drift, no "our split".
 
 </td>
 <td width="50%" valign="top">
@@ -105,14 +106,14 @@ runs it.
 A benchmark result is only useful if someone else can get the same number the same way. yavih freezes everything
 that decides what a number means and leaves everything else to you:
 
-- **Frozen by yavih:** which clips, which labels, which raw files your model receives, which probe is trained on top,
-  how it is trained, and which metric is reported — with a floor (what a model that ignores its input would score)
-  next to every result.
+- **Frozen by yavih:** which clips, which labels, which raw files your model receives, which probe is trained on top
+  and how it is trained (or which scorer reads the model's own outputs), and which metric is reported — with a floor
+  (what a model that ignores its input would score) next to every result.
 - **Yours to choose:** the model, how it reads the media (frames, crops, audio front end), its precision and batch
   size. All of it is recorded with every number, none of it changes what the number is compared against.
 
 That frozen protocol is summarised in one short hash, the `eval_hash`. Same hash ⇔ same data, same protocol, same
-probe. The report only ever puts numbers with the same hash in one column; change a clip or a metric and you get a
+scorer. The report only ever puts numbers with the same hash in one column; change a clip or a metric and you get a
 new hash, never a quietly different number.
 
 <p align="center"><img src="https://raw.githubusercontent.com/Bizilizi/yavih/main/assets/readme/hash.gif" alt="Matching hashes make results comparable; a changed protocol gets its own hash" width="100%"></p>
@@ -142,6 +143,9 @@ Your model connects through a **bridge**: a small Python file, written by your a
 benchmark's raw files into features. It runs in your model's own environment — yavih installs without touching your
 torch. yavih checks the features, trains the same probe every model gets, and reports with floors and confidence
 intervals. Everything runs on a laptop, a workstation or as job arrays on any cluster.
+
+The same pipeline carries benchmarks that are not probes. On a generation benchmark the bridge returns the clip your
+model generated, and the benchmark's own scorer takes the place of the probe.
 
 <details>
 <summary><b>Learn more</b></summary>

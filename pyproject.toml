@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "yavih"
 dynamic = ["version"]               # from the git tag vX.Y.Z (setuptools-scm, [tool.setuptools_scm] below)
-description = "Frozen-feature benchmark harness for video and audio models"
+description = "Benchmark harness of frozen evaluation protocols for video and audio models"
 readme = "README.md"
 requires-python = ">=3.10"          # tomllib, or the tomli / vendored fallback
 license = "MIT"

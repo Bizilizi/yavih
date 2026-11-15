@@ -60,7 +60,7 @@ catalog (`$TRIAL/catalog`); `<WORK>` the workspace;
 it as the <root> data root` or `no data is staged: obtain it as setup.md says`; `<N>` the sample size (32 to 64).
 
 ```text
-You are checking whether a new benchmark of yavih (a frozen-feature benchmark harness) can be set up by an agent
+You are checking whether a new benchmark of yavih (a benchmark harness of frozen evaluation protocols) can be set up by an agent
 that has never seen it. Work only inside <WORK>. You have the yavih wheel <WHEEL>, the benchmark's folder as an offline
 catalog <CATALOG> (the published catalog does not list it yet: where the skill fetches a benchmark, use
 `yavih bench fetch <BENCH> --from <CATALOG>`), the network for pip and for the benchmark's public downloads, and: <DATA>. You do not have the yavih source repository: do not look for it, and do

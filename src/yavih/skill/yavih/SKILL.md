@@ -1,14 +1,17 @@
 ---
 name: yavih
 description: >
-  Evaluate or benchmark a video, audio, image or audio-visual model with FROZEN features through
-  yavih (frozen-feature benchmark harness): reading a benchmark's setup.md, writing a yavih bridge
-  that turns the benchmark's raw files into tokens, extracting features, running the standardized
-  probe readouts (clf / seq / grid / box) and reporting with floors. Use whenever the request
-  mentions yavih, a bridge, frozen-feature or linear/attentive probing, a benchmark suite
-  ("benchmark my model" = the default suite), evaluating an encoder's audio, visual, audio-visual,
-  temporal or spatial capabilities, or any benchmark in `yavih bench list` (by name or alias). Nine
-  steps, each with the exact command and the output to see before moving on; contracts in references/.
+  Evaluate or benchmark a video, audio, image or audio-visual model through yavih (a harness of
+  frozen evaluation protocols). An encoder is scored with FROZEN features: reading a benchmark's
+  setup.md, writing a yavih bridge that turns the benchmark's raw files into tokens, extracting
+  features, running the standardized probe readouts (clf / seq / grid / box) and reporting with
+  floors. A model that generates or answers is scored on its own outputs by the benchmark's scorer
+  (today: audio generation). Use whenever the request mentions yavih, a bridge, frozen-feature or
+  linear/attentive probing, a benchmark suite ("benchmark my model" = the default suite),
+  evaluating an encoder's audio, visual, audio-visual, temporal or spatial capabilities, scoring a
+  text-to-audio or video-to-audio generator, evaluating a video or audio language model with
+  yavih, or any benchmark in `yavih bench list` (by name or alias). Nine steps, each with the
+  exact command and the output to see before moving on; contracts in references/.
 ---
 
 # yavih — nine steps, one stop condition each
@@ -29,9 +32,10 @@ bridge returns `[N, D]` tokens per clip and, for localized labels, token positio
 coordinates (t = fraction of the clip's duration, (y, x) = fraction of the ORIGINAL frame). Each
 benchmark writes both contracts in its `setup.md`: read it first.
 
-Use this skill when a model must be scored on a frozen benchmark, a bridge has to be written or
-debugged, features must be validated, or a probe/report must be read. Not for training or
-fine-tuning: yavih reads models, it never updates them.
+Use this skill when a model must be scored on a frozen benchmark (an encoder through its features and a
+probe; a generator or a model that answers on its own outputs, on a benchmark whose setup.md asks for
+them), a bridge has to be written or debugged, features or other bridge outputs must be validated, or a
+probe/report must be read. Not for training or fine-tuning: yavih reads models, it never updates them.
 
 ## 0. Install (into the MODEL env, never a new one)
 

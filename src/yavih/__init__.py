@@ -1,4 +1,4 @@
-"""yavih — AI-native frozen-feature benchmark harness.
+"""yavih — AI-native benchmark harness of frozen evaluation protocols.
 
 Re-exports the core API and exposes the torch-dependent subpackages
 (``probes``, ``readouts``, ``report``, ``plan``) as PEP 562 lazy attributes so that

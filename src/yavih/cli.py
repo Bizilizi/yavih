@@ -2266,7 +2266,7 @@ def build_parser() -> argparse.ArgumentParser:
     common_r = argparse.ArgumentParser(add_help=False, parents=[common])
     config_flags(common_r)
 
-    p = argparse.ArgumentParser(prog="yavih", description="yavih: frozen-feature benchmark harness", parents=[common_r])
+    p = argparse.ArgumentParser(prog="yavih", description="yavih: benchmark harness of frozen evaluation protocols", parents=[common_r])
     p.add_argument("--version", action="version", version=f"yavih {__version__}")
     sub = p.add_subparsers(dest="command", metavar="<command>")
     sub.required = True
