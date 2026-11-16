@@ -209,7 +209,8 @@ def decode_row(raw: np.ndarray, duration_s: float) -> np.ndarray:
     cand = np.flatnonzero(flat >= float(DECODE["score_thresh"]))
     top = int(DECODE["pre_nms_topk"])
     if cand.size > top:
-        cand = np.sort(cand[np.argpartition(-flat[cand], top - 1)[:top]])
+        # a stable sort, not argpartition: tied scores (a constant floor) keep the lowest index on every CPU
+        cand = np.sort(cand[np.argsort(-flat[cand], kind="stable")[:top]])
     if cand.size == 0:
         return np.zeros((0, 4))
     k, c = np.divmod(cand, C)

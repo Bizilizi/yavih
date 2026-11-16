@@ -17,9 +17,10 @@ file is a line-by-line numpy transcription of its scoring path (``ANETdetection`
   rule: ``groundtruth_df[groundtruth_df["class"] != "background"]``), times in seconds;
 * predictions whose class does not occur in that ground truth are dropped;
 * per class present in the ground truth, AP at each tIoU threshold (``np.linspace(0.1, 0.5, 5)``): predictions of
-  the class sorted by ``score.argsort()[::-1]`` (numpy's default quicksort, reversed: the same tie order), each
+  the class sorted by ``score.argsort()[::-1]`` (here ``kind="stable"``, reversed: the official default quicksort
+  leaves the order of tied scores to the CPU's sort routine, so a stable sort makes it the same everywhere), each
   matched greedily to the unmatched ground-truth segment of the same recording with the highest tIoU
-  (``tiou.argsort()[::-1]``), interpolated VOC-2011 precision-recall area; a class without predictions scores 0;
+  (``tiou.argsort()[::-1]``, stable as above), interpolated VOC-2011 precision-recall area; a class without predictions scores 0;
 * ``mAP@k`` = mean over classes, ``map_avg`` = mean of the five, reported in percent like the official script.
 
 The transcription is pinned by the folder test against the AP of the C10 baseline file
@@ -97,7 +98,7 @@ def average_precision_detection(gt_video: np.ndarray, gt_seg: np.ndarray, pr_vid
         return ap
     npos = float(len(gt_video))
     lock_gt = np.ones((len(tiou_thresholds), len(gt_video))) * -1
-    sort_idx = pr_score.argsort()[::-1]
+    sort_idx = pr_score.argsort(kind="stable")[::-1]
     pr_video, pr_seg = pr_video[sort_idx], pr_seg[sort_idx]
     tp = np.zeros((len(tiou_thresholds), len(sort_idx)))
     fp = np.zeros((len(tiou_thresholds), len(sort_idx)))
@@ -111,7 +112,7 @@ def average_precision_detection(gt_video: np.ndarray, gt_seg: np.ndarray, pr_vid
             fp[:, idx] = 1
             continue
         tiou_arr = segment_iou(pr_seg[idx], gt_seg[gidx])
-        tiou_sorted_idx = tiou_arr.argsort()[::-1]
+        tiou_sorted_idx = tiou_arr.argsort(kind="stable")[::-1]
         for tidx, thr in enumerate(tiou_thresholds):
             for jdx in tiou_sorted_idx:
                 if tiou_arr[jdx] < thr:
