@@ -39,9 +39,11 @@ groups, dialogue and singing. The clips were filtered automatically and checked 
 on screen. The perturbed soundtracks were generated from the originals: the temporal ones by shifting, resampling
 and window jitter, the timbre ones with OpenVoice V2 (voices) and DDSP (instruments).
 
-The public release holds 3 494 original videos and 37 743 pairs: 14 600 offset pairs (five magnitudes, both
-directions), 14 570 speed pairs (ten factors), 7 755 jitter pairs (three magnitude ranges), 589 voice-timbre and 229
-instrument-timbre pairs. These differ slightly from the paper's own count of 38 390. There is no training split:
+The public release holds 37 743 pairs: 14 600 offset pairs (five magnitudes, both directions), 14 570 speed pairs
+(ten factors), 7 755 jitter pairs (three magnitude ranges), 589 voice-timbre and 229 instrument-timbre pairs. Their
+originals are 3 494 mp4 files: 2 676 shared by the temporal pairs, one per video, and 818 in the timbre part, where
+every pair has its own copy of its original. Those files show 3 003 distinct videos (`video_id`): the 818 timbre
+copies are 552 videos, 225 of which are also among the temporal ones. These differ slightly from the paper's own count of 38 390. There is no training split:
 every pair is a test pair.
 
 The dataset card declares the MIT licence. The clips themselves come from public platforms, and the authors do not
@@ -57,7 +59,8 @@ paper's tables; the timbre accuracy pools its pairs. The headline is the mean of
 
 Not this benchmark: the offset classifiers of the paper (Synchformer, SparseSync) are scored there by their
 probability of zero offset rather than by a cosine, which this folder does not do; and the toolkit's
-`official_0p64` mode scores every segment of a pair instead of at most 18, which moves the numbers slightly.
+`official_0p64` mode scores every segment of a pair instead of at most 18 (how much that changes the numbers has
+not been measured).
 
 ## Reference numbers
 
@@ -71,7 +74,9 @@ averages over the levels):
 | CAV-MAE-Sync | 0.500 | 0.636 | 0.486 | 0.628 |
 
 They come from the paper's own preprocessing of each model and from the full 38 390 pairs. The release this folder
-scores has 37 743, so the numbers are comparable but not identical.
+scores has 37 743, so the numbers are comparable but not identical. The paper does not define how its timbre
+"Overall" is computed, so the folder's `acc_timbre` (voice and instrument pairs pooled) is only roughly comparable
+with that column.
 
 ## Citation
 
