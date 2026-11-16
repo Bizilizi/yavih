@@ -47,6 +47,7 @@ the sizes of the upstream release and the layout rules are in that folder's `set
 | unav100_causal | stream | `public_url`; 66.1 GB = `source.bytes` | 66.1 GB = `budget.media_gb` | 6 487 train / 2 166 test | video + audio | auto | `yavih bench info unav100_causal --setup` |
 | vggsound_retrieval | vggsound_retrieval | `public_url`; 407.0 GB = `source.bytes` | 31.12 GB = `budget.media_gb` | 15 440 test | video + audio | needs-data-owner | `yavih bench info vggsound_retrieval --setup` |
 | vggsounder | clf (multi_sets) | `public_url`; 407.0 GB = `source.bytes` | 67 GB = `budget.media_gb` | 20 000 train / 12 008 test | video + audio | needs-data-owner | `yavih bench info vggsounder --setup` |
+| vggsounder_retrieval | vggsounder_retrieval | `public_url`; 407.0 GB = `source.bytes` | 10.72 GB = `budget.media_gb` | 5 294 test | video + audio | needs-data-owner | `yavih bench info vggsounder_retrieval --setup` |
 | vggsounder_v2a | vggsounder_v2a | `public_url` | 4.5 GB = `budget.media_gb` | 3 000 test | video (materialized at prepare time) | needs-data-owner | `yavih bench info vggsounder_v2a --setup` |
 | vggss_box | box (box) | `public_url`; 10.5 GB = `source.bytes` | 9.35 GB = `budget.media_gb` | 3 700 train / 914 eval | video + audio | needs-data-owner | `yavih bench info vggss_box --setup` |
 | vggss_loc | vggss_loc | `public_url`; 10.5 GB = `source.bytes` | 10.53 GB = `budget.media_gb` | 5 154 test | video + audio | needs-data-owner | `yavih bench info vggss_loc --setup` |
@@ -157,7 +158,7 @@ lines; "None." for most), "## Input contract", "## Output contract", "## Prepare
 expected `yavih bench verify <b>` output), "## Gotchas" (bridge mistakes that pass validation on
 this benchmark). One per folder:
 <!-- yavih:bench-table names begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `epic_sounds_det`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `perception_test_action_loc`, `perception_test_sound_loc`, `ssv2`, `thumos14_oad`, `unav100`, `unav100_causal`, `vggsound_retrieval`, `vggsounder`, `vggsounder_v2a`, `vggss_box`, `vggss_loc`.
+`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `epic_sounds_det`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `perception_test_action_loc`, `perception_test_sound_loc`, `ssv2`, `thumos14_oad`, `unav100`, `unav100_causal`, `vggsound_retrieval`, `vggsounder`, `vggsounder_retrieval`, `vggsounder_v2a`, `vggss_box`, `vggss_loc`.
 <!-- yavih:bench-table names end -->
 
 ## 6. Failure modes yavih guards against

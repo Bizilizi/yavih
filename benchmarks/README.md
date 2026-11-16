@@ -32,7 +32,7 @@ capabilities is listed under each.
 | [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
 | [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
 
-### audio-visual (14)
+### audio-visual (15)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -47,6 +47,7 @@ capabilities is listed under each.
 | [unav100_causal](unav100_causal/README.md) | UnAV-100 causal audio-visual event recognition (streaming; 100 classes, one-second bins, multilabel) | stream | video + audio | public (obtain: auto) |
 | [vggsound_retrieval](vggsound_retrieval/README.md) | VGGSound test-set audio–video retrieval (A→V and V→A R@1 over 15 440 clips; the CAV-MAE Sync 1 545-clip subset alongside) | vggsound_retrieval | video + audio | public (obtain: needs-data-owner) |
 | [vggsounder](vggsounder/README.md) | VGGSounder audio / visual / audio-visual multilabel probe (VGGSound-train probe, 309 classes) | clf | video + audio | public (obtain: needs-data-owner) |
+| [vggsounder_retrieval](vggsounder_retrieval/README.md) | VGGSounder audio–video retrieval on the 5 294 test clips whose classes are all audible and visible (A→V and V→A R@1; class-level mAP alongside) | vggsounder_retrieval | video + audio | public (obtain: needs-data-owner) |
 | [vggsounder_v2a](vggsounder_v2a/README.md) | VGGSounder video-to-audio generation (3 000 audible clips; FD, KL, IS, ImageBind score, DeSync via av-benchmark) | vggsounder_v2a | video (materialized at prepare time) | public (obtain: needs-data-owner) |
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 | [vggss_loc](vggss_loc/README.md) | VGG-SS training-free sound-source localization (cIoU@0.5, AUC on heatmaps) | vggss_loc | video + audio | public (obtain: needs-data-owner) |
@@ -74,11 +75,12 @@ capabilities is listed under each.
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 | [vggss_loc](vggss_loc/README.md) | VGG-SS training-free sound-source localization (cIoU@0.5, AUC on heatmaps) | vggss_loc | video + audio | public (obtain: needs-data-owner) |
 
-### retrieval (1)
+### retrieval (2)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [vggsound_retrieval](vggsound_retrieval/README.md) | VGGSound test-set audio–video retrieval (A→V and V→A R@1 over 15 440 clips; the CAV-MAE Sync 1 545-clip subset alongside) | vggsound_retrieval | video + audio | public (obtain: needs-data-owner) |
+| [vggsounder_retrieval](vggsounder_retrieval/README.md) | VGGSounder audio–video retrieval on the 5 294 test clips whose classes are all audible and visible (A→V and V→A R@1; class-level mAP alongside) | vggsounder_retrieval | video + audio | public (obtain: needs-data-owner) |
 
 ### generation (2)
 
@@ -144,6 +146,7 @@ Read the folder's `setup.md` first, before downloading anything or writing a bri
 [unav100_causal](unav100_causal/setup.md) ·
 [vggsound_retrieval](vggsound_retrieval/setup.md) ·
 [vggsounder](vggsounder/setup.md) ·
+[vggsounder_retrieval](vggsounder_retrieval/setup.md) ·
 [vggsounder_v2a](vggsounder_v2a/setup.md) ·
 [vggss_box](vggss_box/setup.md) ·
 [vggss_loc](vggss_loc/setup.md).

@@ -738,6 +738,7 @@ The full index with descriptions, media and sources is [benchmarks/README.md](..
 | unav100_causal | stream | none | video, audio | `map_gru` | yes |
 | vggsound_retrieval | vggsound_retrieval | none | video, audio | `r@1` | yes |
 | vggsounder | clf | multi_sets | video, audio | `auc_pr` | yes, `external` |
+| vggsounder_retrieval | vggsounder_retrieval | none | video, audio | `r@1` | yes |
 | vggsounder_v2a | vggsounder_v2a | none | video (materialized) | `fd_passt` | yes, `external` |
 | vggss_box | box | box | video, audio | `iou_mean` |  |
 | vggss_loc | vggss_loc | none | video, audio | `ciou@0.5` | yes |
