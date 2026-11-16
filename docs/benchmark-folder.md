@@ -720,6 +720,7 @@ The full index with descriptions, media and sources is [benchmarks/README.md](..
 |---|---|---|---|---|---|
 | audiocaps_t2a | audiocaps_t2a | none | caption (cell) | `fd_passt` | yes, `external` |
 | audioset20k | clf | multi | video, audio | `map` |  |
+| av_syncbench | av_syncbench | none | video, audio, edited_audio | `acc_task_mean` | yes |
 | ave | seq | segments | video, audio | `seg_acc` |  |
 | ave_causal | stream | none | video, audio | `sec_acc_gru` | yes |
 | avsync | clf | single | video, audio (materialized) | `acc` | yes |

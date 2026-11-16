@@ -32,11 +32,12 @@ capabilities is listed under each.
 | [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
 | [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
 
-### audio-visual (15)
+### audio-visual (16)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [audioset20k](audioset20k/README.md) | AudioSet-20K (balanced) 527-class multi-label audio-visual tagging, published raw clips (macro mAP) | clf | video + audio | public (obtain: auto) |
+| [av_syncbench](av_syncbench/README.md) | AV-SyncBench zero-shot audio-visual synchronisation (original vs offset, speed, jitter or timbre-edited audio; pairwise accuracy) | av_syncbench | video + audio | public (obtain: auto) |
 | [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
@@ -52,10 +53,11 @@ capabilities is listed under each.
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 | [vggss_loc](vggss_loc/README.md) | VGG-SS training-free sound-source localization (cIoU@0.5, AUC on heatmaps) | vggss_loc | video + audio | public (obtain: needs-data-owner) |
 
-### temporal (10)
+### temporal (11)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
+| [av_syncbench](av_syncbench/README.md) | AV-SyncBench zero-shot audio-visual synchronisation (original vs offset, speed, jitter or timbre-edited audio; pairwise accuracy) | av_syncbench | video + audio | public (obtain: auto) |
 | [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
@@ -128,6 +130,7 @@ Read the folder's `setup.md` first, before downloading anything or writing a bri
 <!-- yavih:bench-table setup_links begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
 [audiocaps_t2a](audiocaps_t2a/setup.md) ·
 [audioset20k](audioset20k/setup.md) ·
+[av_syncbench](av_syncbench/setup.md) ·
 [ave](ave/setup.md) ·
 [ave_causal](ave_causal/setup.md) ·
 [avsync](avsync/setup.md) ·

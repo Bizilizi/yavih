@@ -29,6 +29,7 @@ the sizes of the upstream release and the layout rules are in that folder's `set
 |---|---|---|---|---|---|---|---|
 | audiocaps_t2a | audiocaps_t2a | `public_url` | 0.9 GB = `budget.media_gb` | 776 test | text (cell) | auto | `yavih bench info audiocaps_t2a --setup` |
 | audioset20k | clf (multi) | `public_url`; 66.1 GB = `source.bytes` | 66 GB = `budget.media_gb` | 17 726 train / 16 223 eval | video + audio | auto | `yavih bench info audioset20k --setup` |
+| av_syncbench | av_syncbench | `public_url`; 68.2 GB = `source.bytes` | 69.94 GB = `budget.media_gb` | 37 743 test | video + audio | auto | `yavih bench info av_syncbench --setup` |
 | ave | seq (segments) | `public_url`; 13.4 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 2 624 train / 316 test | video + audio | auto | `yavih bench info ave --setup` |
 | ave_causal | stream | `public_url`; 13.4 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 2 592 train / 316 test | video + audio | auto | `yavih bench info ave_causal --setup` |
 | avsync | clf (floor role) | `derived`; 407.0 GB = `source.bytes` | 74.4 GB = `budget.media_gb` | 24 000 train / 3 000 test / 5 997 stationary | video + audio (materialized at prepare time) | needs-data-owner | `yavih bench info avsync --setup` |
@@ -158,7 +159,7 @@ lines; "None." for most), "## Input contract", "## Output contract", "## Prepare
 expected `yavih bench verify <b>` output), "## Gotchas" (bridge mistakes that pass validation on
 this benchmark). One per folder:
 <!-- yavih:bench-table names begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-`audiocaps_t2a`, `audioset20k`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `epic_sounds_det`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `perception_test_action_loc`, `perception_test_sound_loc`, `ssv2`, `thumos14_oad`, `unav100`, `unav100_causal`, `vggsound_retrieval`, `vggsounder`, `vggsounder_retrieval`, `vggsounder_v2a`, `vggss_box`, `vggss_loc`.
+`audiocaps_t2a`, `audioset20k`, `av_syncbench`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `epic_sounds_det`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `perception_test_action_loc`, `perception_test_sound_loc`, `ssv2`, `thumos14_oad`, `unav100`, `unav100_causal`, `vggsound_retrieval`, `vggsounder`, `vggsounder_retrieval`, `vggsounder_v2a`, `vggss_box`, `vggss_loc`.
 <!-- yavih:bench-table names end -->
 
 ## 6. Failure modes yavih guards against
