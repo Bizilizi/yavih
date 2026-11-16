@@ -1,7 +1,9 @@
 """Bridge skeleton for **av_syncbench**. Copy, rename, fill the TODOs.
 
 Read ``setup.md`` first (input and output contracts). ``yavih bridge check <file> --bench av_syncbench --synthetic``
-smoke-tests it before any data is staged; an unfilled copy fails bridge check: E_TEMPLATE_UNFILLED /
+is refused with E_SYNTHETIC: the core's synthetic check covers the core scorers only, not this folder's own pairwise
+scorer (setup.md "Gotchas"). Check the bridge on the staged data (``yavih bridge check <file> --bench av_syncbench
+--out <profile>``, the line ``plan init`` prints); an unfilled copy fails bridge check: E_TEMPLATE_UNFILLED /
 E_CONSTANT_FEATURES. A bridge file serves one benchmark; each matrix entry (file + args) is one reading of one model.
 ``av_syncbench`` is TRAINING-FREE: the folder's scorer (``pairwise.py``) compares, for every pair, the mean cosine
 of the video's segment embeddings with the original audio's and with the perturbed audio's, segment by segment, in
