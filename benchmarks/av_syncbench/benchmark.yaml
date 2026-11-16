@@ -23,8 +23,8 @@ changelog:
     date: "2026-11-15"
     reason: Initial release.
     invalidates: false
-    protocol_hash: d85f3fea8a15517643015cd7cb37bb9758faad60b51e7e09f36ab2449d566418   # recorded, outside the hashed payload; `yavih bench lint` checks it
-    input_hash: 3e0647b3501abfedc47fb56d6dee64d629edfdf950ce39ba4b2e5c073201e196
+    protocol_hash: 2d53da812f830a7c35d385eb6d03fb52c87804a97500fab01ab22186b53b2904   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 9752ad9a05e1cc6048606a3623bb0e59c1a336cf2b675c0c8d91904e4364ffdd
     supersedes: []
 
 source:
@@ -64,7 +64,7 @@ budget:
 
 manifest:
   file: manifest.csv.gz
-  sha256: dc5444fbd765df61df69f93a107bbe4f54076de112e39e067a39c3d9f6bc306d
+  sha256: 20867338bb5e5631c15cc278a922ef5056f215fd1ba837634365d72ac0020328
   classes: null
   classes_sha256: null
   key: clip_id
@@ -89,8 +89,9 @@ manifest:
     rows: 37746
     note: >-
       One row per original-versus-perturbed pair: the 36 925 lines of hf_temporal_challenge/metadata.jsonl and the
-      821 lines of hf_timbre_edit/metadata.jsonl minus 3 lines that repeat an earlier line byte for byte, ordered by
-      rel_video. 3 494 original mp4 (3 003 distinct video_id), 37 743 perturbed wav. task / level / direction are
+      821 lines of hf_timbre_edit/metadata.jsonl minus 3 lines that repeat an earlier line byte for byte, ordered
+      round-robin over the 18 temporal (task, level) groups and the two timbre tasks, so the first 20 rows cover all
+      20 groups. 3 494 original mp4 (3 003 distinct video_id), 37 743 perturbed wav. task / level / direction are
       parsed from target_attribute or edit_type; the raw fields are kept (never handed over).
     upstream_files:
       "AV_SyncBench/hf_temporal_challenge/metadata.jsonl": f96dcf8ab8e445e1519bcfdf10a8a413d0df9aec5da76da08483bf3d80aa3212

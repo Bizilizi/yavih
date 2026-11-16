@@ -17,8 +17,15 @@ The rules (every row is one original-versus-perturbed pair, the upstream evaluat
 
 1. **Rows.** Every line of both files, minus the 3 lines of ``hf_timbre_edit/metadata.jsonl`` that repeat an earlier
    line byte for byte (lines 374, 421, 422 repeat 345, 378, 379; ``curation.excluded.duplicate_line``): 36 925 +
-   818 = 37 743 rows, one split ``test``, ordered by ``rel_video`` then ``upstream_line`` (the pairs of one
-   original video are consecutive).
+   818 = 37 743 rows, one split ``test``.
+   **Order: round-robin over the scored groups**, so that every short prefix (``plan build --sample N`` takes the
+   first N rows) covers every group a metric with an interval reads: the 18 temporal ``(task, level)`` groups
+   (offset 50 to 500 ms, jitter L1 to L3, speed 0.80x to 1.25x) and the two timbre tasks (``voice_timbre``,
+   ``instrument_timbre``), 20 groups in the fixed order of ``GROUP_ORDER``. Inside a group the rows are ordered by
+   ``rel_video`` then ``upstream_line``; row ``i`` of the manifest is the next row of the next group that still has
+   rows, so the first 20 rows hold one row of every group (``--sample 20`` is the smallest covering cap) and every
+   prefix of ``20 k`` rows, ``k <= 229``, holds ``k`` rows of each. The pairs of one original video are therefore
+   not consecutive.
 2. **Columns** ``clip_id,split,task,level,direction,category,video_id,rel_video,rel_edited,duration,
    target_attribute,source_attribute,upstream_line``. ``clip_id`` = ``sample_id``. ``task`` / ``level`` /
    ``direction`` are parsed from ``target_attribute`` (temporal) or ``edit_type`` (semantic):
@@ -89,6 +96,10 @@ MANIFEST_COLUMNS = ["clip_id", "split", "task", "level", "direction", "category"
 OFFSET_LEVELS = ("50ms", "100ms", "200ms", "300ms", "500ms")
 SPEED_LEVELS = ("0.80x", "0.83x", "0.87x", "0.91x", "0.95x", "1.05x", "1.10x", "1.15x", "1.20x", "1.25x")
 JITTER_LEVELS = ("L1", "L2", "L3")
+#: the scored groups, in the round-robin order of the manifest (``(task, level)``; ``level`` is ``""`` for a timbre task)
+GROUP_ORDER: tuple[tuple[str, str], ...] = (
+    *(("offset", lv) for lv in OFFSET_LEVELS), *(("jitter", lv) for lv in JITTER_LEVELS), *(("speed", lv) for lv in SPEED_LEVELS),
+    ("voice_timbre", ""), ("instrument_timbre", ""))
 #: rows per task and per (task, level) in the pinned release
 EXPECTED: dict[str, Any] = {
     "tasks": {"offset": 14600, "speed": 14570, "jitter": 7755, "voice_timbre": 589, "instrument_timbre": 229},
@@ -189,11 +200,33 @@ def derive(meta: dict[str, bytes]) -> tuple[list[dict[str, str]], dict[str, Any]
     offset_dirs = Counter((r["level"], r["direction"]) for r in rows if r["task"] == "offset")
     if set(offset_dirs.values()) != {1460} or len(offset_dirs) != 10:
         raise SystemExit(f"offset (level, direction) counts {dict(offset_dirs)}")
-    rows.sort(key=lambda r: (r["rel_video"], r["upstream_line"][0], int(r["upstream_line"][1:])))
+    rows = interleave(rows)
     excluded = {"duplicate_line": sum(len(v) for v in DUPLICATE_LINES.values())}
     stats = {"tasks": dict(tasks), "videos_per_task": videos, "original_video_files": len(video_of),
              "video_ids": len({r["video_id"] for r in rows}), "categories": dict(sorted(Counter(r["category"] for r in rows).items()))}
     return rows, {"excluded": excluded, **stats}
+
+
+def group_of(row: dict[str, str]) -> tuple[str, str]:
+    """The scored group of a row: ``(task, level)`` of a temporal pair, ``(task, "")`` of a timbre pair."""
+    return (row["task"], "" if row["task"] in SEMANTIC_TASK.values() else row["level"])
+
+
+def interleave(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """The manifest order: each group sorted by ``rel_video`` then ``upstream_line``, then round-robin over
+    ``GROUP_ORDER`` (an exhausted group is skipped), so every prefix of ``len(GROUP_ORDER)`` rows covers every group."""
+    by_group: dict[tuple[str, str], list[dict[str, str]]] = {g: [] for g in GROUP_ORDER}
+    for r in rows:
+        g = group_of(r)
+        if g not in by_group:
+            raise SystemExit(f"{r['clip_id']}: group {g} is not in GROUP_ORDER")
+        by_group[g].append(r)
+    for g in GROUP_ORDER:
+        by_group[g].sort(key=lambda r: (r["rel_video"], r["upstream_line"][0], int(r["upstream_line"][1:])))
+    out = []
+    for k in range(max(len(v) for v in by_group.values())):
+        out.extend(by_group[g][k] for g in GROUP_ORDER if k < len(by_group[g]))
+    return out
 
 
 def listing_dir(directory: Path) -> set[str]:

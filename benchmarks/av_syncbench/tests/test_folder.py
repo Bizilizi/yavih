@@ -82,13 +82,19 @@ def test_yaml_identity(spec: dict):
     assert spec["splits"]["eval"] == ["test"] and spec["splits"]["train"] == [] and spec["readout_params"] == {}
 
 
-def test_rows_columns_and_counts(rows: list[dict[str, str]]):
+def test_rows_columns_and_counts(rows: list[dict[str, str]], mm):
     assert list(rows[0]) == COLUMNS and len(rows) == 37743
     assert Counter(r["task"] for r in rows) == TASKS
     ids = [r["clip_id"] for r in rows]
     assert len(set(ids)) == len(ids)
     assert len({r["rel_edited"] for r in rows}) == len(rows) and len({r["rel_video"] for r in rows}) == 3494
-    assert [r["rel_video"] for r in rows] == sorted(r["rel_video"] for r in rows)
+    groups = [mm.group_of(r) for r in rows]
+    assert set(groups) == set(mm.GROUP_ORDER) and len(mm.GROUP_ORDER) == 20
+    assert groups[:20] == list(mm.GROUP_ORDER)  # --sample 20 (or more) covers every scored group
+    assert all(Counter(groups[:20 * k]) == {g: k for g in mm.GROUP_ORDER} for k in (1, 2, 50, 229))
+    for g in mm.GROUP_ORDER:  # inside a group: rel_video, then upstream_line
+        keys = [(r["rel_video"], r["upstream_line"][0], int(r["upstream_line"][1:])) for r, gr in zip(rows, groups, strict=True) if gr == g]
+        assert keys == sorted(keys)
     lv = Counter((r["task"], r["level"]) for r in rows if r["task"] in ("offset", "speed", "jitter"))
     assert set(lv.values()) == {2920, 1457, 2585} and len(lv) == 18
     for r in rows:
@@ -276,9 +282,9 @@ def test_bridge_template_describe_keys(template):
 
 
 def test_reader_smoke_synthetic_raw(tmp_path: Path, rows, spec):
-    """Two rows of one synthetic original (an mp4 with its own AAC track) and their wavs under a temporary root: the
-    reader hands the mp4 over as both ``video`` and ``audio`` and the wav as ``edited_audio``, byte for byte, with the
-    guaranteed media facts and ``meta == {"facts": {"segment_seconds": 0.64}}``."""
+    """The first two rows (two synthetic originals, each an mp4 with its own AAC track) and their wavs under a temporary
+    root: the reader hands each mp4 over as both ``video`` and ``audio`` and the wav as ``edited_audio``, byte for
+    byte, with the guaranteed media facts and ``meta == {"facts": {"segment_seconds": 0.64}}``."""
     pytest.importorskip("av")
     from yavih import Benchmark
     from yavih.codecs import wav_bytes
@@ -287,11 +293,12 @@ def test_reader_smoke_synthetic_raw(tmp_path: Path, rows, spec):
     b = Benchmark.from_dir(HERE, data={"media_root": str(tmp_path)})
     man = b.manifest("test")
     picked = [0, 1]
-    assert man.media[0]["video"] == man.media[1]["video"]  # rows of one original are consecutive
-    mp4 = tmp_path / man.media[0]["video"]
-    synth._write_video(mp4, np.tile([1, 0], 10), 0.25)
+    mp4s = {}
     stored_wavs = {}
     for k in picked:
+        mp4s[k] = tmp_path / man.media[k]["video"]
+        if not mp4s[k].is_file():
+            synth._write_video(mp4s[k], np.tile([1, 0], 10), 0.25)
         p = tmp_path / man.media[k]["edited_audio"]
         p.parent.mkdir(parents=True, exist_ok=True)
         data = wav_bytes(np.zeros(16000 * (k + 2), dtype=np.float32), 16000)
@@ -302,7 +309,7 @@ def test_reader_smoke_synthetic_raw(tmp_path: Path, rows, spec):
     for s in samples:
         assert set(s.streams) == set(STREAMS) and s.meta == {"facts": {"segment_seconds": 0.64}}
         v, a, e = s.streams["video"], s.streams["audio"], s.streams["edited_audio"]
-        assert v.bytes() == a.bytes() == mp4.read_bytes() and e.bytes() == stored_wavs[s.row]
+        assert v.bytes() == a.bytes() == mp4s[s.row].read_bytes() and e.bytes() == stored_wavs[s.row]
         for name, st in (("video", v), ("audio", a), ("edited_audio", e)):
             missing = [k for k in spec["input_contract"]["info"][name] if st.info.get(k) is None]
             assert not missing, (name, missing)

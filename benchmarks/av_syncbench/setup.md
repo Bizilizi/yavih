@@ -169,7 +169,7 @@ isolation:
 
 ## Prepare & verify
 
-`yavih bench prepare av_syncbench 03` prints `manifest matches (dc5444fb…)` with `staged: 37743, missing: 0`.
+`yavih bench prepare av_syncbench 03` prints `manifest matches (20867338…)` with `staged: 37743, missing: 0`.
 `yavih bench verify av_syncbench --census` then reports status verified, `test 37743/37743` present, a successful read
 sample and the media-info table written (44 731 cells: 3 494 mp4 read for two streams, 37 743 wav; the census
 probes every cell, about 20 minutes at 35 cells/s on a busy network file system). Eval coverage below
@@ -177,6 +177,13 @@ probes every cell, about 20 minutes at 35 cells/s on a busy network file system)
 
 ## Gotchas
 
+- A capped run needs `--sample 20` or more (`yavih plan build ... --sample N` takes the first N manifest rows). The
+  manifest is ordered round-robin over the 20 scored groups (the 18 temporal levels: offset 50 to 500 ms, jitter
+  L1 to L3, speed 0.80x to 1.25x; then voice timbre and instrument timbre), so the first 20 rows hold one pair of
+  each and every prefix of `20 k` rows (`k` up to 229) holds `k` of each. With fewer than 20 rows a group is
+  empty, the binomial interval of its accuracy (`acc_timbre`, `acc_instrument_timbre`, ...) has `n = 0`, and the
+  scorer refuses the result with `E_METRICS_INCOMPLETE`. `--sample 32` covers every group; a multiple of 20 keeps
+  the groups balanced.
 - `yavih bridge check <bridge> --bench av_syncbench --synthetic` is refused with `E_SYNTHETIC`: the core's synthetic
   check covers the core scorers only, not this folder's own pairwise scorer. Check the bridge on the staged data
   (`yavih bridge check <bridge> --bench av_syncbench --out <profile>`, the line `plan init` prints); the folder's own
@@ -197,6 +204,7 @@ probes every cell, about 20 minutes at 35 cells/s on a busy network file system)
   scorer does not implement: they have no bridge here.
 - The authors decode at 25 fps in the paper; their ImageBind adapter decodes at the native rate. Either is the
   bridge's declared choice.
-- The rows of one original video are consecutive (sorted by `rel_video`): a bridge may cache the video and original
-  audio embeddings of the last mp4 it saw, keyed on the file's bytes, but the cached value must be bit-identical to a
-  fresh forward (`bridge check` re-encodes in other batch compositions).
+- The rows of one original video are NOT consecutive (the manifest is interleaved across the scored groups; one mp4
+  serves up to 26 rows spread over the split): a bridge may cache the video and original audio embeddings of the
+  mp4s it has seen, keyed on the file's bytes, but the cached value must be bit-identical to a fresh forward
+  (`bridge check` re-encodes in other batch compositions).
