@@ -736,12 +736,12 @@
    "protocol_version": 2,
    "revisions": [
     {
-     "commit": "69fc1b7a9b1c7c8009243b46397b8001594897bc",
+     "commit": "31428ef95301852300de727b252806303850a50a",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggss_box",
      "protocol_hash": "807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60",
      "protocol_version": 2,
-     "tree": "2c3f783a59613c06b2a57afb16efcc9c13549c62"
+     "tree": "d35b64eee6430c76f26d36534dfd560a6c5dd5aa"
     },
     {
      "commit": "feb9af68ca6be4af65857a913acb8596e478bd45",
@@ -787,6 +787,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "ee829d4e29f666109676cc60856ec29e86a79a6e",
+ "commit": "31428ef95301852300de727b252806303850a50a",
  "repo": "Bizilizi/yavih"
 }
