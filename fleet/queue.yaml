@@ -2641,8 +2641,8 @@ entries:
   text_fields: false
   parents: []
   survey_note: Zero-shot cosine/offset consistency tests
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: auto
   blocked_by: null
   branch: bench/av_syncbench
 - name: avut_qa
