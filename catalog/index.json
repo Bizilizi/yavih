@@ -60,6 +60,36 @@
    "scorer": "clf",
    "title": "AudioSet-20K (balanced) 527-class multi-label audio-visual tagging, published raw clips (macro mAP)"
   },
+  "av_syncbench": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "temporal"
+   ],
+   "clips": {
+    "test": 37743
+   },
+   "core": ">=1.1,<2",
+   "header_title": "AV-SyncBench: Decoupled Benchmarking of Temporal and Semantic Audio-Visual Synchronization",
+   "media_gb": 69.94,
+   "name": "av_syncbench",
+   "obtain": "auto",
+   "path": "benchmarks/av_syncbench",
+   "protocol_hash": "2d53da812f830a7c35d385eb6d03fb52c87804a97500fab01ab22186b53b2904",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "a66f118fd80eb48bb2c733306e863627bdd702e2",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/av_syncbench",
+     "protocol_hash": "2d53da812f830a7c35d385eb6d03fb52c87804a97500fab01ab22186b53b2904",
+     "protocol_version": 1,
+     "tree": "bccbcf050e92865152bb0f24536ce2f8a0a3f576"
+    }
+   ],
+   "scorer": "av_syncbench",
+   "title": "AV-SyncBench zero-shot audio-visual synchronisation (original vs offset, speed, jitter or timbre-edited audio; pairwise accuracy)"
+  },
   "ave": {
    "aliases": [],
    "capability": [
@@ -749,6 +779,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "fd073b7f76c4f5200eda148635f878f0582ec7ef",
+ "commit": "e29fbd72393e61bdb690a88885d213b114fcba4e",
  "repo": "Bizilizi/yavih"
 }
