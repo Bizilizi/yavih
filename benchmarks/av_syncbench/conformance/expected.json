@@ -1,0 +1,130 @@
+{
+ "benchmark": "av_syncbench",
+ "generator": 1,
+ "population": {
+  "eval": 120,
+  "floor": 0,
+  "folds": 0,
+  "train": 0
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "ce8c92117907295f9ba43b54dfb81e5ebd1504f5+dirty",
+  "externals": {},
+  "folder_source": {
+   "eval": "8a0ad04ac3fbe83d0a857e661b5c6d5ea8ff54a04f4beac84fe103a790cf3b1f",
+   "reader": null
+  },
+  "protocol_hash": "2d53da812f830a7c35d385eb6d03fb52c87804a97500fab01ab22186b53b2904",
+  "scorer": {
+   "kind": "stateless",
+   "name": "av_syncbench",
+   "version": 1
+  },
+  "scoring_hash": "baa8eaaed2ca110677d377a0fd53ecc3f959e6de408272271c6e0a79241f8201",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "acc_all": 0.001,
+  "acc_instrument_timbre": 0.001,
+  "acc_jitter": 0.001,
+  "acc_jitter_l1": 0.001,
+  "acc_jitter_l2": 0.001,
+  "acc_jitter_l3": 0.001,
+  "acc_offset": 0.001,
+  "acc_offset_100ms": 0.001,
+  "acc_offset_200ms": 0.001,
+  "acc_offset_300ms": 0.001,
+  "acc_offset_500ms": 0.001,
+  "acc_offset_50ms": 0.001,
+  "acc_speed": 0.001,
+  "acc_speed_080": 0.001,
+  "acc_speed_083": 0.001,
+  "acc_speed_087": 0.001,
+  "acc_speed_091": 0.001,
+  "acc_speed_095": 0.001,
+  "acc_speed_105": 0.001,
+  "acc_speed_110": 0.001,
+  "acc_speed_115": 0.001,
+  "acc_speed_120": 0.001,
+  "acc_speed_125": 0.001,
+  "acc_task_mean": 0.001,
+  "acc_timbre": 0.001,
+  "acc_voice_timbre": 0.001,
+  "invalid_rate": 0.001,
+  "n_eval": 0.001,
+  "tie_rate": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "acc_all": [
+     0.3832373024605453,
+     0.5597786787301571
+    ],
+    "acc_instrument_timbre": [
+     0.09677141110578041,
+     0.700006684861608
+    ],
+    "acc_jitter": [
+     0.2618849206349206,
+     0.7555555555555555
+    ],
+    "acc_offset": [
+     0.3190324675324675,
+     0.6766785714285714
+    ],
+    "acc_speed": [
+     0.3381390692640692,
+     0.5999454365079364
+    ],
+    "acc_task_mean": [
+     0.3411802774771525,
+     0.5636256868131867
+    ],
+    "acc_timbre": [
+     0.13812009109121315,
+     0.6093779111272004
+    ],
+    "acc_voice_timbre": [
+     0.09677141110578041,
+     0.700006684861608
+    ]
+   },
+   "controls": {},
+   "floors": {},
+   "metrics": {
+    "acc_all": 0.47058823529411764,
+    "acc_instrument_timbre": 0.3333333333333333,
+    "acc_jitter": 0.5,
+    "acc_jitter_l1": 0.5,
+    "acc_jitter_l2": 0.3333333333333333,
+    "acc_jitter_l3": 0.6666666666666666,
+    "acc_offset": 0.5,
+    "acc_offset_100ms": 0.5,
+    "acc_offset_200ms": 0.8333333333333334,
+    "acc_offset_300ms": 0.6666666666666666,
+    "acc_offset_500ms": 0.3333333333333333,
+    "acc_offset_50ms": 0.16666666666666666,
+    "acc_speed": 0.47,
+    "acc_speed_080": 0.5,
+    "acc_speed_083": 0.6666666666666666,
+    "acc_speed_087": 0.16666666666666666,
+    "acc_speed_091": 0.3333333333333333,
+    "acc_speed_095": 0.6666666666666666,
+    "acc_speed_105": 0.5,
+    "acc_speed_110": 0.2,
+    "acc_speed_115": 0.6666666666666666,
+    "acc_speed_120": 0.5,
+    "acc_speed_125": 0.5,
+    "acc_task_mean": 0.4508333333333333,
+    "acc_timbre": 0.3333333333333333,
+    "acc_voice_timbre": 0.3333333333333333,
+    "invalid_rate": 0.008333333333333333,
+    "n_eval": 120,
+    "tie_rate": 0.19327731092436976
+   }
+  }
+ }
+}

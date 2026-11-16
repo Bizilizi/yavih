@@ -1,0 +1,230 @@
+# yavih benchmark folder — AV-SyncBench pairwise audio-visual synchronisation (schema 3). Values under `manifest` and
+# `budget.clips` are written by make_manifest.py; `make_manifest.py --check` re-derives them.
+schema_version: 3
+name: av_syncbench
+aliases: []
+title: AV-SyncBench zero-shot audio-visual synchronisation (original vs offset, speed, jitter or timbre-edited audio; pairwise accuracy)
+capability: [audio-visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+header:
+  name: AV-SyncBench
+  title: "AV-SyncBench: Decoupled Benchmarking of Temporal and Semantic Audio-Visual Synchronization"
+  venue: "Zhou et al. · Interspeech 2026"
+  abstract: >-
+    In-the-wild clips of voice, music and sound, each paired with copies of its audio that are shifted, sped up or
+    slowed down, locally jittered, or re-synthesised with another voice or instrument. Without training, a model
+    must score every original pair above its perturbed copy, by the cosine of its per-segment audio and video
+    embeddings.
+  chips: ["video + audio", "pairwise sync test", "37 743 pairs", "zero-shot cosine", "av", "pairwise accuracy"]
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+scorer: av_syncbench
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 2d53da812f830a7c35d385eb6d03fb52c87804a97500fab01ab22186b53b2904   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 9752ad9a05e1cc6048606a3623bb0e59c1a336cf2b675c0c8d91904e4364ffdd
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://modelscope.cn/datasets/coming245/AVSyncBench
+    - https://github.com/fgt7t6g/AV-SyncBench
+    - https://arxiv.org/abs/2607.00726
+  licence: >-
+    MIT, as the ModelScope and Hugging Face dataset cards declare. The clips are in-the-wild videos from public
+    platforms; the authors do not address the rights of the original creators. The evaluation code copied into
+    pairwise.py (the authors' toolkit) states no licence.
+  revision: 86c06579529a6e7b2cafb0dc386a50152a37fb98
+  bytes: 68191839983
+  sha256:
+    "AV_SyncBench.tar.gz.part_aa": 4e88e575b3c5e202cd2addbc1789bfed6a4cf036d85f0f70d5ca56be05b96d7d
+    "AV_SyncBench.tar.gz.part_ab": 00e4b50c2b4b32d539d8c75a8e6f9308afa83983c3c0b221445935740354fdbd
+    "AV_SyncBench.tar.gz.part_ac": 078c1d9a70beb6f9fa6d6b0c6afb21e3527d932c04f76cec2b726a388baf4d53
+    "AV_SyncBench.tar.gz.part_ad": 7ef96fb3dce0b6f241e4d7aa19d873e518176ddf33e3b7a16bc5feb5a32eac01
+    "AV_SyncBench.tar.gz.part_ae": 4dfbbd97087b025a0b16f46def669a953de566bbae275489dd5ef90330b4d712
+    "AV_SyncBench.tar.gz.part_af": 35ec67bc890589289f1644ecbba1a30337119db65fec99072e8bcc2a06196630
+    "AV_SyncBench.tar.gz.part_ag": 3d71987d812814950fb940862fff1648d127f4cc15bbfe68c34e7ad4c6bcd2f1
+  notes: >-
+    One split tar.gz in seven parts (68.19 GB) on ModelScope at the pinned revision, the same revision the authors'
+    toolkit pins (scripts/download_dataset.sh). It extracts to AV_SyncBench/hf_temporal_challenge/ (2 676 original
+    mp4, 36 925 perturbed wav, metadata.jsonl) and AV_SyncBench/hf_timbre_edit/ (818 mp4, 818 wav, metadata.jsonl),
+    about 70 GB. The Hugging Face mirror holds only a README.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "prepare/01_download.sh fetches the seven ModelScope parts anonymously over HTTPS (68.2 GB, sha256-checked); 02_extract.sh unpacks them"
+budget:
+  clips: {test: 37743}
+  media_gb: 69.94   # the 3 494 mp4 and 37 743 wav the rows read, measured on the extracted release (make_manifest.py stats.media_bytes)
+  extract_min_per_1k_clips_ref: 2.0   # TODO: measure
+  probe_minutes_ref: {av_syncbench: 1}   # TODO: measure
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 20867338bb5e5631c15cc278a922ef5056f215fd1ba837634365d72ac0020328
+  classes: null
+  classes_sha256: null
+  key: clip_id
+  label:
+    column: null
+    kind: none
+  columns:
+    task: {type: str, role: extra}
+    level: {type: str, role: extra}
+    direction: {type: str, role: extra}
+    category: {type: str, role: extra}
+    video_id: {type: str, role: extra}
+    rel_video: {type: str, role: media, stream: [video, audio]}
+    rel_edited: {type: str, role: media, stream: edited_audio}
+    duration: {type: float, role: extra}
+    target_attribute: {type: json, role: extra}
+    source_attribute: {type: json, role: extra}
+    upstream_line: {type: str, role: extra}
+  upstream:
+    source: "ModelScope coming245/AVSyncBench @ 86c0657: the two metadata.jsonl files of the release archive"
+    sha256: f96dcf8ab8e445e1519bcfdf10a8a413d0df9aec5da76da08483bf3d80aa3212
+    rows: 37746
+    note: >-
+      One row per original-versus-perturbed pair: the 36 925 lines of hf_temporal_challenge/metadata.jsonl and the
+      821 lines of hf_timbre_edit/metadata.jsonl minus 3 lines that repeat an earlier line byte for byte, ordered
+      round-robin over the 18 temporal (task, level) groups and the two timbre tasks, so the first 20 rows cover all
+      20 groups. 3 494 original mp4 (3 003 distinct video_id), 37 743 perturbed wav. task / level / direction are
+      parsed from target_attribute or edit_type; the raw fields are kept (never handed over).
+    upstream_files:
+      "AV_SyncBench/hf_temporal_challenge/metadata.jsonl": f96dcf8ab8e445e1519bcfdf10a8a413d0df9aec5da76da08483bf3d80aa3212
+      "AV_SyncBench/hf_timbre_edit/metadata.jsonl": 93dcba15699ce6653ee7540f813b463d963c4c90d4948c9bdcfeadfe36fe6c61
+    curation:
+      total_upstream: 37746
+      per_split:
+        test: {listed: 37743, staged: 37743, missing: 0}
+      excluded:
+        duplicate_line: 3
+
+splits:
+  train: []
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_video
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_video
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  edited_audio:
+    storage: file
+    kind: audio
+    media_column: rel_edited
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/av_syncbench"
+      description: "holds AV_SyncBench/{hf_temporal_challenge,hf_timbre_edit}/{original_video/*.mp4,edited_audio/*.wav,metadata.jsonl} (the extracted release) and raw/ (the seven parts)"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the original mp4 exactly as stored (H.264, native and mixed frame size, 25 to 30 fps, 2.5 to 13 s, with its
+      own AAC track, which video_seg must not read); nothing decoded, cut, resized or padded
+    audio: >-
+      the same mp4, read for its own AAC track (the original sound, 44.1 or 48 kHz stereo as stored), which
+      audio_seg reads; the frames must not be read
+    edited_audio: >-
+      the perturbed wav exactly as stored (16-bit PCM mono at 16 kHz, or 22.05 kHz for most timbre pairs; starts
+      with the video, often shorter or longer than it); nothing resampled, trimmed or padded
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, channels, container, bytes]
+    edited_audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: [segment_seconds]
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+  schema:
+    video_seg: {type: array, dtype: [float16, float32], shape: ["*", D]}               # one embedding per complete segment of the video, in time order
+    audio_seg: {type: array, dtype: [float16, float32], shape: ["*", D]}               # the same for the mp4's own audio track, in the same space
+    edited_seg: {type: array, dtype: [float16, float32], shape: ["*", D], stats: true}  # the same for the perturbed wav
+  isolation:   # bridge check's modality-isolation gate (E_MODALITY_LEAK): each key reads only the listed stream
+    video_seg: [video]
+    audio_seg: [audio]
+    edited_seg: [edited_audio]
+
+external: []
+
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: rows
+  segment_seconds: 0.64
+  max_segments: 18
+
+metrics:
+  headline: acc_task_mean
+  list: [acc_task_mean, acc_offset, acc_jitter, acc_speed, acc_timbre, acc_voice_timbre, acc_instrument_timbre, acc_all,
+         acc_offset_50ms, acc_offset_100ms, acc_offset_200ms, acc_offset_300ms, acc_offset_500ms,
+         acc_jitter_l1, acc_jitter_l2, acc_jitter_l3,
+         acc_speed_080, acc_speed_083, acc_speed_087, acc_speed_091, acc_speed_095,
+         acc_speed_105, acc_speed_110, acc_speed_115, acc_speed_120, acc_speed_125,
+         tie_rate, invalid_rate, n_eval]
+  table: [acc_task_mean, acc_offset, acc_jitter, acc_speed, acc_timbre]
+  floors: []
+  controls: []
+  chance: {acc_task_mean: 0.5, acc_offset: 0.5, acc_jitter: 0.5, acc_speed: 0.5, acc_timbre: 0.5, acc_voice_timbre: 0.5,
+           acc_instrument_timbre: 0.5, acc_all: 0.5,
+           acc_offset_50ms: 0.5, acc_offset_100ms: 0.5, acc_offset_200ms: 0.5, acc_offset_300ms: 0.5, acc_offset_500ms: 0.5,
+           acc_jitter_l1: 0.5, acc_jitter_l2: 0.5, acc_jitter_l3: 0.5,
+           acc_speed_080: 0.5, acc_speed_083: 0.5, acc_speed_087: 0.5, acc_speed_091: 0.5, acc_speed_095: 0.5,
+           acc_speed_105: 0.5, acc_speed_110: 0.5, acc_speed_115: 0.5, acc_speed_120: 0.5, acc_speed_125: 0.5}
+  ci:
+    acc_task_mean: bootstrap_clip
+    acc_offset: bootstrap_clip
+    acc_jitter: bootstrap_clip
+    acc_speed: bootstrap_clip
+    acc_timbre: binomial
+    acc_voice_timbre: binomial
+    acc_instrument_timbre: binomial
+    acc_all: binomial
+  bootstrap: {samples: 2000, seed: 0}
+  notes:
+    - "Pairwise accuracy, chance 0.5; a tie (S_pos == S_neg) is wrong, so a constant model scores 0, not 0.5 (tie_rate)."
+    - "acc_task_mean's 95 % CI is about ±0.01 (its timbre quarter rests on 818 pairs); acc_timbre about ±0.035, acc_instrument_timbre (229) about ±0.065."
+    - "Scored as the authors' toolkit does (fgt7t6g/AV-SyncBench @ 82e1353, copied into pairwise.py): mean diagonal cosine of 0.64 s segments, at most 18 per pair."
+    - "acc_offset / acc_jitter / acc_speed are the unweighted means of their levels (the paper's Overall); acc_task_mean, their mean with acc_timbre, is yavih's."
+    - "The toolkit's official_0p64 mode scores every segment (no 18 cap); offset-classifiers (Synchformer, SparseSync) use p(offset=0) instead of a cosine: not this scorer."
+    - "This release has 14 600 offset, 14 570 speed, 7 755 jitter and 818 timbre pairs; the paper's Table 1 counts 15 000 / 15 000 / 7 569 / 821."
+
+readout_params: {}

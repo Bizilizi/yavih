@@ -1,0 +1,29 @@
+{
+  "preview_version": 1,
+  "design_version": 1,
+  "figures": {
+    "preview": {
+      "kind": "av_syncbench_pair",
+      "split": "test",
+      "rows": [
+        "09832c3947a04086a5d4adb53b6c689c_5e25028375"
+      ],
+      "source_sha256": "dbae873f4e821537d4f0e6c9c6dd2ead3bab53a1dbcdc71b5842118649ae55e5",
+      "files": {
+        "preview.png": 974327
+      }
+    },
+    "clip": {
+      "kind": "motion",
+      "split": "test",
+      "rows": [
+        "09832c3947a04086a5d4adb53b6c689c_5e25028375"
+      ],
+      "source_sha256": "853b86bf97ae18a6efac419c6f943d06db26a24afd144f30a40604b22c0125ca",
+      "files": {
+        "clip.gif": 2627064,
+        "clip.mp4": 1106493
+      }
+    }
+  }
+}
