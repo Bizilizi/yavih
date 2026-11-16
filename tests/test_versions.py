@@ -18,7 +18,7 @@ def test_pinned_values():
     assert versions.RESULTS_FILE_VERSION == 4 and versions.REGISTRY_ENTRY_VERSION == 3
     assert versions.PLAN_SCHEMA_VERSION == 3
     # the built-ins (a folder's eval.py SCORER registers when its folder loads, so later entries depend on test order)
-    assert {k: versions.READOUT_VERSION[k] for k in ("clf", "seq", "grid", "box")} == {"clf": 1, "seq": 2, "grid": 2, "box": 2}
+    assert {k: versions.READOUT_VERSION[k] for k in ("clf", "seq", "grid", "box")} == {"clf": 1, "seq": 2, "grid": 2, "box": 3}
     assert versions.PROBE_SCHEMA == "yavih-probe-1"
     assert versions.PROTOCOL_SCHEMA == "yavih-protocol-5"
     assert versions.DESCRIBE_SCHEMA == "yavih-describe-2"

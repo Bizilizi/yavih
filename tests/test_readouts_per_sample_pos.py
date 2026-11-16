@@ -34,7 +34,7 @@ from test_readouts import (
 from yavih.io.reader import FeatureReader
 from yavih.io.writer import FeatureWriter, split_dir_for
 from yavih.probes.config import ProbeConfig
-from yavih.readouts import _fit, probe
+from yavih.readouts import ProbeRefused, _fit, probe
 from yavih.readouts import box as box_mod
 from yavih.readouts import grid as grid_mod
 from yavih.readouts import seq as seq_mod
@@ -120,6 +120,99 @@ def test_grid_and_box_task_pos_with_per_sample_pos_real_reader(two_split_view):
     for out in (grid_mod.media_to_task(ctx, view), box_mod.media_to_task(ctx, view, view.pos_gather())):
         got = np.asarray(out[np.arange(len(view))])
         np.testing.assert_allclose(got[..., 2:], expected[..., 2:], rtol=1e-6)
+
+
+# ============================================================================ box: the annotated frame's time slot
+
+
+def _frames_pos(times_s: list[float], duration_s: float, g: int = 2, n_audio: int = 2) -> np.ndarray:
+    """Media pos ``[len(times)·g² + n_audio, 4]``: a ``g × g`` grid of video tokens (stream 0) per frame time, then
+    untimed-in-space audio tokens (stream 1)."""
+    c = (np.arange(g) + 0.5) / g
+    yy, xx = np.meshgrid(c, c, indexing="ij")
+    vis = [np.stack([np.zeros(g * g), np.full(g * g, t / duration_s), yy.reshape(-1), xx.reshape(-1)], 1) for t in times_s]
+    aud = np.stack([np.ones(n_audio), (np.arange(n_audio) + 0.5) / n_audio, np.full(n_audio, -1.0), np.full(n_audio, -1.0)], 1)
+    return np.concatenate([*vis, aud], 0).astype(np.float32)
+
+
+def test_annotated_slot_keeps_the_nearest_time_slot_of_the_visual_stream_only():
+    from yavih.readouts.coords import annotated_slot, annotated_task_pos
+
+    # row 0: 10 s clip, frames at 1, 5, 9 s; row 1: 6 s clip with the SAME constant pos, i.e. frames at 0.6, 3, 5.4 s
+    pos = np.broadcast_to(_frames_pos([1.0, 5.0, 9.0], 10.0), (2, 14, 4))
+    durs = np.array([[10.0, 10.0], [6.0, 6.0]])
+    keep = annotated_slot(pos, durs, stream_tag=0, second=5.0)
+    assert keep[0].tolist() == [False] * 4 + [True] * 4 + [False] * 6  # the 5.0 s frame; never an audio token
+    assert keep[1].tolist() == [False] * 8 + [True] * 4 + [False] * 2  # the 5.4 s frame of the shorter clip
+    task = annotated_task_pos(pos, durs, stream_tag=0, second=5.0)
+    assert np.isfinite(task[0, 4:8, 2:]).all() and np.isnan(task[0, :4, 2:]).all() and np.isnan(task[0, 8:12, 2:]).all()
+    np.testing.assert_array_equal(task[..., :2], pos[..., :2])  # stream tag and t untouched
+    assert np.isnan(task[:, 12:, 2:]).all()  # audio: no (y, x) before or after
+
+    # two slots equally far (4 s and 6 s) are both kept; a visual token without t is not on the frame
+    tie = _frames_pos([4.0, 6.0, 9.0], 10.0)[None].copy()
+    tie[0, 8, 1] = -1.0  # one token of the 9 s frame loses its time
+    k = annotated_slot(tie, np.array([[10.0, 10.0]]), stream_tag=0, second=5.0)
+    assert k[0].tolist() == [True] * 8 + [False] * 6
+
+    # nothing to select by (no duration, or no timed visual token): every visual token is kept
+    for d in (None, np.array([[np.nan, 10.0]])):
+        assert annotated_slot(pos[:1], d, stream_tag=0, second=5.0)[0].tolist() == [True] * 12 + [False] * 2
+    untimed = pos[:1].copy()
+    untimed[0, :12, 1] = -1.0
+    assert annotated_slot(untimed, durs[:1], stream_tag=0, second=5.0)[0].tolist() == [True] * 12 + [False] * 2
+
+
+def test_box_cells_hold_the_annotated_frame_not_the_average_of_all_frames():
+    """A bridge that feeds three frames is read on the annotated one: the cells equal that frame's tokens."""
+    import torch
+
+    from yavih.probes.dense import pool_cells
+
+    g, n = 2, 3
+    media = _frames_pos([1.0, 5.0, 9.0], 10.0, g=g)  # constant pos, 14 tokens
+    class View:
+        N = media.shape[0]
+
+        def __len__(self):
+            return n
+
+    ctx = NS(protocol={}, stream_names=lambda: ["video", "audio"])
+    durs = np.full((n, 2), 10.0)
+    out = box_mod.media_to_task(ctx, View(), media, annotated=(0, 5.0), durations=durs)
+    task = torch.from_numpy(np.asarray(out[np.arange(n)]))
+    mem = torch.zeros(n, media.shape[0], 4)
+    mem[:, 0:4], mem[:, 4:8], mem[:, 8:12] = 1.0, 2.0, 30.0  # frame at 1 s, at 5 s (annotated), at 9 s
+    cells, counts = pool_cells(mem, task, grid=g, stream_tag=0)
+    assert bool((counts == 1).all()) and bool((cells == 2.0).all())
+    # without the requirement (a folder that declares no annotated frame) every frame is averaged, as before
+    plain = torch.from_numpy(np.broadcast_to(box_mod.media_to_task(ctx, View(), media), (n, *media.shape)).copy())
+    cells_all, counts_all = pool_cells(mem, plain, grid=g, stream_tag=0)
+    assert bool((counts_all == 3).all()) and bool((cells_all == 11.0).all())
+
+
+def test_box_refuses_timed_visual_tokens_without_a_duration():
+    media = _frames_pos([1.0, 5.0, 9.0], 10.0)
+
+    class View:
+        N = media.shape[0]
+
+        def __len__(self):
+            return 2
+
+    ctx = NS(protocol={}, stream_names=lambda: ["video", "audio"])
+    with pytest.raises(ProbeRefused) as e:
+        box_mod.media_to_task(ctx, View(), media, annotated=(0, 5.0), durations=np.array([[10.0, 10.0], [np.nan, 10.0]]))
+    assert e.value.code == "E_DURATIONS" and "'video'" in str(e.value)
+
+
+def test_box_spec_refuses_an_annotated_frame_on_another_stream():
+    params = {"grid": 4, "visual_stream": "video", "conditioning_stream": "audio", "shuffled_control": True, "shuffle_seed": 0}
+    req = NS(grid={"h": 4, "w": 4}, annotated_frame={"fact": "annotated_second", "stream": "video", "tol_s": 0.5})
+    box_mod.SCORER.validate_spec(dict(params), req, {})
+    req.annotated_frame = {"fact": "annotated_second", "stream": "audio", "tol_s": 0.5}
+    with pytest.raises(ValueError, match="visual_stream"):
+        box_mod.SCORER.validate_spec(dict(params), req, {})
 
 
 def test_feature_rows_constant_pos_still_constant_and_mixed_splits_go_per_row():

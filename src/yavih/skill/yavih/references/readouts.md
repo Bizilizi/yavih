@@ -14,7 +14,8 @@ names what a folder extends on its `extends:` line).
 
 Readouts work in media coordinates and never need to know what your bridge did to the media:
 `seq` places a token at absolute second `t · duration_s`; `grid` and `box` place it at its
-full-frame `(y, x)`, where their targets live too. A bridge that cropped leaves the cells it did
+full-frame `(y, x)`, where their targets live too; `box` on vggss_box bins only the video tokens of
+the time slot nearest the annotated 5.0 s (the other frames' tokens reach no cell). A bridge that cropped leaves the cells it did
 not see empty (they get a learned null embedding); a bridge that read 8 frames and one that read 20
 over the same seconds see the same targets.
 
@@ -42,7 +43,9 @@ CI (or ~1 pt cross-hardware noise where there is no CI) clears the floor. Chance
 are weaker than floors (AVE: chance 1/29 ≈ 0.034, the floor several times higher; vggss_box: the
 mean train box already has a sizeable IoU). Controls void a headline: avsync `floor_violated: true`
 means the probe reads a cue that survives on stationary clips; vggss_box `audio_blind: true` means
-the box head does as well with another clip's audio (visual saliency, not grounding). The report
+the box head does as well with another clip's audio tokens (visual saliency, not grounding, for a
+model whose video tokens are computed without the audio; for a model that mixes audio into its video
+tokens the control decides nothing, since those tokens still carry the clip's own audio). The report
 greys such rows (`~~value~~` in md, `flag=below_floor` in csv) — never un-grey them by hand.
 
 ## Eligibility (decided by `validate`, never by the probe)

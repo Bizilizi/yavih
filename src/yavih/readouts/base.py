@@ -620,7 +620,8 @@ def output_requires(spec: Any) -> Any:
     if isinstance(req, Mapping):
         from types import SimpleNamespace
 
-        req = SimpleNamespace(pos=tuple(req.get("pos") or ()), streams=tuple(req.get("streams") or ()), grid=req.get("grid"), t_bins=req.get("t_bins"))
+        req = SimpleNamespace(pos=tuple(req.get("pos") or ()), streams=tuple(req.get("streams") or ()), grid=req.get("grid"), t_bins=req.get("t_bins"),
+                              annotated_frame=req.get("annotated_frame"))
     return req
 
 

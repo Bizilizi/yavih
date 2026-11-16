@@ -15,13 +15,20 @@ header:
     visible sound source in the frame at 5 s. The task is to localize the sounding object in the video given its
     audio; this benchmark regresses one box on the single-box clips and scores mean IoU.
 scorer: box
-protocol_version: 1
+protocol_version: 2
 changelog:
   - version: 1
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
     protocol_hash: f108458e24156e0d49c873b3abb7101f61e077abf664a5282aa43d54b36a7799   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 835ce236d5d00af35486d9626a1776e2eb3b8ed787435185f9d55f57e5b4b611
+    supersedes: []
+  - version: 2
+    date: "2026-11-16"
+    reason: "Box readout 3: the cells hold the video tokens of the time slot nearest the annotated 5.0 s only (readout 2 mean-pooled every frame's tokens into each cell). Features stay valid; probes are re-run."
+    invalidates: true
+    protocol_hash: 807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60
     input_hash: 835ce236d5d00af35486d9626a1776e2eb3b8ed787435185f9d55f57e5b4b611
     supersedes: []
 
@@ -168,7 +175,7 @@ output_contract:
     streams: [video, audio]
     grid: {h: 14, w: 14, min_cell_coverage: 0.25}
     t_bins: null
-    annotated_frame: {fact: annotated_second, stream: video, tol_s: 0.5}  # a video token within 0.5 s of the annotated 5.0 s frame
+    annotated_frame: {fact: annotated_second, stream: video, tol_s: 0.5}  # a video token within 0.5 s of the annotated 5.0 s frame; the box head reads the video tokens of the time slot nearest it
 
 external: []
 
@@ -196,7 +203,10 @@ metrics:
   notes:
     - "No chance level. iou_floor (0.343, 95 % CI [0.331, 0.355]) predicts the mean train box for every clip; an iou_mean whose interval overlaps 0.343 is not a localization result."
     - "The mean train box (cx, cy, w, h) = (0.500, 0.508, 0.506, 0.565) scores acc@0.5 0.186, acc@0.3 0.625 and center_in_gt 0.702: read those next to the model's."
-    - "audio_blind = true means shuffling the audio between clips did not hurt by more than 3 McNemar sigma on acc@0.5: then iou_mean measures visual saliency, not audio-visual localization."
+    - "audio_blind = true means swapping in another clip's audio tokens did not hurt by more than 3 McNemar sigma on acc@0.5: the box head did not need them."
+    - "For a model whose video tokens are computed without the audio, audio_blind = true means iou_mean measures visual saliency, not audio-visual localization."
+    - "For a model that mixes audio into its video tokens audio_blind decides nothing: those tokens still carry the clip's own audio."
+    - "The box head reads the video tokens of the time slot nearest the annotated 5.0 s and no other (box readout 3). Numbers of box readout 2, which averaged all frames, are not comparable."
     - "At n_eval = 914 the iou_mean bootstrap interval is about ±0.012 and acc@0.5 about ±0.03; a gap below about 0.02 iou_mean needs at least two seeds."
     - "Numbers are not comparable with VGG-SS papers, which score heatmaps against all 5 158 clips (multi-box included) with cIoU and AUC."
 

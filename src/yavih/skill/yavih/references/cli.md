@@ -263,7 +263,7 @@ validate · `E_ELIGIBILITY_MISMATCH` splits disagree on eligibility · `E_HASH_P
 `eval_hash` differ from the config's · `E_PLAN_PROFILE` (exit 1) a plan-time `not_applicable` unit without a usable
 profile · `E_LABELS` a row with not exactly one label on a single-label readout, or a label outside `classes.csv` ·
 `E_STREAM` a stream outside `describe()["streams"]` · `E_POS_MISSING` a readout that needs `pos` got none ·
-`E_POS_SHUFFLE` (box) the shuffled control's partners carry different token counts · `E_DURATIONS` (seq) tokens with
+`E_POS_SHUFFLE` (box) the shuffled control's partners carry different token counts · `E_DURATIONS` (seq, box) tokens with
 `pos.t` but no `media.duration_s` · `E_SPEC` (stream) `readout_params.groups` missing · `E_TARGETS` (stream) the
 folder's `eval.py` defines no `targets()` returning one `{times, labels}` per row · `E_EXTERNAL` (exit 3) the base of `E_EXTERNAL_MISSING` / `E_EXTERNAL_VERSION`.
 `plan build`: `E_PLAN` (exit 1) a plan that cannot be built or read (two entries on one run directory, a frozen layout

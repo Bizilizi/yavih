@@ -11,7 +11,7 @@
 | **Headline** | Mean IoU of the predicted box (`iou_mean`) |
 | **Data** | Public download; media on request from the data owner · 9.3 GB of media · how: [setup.md](setup.md) |
 | **Licence** | VGG-SS annotations (Chen et al., CVPR 2021) are distributed through the authors' GitHub repository, which states no licence; check it before redistributing the boxes. VGGSound listing: CC BY 4.0; the media are YouTube clips fetched by the … |
-| **Protocol** | Version 1 · scorer `box` · needs yavih >=1.1,<2 · `yavih bench fetch vggss_box` |
+| **Protocol** | Version 2 · scorer `box` · needs yavih >=1.1,<2 · `yavih bench fetch vggss_box` |
 <!-- yavih:glance end -->
 
 ## The task
@@ -24,8 +24,8 @@ the box the annotators drew.
 ![A VGG-SS clip: the frame at 5.0 s with the annotated box around the roaring lion, beside the class and the audio around that moment](assets/preview.png)
 
 Picture and sound have to work together. A model that only looks at the frame can often guess the most salient
-object, so the benchmark also runs the same model with every clip's audio swapped for another clip's and reports
-whether the audio helped.
+object, so the benchmark also scores the model's features with every clip's audio features swapped for another
+clip's and reports whether the audio helped.
 
 ![Seconds 4 to 7 of the same clip](assets/clip.gif) · [mp4](assets/clip.mp4)
 
@@ -47,14 +47,17 @@ since part of them is no longer on YouTube.
 ## How it is scored
 
 A probe on frozen audio-visual features predicts one box per clip, and the headline is the mean
-intersection-over-union with the annotated box on the 914 evaluation clips. Also reported: the share of clips
-with IoU at least 0.5 and at least 0.3, and the share whose predicted centre falls inside the annotated box.
+intersection-over-union with the annotated box on the 914 evaluation clips. The probe reads the picture features
+of the annotated frame, the one at 5.0 s or the nearest frame the model was given, not an average over the clip.
+Also reported: the share of clips with IoU at least 0.5 and at least 0.3, and the share whose predicted centre
+falls inside the annotated box.
 
 There is no chance level for a box, so the reference point is a floor: predicting the average training box, a
 large box in the middle of the frame, for every clip already scores a mean IoU of 0.343, because sounding objects
 tend to be big and central. A model has to clear that clearly. The audio-swap control says whether it did so by
 listening: when the swapped audio scores as well as the real one, the model found salient objects, not sounding
-ones.
+ones. The control swaps the audio features only, so it cannot judge a model that mixes the sound into its picture
+features: those still carry the clip's own sound.
 
 Not this benchmark: the paper's protocol, which scores localization heatmaps with consensus IoU and AUC on all 5 158
 clips, multi-box included; numbers from VGG-SS papers are not comparable with these. No box-regression numbers have

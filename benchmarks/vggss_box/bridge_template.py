@@ -55,6 +55,8 @@ from yavih.bridge import ArgSpec, Bridge, grid_pos
 
 # TODO: frames the model consumes. Default: 8 frames 1 s apart with frame 4 on the annotated second
 # (5 + (k − 4) · 1 s → 1.0 … 8.0 s); 16 eval clips are shorter than 8.0 s (min 5.09 s), hence edge "clamp".
+# The box head reads the tokens of the time slot nearest the annotated second and no other video token: the
+# other frames count only through what the model put into that slot's tokens.
 N_FRAMES = 8
 FRAME_STEP_S = 1.0
 # TODO: the model's own eval transform, in the declared-rule vocabulary (yavih.media.rules.crop_region evaluates it).

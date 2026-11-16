@@ -36,7 +36,7 @@ def test_builtin_readouts_describe_themselves():
     # the built-ins come first; a folder's SCORER registers when its folder loads (test order decides what follows)
     builtin = ("clf", "seq", "grid", "box")
     assert registry.names()[:4] == builtin and list(READOUTS)[:4] == list(builtin)
-    assert {k: READOUT_VERSION[k] for k in builtin} == {"clf": 1, "seq": 2, "grid": 2, "box": 2}  # hashed: unchanged by the refactor
+    assert {k: READOUT_VERSION[k] for k in builtin} == {"clf": 1, "seq": 2, "grid": 2, "box": 3}  # hashed: unchanged by the refactor
     shipped = {m.rsplit(".", 1)[-1] for m in registry.BUILTIN}  # folder scorers may be probes too (their own heads and losses)
     assert all(registry.get(n).kind != "probe" or n == "stream" for n in registry.names()[4:] if n in shipped)  # stream: causal heads
     for name in builtin:

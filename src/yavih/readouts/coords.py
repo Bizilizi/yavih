@@ -9,7 +9,10 @@ The heads read coordinates in the readout's task frame:
   second it lies in whatever frame count, fps or window the bridge chose;
 - ``grid`` / ``box``: ``((y − y0) / (y1 − y0), (x − x0) / (x1 − x0))`` over ``protocol.target_region``
   ``[y0, x0, y1, x1]`` (the full frame when absent), so the cells tile the region the targets
-  rasterize and a bridge that cropped the frame simply leaves the cells it did not see empty.
+  rasterize and a bridge that cropped the frame simply leaves the cells it did not see empty;
+- ``box`` with ``output_contract.requires.annotated_frame``: the target is drawn on one frame, so only the
+  visual tokens of the time slot nearest that second keep their ``(y, x)`` (:func:`annotated_task_pos`); the
+  visual tokens of every other slot lose them (``NaN``) and fall in no cell.
 
 Tokens outside the scored span or region keep their out-of-range coordinates; a missing coordinate
 becomes ``NaN`` (the heads' null marker, ``yavih.probes.dense.coord_present``), so an out-of-range
@@ -30,6 +33,8 @@ __all__ = [
     "target_region",
     "media_missing",
     "region_task_pos",
+    "annotated_slot",
+    "annotated_task_pos",
     "seq_task_pos",
     "seq_params",
     "TaskPos",
@@ -41,6 +46,9 @@ __all__ = [
 
 #: ``[y0, x0, y1, x1]`` of the whole original frame.
 FULL_FRAME: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+#: Two token times closer than this many seconds are one time slot (:func:`annotated_slot`): far above the float32
+#: rounding of ``t · duration_s`` (about 1e-6 s at 10 s), far below any frame interval.
+SLOT_EPS_S: float = 1e-3
 
 
 def target_region(protocol: Mapping[str, Any]) -> tuple[float, float, float, float]:
@@ -77,6 +85,45 @@ def region_task_pos(pos: np.ndarray, region: Sequence[float] = FULL_FRAME) -> np
     y, x = p[..., 2], p[..., 3]
     out[..., 2] = np.where(media_missing(y), np.nan, (y - y0) / (y1 - y0))
     out[..., 3] = np.where(media_missing(x), np.nan, (x - x0) / (x1 - x0))
+    return out
+
+
+def annotated_slot(pos: np.ndarray, durations: np.ndarray | None, *, stream_tag: int, second: float) -> np.ndarray:
+    """``bool [k, N]``: the tokens of stream ``stream_tag`` that sit on the annotated frame.
+
+    Per row, ``τ = t · duration_s`` of that stream's timed tokens; the row's slot is the smallest ``|τ − second|``
+    and every token within :data:`SLOT_EPS_S` of it is kept (the tokens of one frame or tubelet share a time; two
+    slots equally far from ``second`` are both kept). A token of the stream without ``t`` is not on the frame.
+    A row with nothing to select by (no timed token of the stream, or no ``duration_s``) keeps every token of the
+    stream. Tokens of other streams are ``False``."""
+    p = np.asarray(pos, dtype=np.float32)
+    if p.ndim != 3:
+        raise ValueError(f"annotated_slot: pos must be [k, N, 4], got {p.shape}")
+    stream = p[..., 0] == float(stream_tag)
+    k = p.shape[0]
+    dur = np.full(k, np.nan, dtype=np.float64)
+    if durations is not None:
+        d = np.asarray(durations, dtype=np.float64)
+        if d.ndim != 2 or d.shape[0] != k:
+            raise ValueError(f"annotated_slot: durations must be [k, S] with k = {k}, got {d.shape}")
+        if 0 <= int(stream_tag) < d.shape[1]:
+            dur = d[:, int(stream_tag)]
+    timed = stream & ~media_missing(p[..., 1]) & np.isfinite(dur)[:, None]
+    dist = np.where(timed, np.abs(p[..., 1].astype(np.float64) * np.where(np.isfinite(dur), dur, 0.0)[:, None] - float(second)), np.inf)
+    nearest = dist.min(axis=1, keepdims=True) if p.shape[1] else np.full((k, 1), np.inf)
+    return np.where(np.isfinite(nearest), dist <= nearest + SLOT_EPS_S, stream)
+
+
+def annotated_task_pos(pos: np.ndarray, durations: np.ndarray | None, *, region: Sequence[float] = FULL_FRAME, stream_tag: int,
+                       second: float) -> np.ndarray:
+    """:func:`region_task_pos`, then the tokens of stream ``stream_tag`` off the annotated frame
+    (:func:`annotated_slot`) lose ``(y, x)`` (``NaN``): they fall in no cell of the box head. ``t`` and the stream
+    tag are kept, and the tokens of every other stream are untouched."""
+    p = np.asarray(pos, dtype=np.float32)
+    out = region_task_pos(p, region)
+    off = (p[..., 0] == float(stream_tag)) & ~annotated_slot(p, durations, stream_tag=stream_tag, second=second)
+    out[..., 2] = np.where(off, np.nan, out[..., 2])
+    out[..., 3] = np.where(off, np.nan, out[..., 3])
     return out
 
 

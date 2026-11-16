@@ -3,7 +3,10 @@
 counted). Visual tokens are binned by their full-frame ``(y, x)`` into the ``G × G`` cells over the target
 region (``protocol.target_region``, the whole frame for vggss_box; ``readouts.coords.region_task_pos``):
 a bridge that cropped the frame simply leaves the cells it did not see empty, and IoU is computed in
-full-frame fractions. Media coordinates make per-sample pos the common case (frame sizes differ), so
+full-frame fractions. Where the folder declares ``output_contract.requires.annotated_frame`` (the box is drawn
+on ONE frame: vggss_box, 5.0 s), only the visual tokens of the time slot nearest that second are binned
+(``readouts.coords.annotated_task_pos``): a bridge that fed 8 or 64 frames is read on the annotated one, not
+on the average of all of them. Media coordinates make per-sample pos the common case (frame sizes differ), so
 both constant and per-sample pos are supported. Head ``dense_av_v1`` (``yavih.probes.dense.build_dense_av_head``) built
 with the per-model stream indices of ``readout_params.visual_stream`` / ``conditioning_stream`` resolved
 through ``describe()["streams"]``; shuffled-conditioning control under a seeded derangement
@@ -19,8 +22,14 @@ from typing import Any
 import numpy as np
 
 from yavih.readouts._targets import box_targets
-from yavih.readouts.base import ProbeRefused, ReadoutContext, evaluate_metrics, lazy_module
-from yavih.readouts.coords import region_task_pos, target_region, task_pos
+from yavih.readouts.base import (
+    ProbeRefused,
+    ReadoutContext,
+    evaluate_metrics,
+    lazy_module,
+    output_requires,
+)
+from yavih.readouts.coords import annotated_task_pos, region_task_pos, target_region, task_pos
 from yavih.readouts.registry import Scorer
 
 _fit = lazy_module("yavih.readouts._fit")  # torch: imported on first use, never by the descriptor
@@ -32,7 +41,9 @@ __all__ = ["SCORER", "VERSION", "run_box", "ShuffledRows"]
 #: headline stays at or above ``oracle_min`` and the random bridge's at or below ``random_max``. Probe training is not
 #: bit-reproducible across torch builds, so this is a band, not a point; a change that leaves it bumps ``VERSION``.
 CONFORMANCE: dict[str, float] = {"oracle_min": 0.5, "random_max": 0.45}
-VERSION: int = 2
+#: 3: with ``requires.annotated_frame`` the cells hold the visual tokens of the annotated frame's time slot only
+#: (2 mean-pooled the visual tokens of every time slot into each cell).
+VERSION: int = 3
 
 
 class ShuffledRows:
@@ -82,8 +93,9 @@ class ShuffledRows:
         return own[0] if scalar else own
 
 
-def _rows(ctx: ReadoutContext, splits: list[str]) -> tuple[_fit.FeatureRows, np.ndarray, np.ndarray, list[str], int]:
-    segments, tg, rows, ids = [], [], [], []
+def _rows(ctx: ReadoutContext, splits: list[str], *, durations: bool = False,
+          ) -> tuple[_fit.FeatureRows, np.ndarray, np.ndarray, list[str], int, np.ndarray | None]:
+    segments, tg, rows, ids, durs = [], [], [], [], []
     excluded = 0
     for s in splits:
         r = ctx.present_rows(s)
@@ -99,18 +111,55 @@ def _rows(ctx: ReadoutContext, splits: list[str]) -> tuple[_fit.FeatureRows, np.
         tg.append(t)
         rows.append(kept)
         ids.extend(ctx.clip_ids(s, kept))
+        if durations:
+            durs.append(ctx.durations(s, kept))
     feats = _fit.FeatureRows(segments)
 
     def cat(xs, shape, dt):
         return np.concatenate(xs, axis=0) if xs else np.empty(shape, dtype=dt)
 
-    return feats, cat(tg, (0, 4), np.float32), cat(rows, (0,), np.int64), ids, excluded
+    row_durs = cat(durs, (0, max(1, len(ctx.stream_names()))), np.float64) if durations else None
+    return feats, cat(tg, (0, 4), np.float32), cat(rows, (0,), np.int64), ids, excluded, row_durs
 
 
-def media_to_task(ctx: ReadoutContext, feats: Any, media_pos: Any) -> Any:
-    """Region-relative task pos; ``None`` without pos."""
+def annotated_frame(ctx: ReadoutContext, visual_tag: int) -> tuple[int, float] | None:
+    """``(visual stream tag, annotated second)`` when the folder declares ``output_contract.requires.annotated_frame``
+    (its ``stream`` is ``readout_params.visual_stream``: ``_validate_spec``), else ``None``."""
+    af = getattr(output_requires(ctx.spec), "annotated_frame", None)
+    if not af:
+        return None
+    return int(visual_tag), float(ctx.protocol[af["fact"]])
+
+
+def media_to_task(ctx: ReadoutContext, feats: Any, media_pos: Any, *, annotated: tuple[int, float] | None = None,
+                  durations: np.ndarray | None = None) -> Any:
+    """Region-relative task pos; ``None`` without pos. With ``annotated = (visual stream tag, second)`` and the rows'
+    ``durations [n, S]``, the visual tokens off the annotated frame's time slot lose ``(y, x)`` and reach no cell
+    (``readouts.coords.annotated_task_pos``)."""
     region = target_region(ctx.protocol)
-    return task_pos(media_pos, lambda p, _d: region_task_pos(p, region), n=len(feats), N=feats.N)
+    if annotated is None or media_pos is None:
+        return task_pos(media_pos, lambda p, _d: region_task_pos(p, region), n=len(feats), N=feats.N)
+    tag, second = annotated
+    out = task_pos(media_pos, lambda p, d: annotated_task_pos(p, d, region=region, stream_tag=tag, second=second),
+                   n=len(feats), N=feats.N, per_row=durations)
+    # A timed visual token whose stream has no media.duration_s cannot be placed in seconds: refuse rather than
+    # silently averaging every frame into the cells (checked on the first rows; durations come from the sidecars).
+    k = min(len(feats), 64)
+    if k:
+        idx = np.arange(k)
+        const = isinstance(media_pos, np.ndarray) and media_pos.ndim == 2
+        media = np.broadcast_to(media_pos, (k, *media_pos.shape)) if const else np.asarray(media_pos[idx])
+        timed = (media[..., 0] == float(tag)) & np.isfinite(media[..., 1]) & (media[..., 1] != -1.0)
+        dur = None if durations is None else np.asarray(durations, dtype=np.float64)[idx]
+        known = np.zeros(k, dtype=bool) if dur is None or not (0 <= tag < dur.shape[1]) else np.isfinite(dur[:, tag])
+        if (timed.any(axis=1) & ~known).any():
+            names = ctx.stream_names()
+            raise ProbeRefused(
+                "E_DURATIONS",
+                f"tokens of stream {names[tag] if tag < len(names) else tag!r} carry pos.t but their media.duration_s is unknown "
+                f"(sidecar members[].duration_s): the box readout cannot find the frame annotated at {second:g} s",
+            )
+    return out
 
 
 def run_box(ctx: ReadoutContext) -> dict:
@@ -119,14 +168,16 @@ def run_box(ctx: ReadoutContext) -> dict:
     vis = _fit.stream_index(ctx.describe, str(rp["visual_stream"]))
     cond = _fit.stream_index(ctx.describe, str(rp["conditioning_stream"]))
     t0 = time.time()
-    train, train_t, _, _, ex_train = _rows(ctx, ctx.roles["train"])
-    ev, eval_t, eval_rows, eval_ids, ex_eval = _rows(ctx, ctx.roles["eval"])
+    annotated = annotated_frame(ctx, vis)
+    train, train_t, _, _, ex_train, train_d = _rows(ctx, ctx.roles["train"], durations=annotated is not None)
+    ev, eval_t, eval_rows, eval_ids, ex_eval, eval_d = _rows(ctx, ctx.roles["eval"], durations=annotated is not None)
     if len(train) == 0 or len(ev) == 0:
         raise ProbeRefused("E_SPLIT_MISSING", "box readout needs present train and eval rows")
     media_train, media_eval = train.pos_gather(), ev.pos_gather()
     if media_train is None or media_eval is None:
         raise ProbeRefused("E_POS_MISSING", "box readout needs pos (validate should have recorded eligible: false)")
-    pos_train, pos_eval = media_to_task(ctx, train, media_train), media_to_task(ctx, ev, media_eval)
+    pos_train = media_to_task(ctx, train, media_train, annotated=annotated, durations=train_d)
+    pos_eval = media_to_task(ctx, ev, media_eval, annotated=annotated, durations=eval_d)
     ctx.timing["materialize_s"] = ctx.timing.get("materialize_s", 0.0) + (time.time() - t0)
 
     def build(dim: int | None = None):
@@ -214,6 +265,9 @@ def _validate_spec(params: dict, requires: Any, protocol: Any) -> None:
         raise ValueError(".grid: must equal output_contract.requires.grid h and w")
     if params["visual_stream"] == params["conditioning_stream"]:
         raise ValueError(": visual_stream and conditioning_stream must differ")
+    af = getattr(requires, "annotated_frame", None)
+    if af and af["stream"] != params["visual_stream"]:
+        raise ValueError(".visual_stream: must be output_contract.requires.annotated_frame.stream (the cells hold that frame's tokens)")
 
 
 def _floor_outputs(train_targets: Any, n_eval: int, *, protocol: dict, label_kind: str, num_classes: int | None = None) -> np.ndarray:

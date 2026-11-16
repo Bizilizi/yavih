@@ -7,17 +7,22 @@
   "folds": 0,
   "train": 128
  },
- "protocol_version": 1,
+ "protocol_version": 2,
  "recorded_with": {
-  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "commit": "5280ff17eea59f3dc67832ba424d6320f243e0e9+dirty",
   "externals": {},
   "folder_source": {
-   "probe": null,
+   "eval": null,
    "reader": null
   },
-  "protocol_hash": "f108458e24156e0d49c873b3abb7101f61e077abf664a5282aa43d54b36a7799",
-  "scoring_hash": "c26be40437e1429e116f16f7b6ef0801a2ab478253ae3f1b60f53591b835c41b",
-  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+  "protocol_hash": "807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60",
+  "scorer": {
+   "kind": "probe",
+   "name": "box",
+   "version": 3
+  },
+  "scoring_hash": "0e592dbdd31a09115493a1f98d4a5c17144149735893f439ff23428b4ab7aad9",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {

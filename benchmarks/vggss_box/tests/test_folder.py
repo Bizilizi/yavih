@@ -54,7 +54,7 @@ def _load_module(name: str, file: str):
 def test_yaml_schema2_and_changelog(spec):
     assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "vggss_box"
     assert spec["scorer"] == "box" and spec["aliases"] == []
-    assert spec["protocol_version"] == 1
+    assert spec["protocol_version"] == 2
     assert [c["version"] for c in spec["changelog"]] == [1]
     entry = spec["changelog"][0]
     assert entry["invalidates"] is False and entry["supersedes"] == []

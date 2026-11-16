@@ -277,7 +277,7 @@ happens in the report ([results](results.md#yavih-report)), never in the probe.
 | `E_FOLDS` | 2 | fold splits present ≠ `len(splits.folds)` |
 | `E_SPLIT_MISSING` | 2 | a role split has no features directory or no present rows |
 | `E_METRICS_INCOMPLETE` | 2 | a listed metric, floor, control or interval was not produced |
-| `E_POS_MISSING`, `E_DURATIONS` | 2 | a dense readout got no `pos`; a timed token's stream has no `duration_s` |
+| `E_POS_MISSING`, `E_DURATIONS` | 2 | a dense readout got no `pos`; a timed token's stream has no `duration_s` (`seq`; `box` with `requires.annotated_frame`) |
 | `E_NO_FEATURES` | 3 | no `features/` directory or no split directory |
 | `E_FEATURES_CLEANED` | 3 | a role split's tars were deleted by the cleanup policy (`[features] keep`) after earlier probes finished; re-extract (`plan build --pending` plans the shards again) |
 | `E_SCRATCH_SPACE` | 3 | scratch free space below 1.1 × the train bytes |
@@ -393,7 +393,9 @@ re-express them in the task frame before the head sees them:
 - `seq`: `u = (τ − segment_offset · segment_seconds) / (T · segment_seconds)` with `τ = t · duration_s` of the
   token's own stream;
 - `grid` and `box`: `((y − y0) / (y1 − y0), (x − x0) / (x1 − x0))` over `protocol.target_region` `[y0, x0, y1,
-  x1]` (the full frame when absent).
+  x1]` (the full frame when absent);
+- `box` with `requires.annotated_frame`: only the visual tokens of the time slot nearest the annotated second
+  keep their `(y, x)`; the visual tokens of every other slot lose them (`NaN`) and reach no cell ([box](#box)).
 
 Tokens outside the scored span or region keep their out-of-range coordinates (no clamping); a missing
 coordinate becomes `NaN`, which the heads map to a learned null embedding per axis. A bridge that cropped
@@ -473,6 +475,14 @@ scale 64) of their task coordinate; queries are initialized from sincos of the t
   `requires.grid` h and w.
 - Targets `float32 [n, 4]` `(cx, cy, w, h)` in full-frame fractions from `x1|y1|x2|y2` (sanitized `max(x, 0)`);
   degenerate boxes (`x2 ≤ x1` or `y2 ≤ y1`) are excluded and counted (`n_excluded_degenerate`).
+- The annotated frame: a folder whose target is drawn on one frame declares `requires.annotated_frame` (`fact`,
+  `stream` = `visual_stream`, `tol_s`; vggss_box: 5.0 s). Per row, with `τ = t · duration_s` of the visual stream,
+  the tokens within 1 ms of the smallest `|τ − protocol[fact]|` are that frame's time slot (the tokens of one
+  frame or tubelet; two slots equally far are both kept), and only they are binned into cells. The visual tokens
+  of every other slot, and a visual token with `t = -1`, reach no cell: a bridge that fed 8 or 64 frames is read
+  on the annotated one, not on the mean of all of them. A row with no timed visual token keeps all of them; timed
+  visual tokens whose stream has no `duration_s` are `E_DURATIONS`. Without `requires.annotated_frame` every
+  visual token is binned.
 - Head `dense_av_v1`: visual tokens (stream tag of `visual_stream`, `y, x ≥ 0`) are mean-pooled per cell of the
   `G × G` grid tiling the target region by their full-frame `(y, x)`; a cell with no token gets a learned
   null-cell embedding; fixed 2-D sincos added; 2 self-attention blocks over the `G²` cells; 2 cross-attention
@@ -485,7 +495,10 @@ scale 64) of their task coordinate; queries are initialized from sincos of the t
 - Control (`shuffled_control: true`): a second head is trained and scored with the conditioning stream's tokens
   replaced by another clip's under a seeded derangement (`shuffle_seed` for train, `shuffle_seed + 1` for eval;
   partners must hold the same number of conditioning tokens, else `E_POS_SHUFFLE`) → `iou_shuffled`;
-  `audio_blind = not (McNemar z over paired acc@0.5 successes > 3)`.
+  `audio_blind = not (McNemar z over paired acc@0.5 successes > 3)`. The control replaces tokens, not inputs:
+  it says whether the head needed the conditioning tokens. For a model whose visual tokens are computed without
+  the conditioning stream that is whether the model used it; for a model that mixes the conditioning stream
+  into its visual tokens the control decides nothing, because those tokens still carry the clip's own audio.
 - Eligibility (validate): both named streams are present, the visual stream covers at least
   `min_cell_coverage` of the cells (median over the sample), and any `requires.annotated_frame` condition holds.
 

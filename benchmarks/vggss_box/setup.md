@@ -108,6 +108,11 @@ input_contract:
   whole frame). The readout bins video tokens into the 14 × 14 cells tiling the full frame by their `(y, x)`; IoU,
   GIoU and `center_in_gt` are computed in full-frame fractions (IoU is invariant under per-axis scaling, so it
   equals pixel IoU). A bridge that cropped leaves the cells it did not see empty.
+- **Only the annotated frame's tokens reach the cells.** Per row, the video tokens whose time `t · duration_s` is
+  nearest 5.0 s (one frame or tubelet: every token within 1 ms of that time; two slots equally far are both kept)
+  are binned; the video tokens of every other time slot, and a video token without `t`, reach no cell. The other
+  frames count only through what the model itself put into the annotated frame's tokens. A row with no timed
+  video token keeps all of them; timed video tokens without `media.duration_s` are refused (`E_DURATIONS`).
 - Eligibility (validate, `N_ELIGIBILITY`): `pos` has `y`, `x`; both stream tags appear; the median over the
   validate sample of the fraction of the 196 cells holding ≥ 1 video-token centre is **≥ 0.25**; and the median
   over the sample of `min |t · duration_s − 5.0|` over the video tokens with `t ≥ 0` is **≤ 0.5 s**
@@ -131,7 +136,7 @@ output_contract:
     streams: [video, audio]
     grid: {h: 14, w: 14, min_cell_coverage: 0.25}
     t_bins: null
-    annotated_frame: {fact: annotated_second, stream: video, tol_s: 0.5}  # a video token within 0.5 s of the annotated 5.0 s frame
+    annotated_frame: {fact: annotated_second, stream: video, tol_s: 0.5}  # a video token within 0.5 s of the annotated 5.0 s frame; the box head reads the video tokens of the time slot nearest it
 ```
 
 ## Prepare & verify
@@ -179,7 +184,9 @@ Bridge-side mistakes that pass validation (or fail it late):
 8. **The annotated frame.** The box is drawn on the frame at 5.0 s (`meta["facts"]`). Unless the median over
    validate's sample of the nearest video token's distance to 5.0 s is ≤ 0.5 s, the feature set is
    `not_applicable` (a frame-0 bridge, or one that averages 16 frames over 10 s into tokens timed elsewhere).
-   `explicit` times `annotated_second + (k − n // 2) · step` put one frame on it for any `n`.
+   `explicit` times `annotated_second + (k − n // 2) · step` put one frame on it for any `n`. The box head reads
+   the video tokens of the time slot nearest 5.0 s and no other, so write each token's real time into `pos`: a
+   bridge that stamps every frame's tokens with one time gets all its frames averaged into the cells.
 9. **Edge boxes.** 566 of 4 614 full-frame boxes touch a frame edge; the sigmoid output never reaches 0 or 1, so a
    small residual IoU loss is structural and identical for every model.
 10. **No cross-sample caches.** A decode cache keyed on clip id or path (e.g. reused from `vggsounder`, read with
