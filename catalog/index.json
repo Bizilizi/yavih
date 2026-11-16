@@ -239,12 +239,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "bb7eef90b74e233b0c2364ed31ea5b03a2a42fd8",
+     "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
      "core": ">=1.1,<2",
      "path": "benchmarks/epic_sounds_det",
      "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
      "protocol_version": 1,
-     "tree": "6af6f84827462d43cf933f36e0c81a80cc454189"
+     "tree": "ff0afdad42685dfea19003d365d8b8adc1009c16"
     }
    ],
    "scorer": "epic_sounds_det",
@@ -428,12 +428,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
      "core": ">=1.1,<2",
      "path": "benchmarks/perception_test_action_loc",
      "protocol_hash": "19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3",
      "protocol_version": 1,
-     "tree": "8795d887e1e8b6145ceadf99e9fc42eb4d7c6f1a"
+     "tree": "35a638114e6c6f33c7970371cac9b88ce7121a2b"
     }
    ],
    "scorer": "perception_test_action_loc",
@@ -460,12 +460,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
      "core": ">=1.1,<2",
      "path": "benchmarks/perception_test_sound_loc",
      "protocol_hash": "c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7",
      "protocol_version": 1,
-     "tree": "ce2a77baeb620f771882f116bc8237967dd0e0e9"
+     "tree": "ae3aa78427ff16e6218e0d739b6245d475a1a1ed"
     }
    ],
    "scorer": "perception_test_sound_loc",
@@ -553,12 +553,12 @@
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "60ad151d420c7c0e8ca16701525b701bfb9eea83",
+     "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
      "core": ">=1.1,<2",
      "path": "benchmarks/unav100",
      "protocol_hash": "59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e",
      "protocol_version": 1,
-     "tree": "7bd3079b4f27eec77be6fd69c58f9bb55ba80ab0"
+     "tree": "8f5edcbca333e46332463cdec5d0e997c5876554"
     }
    ],
    "scorer": "unav100",
@@ -779,6 +779,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "5280ff17eea59f3dc67832ba424d6320f243e0e9",
+ "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
  "repo": "Bizilizi/yavih"
 }
