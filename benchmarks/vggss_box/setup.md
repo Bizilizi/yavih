@@ -193,3 +193,8 @@ Bridge-side mistakes that pass validation (or fail it late):
     another recipe) serves the wrong frames while numbers still look plausible. Decode per sample.
     `RawStream.path` is an opaque handle that differs between canaries and the passes of `bridge check`, so a
     path-keyed cache fails `E_BATCH_INVARIANCE` there.
+11. **Declare a fused model.** The audio-swap control replaces the audio-tagged tokens with another clip's. In a
+    model that mixes the audio into its video tokens (a joint encoder, cross-attention between the streams) those
+    tokens still carry the clip's own audio, so the control would report `audio_blind: true` whatever the model
+    does. Such a bridge sets `describe()["fused"]: true`: the control is not run and `iou_shuffled` / `audio_blind`
+    are recorded `null`.

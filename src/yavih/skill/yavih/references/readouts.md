@@ -45,7 +45,8 @@ mean train box already has a sizeable IoU). Controls void a headline: avsync `fl
 means the probe reads a cue that survives on stationary clips; vggss_box `audio_blind: true` means
 the box head does as well with another clip's audio tokens (visual saliency, not grounding, for a
 model whose video tokens are computed without the audio; for a model that mixes audio into its video
-tokens the control decides nothing, since those tokens still carry the clip's own audio). The report
+tokens the control decides nothing, since those tokens still carry the clip's own audio: declare
+`describe()["fused"]: true` and both controls are recorded `null`, not run). The report
 greys such rows (`~~value~~` in md, `flag=below_floor` in csv) — never un-grey them by hand.
 
 ## Eligibility (decided by `validate`, never by the probe)

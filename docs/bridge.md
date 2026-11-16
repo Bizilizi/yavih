@@ -281,6 +281,7 @@ column says whether the key is covered by `describe_sha256`, the consistency dig
 | `input` | dict | yes, minus each `input.<stream>.decoder` | the declared rules, one entry per stream the bridge reads (below) |
 | `precision` | dict | yes | `{autocast: null \| "bf16" \| "fp16", matmul_precision: "highest" \| "high" \| "medium", allow_tf32: bool, deterministic: bool}`; only `autocast` may be null, else `E_PRECISION_UNDECLARED` |
 | `args` | dict | yes | echoes every consumed `--arg` with defaults filled (`== self.args`), else `E_ARGS_UNCONSUMED`; a key not in `ARGS` is refused too |
+| `fused` | bool, optional | yes | `true` when the tokens of one stream are computed from another stream's input too (a model that mixes audio into its video tokens). The `box` readout then runs no shuffled-token control and records `iou_shuffled` and `audio_blind` as `null` ([readouts](readouts.md#box)). Absent means `false` |
 | `batch_tolerance` | dict, optional | no | `{rel_l2, reason}`: a batch- and order-invariance tolerance looser than the default `1e-5`, in `(0, 1e-3]`, with a non-empty reason |
 | `waive` | dict, optional | yes | `{CODE: reason}` (`{"*": reason}` = every waivable check): checks this bridge waives, each with a non-empty reason. A non-waivable code or a missing reason is `E_WAIVE_INVALID` (exit 2). See [validation](validation.md) |
 

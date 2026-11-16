@@ -499,6 +499,8 @@ scale 64) of their task coordinate; queries are initialized from sincos of the t
   it says whether the head needed the conditioning tokens. For a model whose visual tokens are computed without
   the conditioning stream that is whether the model used it; for a model that mixes the conditioning stream
   into its visual tokens the control decides nothing, because those tokens still carry the clip's own audio.
+  Such a bridge declares `describe()["fused"]: true`: no shuffled head is trained, `iou_shuffled` and
+  `audio_blind` are recorded `null` (not applicable), and the report greys nothing for them.
 - Eligibility (validate): both named streams are present, the visual stream covers at least
   `min_cell_coverage` of the cells (median over the sample), and any `requires.annotated_frame` condition holds.
 

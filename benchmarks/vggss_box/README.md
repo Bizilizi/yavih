@@ -57,7 +57,8 @@ large box in the middle of the frame, for every clip already scores a mean IoU o
 tend to be big and central. A model has to clear that clearly. The audio-swap control says whether it did so by
 listening: when the swapped audio scores as well as the real one, the model found salient objects, not sounding
 ones. The control swaps the audio features only, so it cannot judge a model that mixes the sound into its picture
-features: those still carry the clip's own sound.
+features: those still carry the clip's own sound. Such a model says so, and the control is reported as not
+applicable instead of being run.
 
 Not this benchmark: the paper's protocol, which scores localization heatmaps with consensus IoU and AUC on all 5 158
 clips, multi-box included; numbers from VGG-SS papers are not comparable with these. No box-regression numbers have

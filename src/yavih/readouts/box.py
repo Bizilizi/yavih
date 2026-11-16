@@ -11,7 +11,9 @@ both constant and per-sample pos are supported. Head ``dense_av_v1`` (``yavih.pr
 with the per-model stream indices of ``readout_params.visual_stream`` / ``conditioning_stream`` resolved
 through ``describe()["streams"]``; shuffled-conditioning control under a seeded derangement
 (``readout_params.shuffle_seed``) → a second head whose eval outputs reach ``iou_shuffled``/``audio_blind``
-via ``split_meta["shuffled"]``.
+via ``split_meta["shuffled"]``. A bridge that declares ``describe()["fused"]: true`` (its visual tokens are
+computed from the conditioning stream's input too) gets no shuffled arm: swapping the conditioning tokens leaves
+that stream inside the visual tokens, so the control decides nothing and both controls are recorded ``null``.
 """
 
 from __future__ import annotations
@@ -34,7 +36,10 @@ from yavih.readouts.registry import Scorer
 
 _fit = lazy_module("yavih.readouts._fit")  # torch: imported on first use, never by the descriptor
 
-__all__ = ["SCORER", "VERSION", "run_box", "ShuffledRows"]
+__all__ = ["SCORER", "VERSION", "run_box", "ShuffledRows", "SHUFFLED_CONTROLS"]
+
+#: The controls of the shuffled arm: ``null`` (not applicable) for a bridge that declares ``describe()["fused"]``.
+SHUFFLED_CONTROLS: tuple[str, ...] = ("iou_shuffled", "audio_blind")
 
 #: The readout version: enters ``protocol_hash``; ``yavih.versions.READOUT_VERSION`` reads it here.
 #: The readout's conformance band on the synthetic end-to-end run (``tests/test_e2e_synthetic.py``): the oracle bridge's
@@ -208,7 +213,8 @@ def run_box(ctx: ReadoutContext) -> dict:
     }
     fits: dict[str, Any] = {"main": _fit.fit_record(res)}
     extra: dict[str, np.ndarray] = {}
-    if rp.get("shuffled_control"):
+    fused = bool(ctx.describe.get("fused"))
+    if rp.get("shuffled_control") and not fused:
         seed = int(rp.get("shuffle_seed", 0))
         sh_train = ShuffledRows(train, _fit.derangement(len(train), seed), media_train, cond)
         sh_eval = ShuffledRows(ev, _fit.derangement(len(ev), seed + 1), media_eval, cond)
@@ -220,11 +226,17 @@ def run_box(ctx: ReadoutContext) -> dict:
         fits["shuffled"] = _fit.fit_record(res_sh)
         extra["eval_outputs_shuffled"] = pred_sh
 
+    specs = ctx.metric_specs
+    skipped = [c for c in SHUFFLED_CONTROLS if fused and c in specs.get("controls", {})]
+    if skipped:  # no shuffled arm for a fused bridge: its controls are not applicable, recorded null
+        specs = {**specs, "controls": {k: v for k, v in specs["controls"].items() if k not in skipped}}
     blocks = evaluate_metrics(
-        ctx.metric_specs, outputs=pred, targets=eval_t, protocol=ctx.protocol,
+        specs, outputs=pred, targets=eval_t, protocol=ctx.protocol,
         split_meta=split_meta, floor_outputs=floor_out, ci=ctx.ci,
         scorer=ctx.scorer(ctx.roles["eval"], eval_rows, eval_t),
     )
+    for c in skipped:
+        blocks["controls"][c] = None
     rec = fits["main"]
     return {
         **blocks,

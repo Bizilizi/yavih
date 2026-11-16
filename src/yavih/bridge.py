@@ -693,6 +693,10 @@ def validate_describe(d: dict, bridge: Bridge, bench: Any) -> None:
     _require(isinstance(prec["allow_tf32"], bool), f"precision.allow_tf32 must be a bool, got {prec['allow_tf32']!r}")
     _require(isinstance(prec["deterministic"], bool), f"precision.deterministic must be a bool, got {prec['deterministic']!r}")
 
+    # Optional: the tokens of one stream are computed from another stream's input too (audio mixed into the video
+    # tokens inside the model). A control that swaps one stream's TOKENS between clips decides nothing then.
+    _require("fused" not in d or isinstance(d["fused"], bool), f"fused must be a bool when present, got {d.get('fused')!r}")
+
     if "batch_tolerance" in d:
         bt = d["batch_tolerance"]
         _require(isinstance(bt, Mapping) and set(bt) == {"rel_l2", "reason"},

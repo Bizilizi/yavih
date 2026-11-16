@@ -205,7 +205,7 @@ metrics:
     - "The mean train box (cx, cy, w, h) = (0.500, 0.508, 0.506, 0.565) scores acc@0.5 0.186, acc@0.3 0.625 and center_in_gt 0.702: read those next to the model's."
     - "audio_blind = true means swapping in another clip's audio tokens did not hurt by more than 3 McNemar sigma on acc@0.5: the box head did not need them."
     - "For a model whose video tokens are computed without the audio, audio_blind = true means iou_mean measures visual saliency, not audio-visual localization."
-    - "For a model that mixes audio into its video tokens audio_blind decides nothing: those tokens still carry the clip's own audio."
+    - "A model that mixes audio into its video tokens declares describe()['fused']: true: the token swap decides nothing there, so iou_shuffled and audio_blind are null (not run)."
     - "The box head reads the video tokens of the time slot nearest the annotated 5.0 s and no other (box readout 3). Numbers of box readout 2, which averaged all frames, are not comparable."
     - "At n_eval = 914 the iou_mean bootstrap interval is about ±0.012 and acc@0.5 about ±0.03; a gap below about 0.02 iou_mean needs at least two seeds."
     - "Numbers are not comparable with VGG-SS papers, which score heatmaps against all 5 158 clips (multi-box included) with cIoU and AUC."

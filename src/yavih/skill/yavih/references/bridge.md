@@ -142,6 +142,7 @@ tells configurations of one model name apart in the report (`W_BRIDGE_CHANGED`).
 | `input` | yes, except each stream's `decoder` block | per stream you READ: the declared rules of §3 below; `decoder` (`{lib, version, …}`) is recorded as provenance, like the torch or CUDA version |
 | `precision` | yes | `{autocast: null\|"bf16"\|"fp16", matmul_precision: "highest"\|"high"\|"medium", allow_tf32: bool, deterministic: bool}`; enforced by run_extract; a null other than `autocast` → `E_PRECISION_UNDECLARED` |
 | `args` | yes | the consumed `--arg` values with defaults filled; an unechoed one → `E_ARGS_UNCONSUMED` |
+| `fused` | yes | optional bool: `true` when one stream's tokens are computed from another stream's input too (audio mixed into the video tokens); vggss_box then records `iou_shuffled` / `audio_blind` as `null` instead of running the token-swap control |
 | `batch_tolerance` | **no** | optional `{rel_l2: ≤ 1e-3, reason: "…"}` when you cannot reach `1e-5` |
 | `waive` | yes | optional `{CODE: reason}` (`{"*": reason}` = every waivable check): checks that are wrong for this model, each with a reason (§6, "Waiving a check") |
 

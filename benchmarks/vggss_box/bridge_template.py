@@ -116,6 +116,9 @@ class VGGSSBoxBridge(Bridge):
             "model": "TODO-model",  # the name all of this model's bridges use; results are filed under it
             "layer": self.args["layer"],
             "pooling": "none",  # tokens, never pooled: the head needs the spatial grid
+            # TODO: True when the model mixes the audio into its video tokens (joint encoder, cross-attention): the
+            # audio-swap control is then not run and iou_shuffled / audio_blind are recorded null.
+            "fused": False,
             "views": 1,
             "input": {
                 "video": {
