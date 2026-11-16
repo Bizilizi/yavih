@@ -22,6 +22,9 @@ ALLOWED: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("pyproject.toml", re.compile(r'^authors = \[\{ name = "Daniil Zverev" \}\]$')),
     ("benchmarks/vggsounder/README.md", re.compile(r"zverev\w*2025vggsounder|Daniil Zverev and |Zverev et al\.")),
     ("benchmarks/vggsounder/benchmark.yaml", re.compile(r"^\s+venue: .*Zverev")),
+    # retrieval on VGGSounder's audible-and-visible labels cites VGGSounder
+    ("benchmarks/vggsounder_retrieval/README.md", re.compile(r"zverev\w*2025vggsounder|Daniil Zverev and |Zverev et al\.")),
+    ("benchmarks/vggsounder_retrieval/benchmark.yaml", re.compile(r"^\s+venue: .*Zverev")),
     # the generation benchmarks cite VGGSounder and the review whose evaluation protocol they follow
     ("benchmarks/vggsounder_v2a/README.md", re.compile(r"zverev\w*2025vggsounder|Daniil Zverev and |and Daniil Zverev and ")),
     ("benchmarks/vggsounder_v2a/benchmark.yaml", re.compile(r"^\s+venue: .*Zverev")),
