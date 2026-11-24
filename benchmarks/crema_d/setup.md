@@ -35,6 +35,13 @@ yavih bench prepare crema_d 03    # re-freeze (byte-identical) and yavih bench v
 * After step 01, `AudioWAV/` holds 7 442 files, not 7 438: the 7 438 wavs plus the four skipped clips as 130 B Git
   LFS pointer text files (the clone checks out every pointer; step 01 downloads only the listed wavs). They are not
   audio, the manifest and `02_verify.sh` ignore them, and `ls AudioWAV | wc -l` therefore prints 7442. Leave them.
+* HEAR's own build of the task is public and not needed: Zenodo record 6332517 (version 2021.3),
+  `hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz`, 1 513 054 261 B, md5 `8a80e180e44f01a5a43c962de92c1e12`. Its fold
+  files agree with the manifest: every one of the 7 438 clips is in the same fold with the same label. To re-check,
+  put the archive at `<media_root>/hear/` (or point `YAVIH_CREMA_D_HEAR_ARCHIVE` at it) and run
+  `python "$(yavih bench path crema_d)/make_manifest.py" --hear-archive <archive>` (exit 0: they agree; it also
+  checks the md5) or the folder test `test_hear_archive_staged`. Do not use HEAR's pre-2022 build (Zenodo 5802571):
+  it had an audio-amplitude bug and was retracted.
 * Data root: `media_root` defaults to `${data.root}/crema_d`. Elsewhere set
   `YAVIH_DATA__CREMA_D__MEDIA_ROOT=/path/to/crema_d` or, in `~/.config/yavih/config.toml`:
 

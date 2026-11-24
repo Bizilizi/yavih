@@ -44,7 +44,8 @@ held-out clips, and the score is HEAR's top-1 accuracy, averaged over the five f
 ([hear-eval-kit](https://github.com/hearbenchmark/hear-eval-kit)), and the folds are re-derived from the public CREMA-D
 files exactly as [hear-preprocess](https://github.com/hearbenchmark/hear-preprocess) and TensorFlow Datasets built
 them, so the benchmark does not need HEAR's 1.5 GB build of the task; that build is public on
-[Zenodo](https://doi.org/10.5281/zenodo.6332517), and the folds can be checked against it clip by clip. With six
+[Zenodo](https://doi.org/10.5281/zenodo.6332517), and its fold files agree with these folds clip by clip: all 7 438
+clips sit in the same fold with the same emotion. With six
 near-balanced classes, chance is one in six (16.7 %); the floor, always answering the most frequent training
 emotion, is 15.7 %.
 

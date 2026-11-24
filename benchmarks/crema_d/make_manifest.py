@@ -7,7 +7,10 @@ built task (``hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz``, 1.5 GB, Zenodo re
 build fixed after hear-preprocess ``a5d6042``; the earlier records 5802571 and 5885750 hold or retract the build with
 the amplitude bug). The manifest does not need that archive: the folds are re-derived here, step by step, from the
 public CREMA-D files, with the copied code of ``hear_split.py``, and ``--hear-archive`` compares the result with
-HEAR's fold files, clip by clip (see "Cross-check against HEAR's task" below):
+HEAR's fold files, clip by clip (see "Cross-check against HEAR's task" below). They agree: run on 2026-11-24 on the
+archive (md5 checked against Zenodo's listing), all 7 438 clips are in HEAR's fold with HEAR's label (1 488 / 1 488 /
+1 488 / 1 487 / 1 487), none missing or extra; the audio of 200 of HEAR's wavs, resampled, correlates 0.995 or more
+with the CREMA-D wav its stem maps to (a clip of the same label: under 0.05). The steps:
 
 1. the clip list of the TensorFlow Datasets builder ``crema_d`` 1.0.0: every ``FileName`` of
    ``processedResults/summaryTable.csv`` except the four TFDS skips as absent from GitHub (``1040_ITH_SAD_XX``,
@@ -55,10 +58,11 @@ Cross-check against HEAR's task (writes nothing; needs neither media nor summary
 
 It reads ``tasks/tfds_crema_d-1.0.0-full/fold00.json`` … ``fold04.json`` (``{"<hear_file>.wav": [label]}``),
 ``labelvocabulary.csv`` and ``task_metadata.json`` from the archive (streamed, nothing extracted; an extracted copy
-works too), checks the archive's md5 against Zenodo's listing, and exits 0 only when every one of the 7 438
+works too), checks the archive's md5 against Zenodo's listing (and, for that file, the pinned sha256 of the
+archive and of each task file, ``HEAR_TASK_SHA256``), and exits 0 only when every one of the 7 438
 ``hear_file`` stems of the committed manifest is in HEAR's fold ``split`` with HEAR's label ``labels``, with no file
-missing or extra. Its JSON names the digests to pin in ``manifest.upstream.upstream_files``
-(``upstream_files_to_pin``). Should the folds ever disagree, HEAR's published fold files are the protocol: freeze
+missing or extra. Its JSON names the digests pinned in ``manifest.upstream.upstream_files``
+(``upstream_files_to_pin``; the freeze prints them there too, from ``HEAR_UPSTREAM_FILES``). Should the folds ever disagree, HEAR's published fold files are the protocol: freeze
 the manifest from them instead. The folder test ``test_hear_archive_staged`` runs the same check when the archive
 is at ``<media_root>/hear/`` or ``$YAVIH_CREMA_D_HEAR_ARCHIVE``.
 
@@ -110,8 +114,22 @@ HEAR_ARCHIVE_NAME = "hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz"
 HEAR_ARCHIVE_MD5 = "8a80e180e44f01a5a43c962de92c1e12"
 HEAR_ARCHIVE_BYTES = 1513054261
 HEAR_ARCHIVE_URL = f"https://zenodo.org/records/6332517/files/{HEAR_ARCHIVE_NAME}"
+HEAR_ARCHIVE_SHA256 = "0d4bb3762770504cac4f933af8b9bdd47565f5eb972037dca39489ae9d388a6f"
 HEAR_TASK_DIR = "tfds_crema_d-1.0.0-full"         # hear-preprocess FinalCombine: tasks/<task>-<version>-<mode>/
 HEAR_TASK_FILES = (*(f"{f}.json" for f in FOLDS), "labelvocabulary.csv", "task_metadata.json")
+# sha256 of the task files inside that archive (read 2026-11-24; they agree with the manifest, 7 438 of 7 438 clips)
+HEAR_TASK_SHA256 = {
+    "fold00.json": "820fe9fd6cc9df0cd5c8e34414dd67f3682139e2432ea0437ba852d20dd3e3bb",
+    "fold01.json": "0a68a52e7956334f7c10b7e1f8e0deda89a1bd0b2ec70205c9b3566b6be24cae",
+    "fold02.json": "65e83c9b79546840211e548df319bc9c4ac6172ebc940259d62d4f5ea184d05c",
+    "fold03.json": "828612e29905077cffec89c4a0e538646d3e395e8ad1738930c6ecc689fa56de",
+    "fold04.json": "83cb7c56e282e3fd61f538267d01f0030e330e2399eb4d5ac5634902eddccf42",
+    "labelvocabulary.csv": "c61704379b8db2fd0e5588689a9a80e9111f1912fe76948d8420edf035834100",
+    "task_metadata.json": "e14ce42932fc50fa6a5fb47c51e7b6ed35084013e4da986eb6172bea670ed758",
+}
+# manifest.upstream.upstream_files entries of the cross-check (read by --hear-archive, not by the freeze)
+HEAR_UPSTREAM_FILES = {f"zenodo/6332517/{HEAR_ARCHIVE_NAME}": HEAR_ARCHIVE_SHA256,
+                       **{f"hear2021/{HEAR_TASK_DIR}/{n}": s for n, s in HEAR_TASK_SHA256.items()}}
 
 MANIFEST_COLUMNS = ["clip_id", "labels", "split", "rel_path", "actor", "sentence", "intensity", "tfds_split", "hear_file"]
 CLASSES_COLUMNS = ["index", "name"]
@@ -238,6 +256,11 @@ def check_hear_archive(path: Path, manifest_path: Path, log) -> int:
         meta = json.loads(files["task_metadata.json"])
         result["task_metadata"] = {k: meta.get(k) for k in ("task_name", "version", "mode", "split_mode", "nfolds", "embedding_type", "prediction_type")}
     file_sha = {name: hashlib.sha256(data).hexdigest() for name, data in sorted(files.items())}
+    if digests is not None and path.name == HEAR_ARCHIVE_NAME:
+        if digests["sha256"] != HEAR_ARCHIVE_SHA256:
+            problems.append(f"{path.name} has sha256 {digests['sha256']}, pinned {HEAR_ARCHIVE_SHA256}")
+        problems += [f"{name} has sha256 {sha}, pinned {HEAR_TASK_SHA256[name]}"
+                     for name, sha in file_sha.items() if HEAR_TASK_SHA256.get(name) not in (None, sha)]
     pin = {f"hear2021/{HEAR_TASK_DIR}/{name}": sha for name, sha in file_sha.items()}
     if digests is not None:
         pin = {f"zenodo/6332517/{path.name}": digests["sha256"], **pin}
@@ -397,7 +420,8 @@ def main(argv: list[str] | None = None) -> int:
             "sha256": meta_sha,
             "rows": TOTAL_UPSTREAM,
             "upstream_files": {"CREMA-D/processedResults/summaryTable.csv": meta_sha,
-                               "tfds-data/dataset_info/crema_d/1.0.0/dataset_info.json": TFDS_INFO_SHA256},
+                               "tfds-data/dataset_info/crema_d/1.0.0/dataset_info.json": TFDS_INFO_SHA256,
+                               **HEAR_UPSTREAM_FILES},
             "curation": {
                 "total_upstream": TOTAL_UPSTREAM,
                 "per_split": {f: {"listed": fold_counts[f], "staged": fold_counts[f], "missing": 0} for f in FOLDS},
