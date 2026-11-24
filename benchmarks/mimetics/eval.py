@@ -19,7 +19,10 @@ https://github.com/mks0601/IntegralAction_RELEASE at commit 50bc02ae8ad30d55628d
 clip, a yavih feature set has one output per clip, so the reference's averaging of ``cfg.test_infer_num`` = 10
 temporal views per video is the bridge's business, and a yavih bridge declares one view); the counts are returned
 as fractions in [0, 1] instead of printed as percentages; the result file is not written; the per-clip success
-vectors are exposed for the binomial intervals. The reference also skips at load time every video with
+vectors are exposed for the binomial intervals; the top-5 sort is made stable (``kind="stable"``) so tied scores
+resolve the same on every CPU (the upstream default sort, introsort, leaves the order of ties to the platform:
+numpy's AVX-512 kernels order them differently), so of several classes tied at the fifth place the
+lower-indexed ones are dropped first. The reference also skips at load time every video with
 ``frame_num <= (frame_per_seg - 1) * frame_interval`` = 56 frames (its own 8 x 8 frame sampling, cfg); yavih scores
 every staged clip, see ``metrics.notes``.
 
@@ -47,7 +50,9 @@ __all__ = [
 # 50bc02ae8ad30d55628d6aecbd46f2dfa6173117, data/Mimetics/Mimetics.py, Mimetics.evaluate, lines "# measure accuracy"
 # to the two prints. Licence: none stated (the repository has no LICENSE file). Changes: `action_label_gt` /
 # `action_label_out` (dicts keyed by video id, outputs already averaged over views) become `gts` [n] and `scores`
-# [n, C]; the success of each clip is kept (`hit1`, `hit5`); fractions are returned instead of printed percentages.
+# [n, C]; the success of each clip is kept (`hit1`, `hit5`); fractions are returned instead of printed percentages;
+# the top-5 `np.argsort` is given kind="stable" so tied scores resolve the same on every CPU (the upstream default
+# sort leaves the order of ties to the platform: numpy's AVX-512 kernels order them differently).
 
 
 def integralaction_topk(scores: Any, gts: Any) -> tuple[np.ndarray, np.ndarray]:
@@ -62,7 +67,7 @@ def integralaction_topk(scores: Any, gts: Any) -> tuple[np.ndarray, np.ndarray]:
     for k in range(sample_num):
         if action_label_gt[k] == np.argmax(action_label_out[k]):
             hit1[k] = True
-        if action_label_gt[k] in np.argsort(action_label_out[k])[-5:][::-1]:
+        if action_label_gt[k] in np.argsort(action_label_out[k], kind="stable")[-5:][::-1]:
             hit5[k] = True
     return hit1, hit5
 

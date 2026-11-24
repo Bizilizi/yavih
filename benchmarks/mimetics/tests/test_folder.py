@@ -194,6 +194,27 @@ def test_folder_metrics_hand_checked():
         ev.top5(np.zeros(4), t, {}, {})
 
 
+def test_top5_ties_resolve_the_same_on_every_cpu():
+    """The copied top-5 uses a stable argsort: of classes tied across the fifth place, the lower-indexed are dropped.
+
+    numpy's default sort (introsort, AVX-512 kernels where the CPU has them) leaves the order of ties to the platform;
+    this row would then put class 1 inside or outside the top five depending on the machine.
+    """
+    ev = _eval()
+    s = np.zeros((4, 8))
+    s[:, 7] = 1.0  # one clear winner, then seven classes tied at 0 across the cut
+    t = np.array([0, 1, 3, 4])
+    hit1, hit5 = ev.integralaction_topk(s, t)
+    # ascending stable order is 0, 1, ..., 6, 7; the last five are 3, 4, 5, 6, 7
+    assert list(hit5) == [False, False, True, True]
+    assert not hit1.any()
+    assert ev.top5(s, t, {}, {}) == pytest.approx(2 / 4)
+    # argmax keeps the FIRST of tied maxima, the stable top-5 the LAST: on an all-tied row the label 0 is a top-1
+    # hit but not a top-5 hit (the reference's own behaviour, now the same everywhere)
+    z1, z5 = ev.integralaction_topk(np.zeros((1, 6)), np.array([0]))
+    assert z1[0] and not z5[0]
+
+
 def test_chance_levels_hold_for_random_scores(spec: dict):
     ev = _eval()
     rng = np.random.default_rng(1)
