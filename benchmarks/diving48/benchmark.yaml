@@ -1,0 +1,179 @@
+# diving48: people read README.md, the agent reads setup.md first.
+# Values under `manifest` are produced by make_manifest.py from the official V2 annotation files (`--check` confirms them).
+# The protocol is VideoGLUE's Diving48 task (Yuan et al., TMLR; tensorflow/models official/projects/videoglue):
+# the V2 train/test files, the 48-class vocabulary, top-1 accuracy on the 1 970 test clips.
+schema_version: 3
+name: diving48
+aliases: []
+title: Diving48 fine-grained dive classification (official V2 splits, 15 027 train / 1 970 test, 48 classes)
+capability: [visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+header:
+  name: Diving48
+  title: "RESOUND: Towards Action Recognition without Representation Bias"
+  venue: "Li, Li & Vasconcelos · ECCV 2018"
+  abstract: >-
+    About 18 000 trimmed clips of competitive dives cut from broadcasts of major competitions, labelled with
+    48 dive types defined by takeoff, somersaults, twists and body position. Scenes, divers and pools look
+    alike across classes, so naming the dive requires following the motion through takeoff, flight and entry.
+scorer: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: af5186f011d9b8ad4c25d111d5259bdc669925a5b0fe0a5fe3692116e7f6a711
+    input_hash: bce7d4dbf9f8ea7195fc9b75973893b2392936ae25e88ceadbff9e4b03bd0426
+
+source:
+  kind: public_url
+  urls:
+    - "http://www.svcl.ucsd.edu/projects/resound/dataset.html"
+    - "https://nextcloud.nrp-nautilus.io/s/eqKMRFHqNCrP77L/download"
+    - "https://nextcloud.nrp-nautilus.io/s/Z3CfTwcnTtp5d4p/download"
+    - "https://nextcloud.nrp-nautilus.io/s/mfr5pfaSNp5Zx8X/download"
+    - "https://nextcloud.nrp-nautilus.io/s/oWjtCkbw9G4qdSy/download"
+  licence: >-
+    No licence is stated on the official Diving48 page (checked 2026-11-15); the clips are segments of online
+    videos of diving competitions, distributed by UCSD SVCL for research. Cite the ECCV 2018 paper.
+  revision: "Diving48 V2 annotations (2020-10-30 update) + 2018 RGB release"
+  bytes: 10289136668
+  sha256:
+    "Diving48_rgb.tar.gz": "24e1cf350f2ec16fd1212ed57c90c148aab2c40fe61f43a7c4a68b8b0ae7c3e0"
+    "Diving48_V2_train.json": "62bcff1537b24162b1c9be49f376b8f9b6fccd222734f10d4a5d545b38c00e93"
+    "Diving48_V2_test.json": "658fe0d84ebea61414548bb69a996d668d9f249a82919e276ffc0f424d9371a3"
+    "Diving48_vocab.json": "cc4238904e3ab274ae3ab36d26a09afd41e8c7891aa1f7c773d43fecb9388696"
+    "rgb.sha256sum": "c5aaecb78e29f96d81749fd7c36a7e5a79887cf106814ecd51f523b2d9bfd536"
+  notes: >-
+    The official page links Nextcloud shares (migrated 2023-09-30): Diving48_rgb.tar.gz (10 287 167 940 B,
+    rgb/<vid_name>.mp4), the V1 train/test JSONs, Diving48_vocab.json (3 094 B), and the V2 train/test JSONs
+    (1 586 934 B and 207 545 B, manually cleaned, poorly segmented clips removed). `bytes` = the RGB archive +
+    the three JSON files read. rgb.sha256sum = sha256 of `cd rgb && LC_ALL=C sha256sum *.mp4` over the 18 404
+    extracted files (10 313 555 478 B). The optical-flow archive (6.9 GB) and the V1 JSONs are not used.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "Public download from the official Nextcloud shares (10.3 GB archive + three JSON files); yavih bench prepare diving48 01-03 runs unattended"
+budget:
+  clips: {train: 15027, test: 1970}
+  media_gb: 9.64   # the 16 997 rgb/*.mp4 the manifest reads: 9 635 510 119 B (stat of the staged files)
+  extract_min_per_1k_clips_ref: 2.3  # bridge check, DINOv2 ViT-B/14 per frame, 16 frames, RTX 4500 Ada, 4 decode workers: 7.39 clips/s; capped extracts on the shared host ran 3.0 and 2.5 clips/s (storage reads dominated)
+  probe_minutes_ref: {clf: 13}  # clf probe wall 19.7 s on 384 train rows (N=16, D=768, RTX 4500 Ada), scaled x 15027/384
+
+manifest:
+  file: manifest.csv.gz
+  sha256: "cab70696095ce4f7c12feebbb13678828610786cbf6f50690b8cc720979e3d1a"
+  classes: classes.csv
+  classes_sha256: "be976e05a7e4d67b8ff772eace7f599bb70dfe77c674189fabf03cbd257d3b99"
+  key: clip_id
+  label:
+    column: label
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: video}
+    end_frame: {type: int, role: extra}
+  upstream:
+    source: "official Diving48 V2 annotations (2020-10-30 update): Diving48_V2_{train,test}.json + Diving48_vocab.json"
+    sha256: "62bcff1537b24162b1c9be49f376b8f9b6fccd222734f10d4a5d545b38c00e93"
+    rows: 16997
+    note: >-
+      Every V2 entry is one row, in file order (Diving48_V2_train.json then Diving48_V2_test.json): clip_id =
+      vid_name, rel_media = rgb/<vid_name>.mp4, label = the vocabulary entry joined by spaces, end_frame = the
+      annotation's frame count (start_frame is 0 everywhere). No cap, no exclusion. Class 30 (Forward Dive NoTwis
+      STR) has no V2 row and stays in classes.csv (48-way, as VideoGLUE). V2 drops 916 train and 126 test clips of
+      V1 and gives 6 639 of the 16 997 kept clips another label than V1.
+    upstream_files:
+      "Diving48_V2_train.json": "62bcff1537b24162b1c9be49f376b8f9b6fccd222734f10d4a5d545b38c00e93"
+      "Diving48_V2_test.json": "658fe0d84ebea61414548bb69a996d668d9f249a82919e276ffc0f424d9371a3"
+      "Diving48_vocab.json": "cc4238904e3ab274ae3ab36d26a09afd41e8c7891aa1f7c773d43fecb9388696"
+    curation:
+      total_upstream: 16997
+      per_split:
+        train: {listed: 15027, staged: 15027, missing: 0}
+        test: {listed: 1970, staged: 1970, missing: 0}
+      excluded: {}
+      short_clips: 0
+      leakage_audit: null
+
+splits:
+  train: [train]
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/diving48"
+      description: >-
+        Diving48 root: rgb/<vid_name>.mp4 (the rgb/ directory of Diving48_rgb.tar.gz, 18 404 files, 10.3 GB;
+        the manifest uses 16 997) next to Diving48_V2_train.json, Diving48_V2_test.json and Diving48_vocab.json.
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the Diving48 mp4 exactly as stored (h264, 640 x 480, no audio track, 1.0-16.96 s (median 4.08 s), 25 to 823 frames, at the source's own rate: 25 fps for 8 743 clips, 60 for 6 092, about 30 (29.83-30) for 2 027, 24.92 for 135), byte for byte; nothing decoded, cut, re-timed, resized or
+      cropped
+  info:
+    video: [duration_s, fps, n_frames, width, height, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []
+
+protocol:
+  clip_seconds: null
+  train_draw: null
+  views: none
+
+metrics:
+  headline: acc
+  list: [acc, n_eval]
+  floors: [acc_floor]
+  controls: []
+  chance: {acc: 0.020833}
+  ci: {acc: binomial}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+  notes:
+    - "Protocol and splits are VideoGLUE's (tensorflow/models official/projects/videoglue): V2 labels, 48-way, top-1 on the 1 970 test clips. V1 numbers (2 096 test clips) are not comparable."
+    - "acc is yavih's top-1 (argmax over the 48 logits), the quantity of VideoGLUE's TopKCategoricalAccuracy(k=1); class 30 has no V2 clip but keeps its logit."
+    - "The floor (always the train-majority class, Forward 35som NoTwis PIKE) is 69/1970 = 0.035; chance is 1/48 = 0.021. The largest test class holds 163/1970 = 0.083."
+    - "Over 1 970 test clips the 95 % interval is about ±0.022 at 0.5 and ±0.018 at 0.2 or 0.8: treat gaps below about 0.02 at one seed as unresolved."
+    - "yavih trains its clf attentive probe on one view; VideoGLUE's frozen head is one cross-attention pooler (AdamW 1e-4, 100 epochs, label smoothing 0.1) scored on 4 clips x 3 crops."
+    - "VideoGLUE's eval loop (validation_steps 122 x batch 16, drop_remainder) scores 1 952 of the 1 970 test clips; yavih scores all 1 970."
+
+readout_params: {}
