@@ -1,0 +1,185 @@
+# yavih benchmark folder — Speech Commands v0.02 as the HEAR 2021 task speech_commands-v0.0.2-5h (schema 3).
+schema_version: 3
+name: speech_commands
+aliases: []
+title: Speech Commands v0.02 keyword spotting (HEAR 2021 speech_commands-v0.0.2-5h, 12 classes, top-1 accuracy)
+capability: [audio]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+header:
+  name: Speech Commands
+  title: "Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition"
+  venue: "Warden · arXiv 2018"
+  abstract: >-
+    One-second recordings of short spoken words by thousands of speakers. As the HEAR 2021 task used here, a
+    clip is one of ten command words, another word or background noise (12 classes); a probe trains on HEAR's
+    five-hour subset and is scored by top-1 accuracy on the official 4 890-clip test set.
+scorer: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 36bc64df609d131ebb21c8dd1d0754801bd09110e0f5c87bf086106f92863593   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: 96d3bd74794b104937bd00eaac13c6b973bb5af884668e071267e2ab13104d15
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - "http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz"
+    - "http://download.tensorflow.org/data/speech_commands_test_set_v0.02.tar.gz"
+    - "https://arxiv.org/abs/1804.03209"
+    - "https://github.com/hearbenchmark/hear-preprocess"
+  licence: "CC BY 4.0 (Speech Commands v0.02, Google; the archives' LICENSE file)"
+  revision: "speech_commands_v0.02 + speech_commands_test_set_v0.02 (HEAR task speech_commands-v0.0.2, hear-preprocess v2021.1.1 @ 610d864b2c0f7064eaeced98ee8992d3914d58f1)"
+  bytes: 2541486466            # the two archives: 2 428 923 189 + 112 563 277 B
+  sha256:
+    speech_commands_v0.02.tar.gz: af14739ee7dc311471de98f5f9d2c9191b18aedfe957f4a6ff791c709868ff58
+    speech_commands_test_set_v0.02.tar.gz: cc2a00c1147c2254e9be3fa0f779d8c17421dc349b86366567a8edfa9acd51df
+  notes: >-
+    Two public archives from Google's download server, no account. HEAR builds the task from them
+    (hear-preprocess speech_commands.py): the test archive is the test set; validation_list.txt of the
+    train archive plus silence cut from running_tap.wav is HEAR's valid split; the rest of the train archive
+    (minus testing_list.txt) plus silence cut from the other five background recordings is HEAR's train
+    split. prepare/02_hear_silence.py cuts the 789 silence clips (HEAR's loop, sample-exact copies).
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "two public tar.gz archives from download.tensorflow.org (2.5 GB, no account), extracted by prepare/01; prepare/02 cuts HEAR's silence clips"
+budget:
+  clips: {train: 16000, valid: 2000, test: 4890}
+  media_gb: 0.72                    # measured: bytes of the 22 890 wavs of train + valid + test (make_manifest.py); the whole staged root is 3.4 GB
+  extract_min_per_1k_clips_ref: 0.25  # measured with an AST-shaped ViT-B (random weights, 108 x 768 tokens), RTX 4500 Ada, 4 decode workers: bridge check 120.9 clips/s = 0.14; the full extraction of the 22 890 clips 572 s = 0.42 (shared GPU, network FS); 0.25 is within 2x of both
+  probe_minutes_ref: {clf: 20}        # measured: the clf probe on those 108 x 768 features, 18 000 train / 4 890 eval, 17.1 min (unit wall 21.2 min), RTX 4500 Ada
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 0815e329bfbc48295a5e909eb2593d72b58ff42774cffd647e0d51ba94ef67ba
+  classes: classes.csv
+  classes_sha256: 02a1611070fdf7594e3be565cff85c6de877afec213861d81095eaa91d479ed6
+  key: clip_id
+  label:
+    column: label
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_path: {type: str, role: media, stream: audio}
+    word: {type: str, role: extra}      # the upstream folder: the spoken word (train archive), or the test archive's _unknown_ / _silence_
+    speaker: {type: str, role: extra}   # the release's 8-hex speaker id (before _nohash_); empty for silence clips
+  upstream:
+    draw: >-
+      HEAR's 5 h draw (hear-preprocess pipeline.py SubsampleSplit): HEAR train (85 511 files) and HEAR valid (10 102)
+      each sorted by unique_filestem, shuffled by numpy RandomState(str2int("SubsampleSplit(<split>)")) =
+      3488948419 (train) / 3511819133 (valid), first 16 000 / 2 000 kept; the rest are train_rest / valid_rest
+    source: "speech_commands_v0.02.tar.gz + speech_commands_test_set_v0.02.tar.gz (listing below) + the HEAR silence slices; HEAR task speech_commands-v0.0.2-5h of hearbenchmark/hear-preprocess @ 610d864 (v2021.1.1)"
+    sha256: 45e27c3371df92c8a914fd9edd4ed91088025778dd2a0a379837b8d93d491008   # the listing CSV (make_manifest.py --write-metadata)
+    rows: 111508
+    note: >-
+      Every upstream wav and every HEAR silence clip is one row: HEAR's 5 h task (train 16 000, valid 2 000, test
+      4 890), the rest of HEAR's full task (train_rest 69 511, valid_rest 8 102) and the 11 005 testing_list.txt
+      files of the train archive that HEAR never reads (testing_list; clip_id prefixed testing_list:). The three
+      read splits equal the output of HEAR's own pandas code run on the staged data (checked once, pandas 3.0.3).
+    upstream_files:
+      speech_commands_v0.02.tar.gz: af14739ee7dc311471de98f5f9d2c9191b18aedfe957f4a6ff791c709868ff58
+      speech_commands_test_set_v0.02.tar.gz: cc2a00c1147c2254e9be3fa0f779d8c17421dc349b86366567a8edfa9acd51df
+      train/validation_list.txt: 5747407275538b4056e823982f0db1fc993776ab532048196a19be701bdc87d2
+      train/testing_list.txt: 2d17c6b3faf63be43eda93cfeb0c747cfd79b7b236282039dbac65a2cb5f1df5
+    curation:
+      total_upstream: 111508
+      per_split:
+        train: {listed: 16000, staged: 16000, missing: 0}
+        valid: {listed: 2000, staged: 2000, missing: 0}
+        test: {listed: 4890, staged: 4890, missing: 0}
+        train_rest: {listed: 69511, staged: 69511, missing: 0}
+        valid_rest: {listed: 8102, staged: 8102, missing: 0}
+        testing_list: {listed: 11005, staged: 11005, missing: 0}
+      excluded: {}
+      short_clips: 1804            # read-split clips under 1.0 s (16 000 samples); none is longer
+      leakage_audit:
+        against: "8-hex speaker ids (before _nohash_) across train, valid and test: 0 train/test and 0 train/valid speakers shared"
+        excluded: 0
+      # invariant: 16 000 + 2 000 + 4 890 + 69 511 + 8 102 + 11 005 + 0 == 111 508
+
+splits:
+  train: [train, valid]       # HEAR's 5 h budget (train + valid); the clf probe carves its own val from it
+  eval: [test]
+  floor: []
+  folds: null
+  unused: [train_rest, valid_rest, testing_list]   # the rest of HEAR's full task; the train archive's testing_list.txt files
+  min_eval_coverage: 0.95
+
+fields:
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_path
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/speech_commands"
+      description: >-
+        train/ (speech_commands_v0.02.tar.gz extracted: <word>/<speaker>_nohash_<n>.wav, _background_noise_/,
+        validation_list.txt, testing_list.txt), test/ (speech_commands_test_set_v0.02.tar.gz extracted:
+        <label>/<file>.wav) and hear_silence/ (prepare/02: <noise>-<start>.wav and SHA256SUMS); 16 kHz mono PCM_16
+  tar_index: null
+  derived:
+    hear_silence/SHA256SUMS: 9e3cef9ceb50fcba95cf909e4e4215aa0e22a05f8b991ae61785e5ea212c8533
+
+input_contract:
+  handed_over:
+    audio: >-
+      the stored 16 kHz mono PCM_16 wav exactly as stored: a release clip of at most 1.000 s (some are shorter), or one
+      of HEAR's 1.000 s silence clips that prepare/02 cuts sample-exactly from a background recording; nothing
+      decoded, resampled, trimmed or padded
+  info:
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []                    # HEAR's scorer is copied (hear_score.py), not imported: heareval pins numpy==1.19.2 and tensorflow
+
+protocol:
+  clip_seconds: 1.0             # HEAR's sample_duration (a fact; never used to cut or pad by the reader)
+  train_draw: {cap: 18000, seed: 3488948419, balance: null}   # HEAR's 5 h draw, frozen in the manifest (manifest.upstream.draw)
+  views: none
+
+metrics:
+  headline: top1_acc
+  list: [top1_acc, n_train, n_eval]
+  floors: [top1_acc_floor]
+  controls: []
+  chance: {top1_acc: 0.0833}
+  ci: {top1_acc: binomial}
+  notes:
+    - "top1_acc is HEAR's heareval.score.Top1Accuracy (hear-eval-kit @ 8559649, copied in hear_score.py) on the softmax of the probe's scores over the 4 890 test clips."
+    - "Rows are HEAR's speech_commands-v0.0.2-5h (hear-preprocess @ 610d864): 16 000 train + 2 000 valid; yavih's clf probe trains on both and carves its own val."
+    - "HEAR's own readout is a grid-searched MLP on one embedding per clip (heareval task_predictions.py); the clf attentive probe differs, so HEAR leaderboard numbers are not these."
+    - "Chance is 1/12 = 0.083; the floor (always _unknown_, the train majority at 63 %) is 408/4 890 = 0.083 on the balanced test set. An interval touching it is no result."
+    - "Over 4 890 test clips the binomial 95 % interval is about ±0.014 at 0.5 and ±0.008 at 0.9: treat gaps below about 0.01 at one seed as unresolved."
+    - "HEAR feeds every clip trimmed or zero-padded to exactly 1.0 s (hear-preprocess TrimPadSplit); 1 804 stored clips are shorter, handed over as stored; the template pads like HEAR."
+    - "Not HEAR's full task (all 95 613 train+valid files, splits train_rest/valid_rest here, unused) and not the 35-word task: their numbers are not comparable with these."
+
+readout_params: {}
