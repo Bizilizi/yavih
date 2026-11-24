@@ -1,0 +1,268 @@
+# avrobustbench (VGGSOUND-2C of AVROBUSTBENCH): human docs in README.md, the agent's contracts in setup.md. Values under
+# `manifest`, `manifest.upstream` and `budget.clips` are printed by make_manifest.py (`--check` confirms them).
+schema_version: 3
+name: avrobustbench
+aliases: [vggsound_2c]
+title: AVROBUSTBENCH VGGSOUND-2C, VGGSound under 15 co-occurring audio-visual corruptions (clean-train probe, 309 classes)
+capability: [audio-visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+header:
+  name: AVROBUSTBENCH
+  title: "AVROBUSTBENCH: Benchmarking the Robustness of Audio-Visual Recognition Models at Test-Time"
+  venue: "Maharana et al. · NeurIPS 2025 Datasets and Benchmarks"
+  abstract: >-
+    Test-time robustness of audio-visual recognition: VGGSound test clips are corrupted in both modalities at once by
+    15 correlated corruptions (noise, compression, weather, underwater, concert, smoke, crowd, interference), each
+    pairing a visual degradation with a matching sound. A classifier trained on clean clips is scored on every
+    corruption at the highest severity.
+  chips: ["video + audio, 10 frames 224 px", "309-way classification", "15 AV corruptions, severity 5",
+          "14 046 clips x 16 conditions", "train 20 000 clean", "mean accuracy over corruptions"]
+scorer: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: 251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11
+    input_hash: d9634cdb5104606235f827bd957a1e8abb6559fb4ac4872d64c374a51d234b81
+    supersedes: []
+
+source:
+  kind: derived
+  urls:
+    - https://github.com/sarthaxxxxx/AV-C-Robustness-Benchmark
+    - https://huggingface.co/datasets/sakshamsingh1/av_robust_data
+    - https://www.robots.ox.ac.uk/~vgg/data/vggsound/
+  licence: >-
+    Derived from VGGSound (annotations CC BY 4.0; the media are YouTube clips fetched by the user, subject to YouTube's
+    terms). Corruption code and noise/overlay assets: AVROBUSTBENCH repository, MIT (its noise recordings come from
+    ESC-50 and Freesound under their own licences). The VGGSOUND-2C clip list: the authors' Hugging Face release
+    (card licence Apache-2.0, "refer to the original datasets' license terms").
+  revision: "AV-C-Robustness-Benchmark@f6c3f2e12de918373a36575f8fec14d84adc4707 + av_robust_data@42b5e0789ccd1a1545a9e2a4c68e6ecb499541bb"
+  bytes: 407_000_000_000
+  sha256:
+    "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+    "av_robust_data/clean_vgg.members.txt": d8a5754e7a2824848209986f363dc92bc5802ea10c4b44d431f5e5a2583c244a
+    "av_robust_data/vgg_data/clean_vgg.zip": 74ca5d49efa3dc340695a16f2176d81082e868e48ba2ca24ad493ab863d48b3e
+  notes: >-
+    Source media = the VGGSound corpus staged as loose files (the tree the vggsounder folder reads; `bytes` is that
+    corpus). The frozen manifest touches 34 046 source clips (14 046 eval + 20 000 train), read only by
+    prepare/04_materialize.py, which writes one 224 px, 10-frame mp4 and one 16 kHz wav per row (16 conditions per
+    eval clip, clean for train) under derived_root: that is what the bridge receives. The authors' released corrupted
+    mp4s (vgg_data/*_vgg.zip) are not used: they lack the frost corruption and carry 44.1 kHz AAC audio; only the clip
+    list is read from the release.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: needs-data-owner
+  how: "needs the VGGSound corpus (YouTube clips decay: prefer an existing copy); the corrupted clips are then made locally by prepare steps 3-4 (authors' code, public assets)"
+budget:
+  clips: {train: 20000, test: 224736}
+  # media_gb: the materialized mp4 + wav per row, mean bytes per (split, condition) over the 1 342 verified rows of a
+  # staged sample (52 eval clips x 16 conditions, 510 train clips) x the frozen rows: train 7.8 + test 112.9 GB. The
+  # VGGSound source media the manifest touches (34 046 clips, 68 092 files) are 70.5 GB, prepare-only (media_root).
+  media_gb: 120.6
+  # 1000 / clips_per_s / 60 from `bridge check` (ResNet-50 frames + STFT audio budget bridge, reading av, 30.2
+  # clips/s at 4 decode workers, n = 32, a shared 24 GB GPU). A capped extract of 320 test rows on the same, heavily
+  # loaded machine ran at 1.42 clips/s wall (read 22.5 s, prepare 10.5 s, encode 9.6 s of 226 s).
+  extract_min_per_1k_clips_ref: 0.6
+  # probe_minutes_ref: derived, each stage of a measured capped probe scaled by its rows. The clf probe on the same
+  # budget bridge's features (N = 74, D = 2048, float16) of the first 320 rows of each split, on the idle 24 GB GPU:
+  # fit 61.0 s (288 train + 32 val rows, 15 epochs, stopped by patience) x 20 000 / 320 = 63.5 min, score 1.9 s x
+  # 224 736 / 320 = 21.8 min, validate 0.5 s x 244 736 / 640 = 3.3 min; 88.6 min, rounded up. The full run may stop
+  # at another epoch.
+  probe_minutes_ref: {clf: 90}
+
+manifest:
+  file: manifest.csv.gz
+  sha256: e0c3c4249972c36a026a179c066f888375dcf94b4dffc2d56a5ee4bc0d95eee2
+  classes: classes.csv
+  classes_sha256: a72a8eae718df5f9571be53b1615f838e14ef8272f1adf7b06eec1d61b32a4bf
+  key: clip_id
+  label:
+    column: label
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    condition: {type: str, role: extra}   # clean | one of the 15 corruptions (== the clip id's #suffix); never handed over
+    rel_video: {type: str, role: media, stream: video}   # materialized mp4 under derived_root
+    rel_audio: {type: str, role: media, stream: audio}   # materialized wav under derived_root
+    src_video: {type: str, role: extra}   # VGGSound source mp4 under media_root (materialize.source_columns)
+    src_audio: {type: str, role: extra}   # VGGSound source wav under media_root (materialize.source_columns)
+  upstream:
+    source: "VGGSound vggsound.csv (labels, train draw) + VGGSOUND-2C clip list (sakshamsingh1/av_robust_data@42b5e078 vgg_data/clean_vgg.zip members)"
+    sha256: d8a5754e7a2824848209986f363dc92bc5802ea10c4b44d431f5e5a2583c244a
+    rows: 197776
+    draw: "VGGSound vggsound.csv, the split == train rows in file order minus the 7 rows sharing a YouTube id with an eval clip (183 723), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 20 000, seed 0; 64-65 clips per class"
+    note: >-
+      rows = 14 046 VGGSOUND-2C clips + 183 730 vggsound.csv train rows. Eval rows are (clip, condition) pairs,
+      clip_id = <clip>#<condition>, 16 conditions (clean + 15 corruptions) x 14 046 clips, clip-major (a clip's 16 rows are consecutive).
+      total_upstream counts candidate rows: 183 730 train rows + 16 x 15 446 VGGSound test rows = 430 866 = 244 736
+      listed + 186 130 excluded (not_in_vggsound2c: the 1 400 VGGSound test clips missing from the authors' release, x
+      16; leakage_train_ytid: train rows whose YouTube id is an eval clip's; draw_remainder).
+    upstream_files:
+      "vggsound/metadata/vggsound.csv": ed9fdeed1b4a4ee34bb1f3722af8690354815b27cd55daea53576be79283f1f8
+      "av_robust_data/clean_vgg.members.txt": d8a5754e7a2824848209986f363dc92bc5802ea10c4b44d431f5e5a2583c244a
+      "av_robust_data/vgg_data/clean_vgg.zip": 74ca5d49efa3dc340695a16f2176d81082e868e48ba2ca24ad493ab863d48b3e
+    curation:
+      total_upstream: 430866
+      per_split:
+        train: {listed: 20000, staged: 0, missing: 20000}
+        test: {listed: 224736, staged: 0, missing: 224736}
+      excluded:
+        not_in_vggsound2c: 22400
+        leakage_train_ytid: 7
+        draw_remainder: 163723
+      leakage_audit: {against: "VGGSOUND-2C eval ytids (train rows sharing a YouTube id with an eval clip)", excluded: 7}
+
+splits:
+  train: [train]
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_video
+    root: derived_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_audio
+    root: derived_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${datasets.vggsound}"
+      prepare_only: true
+      description: >-
+        VGGSound source tree (video/<clip>.mp4, audio/<clip>.wav 16 kHz mono, metadata/vggsound.csv), the tree
+        vggsounder reads; read only by prepare/04_materialize.py (materialize.source_columns) and make_manifest.py
+    derived_root:
+      default: "${data.root}/avrobustbench"
+      description: >-
+        media/<split>/<condition>/<clip>.{mp4,wav} (the materialized rows, prepare/04_materialize.py; what the reader
+        hands over), _materialize/log*.jsonl, upstream/corruptions/ (prepare/03), meta/clean_vgg.members.txt
+        (prepare/02, re-freezing only)
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the row's materialized mp4 (prepare/04_materialize.py): the 10 CAV-MAE frames of the VGGSound clip (224 x 224,
+      resize-224 + centre crop, each a JPEG round trip), each passed through the row's visual corruption at severity 5
+      (none for clean), encoded as a 1 fps, 10.0 s H.264 yuv420p mp4 (crf 23, no audio track)
+    audio: >-
+      the row's materialized wav: the VGGSound 16 kHz mono wav through the row's audio corruption at severity 5 (none
+      for clean), written as 16-bit PCM at 16 kHz with the source's length (nominal 10 s; ~11 % of clips are
+      shorter, down to ~1 s); mono, except most crowd rows (2 channels: 7 of the 8 crowd noise recordings are stereo
+      and the authors' add_noise broadcasts the clip onto them); nothing resampled, trimmed or padded
+  info:
+    video: [duration_s, fps, n_frames, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize:   # the pin is this recipe (its sha256 is in every materialization log line), never the output bytes
+    kind: avrobustbench_corrupt
+    condition_column: condition
+    source_columns: {video: src_video, audio: src_audio}
+    severity: 5
+    seed: 0
+    frames: 10
+    size: 224
+    fps: 1
+    code_sha256:   # prepare/corruptions.py (authors' code, copied) and prepare/cavmae_frames.py (CAV-MAE, copied)
+      corruptions: 9754ffd0edd9332389c45f114514df85bc206da371366bafe7443271abb1783b
+      cavmae_frames: 8a151d5b899d449f9ef922e287437f074e0a8233558f4cd838172a3dae6c95cc
+    assets:   # the upstream corruptions/ directory, prepare/03_corruption_assets.sh (146 files, sha256 list)
+      commit: f6c3f2e12de918373a36575f8fec14d84adc4707
+      files: 146
+      list_sha256: 98b79e6feed85577d45183433ac0458d7c5683ec0b5011464d9d8ff33975bf2a
+    tool:
+      name: ffmpeg
+      version_pin: "4.4.2-0ubuntu0.22.04.1"
+      # command = ["ffmpeg", *video_args, "<out>.mp4"], the 10 corrupted frames piped as rgb24; the encoder settings of
+      # moviepy 1.0.3 write_videofile (libx264, preset medium, crf 23 default, yuv420p) that made the released mp4s
+      video_args: [-nostdin, -hide_banner, -loglevel, error, -y, -f, rawvideo, -vcodec, rawvideo, -s, 224x224,
+                   -pix_fmt, rgb24, -r, "1", -an, -i, "-", -vcodec, libx264, -preset, medium, -crf, "23",
+                   -pix_fmt, yuv420p, -threads, "1", "-flags:v", +bitexact, -fflags, +bitexact,
+                   -map_metadata, "-1"]
+      python: [numpy==2.4.6, torch==2.3.1, torchaudio==2.3.1, torchvision==0.18.1, scipy==1.17.1, pillow==11.2.1,
+               opencv-python-headless==4.11.0.86, scikit-image==0.25.2, Wand==0.6.13, soundfile==0.13.1]
+      pins:
+        libx264:
+          value: "x264 - core 163 r3060 5db6aa6"
+          probe: ["{tool}", -nostdin, -hide_banner, -loglevel, error, -f, lavfi, -i, "color=c=black:s=64x64:d=0.04",
+                  "-frames:v", "1", -c:v, libx264, -f, h264, "-"]
+          match: "x264 - core \\d+ r\\d+ [0-9a-f]+"
+        imagemagick:
+          value: "6.9.11-60"
+          probe: [convert, -version]
+          match: "\\d+\\.\\d+\\.\\d+-\\d+"
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []
+
+protocol:
+  clip_seconds: 10.0
+  train_draw:
+    cap: 20000
+    seed: 0
+    balance: class
+  views: rows
+  severity: 5
+  conditions: [clean, gaussian, impulse, shot, speckle, compression, snow, frost, spatter, wind, rain, underwater,
+               concert, smoke, crowd, interference]
+  corruption_groups:
+    digital: [gaussian, impulse, shot, speckle, compression]
+    environmental: [snow, frost, spatter, wind, rain, underwater]
+    human: [concert, smoke, crowd, interference]
+
+metrics:
+  headline: macc
+  list: [macc, acc_clean, alpha, rho, macc_digital, macc_environmental, macc_human,
+         acc_gaussian, acc_impulse, acc_shot, acc_speckle, acc_compression, acc_snow, acc_frost, acc_spatter,
+         acc_wind, acc_rain, acc_underwater, acc_concert, acc_smoke, acc_crowd, acc_interference, n_clips, n_eval]
+  table: [macc, acc_clean, rho]
+  floors: [macc_floor]
+  controls: []
+  chance: {macc: 0.003236, acc_clean: 0.003236}
+  ci: {macc: bootstrap_clip, acc_clean: binomial}
+  bootstrap: {samples: 2000, seed: 0}
+  notes:
+    - "macc (headline) = mean top-1 accuracy over the 15 corruptions at severity 5 (paper Table 4); acc_clean is the same probe on the clean clips; rho = macc / acc_clean."
+    - "Floor: macc_floor is the train-majority class, about 1/309 = 0.003 (train is class-balanced). The macc CI resamples source clips (14 046)."
+    - "Corruptions are the authors' code (prepare/corruptions.py, MIT) at severity 5, seeded per row; frames and crop follow CAV-MAE (10 frames, 224 px)."
+    - "Upstream defects kept: gaussian audio uses SNR = severity dB (5 dB), the other noise-adding ones 0 dB; frost never picks frost6.jpg. wind_visual crashes upstream and runs as its previous commit."
+    - "Paper numbers: in-memory frames and wavs (no re-encode), models fine-tuned or probed on all VGGSound train. Here frames are crf-23 H.264 and the probe sees 20 000 clips."
+    - "Not the authors' released VGGSOUND-2C mp4s (14 corruptions, no frost, AAC audio). On one compared clip, frames match 12 of them in statistics; their impulse and speckle are far weaker."
+    - "Clip ids end in #<condition>: a bridge must never read them (bridge check scrambles clip_id)."
+
+readout_params: {}

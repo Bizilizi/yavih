@@ -1,0 +1,99 @@
+{
+ "benchmark": "avrobustbench",
+ "generator": 1,
+ "population": {
+  "eval": 256,
+  "floor": 0,
+  "folds": 0,
+  "train": 256
+ },
+ "protocol_version": 1,
+ "recorded_with": {
+  "commit": "af69f15d857863cbbf2889b47ae2796d02efa515",
+  "externals": {},
+  "folder_source": {
+   "eval": "720b9275b4b00a72851a2250cc6937b5727729ed11bb28af0fde46d228dffd43",
+   "reader": null
+  },
+  "protocol_hash": "251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11",
+  "scorer": {
+   "kind": "probe",
+   "name": "clf",
+   "version": 1
+  },
+  "scoring_hash": "5d8ace9058caba8c47c7fe21e8f5eb85e1104cb931848f039e5514050d86ae12",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
+ },
+ "schema": "yavih-conformance-1",
+ "tolerance": {
+  "acc_clean": 0.001,
+  "acc_compression": 0.001,
+  "acc_concert": 0.001,
+  "acc_crowd": 0.001,
+  "acc_frost": 0.001,
+  "acc_gaussian": 0.001,
+  "acc_impulse": 0.001,
+  "acc_interference": 0.001,
+  "acc_rain": 0.001,
+  "acc_shot": 0.001,
+  "acc_smoke": 0.001,
+  "acc_snow": 0.001,
+  "acc_spatter": 0.001,
+  "acc_speckle": 0.001,
+  "acc_underwater": 0.001,
+  "acc_wind": 0.001,
+  "alpha": 0.001,
+  "macc": 0.001,
+  "macc_digital": 0.001,
+  "macc_environmental": 0.001,
+  "macc_floor": 0.001,
+  "macc_human": 0.001,
+  "n_clips": 0.001,
+  "n_eval": 0.001,
+  "rho": 0.001
+ },
+ "values": {
+  "*": {
+   "ci95": {
+    "acc_clean": [
+     0.0,
+     0.22809537235419838
+    ],
+    "macc": [
+     0.0,
+     0.0
+    ]
+   },
+   "controls": {},
+   "floors": {
+    "macc_floor": 0.0
+   },
+   "metrics": {
+    "acc_clean": 0.0,
+    "acc_compression": 0.0,
+    "acc_concert": 0.0,
+    "acc_crowd": 0.0,
+    "acc_frost": 0.0,
+    "acc_gaussian": 0.0,
+    "acc_impulse": 0.0,
+    "acc_interference": 0.0,
+    "acc_rain": 0.0,
+    "acc_shot": 0.0,
+    "acc_smoke": 0.0,
+    "acc_snow": 0.0,
+    "acc_spatter": 0.0,
+    "acc_speckle": 0.0,
+    "acc_underwater": 0.0,
+    "acc_wind": 0.0,
+    "alpha": 1.0,
+    "macc": 0.0,
+    "macc_digital": 0.0,
+    "macc_environmental": 0.0,
+    "macc_human": 0.0,
+    "n_clips": 255,
+    "n_eval": 256,
+    "rho": 0.0
+   }
+  }
+ }
+}
