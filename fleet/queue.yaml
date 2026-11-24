@@ -248,8 +248,8 @@ entries:
   - twlv_i
   - videoglue
   survey_note: 48-class dive clf
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: auto
   blocked_by: null
   branch: bench/diving48
 - name: ego_exo4d
@@ -533,8 +533,8 @@ entries:
   text_fields: false
   parents: []
   survey_note: Test-only mimed actions; probe trained on K400 classes
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: auto
   blocked_by: null
   branch: bench/mimetics
 - name: moments_in_time
@@ -579,8 +579,8 @@ entries:
   - icme2025_audio
   - x_ares
   survey_note: Pitch/instrument clf
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: auto
   blocked_by: null
   branch: bench/nsynth
 - name: physion_ocp
@@ -706,8 +706,8 @@ entries:
   - maeb
   - x_ares
   survey_note: Keyword clf
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: auto
   blocked_by: null
   branch: bench/speech_commands
 - name: temporal50_static50
@@ -1095,8 +1095,8 @@ entries:
   - maeb
   - x_ares
   survey_note: Speech emotion clf
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: auto
   blocked_by: null
   branch: bench/crema_d
 - name: dover_quality
@@ -2055,8 +2055,8 @@ entries:
   text_fields: false
   parents: []
   survey_note: Segment-level multi-label AV parsing
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: auto
   blocked_by: null
   branch: bench/llp_avvp
 - name: lrs3_asr
