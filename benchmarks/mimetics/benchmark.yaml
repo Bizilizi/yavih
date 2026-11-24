@@ -1,0 +1,194 @@
+# mimetics — schema 3. README.md describes the benchmark, setup.md sets it up.
+# Values under `manifest.upstream` and `budget.clips` are produced by make_manifest.py; `make_manifest.py --check`
+# confirms the manifest and classes.
+schema_version: 3
+name: mimetics
+aliases: []
+title: Mimetics out-of-context action recognition (713 mimed YouTube clips of 50 Kinetics-400 classes; probe trained on Kinetics-400, video only)
+capability: [visual]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+header:
+  name: Mimetics
+  title: "Mimetics: Towards Understanding Human Actions Out of Context"
+  venue: "Weinzaepfel & Rogez · IJCV 2021"
+  abstract: >-
+    713 short YouTube clips of people miming actions of 50 Kinetics-400 classes, without the objects or scenes the
+    actions normally involve. A classifier trained on ordinary Kinetics-400 clips of the same classes labels each
+    mimed clip, which measures how far action recognition relies on context rather than body motion.
+  chips: [video, 50-way action classification, 713 mimed test clips, "trained on 10 000 Kinetics-400 clips", top-1 accuracy]
+scorer: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: c178b398efe3e92c3f5d6bbf3823722dd2d570651c09fb413488e6fdf5cc2156
+    input_hash: 014ec7c24b16b863ea6134d5b155484da9ee3144b85c71b6280c137d878f2ab3
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - https://europe.naverlabs.com/research/computer-vision/mimetics/
+    - https://europe.naverlabs.com/wp-content/uploads/2019/12/Mimetics_release_v1.0.zip
+    - https://arxiv.org/abs/1912.07249
+    - https://github.com/activitynet/ActivityNet/tree/master/Crawler/Kinetics
+    - https://academictorrents.com/details/184d11318372f70018cf9a72ef867e2fb9ce1d26
+  licence: >-
+    Mimetics v1.0 (NAVER LABS Europe): the release (README, page) states no licence and asks to cite the paper. The
+    Mimetics media are YouTube videos the user downloads and trims, subject to YouTube's terms and the uploaders'
+    rights. The Kinetics-400 train clips: annotations CC BY 4.0 (DeepMind), media the Academic-Torrents _256 re-encode
+    of YouTube clips, research use only (as for the k400 folder).
+  revision: Mimetics_release_v1.0.zip (December 2019, sha256 6ddc9c98c3f720baa5c70f1dc6cc05b80f1a16deb679a728082a698afb8680ab)
+  bytes: 21869
+  sha256:
+    "Mimetics_release_v1.0.zip": 6ddc9c98c3f720baa5c70f1dc6cc05b80f1a16deb679a728082a698afb8680ab
+  notes: >-
+    The release is one 21 869 B zip (mimetics_v1.0.csv with the YouTube ids and the start and end seconds of the 713
+    clips in the Kinetics format, two annotation files and a README); the clips are downloaded from YouTube and
+    trimmed with the Kinetics crawler recipe (prepare/02_clips.py). `bytes` is the zip only. The training clips are
+    the 50 Mimetics classes of the Academic-Torrents Kinetics-400 _256 release (infohash
+    184d11318372f70018cf9a72ef867e2fb9ce1d26, 157 GB for the whole release), read in place from the k400 folder's
+    staging.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "nobody: prepare/01 fetches the 22 kB release, prepare/02 downloads and trims the clips from YouTube (some videos are gone); the train clips come from the k400 folder's staged Kinetics-400"
+budget:
+  clips: {train: 10000, test: 713}
+  media_gb: 5.6  # measured: the 10 000 K400 train files (5.25 GB) + 422 staged Mimetics clips (0.35 GB)
+  extract_min_per_1k_clips_ref: 1.1  # measured: ResNet-18 per frame (8 x 7 x 7 tokens), shared 24 GB GPU, 4 decode workers, 10 422 clips in 678.6 s
+  probe_minutes_ref: {clf: 10}  # measured: 9.5 min (fit 551 s, 10 epochs), seed 0, ResNet-18 tokens (392 x 512), shared 24 GB GPU, peak ~13 GB
+
+manifest:
+  file: manifest.csv.gz
+  sha256: d18ed97b96b586ef29c30398d6f8a7323273a7513ad273ea9d307c1a33f73208
+  classes: classes.csv
+  classes_sha256: 85f2403f04f872b506b8b95d57c9e5c17e7536f265f601328e54be73b09c13cc
+  key: clip_id
+  label:
+    column: label
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: video}
+    object: {type: str, role: extra}
+    scene: {type: str, role: extra}
+    mime: {type: str, role: extra}
+  upstream:
+    source: "Mimetics v1.0 release (Mimetics_release_v1.0.zip, NAVER LABS Europe) + the 50 Mimetics class directories of the Academic-Torrents Kinetics-400 _256 release (184d11318372f70018cf9a72ef867e2fb9ce1d26)"
+    sha256: 78b32467a248c24b7082d9a29d9eb0bf6eeb4462ed8abda290d2036018115044
+    rows: 34819
+    draw: "all 34 106 train mp4 of the 50 Mimetics classes in the Academic-Torrents Kinetics-400 _256 release (classes.csv order, then file name), class-balanced draw (yavih.freeze.class_balanced_subsample), cap 10 000, seed 0"
+    note: >-
+      sha256 is that of mimetics_v1.0.csv (713 rows: label, youtube_id, time_start, time_end); rows = 713 Mimetics
+      clips + 34 106 candidate train files. Test rows are all 713 release clips, clip_id
+      <youtube_id>_<start:06d>_<end:06d> (the Kinetics crawler's file name), with the release's per-clip object, scene
+      and mime flags (mimetics_v1.0_objectsceneannot.txt); they are frozen whether or not the YouTube video still
+      exists. Train rows are the seeded class-balanced draw of protocol.train_draw over the 34 106 train mp4 of the 50
+      classes (listing sha256 in upstream_files), 200 per class. Classes are the release's 50 labels in its order
+      (mimetics_v1.0_clsannot.txt), named as their Academic-Torrents class directories.
+    upstream_files:
+      "Mimetics_release_v1.0.zip": 6ddc9c98c3f720baa5c70f1dc6cc05b80f1a16deb679a728082a698afb8680ab
+      "release/mimetics_v1.0.csv": 78b32467a248c24b7082d9a29d9eb0bf6eeb4462ed8abda290d2036018115044
+      "release/mimetics_v1.0_objectsceneannot.txt": a4db94284f22b777442c40ca28318602c8cadb253721e3a1016ba4f1df4b9f63
+      "release/mimetics_v1.0_clsannot.txt": cb18b3435545c247fcef83d90ad25d1aa9225a621eb71ec6d4c7d6cfd0ebfe62
+      "k400_train_listing_50_classes": 9b2af343a935b67dd2b676637eb121bb34a53e1e18bd5b5bcc8593182d617a67
+    curation:
+      total_upstream: 34819
+      per_split:
+        train: {listed: 10000, staged: 10000, missing: 0}
+        test: {listed: 713, staged: 422, missing: 291}
+      excluded:
+        draw_remainder: 24106
+      leakage_audit: {against: "Kinetics-400 train and val YouTube ids of the Academic-Torrents release (raw and normalised)", excluded: 0}
+
+splits:
+  train: [train]
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.5
+
+fields:
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: {train: k400_root, test: media_root}
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/mimetics"
+      description: "Mimetics staging: release/ (the official zip, unpacked; prepare/01) and clips/<clip_id>.mp4 (the trimmed YouTube clips; prepare/02); test rows read clips/"
+    k400_root:
+      default: "${datasets.kinetics400}"
+      description: "the staged Academic-Torrents Kinetics-400 _256 release, read in place as the k400 folder stages it: train/<class>/<clip_id>.mp4 (train rows)"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    video: >-
+      the stored mp4 as is: for train rows a Kinetics-400 clip of the Academic-Torrents _256 release (h264, 256
+      pixels high, about 10 s), for test rows a Mimetics clip as the Kinetics crawler trims it from the YouTube
+      video (h264 re-encode at the downloaded resolution, 128 to 2160 pixels high, 1 to 10 s); nothing decoded, cut,
+      resized, padded or normalized
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []
+
+protocol:
+  clip_seconds: null
+  train_draw:
+    cap: 10000
+    seed: 0
+    balance: class
+  views: none
+
+metrics:
+  headline: acc
+  list: [acc, top5, mean_top1, mean_top5, mean_ap, n_eval]
+  table: [acc, top5, mean_ap]
+  floors: [acc_floor]
+  controls: []
+  chance: {acc: 0.02, top5: 0.1, mean_top1: 0.02, mean_top5: 0.1, mean_ap: 0.09}
+  ci: {acc: binomial, top5: binomial}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+  notes:
+    - "acc and top5 are IntegralAction's Mimetics top-1/top-5 (github.com/mks0601/IntegralAction_RELEASE@50bc02a, Mimetics.evaluate), over all scored clips; no official evaluation code exists."
+    - "mean_top1, mean_top5, mean_ap are the paper's Table 6/9 metrics, from its text: per-class means; AP = mean 1/rank of the label. Ties count for the label: yavih's choice, not the paper's."
+    - "The probe is 50-way (paper Table 9; IntegralAction's Kinetics50), trained on the 200-per-class draw (protocol.train_draw); Table 9 trains on all K400 videos of the 50 classes."
+    - "IntegralAction's numbers are over 596 clips (implied by its printed percentages, 158/596 and 301/596); its loader skips clips of <= 56 frames, part of the 117 missing."
+    - "IntegralAction averages 10 windows per clip; yavih scores every staged clip with one view. The paper's main 400-way numbers (Table 6) are far lower and not comparable."
+    - "YouTube removals: 422/713 clips (312 of 560 videos) staged on 2026-11-15, before YouTube's bot check; n_eval and coverage are in every result, subsets can differ by a few points."
+    - "Near 25 % on ~420 clips the binomial 95 % CI of acc is about +-4 points (+-3.2 on all 713): gaps below that at one seed are unresolved."
+    - "Floor acc_floor: the train draw is balanced (200 per class), so the floor answers class 0 (archery): 19/713 = 2.7 % on all clips, 17/422 = 4.0 % here; chance is 2 %."
+readout_params: {}
