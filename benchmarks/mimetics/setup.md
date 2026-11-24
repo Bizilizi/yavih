@@ -151,6 +151,11 @@ yavih bench verify mimetics --census
 yavih bridge check my_mimetics_bridge.py --bench mimetics --out mimetics.profile.json
 ```
 
+A trial run with `--sample N` (`yavih plan build ... --sample N`) takes the first N rows of each split in
+manifest order, and the manifest is class-ordered (classes.csv order, then clip id): with N up to 200 the probe
+trains on `archery` alone and tests on a handful of classes (64 test rows cover 4), so its numbers say nothing.
+It is a smoke run of the chain, never a reading.
+
 A pass prints `train present 10000/10000` and `test present 422/713` (or however many your download got),
 a decode sample with 0 failures, and with `--census` the media-info table. `bridge check` must report a
 bit-identical rerun and batch and order invariance; its smoke sample may report `W_MISSING_ROWS` for test clips
@@ -165,7 +170,10 @@ that YouTube no longer serves.
    is clamped to the last frame on them (`edge: "clamp"`); `edge: "error"` fails with `E_TIMES_OUT_OF_MEDIA`. Never
    drop a clip: every staged clip is scored (the reference implementation drops clips shorter than its window;
    yavih does not).
-3. **One view.** `views: 1`; the reference averages 10 temporal windows per clip, a yavih bridge declares one.
+3. **One view per clip.** The bridge declares `describe()["views"] = 1`: one deterministic window per clip, where
+   the reference averages 10 temporal windows. (`protocol.views: none` in `benchmark.yaml` is a different fact: no
+   two rows derive from one source clip; the 713 test clips come from 560 YouTube videos, but no two of them
+   overlap.)
 4. **The first frame is at 0.** Step 02 shifts each trimmed clip's timestamps so its first video frame is at pts 0.
    A clip cut by another tool (the crawler as published) often starts at the second frame of its second (16-47 ms),
    and a bridge's declared frame times then miss by one frame (`E_RULE_MISMATCH` in `bridge check`). Re-trim with

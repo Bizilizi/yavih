@@ -46,8 +46,9 @@ defaults below are those of the reference implementation (IntegralAction, https:
               Alternative for a model with its own clip length: ``{"rule": "uniform", "n": 16, "span": "full"}``.
     spatial   resize the short side to 256, centre-crop 224 (the reference's test crop).
     norm      the model's pretraining constants with their source (never batch or dataset statistics).
-Gotchas (setup.md "## Gotchas"): one clip, one view (``views`` MUST be 1: no 10-window averaging); train and test
-clips come from different encoders and sizes, never branch on them; the model in ``.eval()``; declare precision
+Gotchas (setup.md "## Gotchas"): one clip, one view (``describe()["views"]`` MUST be 1: no 10-window averaging;
+``protocol.views: none`` in benchmark.yaml is another fact, that no two rows derive from one source clip); train
+and test clips come from different encoders and sizes, never branch on them; the model in ``.eval()``; declare precision
 honestly; labels and class order never reach a bridge; after importing torchvision call ``av.logging.set_level(None)``
 (torchvision turns on PyAV's Python log callback, which deadlocks decoding with several decode workers).
 """
