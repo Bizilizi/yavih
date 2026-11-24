@@ -126,8 +126,8 @@ entries:
   text_fields: false
   parents: []
   survey_note: Corrupted AV clf, probe on clean train; needs prepare-time corruption; zero-shot variants B2
-  status: claimed
-  obtain: null
+  status: shipped
+  obtain: needs-data-owner
   blocked_by: null
   branch: bench/avrobustbench
 - name: bear
