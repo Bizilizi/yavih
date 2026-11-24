@@ -42,6 +42,8 @@ folder where it can be read, diffed against its source and audited. So official 
 
 - it is not on PyPI: a repository that only installs from git (`pip install git+<url>`), even with a
   `pyproject.toml` or `setup.py`; a notebook; a script inside a model repository;
+- (`yavih bench lint` warns `W_EXTERNAL_NOT_RELEASED` for any `external` that installs from a repository, a URL or
+  a path; `nyuv2_depth` copies Probe3D's `evaluate_depth` into `probe3d_metrics.py` instead of installing it);
 - it is on PyPI, but the module that computes the number imports frameworks a torch environment should not need
   for it (TensorFlow, JAX), or its pins exclude a current numpy or torch and `--no-deps` does not get around them;
 - its authors document the file as stand-alone and meant to be copied.

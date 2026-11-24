@@ -113,9 +113,12 @@ the `a` reading on the package's `a` and `a only` sets, `v` on `v` and `v only`,
 own metric name and definition). `join` may return `table: {header, rows, notes}`, the compact view `report`
 prints in md instead of every key (the rest under `--detail`).
 
-Every call into an original-author package goes through `yavih.external.require(name, pip, version_pin)` with the
-matching `benchmark.yaml` `external` entry. A `eval.py` that re-implements the authors' code instead (because it is
-not importable) says so in setup.md "## Dependencies".
+Only the authors' code released as a wheel on PyPI is imported: every call into it goes through
+`yavih.external.require(name, pip, version_pin)` with the matching `benchmark.yaml` `external` entry, whose `pip` is
+`pip install <name>==<version>`. Anything else (a repository installed from a git URL, scripts, a notebook, a
+non-official implementation) is copied into the folder, as much as the benchmark needs, each copied file starting with
+a comment that names the repository, the commit, the upstream path and the changes ([fleet/grounding.md](../fleet/grounding.md));
+setup.md "## Dependencies" says what was copied from where. `nyuv2_depth` (`probe3d_metrics.py`) is the example.
 
 ### testing.py
 
@@ -698,7 +701,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `preview` | `E_PREVIEW_SPEC`, `W_PREVIEW_MISSING`, `W_PREVIEW_STALE`, `W_ASSET_SIZE` (warnings) | Where the design system is at hand (a source checkout): `assets/preview.yaml` parses and names known kinds, splits, clip_ids and options with the row count its kind draws (`E_PREVIEW_SPEC`); it exists and every declared figure file exists (`W_PREVIEW_MISSING`); `assets/preview.src.json` records the current source of each figure, no still has transparent pixels (an incomplete render), and no undeclared `preview*.png` / `clip*.png` / `*.gif` / `*.mp4` file is left (`W_PREVIEW_STALE`); no file over its size budget and `assets/` at most 10 MB (`W_ASSET_SIZE`). |
 | `readme` | `E_README`, `E_README_GLANCE`, `E_README_HASH`, `W_README_ASSET` (warning), `W_README_LEGACY` (warning) | The [README.md contract](#readmemd-contract): header image, links line, no H1, the sections in order, a bibtex block; exactly one "at a glance" block before the first `##`, equal to `python -m yavih.doctables --glance <name>` (`E_README_GLANCE`); a `](assets/<file>)` link other than the header image (outside an HTML comment) names an existing file (`W_README_ASSET`). A README with `## In yavih` is the legacy shape: the earlier rules and `W_README_LEGACY`. |
 | `setup` | `E_SETUP` | The [setup.md contract](#setupmd-contract). |
-| `external` | `E_EXTERNAL` | Every `external[].pip` starts with `pip install `. |
+| `external` | `E_EXTERNAL`, `W_EXTERNAL_NOT_RELEASED` (warning) | Every `external[].pip` starts with `pip install `; one that installs from a repository, a URL or a path (not a released PyPI wheel) is warned: copy that code into the folder instead. |
 | `codecs` | `E_CODEC_SELFTEST` | Every folder or entry-point codec the output schema names passes `yavih.codecs.self_test` ([codecs](codecs.md#writing-a-codec)). |
 | `obtain` | `E_OBTAIN` | `obtain` is exactly `{tier, how}`, a known tier and a non-empty `how`. |
 | `core` | `E_CORE` | `core` names the yavih core releases that can load the folder (a PEP 440 specifier; its syntax is the loader's, `E_SCHEMA`). Loading a folder under a release outside it is refused with `E_CORE_VERSION` (exit 3, the pip line in the message); a development build is never refused. |

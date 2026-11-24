@@ -56,3 +56,19 @@ def test_core_is_not_hashed_and_its_syntax_is_checked(tmp_path):
     y.write_text("\n".join(line for line in text.splitlines() if not line.startswith("core:")) + "\n")
     codes = [f.code for f in lint.lint_folder(folder, skip=("conformance", "imports")).findings]
     assert "E_CORE" in codes
+
+
+def test_an_external_installed_from_a_repository_is_warned(tmp_path):
+    """Only a released PyPI wheel is imported; a git, URL or editable install draws W_EXTERNAL_NOT_RELEASED."""
+    src = Benchmark.load("esc50").folder
+    folder = tmp_path / "esc50"
+    shutil.copytree(src, folder, ignore=shutil.ignore_patterns("__pycache__"))
+    y = folder / "benchmark.yaml"
+    text = y.read_text()
+    assert "\nexternal: []" in text
+    for pip, warned in (("pip install pkg==1.0", False), ("pip install --no-deps pkg==1.0", False),
+                        ("pip install -e git+https://github.com/o/r.git@abc#egg=pkg", True),
+                        ("pip install git+https://github.com/o/r.git@abc", True), ("pip install https://x/y.whl", True)):
+        y.write_text(text.replace("\nexternal: []", f'\nexternal:\n  - {{name: pkg, pip: "{pip}", version_pin: "1.0", used_for: x}}'))
+        codes = [f.code for f in lint.lint_folder(folder, checks=["external"]).findings]
+        assert ("W_EXTERNAL_NOT_RELEASED" in codes) is warned, (pip, codes)

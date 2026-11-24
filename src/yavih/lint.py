@@ -669,11 +669,22 @@ def _c_setup(c: _Ctx) -> Iterator[Finding]:
         yield _err("setup", "E_SETUP", f"## Obtain the data must contain source.revision {rev!r} (the pinned download)", f)
 
 
+#: A pip line that installs from a repository or a path rather than a released wheel.
+_NOT_A_RELEASE = ("git+", "http://", "https://", " -e ", "--editable", " ./", " /")
+
+
 @_check("external")
 def _c_external(c: _Ctx) -> Iterator[Finding]:
     for ext in (c.raw or {}).get("external") or []:
-        if not str(ext.get("pip", "")).startswith("pip install "):
+        pip = str(ext.get("pip", ""))
+        if not pip.startswith("pip install "):
             yield _err("external", "E_EXTERNAL", f"external {ext.get('name')!r}: pip {ext.get('pip')!r} is not a full `pip install …` command", "benchmark.yaml")
+        elif any(t in f"{pip} " for t in _NOT_A_RELEASE):
+            # an agent asked to install from a git URL often refuses and hands the step to a person
+            yield _warn("external", "W_EXTERNAL_NOT_RELEASED",
+                        f"external {ext.get('name')!r} installs from a repository or a path ({pip!r}): only a released "
+                        "wheel on PyPI is imported (`pip install <name>==<version>`); otherwise copy the authors' code "
+                        "into the folder with a comment naming its repository and commit (fleet/grounding.md)", "benchmark.yaml")
 
 
 @_check("core")
