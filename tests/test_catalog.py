@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tarfile
 from pathlib import Path
+from unittest import mock
 
 import pytest
 import yaml
@@ -16,6 +17,11 @@ import yaml
 from yavih import catalog
 from yavih.catalog import CatalogError
 from yavih.testing import make_synthetic_benchmark
+
+#: Run a block as yavih 9.0.0. ``catalog.fetch(version=...)`` chooses the revision for that version, and the fetched
+#: folder is then loaded by the running core: on a development build the load is lenient, on a release (a tagged
+#: commit, where this suite also runs) it is not, so a test that fetches the revision for core 9 runs as core 9.
+AS_CORE_9 = mock.patch("yavih.versions.__version__", "9.0.0")
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
 
@@ -147,7 +153,8 @@ def test_fetch_from_an_archive_and_from_file_urls_with_the_archive_cache(catrepo
     # the archive of c4 holds the index and c3's folder: an archive serves the revision it holds
     with pytest.raises(CatalogError, match="9,<10"):
         catalog.fetch("catx", source=archives / f"{catrepo['c4']}.tar.gz", dest_dir=tmp_path / "a", version="1.2.0")
-    rec = catalog.fetch("catx", source=archives / f"{catrepo['c4']}.tar.gz", dest_dir=tmp_path / "a", version="9.0.0")
+    with AS_CORE_9:  # the fetched folder is then loaded by the running core, which must be the one it was chosen for
+        rec = catalog.fetch("catx", source=archives / f"{catrepo['c4']}.tar.gz", dest_dir=tmp_path / "a", version="9.0.0")
     assert rec["commit"] == catrepo["c3"]
     # the default source through [catalog] url / archive (file:// here)
     cfg = tmp_path / "config.toml"
@@ -176,7 +183,8 @@ def test_fetch_from_an_archive_of_either_shape(catrepo, tmp_path, yavih_home, sh
     else:
         prefix = [f"--prefix=yavih-{c}/"] if shape == "prefix" else []
         subprocess.run(["git", "-C", str(catrepo["repo"]), "archive", "--format=tar.gz", *prefix, "-o", str(arc), c], check=True)
-    rec = catalog.fetch("catx", source=arc, dest_dir=tmp_path / "out", version="9.0.0")
+    with AS_CORE_9:
+        rec = catalog.fetch("catx", source=arc, dest_dir=tmp_path / "out", version="9.0.0")
     assert rec["commit"] == catrepo["c3"] and catalog.tree_id(tmp_path / "out" / "catx") == rec["tree"]
 
 
@@ -291,6 +299,7 @@ def test_a_suite_entry_not_here_is_deferred_then_fetched(catrepo, tmp_path, yavi
     assert [d["name"] for d in done] == ["catx"] and not failed and all(x.fetched for _c, x in s2.entries())
 
 
+@mock.patch("yavih.versions.__version__", "1.0.1.dev3+gabc")  # the test's premise, whatever version runs the suite
 def test_load_with_fetch_brings_a_name_that_is_not_here_and_an_edited_copy_warns(catrepo, tmp_path, yavih_home, monkeypatch):
     from yavih import config
     from yavih.benchmark import Benchmark, UnknownBenchmark
@@ -321,7 +330,8 @@ def test_an_exported_catalog_serves_fetch_without_the_checkout(catrepo, tmp_path
     assert catalog.main(["--repo", str(catrepo["repo"]), "--export", str(out), "catx"]) == 0
     idx = json.loads((out / "catalog" / "index.json").read_text())
     assert [r["commit"] for r in idx["benchmarks"]["catx"]["revisions"]] == [catrepo["c3"]]
-    rec = catalog.fetch("catx", source=out, dest_dir=tmp_path / "w" / "benchmarks", version="9.0.0")
+    with AS_CORE_9:
+        rec = catalog.fetch("catx", source=out, dest_dir=tmp_path / "w" / "benchmarks", version="9.0.0")
     assert rec["commit"] == catrepo["c3"] and rec["tree"] == catalog.tree_id(out / "benchmarks" / "catx")
 
 
@@ -390,7 +400,6 @@ def test_a_checkouts_repository_is_its_github_origin_or_unknown(catrepo, tmp_pat
 
 
 def test_an_explicit_revision_for_a_newer_core_is_refused_without_the_staging_path(catrepo, tmp_path, yavih_home):
-    from unittest import mock
 
     with mock.patch("yavih.versions.__version__", "1.2.0"), pytest.raises(CatalogError) as ei:
         catalog.fetch(f"catx@{catrepo['c3'][:10]}", source=catrepo["repo"], dest_dir=tmp_path / "b", version="1.2.0")

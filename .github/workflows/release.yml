@@ -56,7 +56,8 @@ jobs:
           /tmp/venv/bin/python -m pip install --no-deps dist/*.whl
           cd "$RUNNER_TEMP"
           test "$(/tmp/venv/bin/yavih --version)" = "yavih ${TAG#v}"
-          /tmp/venv/bin/yavih bench lint --all
+          # the wheel ships the core only: the repository's folders are read by the installed core (as in ci.yml)
+          YAVIH_BENCH_PATH="$GITHUB_WORKSPACE/benchmarks" /tmp/venv/bin/yavih bench lint --all --skip conformance
       - uses: actions/upload-artifact@v4
         with:
           name: dist
