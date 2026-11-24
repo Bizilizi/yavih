@@ -202,7 +202,7 @@ def test_doctables_lists_are_derived_from_the_folders():
     assert "| clf (5 folds) | single | audio | `acc_mean` |" in rows["esc50"]
     assert rows["in1k (aliases `imagenet1k`, `imagenet`)"].startswith("| in1k (aliases")
     assert "video, audio (materialized)" in rows["avsync"] and rows["avsync"].endswith("| yes |")
-    assert "| none (targets) | image | `d1` | yes, `external` |" in rows["nyuv2_depth"]
+    assert "| none (targets) | image | `d1` | yes |" in rows["nyuv2_depth"]  # Probe3D's metrics are a copy in the folder
     assert doctables.render("readout_groups", pick) == ("Packaged benchmarks per readout: `clf` avsync, esc50, in1k · "
                                                         "`grid` nyuv2_depth · `box` vggss_box.")
     assert doctables.render("prepare_roots", pick) == ("Roots marked `prepare_only`: avsync `media_root` and "

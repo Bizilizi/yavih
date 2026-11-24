@@ -168,20 +168,20 @@ def test_real_git_checkout_and_local_edits(tmp_path, monkeypatch):
         external.require("authpkg_ext", pip, "1.0")
 
 
-def test_nyuv2_setup_documents_the_checkout_route():
-    """The documented clone + checkout is exactly the commit :func:`pinned_commit` reads from the yaml pip line."""
+def test_nyuv2_copies_probe3d_and_installs_nothing():
+    """Probe3D is not released on PyPI, so ``nyuv2_depth`` carries a copy of its depth metrics at a named commit
+    instead of an ``external`` installed from the repository: nothing to install, nothing to check out."""
     import yaml
 
     from yavih.benchmarks import packaged_folder
 
     folder = packaged_folder("nyuv2_depth")
-    pip = yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))["external"][0]["pip"]
-    commit = external.pinned_commit(pip)
+    assert yaml.safe_load((folder / "benchmark.yaml").read_text(encoding="utf-8"))["external"] == []
+    copy = (folder / "probe3d_metrics.py").read_text(encoding="utf-8")
+    assert "github.com/mbanani/probe3d" in copy and "def evaluate_depth(" in copy
     text = (folder / "setup.md").read_text(encoding="utf-8")
     deps = text.split("## Dependencies", 1)[1].split("\n## ", 1)[0]
-    assert pip in deps  # the verbatim pip line stays
-    assert f"checkout {commit}" in deps and "export PYTHONPATH=" in deps and "uv pip install" in deps
-    assert "(git checkout)" in deps
+    assert deps.strip().startswith("None") and "pip install" not in deps and "git checkout" not in deps
 
 
 def test_check_externals_records_the_checkout_identity(tmp_path, monkeypatch):
