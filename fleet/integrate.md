@@ -35,34 +35,30 @@ A branch that fails the footprint check is returned to its worker with the offen
 folder is never merged, whatever it fixes. A change to the core that the benchmark really needs arrives as the
 "core request" of the worker's report (the entry is `blocked`) and goes to the maintainer as its own core change.
 
-## 4. The batch review gate
+## 4. The merge review
 
-An independent reviewer, a fresh agent that has not seen the workers' conversations, checks every branch of the
-batch against the contract (`docs/contributing-a-benchmark.md`, `docs/benchmark-folder.md`) and against the
-benchmark's paper, and writes one verdict per branch. Give it the branch names, `<BASE>`, the workers' reports and
-this list; it runs everything itself:
+One independent reviewer per branch, a fresh agent that has not seen the worker's conversation, started with the
+filled [merge review brief](review-brief.md). It runs the quick checks itself (footprint, lint, folder tests, ruff,
+conformance, the synthetic trial) and checks the protocol and its grounding against the source: the paper or the
+suite's implementation, the upstream code at the named commit (diffing the scoring functions), and the numbers the
+README, setup.md and `metrics.notes` state (recomputed from the manifest). It blocks only on what would make a number
+wrong or misleading, a protocol that differs from its source without saying so, a false claim, a guessed credit, a
+failing check, or a folder that breaks for its user; everything else is a note. Two failures found after merging in
+batch 1 are always blocking:
 
-- the protocol is the paper's: splits, labels, metric, headline, floors; the route is justified;
-- every part of the evaluation is grounded as [grounding](grounding.md) says: the rung is the first that applies, only
-  a released official wheel is imported (no install from a git URL), copied code names its source in a comment and is
-  recognisable against the upstream file at the named commit, a copied defect is described and not silently fixed,
-  and the README, setup.md and `metrics.notes` acknowledge the source;
-- `python benchmarks/<name>/make_manifest.py --check` reproduces the frozen manifest from the public files, and the
-  curation sums hold (`yavih bench lint <name>`);
-- `yavih bench lint <name>`, the folder's tests and `ruff check benchmarks/<name>` pass on the branch;
-- `yavih bench trial <name> --synthetic --readout-fast` ends `trial ok`, or the report explains each
-  `not_applicable` stage; `trial UNVERIFIED` is never accepted;
-- the fresh-agent trial report meets [the trial-run criteria](../docs/trial-run.md#reviewer-criteria), or the
-  report says why it was not run (blocked data, no sub-agent) and the entry stays `blocked` or `review`;
-- a branch whose fresh-agent trial run was not run for lack of a sub-agent is merged only after the integrator has
-  run it from the branch (`docs/trial-run.md`) and it passed; one not run because the data is blocked keeps its entry
-  `blocked` and is merged only when the maintainer accepts a folder that has not met real data yet;
-- every budget is measured, or marked derived (how) or not measured (why); nothing is invented;
-- `yavih bench info <name>` prints an `extends:` line that matches the report's unification candidates.
+- **a capped run that cannot finish**: `--sample N` takes the first `N` manifest rows of each split, so a manifest
+  sorted by task leaves a short prefix without some group, and the interval of that group's metric refuses the
+  result. The rows are ordered so that a short prefix (32 rows) covers every group with a metric;
+- **scores that differ between CPUs**: numpy's default `argsort` and `argpartition` order tied scores differently on
+  different CPUs (its AVX-512 kernels), and a constant floor ties everywhere. Every sort and top-k on a scoring path
+  is `kind="stable"`.
 
-A branch that fails goes back with the reviewer's findings, to the same worker or to a fresh one started on the same
-branch with the findings appended to its brief (a fresh agent is required again for the trial run). It stays
-`claimed` until it passes. A fix changes the branch, so the reviewer runs again on it.
+A branch that fails goes to a fresh fixer with the reviewer's findings appended to the worker's brief, then to the
+reviewer once more. One repair round; what is still open goes to the maintainer.
+
+The fresh-agent trial run ([trial run](../docs/trial-run.md)) does not hold a merge. The integrator runs it after the
+merge, from `main`, on a small sample of the staged data, and fixes its friction in a follow-up: it finds setup
+friction, rarely a wrong number, and it costs an hour per folder on a shared machine.
 
 ## 5. Merge the batch
 
@@ -71,9 +67,11 @@ git switch -c batch/<n> <BASE>
 for b in <passing branches>; do git merge --no-ff "$b" -m "Merge $b"; done   # folders are disjoint: no conflicts
 "$PY" -m yavih.doctables --write && git commit -am "doctables: the batch's folders"
 "$PY" -m yavih.catalog --write && git add catalog/index.json && git commit -m "catalog: the batch's folders"
+"$PY" -m pytest tests/test_no_internal_refs.py -q -p no:cacheprovider    # a folder citing the maintainer's own paper
 ```
 
-The catalog index names the commit it was generated at, so write it after the folders are committed. On `main` the
+A folder that cites one of the maintainer's own papers trips `tests/test_no_internal_refs.py`: add its README and
+`benchmark.yaml` to that test's allow-list, as for `vggsounder`. The catalog index names the commit it was generated at, so write it after the folders are committed. On `main` the
 `catalog` workflow regenerates both after a push; writing them on the batch branch keeps its tests honest. Header
 images and README figures live in each folder's `assets/` and are committed: a worker with Chrome commits its own; for
 every folder of the batch that `bench lint` reports with `W_HEADER_MISSING` or `W_HEADER_STALE`, render and commit them

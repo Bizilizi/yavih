@@ -56,10 +56,10 @@ put the one-line unblocking action in `blocked_by`, and report the entry blocked
 
 WHAT TO DO. Follow docs/contributing-a-benchmark.md, which is the contract, with these differences for a fleet
 worker:
-  - steps 1-13 are yours (scaffold, protocol, frozen manifest, prepare steps, setup.md and README.md, bridge
+  - steps 1-12 are yours (scaffold, protocol, frozen manifest, prepare steps, setup.md and README.md, bridge
     template, eval.py, hashes and conformance fixture, folder tests, lint and tests, the header image and figures,
-    synthetic trial, the fresh-agent trial run); step 5, "setup.md and README.md": setup.md is for the agent that
-    sets the benchmark up, README.md is the benchmark's page for people, written per docs/writing-a-readme.md
+    synthetic trial); step 13, the fresh-agent trial run, is the integrator's, after the merge;
+    step 5, "setup.md and README.md": setup.md is for the agent that sets the benchmark up, README.md is the benchmark's page for people, written per docs/writing-a-readme.md
     (nothing an agent needs goes into it: how to read the numbers goes into benchmark.yaml `metrics.notes`, the
     re-freeze recipe into the make_manifest.py docstring), with its "at a glance" block written by
     `python -m yavih.doctables --glance <NAME> --write` (rerun after every yaml edit; never `--write` alone);
@@ -115,9 +115,13 @@ is a bug to fix; `trial UNVERIFIED` (exit 3) means nothing was checked (the auth
 needs is missing): install it as setup.md "## Dependencies" says and rerun, it never counts as done. Stages reported
 `not_applicable` mean no synthetic stand-in covers your scorer: give the folder a `testing.py` stand-in
 (docs/extending-through-a-folder.md "A stand-in of the folder's own") so the trial runs end to end.
-LAST, commit everything on bench/<NAME> (the trial run builds from the committed tree), then the fresh-agent trial
-run of docs/trial-run.md on a small sample of the real data, with the wheel built from an
-archive copy as above. If you cannot start a sub-agent, or the data is blocked, record `trial run: not run` and why.
+TWO RULES FROM THE LAST BATCH, both checked by the merge review:
+  - a capped run must finish: `--sample N` takes the first N manifest rows of each split, so order the rows (in
+    make_manifest.py) so that the first 32 cover every group that has a metric with an interval, e.g. round-robin
+    over the groups, and say in setup.md the smallest N that covers them;
+  - scores must not depend on the CPU: every sort and top-k on a scoring path uses `kind="stable"` (numpy orders
+    tied scores differently on different CPUs, and a floor's constant scores always tie).
+LAST, commit everything on bench/<NAME>.
 
 FINISH. Commit on bench/<NAME> in small commits (never push, never open a pull request, never edit fleet/queue.yaml),
 run the footprint check, and end with this report, filled in exactly:
@@ -135,7 +139,7 @@ run the footprint check, and end with this report, filled in exactly:
 - conformance: <recorded | skipped (why)>
 - synthetic trial: <verdict, exit code, stages not ok and why>
 - figures: rendered | spec only (no Chrome | no ffmpeg | no data) | none (why)
-- fresh-agent trial run: <pass | fail | not run> with the TRIAL_REPORT.md path; friction found and fixed
+- capped run: the smallest --sample N whose first rows cover every scored group
 - budgets: media_gb, extract_min_per_1k_clips_ref, probe_minutes_ref: value and measured | derived (how) | not measured (why)
 - unification candidates: <one bullet per item: what, which file, which other folders might share it; or none>
 - core request: <the gap the folder cannot express, if blocked for that reason; or none>

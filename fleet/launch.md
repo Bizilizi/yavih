@@ -19,9 +19,8 @@ Fill the brief's prompt (the fenced block of `worker-brief.md`) once per name: `
 
 Start every worker of the batch in one message, each as a background sub-agent whose prompt is its filled brief and
 whose working directory is its worktree. Give each one a disk cap that, summed over the batch, fits the data volume,
-and keep the batch at 5 to 8 workers: their downloads, decodes and test runs share the machine. The brief's last step
-starts a further sub-agent (the fresh-agent trial run); where a worker cannot start one, it reports `not run` and the
-integrator runs the trial run from the branch afterwards ([trial run](../docs/trial-run.md)).
+and keep the batch at 5 to 8 workers: their downloads, decodes and test runs share the machine. Workers do not run the
+fresh-agent trial run: the integrator runs it after the merge ([integrate](integrate.md), step 4).
 
 ## With a workflow script
 
