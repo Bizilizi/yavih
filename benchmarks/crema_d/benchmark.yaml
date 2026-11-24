@@ -58,7 +58,7 @@ budget:
   clips: {fold00: 1488, fold01: 1488, fold02: 1488, fold03: 1487, fold04: 1487}
   media_gb: 0.606             # measured: the 7 438 staged wavs, 605 598 660 B
   extract_min_per_1k_clips_ref: 0.5   # measured: wav2vec2-base (95 M), 5.0 s input, one clip per forward, shared 24 GB GPU, 4 decode workers: 207 s of extract wall for 7 438 clips
-  probe_minutes_ref: {clf: 5}         # measured: eval run, five attentive probes on 25 x 768 fp16 tokens, ~5 950 train rows each, shared GPU: 315 s
+  probe_minutes_ref: {clf: 5}         # measured: eval run, five attentive probes on 25 x 768 fp16 tokens, ~5 950 train rows each, shared GPU: 302.6 s (result.json timing.wall_s)
 
 manifest:
   file: manifest.csv.gz

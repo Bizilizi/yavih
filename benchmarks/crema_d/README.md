@@ -28,7 +28,7 @@ quality) tells them apart. Every clip has exactly one answer.
 CREMA-D (Cao et al., IEEE Transactions on Affective Computing 2014) is a crowd-sourced emotional corpus of 91 actors
 (48 men, 43 women, aged 20 to 74, of several ethnic backgrounds) reading 12 sentences in six emotions; one sentence
 ("It's eleven o'clock") is also spoken at low, medium and high intensity. This benchmark uses its audio: 7 438 clips of 16 kHz mono speech, 1.3 to 5.0 seconds
-long, about 2.5 seconds on average. The six emotions are near balanced (1 270 clips each, 1 086 neutral). The labels
+long, about 2.5 seconds on average. The six emotions are near balanced (1 270 or 1 271 clips each, 1 086 neutral). The labels
 are the emotion the actor was asked to act, as in the file names, not the perceived emotion that the corpus's
 crowd raters also give.
 
