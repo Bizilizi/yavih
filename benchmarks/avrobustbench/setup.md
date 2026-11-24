@@ -227,7 +227,7 @@ Bridge-side mistakes that pass validation:
 3. **Frames are 224 px already.** Resize to the model's input size only; a second `Resize(256) + CenterCrop(224)`
    zooms in and crops away part of the corruption (frost, crowd occluders and spatter sit anywhere in the frame).
 4. **Read channel 0 of a 2-channel wav** (most `crowd` rows), as CAV-MAE's Kaldi fbank does; averaging the channels
-   halves that noise and changes the number.
+   changes that noise and the number.
 5. **Short wavs.** ~11 % of clips are shorter than 10 s; pad after the end (as CAV-MAE does), never loop or stretch,
    and declare `pad`.
 6. **Normalization.** Constants from the model's pretraining recipe; per-clip statistics only when they ARE the

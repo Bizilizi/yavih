@@ -66,7 +66,7 @@ EPICKITCHENS-2C).
 ## Reference numbers
 
 At severity 5 the paper reports a mean accuracy of 35.5 % for CAV-MAE (65.5 % clean), 33.8 % for EquiAV and 27.4 %
-for UAVM. The zero-shot models score lower: 11.1 % for AudioCLIP and 10.3 % for ImageBind. Those models were
+for UAVM. The zero-shot models score lower: 11.1 % for AudioCLIP and 10.3 % for ImageBind. CAV-MAE, EquiAV and UAVM were
 fine-tuned or linear-probed on all of VGGSound train and saw the corrupted frames without video compression, so a
 frozen-feature probe trained on 20 000 clips is not directly comparable.
 

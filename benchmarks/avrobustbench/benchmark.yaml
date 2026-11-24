@@ -260,9 +260,9 @@ metrics:
     - "macc (headline) = mean top-1 accuracy over the 15 corruptions at severity 5 (paper Table 4); acc_clean is the same probe on the clean clips; rho = macc / acc_clean."
     - "Floor: macc_floor is the train-majority class, about 1/309 = 0.003 (train is class-balanced). The macc CI resamples source clips (14 046)."
     - "Corruptions are the authors' code (prepare/corruptions.py, MIT) at severity 5, seeded per row; frames and crop follow CAV-MAE (10 frames, 224 px)."
-    - "Upstream defects kept: gaussian audio uses SNR = severity dB (5 dB), others the 0 dB of severity 5; frost never picks frost6.jpg. wind_visual crashes upstream and runs as its previous commit."
+    - "Upstream defects kept: gaussian audio uses SNR = severity dB (5 dB), the other noise-adding ones 0 dB; frost never picks frost6.jpg. wind_visual crashes upstream and runs as its previous commit."
     - "Paper numbers: in-memory frames and wavs (no re-encode), models fine-tuned or probed on all VGGSound train. Here frames are crf-23 H.264 and the probe sees 20 000 clips."
-    - "Not the authors' released VGGSOUND-2C mp4s (no frost, AAC audio). Frames match them in statistics for 13 corruptions; their impulse and speckle are far weaker than the code's severity 5."
+    - "Not the authors' released VGGSOUND-2C mp4s (14 corruptions, no frost, AAC audio). On one compared clip, frames match 12 of them in statistics; their impulse and speckle are far weaker."
     - "Clip ids end in #<condition>: a bridge must never read them (bridge check scrambles clip_id)."
 
 readout_params: {}
