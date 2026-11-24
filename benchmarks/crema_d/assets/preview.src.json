@@ -1,0 +1,18 @@
+{
+  "preview_version": 1,
+  "design_version": 1,
+  "figures": {
+    "preview": {
+      "kind": "audio",
+      "split": "fold00",
+      "rows": [
+        "1004_DFA_ANG_XX",
+        "1004_DFA_SAD_XX"
+      ],
+      "source_sha256": "2b1980cbda2e3c76513a77d8f8b8f9a4440744f2af6848b493e689209a3f1246",
+      "files": {
+        "preview.png": 423259
+      }
+    }
+  }
+}

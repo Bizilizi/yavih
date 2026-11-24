@@ -1,0 +1,8 @@
+schema_version: 1
+figures:
+- id: preview
+  kind: audio
+  split: fold00
+  rows:
+  - 1004_DFA_ANG_XX
+  - 1004_DFA_SAD_XX

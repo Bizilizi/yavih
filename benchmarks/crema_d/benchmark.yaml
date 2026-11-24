@@ -1,0 +1,189 @@
+# yavih benchmark folder — CREMA-D speech emotion recognition in HEAR 2021's five folds (schema 3).
+schema_version: 3
+name: crema_d
+aliases: []
+title: CREMA-D speech emotion recognition (6 emotions, HEAR 2021 5-fold CV, mean top-1 accuracy)
+capability: [audio]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+header:
+  name: CREMA-D
+  title: "CREMA-D: Crowd-sourced Emotional Multimodal Actors Dataset"
+  venue: "Cao et al. · IEEE Transactions on Affective Computing 2014"
+  abstract: >-
+    7 438 short sentences spoken by 91 actors in six emotions (anger, disgust, fear, happiness, neutral,
+    sadness), recorded at 16 kHz. The task is to name a clip's intended emotion; the score is HEAR 2021's
+    top-1 accuracy averaged over its five cross-validation folds.
+scorer: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: f0f44915921495df45a507018ec2dd5010b83dc208ee8c46994aa775afceaa53
+    input_hash: 93319580565d0d248ab06797efa7405f06bf07c0553cfaf624968d71b19ece95
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - "https://github.com/CheyneyComputerScience/CREMA-D"
+    - "https://github.com/CheyneyComputerScience/CREMA-D.git"
+    - "https://media.githubusercontent.com/media/CheyneyComputerScience/CREMA-D/1658cd342dff90010aa843eaeebd53610a08b1dc/AudioWAV/"
+    - "https://storage.googleapis.com/tfds-data/dataset_info/crema_d/1.0.0/dataset_info.json"
+    - "https://storage.googleapis.com/tfds-data/manual_checksums/crema_d.txt"
+    - "https://github.com/hearbenchmark/hear-preprocess"
+  licence: "Open Database License (ODbL) 1.0 for the database; Database Contents License (DbCL) 1.0 for its contents (upstream LICENSE.txt)"
+  revision: "1658cd342dff90010aa843eaeebd53610a08b1dc"
+  bytes: 605598660            # the 7 438 wavs (= the sum of TFDS's manual checksums sizes); the sparse clone adds a few MB
+  sha256:
+    processedResults/summaryTable.csv: fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317
+    LICENSE.txt: e76747a4efa4b338914bb3f930b5d3d3c3ac15b886bbabf897f6a19731f987f8
+    tfds/crema_d-1.0.0-dataset_info.json: 5e748e0ecf01210ebcc1e2a4bcb80a59af47b89bfdee6521d18efa4ff0a7b6b0
+    tfds/crema_d-manual_checksums.txt: 66b5d959dcee997321baf9080c80022a6937279419446db3a9d4827d839b0abb   # TFDS's size + sha256 of every wav it downloaded; 02_verify.sh checks all 7 438
+    AudioWAV.sha256sum: e183e6db23361d1d13a307b87e08b1d31ceba20e652ab5825ae769789a2b23c3   # sha256 of `sha256sum` over the 7 438 wavs, C-locale name order (02_verify.sh)
+  notes: >-
+    Public GitHub repository of the CREMA-D authors (Git LFS), no account or agreement. The 7 438 wavs TensorFlow
+    Datasets' crema_d 1.0.0 (and so HEAR 2021) uses are unchanged since commit f06ffd7 (2017); pinned commit
+    1658cd3 (2025-03-21). 01_download.sh clones the pointers and fetches each wav from the LFS media endpoint,
+    checked against its pointer's sha256; 02_verify.sh checks every wav against TFDS's own manual checksums. make_manifest.py re-derives HEAR's folds from these files;
+    HEAR's own build of the task is public (Zenodo record 6332517, hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz,
+    1.5 GB, md5 8a80e180e44f01a5a43c962de92c1e12), and make_manifest.py --hear-archive compares its fold files with
+    the manifest clip by clip: run 2026-11-24 on the md5-verified archive, all 7 438 clips are in HEAR's fold with
+    HEAR's label (1 488 / 1 488 / 1 488 / 1 487 / 1 487), none missing or extra.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "git clone of github.com/CheyneyComputerScience/CREMA-D at the pinned commit plus 7 438 LFS wav downloads (0.6 GB, public), by yavih bench prepare crema_d 01"
+budget:
+  clips: {fold00: 1488, fold01: 1488, fold02: 1488, fold03: 1487, fold04: 1487}
+  media_gb: 0.606             # measured: the 7 438 staged wavs, 605 598 660 B
+  extract_min_per_1k_clips_ref: 0.5   # measured: wav2vec2-base (95 M), 5.0 s input, one clip per forward, shared 24 GB GPU, 4 decode workers: 207 s of extract wall for 7 438 clips
+  probe_minutes_ref: {clf: 5}         # measured: eval run, five attentive probes on 25 x 768 fp16 tokens, ~5 950 train rows each, shared GPU: 302.6 s (result.json timing.wall_s)
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 9844ba2ee5fbefac529645d714f8f922cce9b8a366824ca5c16450f7de8cf183
+  classes: classes.csv
+  classes_sha256: 85bbf18ea6375dba383ba4a536b7ce6dbe9d1e17f4603788d01de8dda3cd247f
+  key: clip_id
+  label:
+    column: labels
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_path: {type: str, role: media, stream: audio}
+    actor: {type: str, role: extra}        # CREMA-D actor id (1001–1091); HEAR's folds are drawn over files, so an actor spans several folds
+    sentence: {type: str, role: extra}     # one of the 12 sentence codes (IEO, TIE, …)
+    intensity: {type: str, role: extra}    # LO / MD / HI / XX (unspecified)
+    tfds_split: {type: str, role: extra}   # TFDS crema_d 1.0.0's own speaker-grouped split (train / validation / test)
+    hear_file: {type: str, role: extra}    # HEAR's file stem tfds_id_<slugify(tfds_id)>, the key of HEAR's fold files (make_manifest.py --hear-archive)
+  upstream:
+    source: "CheyneyComputerScience/CREMA-D @ 1658cd3 processedResults/summaryTable.csv"
+    sha256: fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317
+    rows: 7442
+    note: "rows = summaryTable.csv FileName order minus TFDS's four skips; split = HEAR's fold (re-derived, make_manifest.py; equal to HEAR's fold files, --hear-archive); labels = the emotion code of the file name; no train draw"
+    upstream_files:
+      CREMA-D/processedResults/summaryTable.csv: fb0e382700d32c0d9adc0c6815292215a36bcf912f2657048862c91e3bd2b317
+      tfds-data/dataset_info/crema_d/1.0.0/dataset_info.json: 5e748e0ecf01210ebcc1e2a4bcb80a59af47b89bfdee6521d18efa4ff0a7b6b0
+      # read by make_manifest.py --hear-archive (the cross-check, not the freeze): HEAR's archive (md5 8a80e180e44f01a5a43c962de92c1e12) and its fold files
+      zenodo/6332517/hear2021-tfds_crema_d-1.0.0-full-48000.tar.gz: 0d4bb3762770504cac4f933af8b9bdd47565f5eb972037dca39489ae9d388a6f
+      hear2021/tfds_crema_d-1.0.0-full/fold00.json: 820fe9fd6cc9df0cd5c8e34414dd67f3682139e2432ea0437ba852d20dd3e3bb
+      hear2021/tfds_crema_d-1.0.0-full/fold01.json: 0a68a52e7956334f7c10b7e1f8e0deda89a1bd0b2ec70205c9b3566b6be24cae
+      hear2021/tfds_crema_d-1.0.0-full/fold02.json: 65e83c9b79546840211e548df319bc9c4ac6172ebc940259d62d4f5ea184d05c
+      hear2021/tfds_crema_d-1.0.0-full/fold03.json: 828612e29905077cffec89c4a0e538646d3e395e8ad1738930c6ecc689fa56de
+      hear2021/tfds_crema_d-1.0.0-full/fold04.json: 83cb7c56e282e3fd61f538267d01f0030e330e2399eb4d5ac5634902eddccf42
+      hear2021/tfds_crema_d-1.0.0-full/labelvocabulary.csv: c61704379b8db2fd0e5588689a9a80e9111f1912fe76948d8420edf035834100
+      hear2021/tfds_crema_d-1.0.0-full/task_metadata.json: e14ce42932fc50fa6a5fb47c51e7b6ed35084013e4da986eb6172bea670ed758
+    curation:
+      total_upstream: 7442
+      per_split:
+        fold00: {listed: 1488, staged: 1488, missing: 0}
+        fold01: {listed: 1488, staged: 1488, missing: 0}
+        fold02: {listed: 1488, staged: 1488, missing: 0}
+        fold03: {listed: 1487, staged: 1487, missing: 0}
+        fold04: {listed: 1487, staged: 1487, missing: 0}
+      excluded:
+        "skipped by TFDS crema_d 1.0.0 as absent from GitHub (hence absent from HEAR's task)": 4
+      short_clips: 0              # no protocol clip length (clip_seconds null); 1.3–5.0 s clips, HEAR pads them to 5 s
+      leakage_audit:
+        against: "actors across HEAR's 5 folds (drawn over files, not actors): 91 of 91 actors in several folds; kept, HEAR's protocol"
+        excluded: 0
+      # invariant: 3 × 1488 + 2 × 1487 + 4 == 7442
+
+splits:
+  train: []
+  eval: []
+  floor: []
+  folds: [fold00, fold01, fold02, fold03, fold04]
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_path
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/crema_d"
+      description: "the sparse CREMA-D clone: AudioWAV/<actor>_<sentence>_<emotion>_<intensity>.wav (7 438 wavs, 16 kHz mono PCM_16, 1.3–5.0 s), processedResults/summaryTable.csv, LICENSE.txt, tfds/crema_d-1.0.0-dataset_info.json"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    audio: "the CREMA-D wav exactly as stored (RIFF PCM_16, 16 kHz, mono, 1.3 to 5.0 s); nothing decoded, resampled, trimmed or padded"
+  info:
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []                    # HEAR's scorer is copied into hear_score.py (heareval's wheel pins numpy 1.19 and TensorFlow)
+
+protocol:
+  clip_seconds: null            # clips vary from 1.3 to 5.0 s; HEAR pads each to 5.0 s in its own preprocessing (a bridge default here)
+  train_draw: null              # uncapped: each fold's probe trains on all clips of the four other folds
+  views: none
+
+metrics:
+  headline: top1_acc_mean
+  list: [top1_acc_mean, top1_acc_std, top1_acc_per_fold, n_folds, n_eval]
+  floors: [top1_acc_floor]
+  controls: []
+  chance: {top1_acc_mean: 0.1667}
+  ci: {top1_acc_mean: pooled_binomial}
+  aggregation: {over: folds, report: [mean, pstd, per_fold]}
+  notes:
+    - "Headline: HEAR's top1_acc (hear-eval-kit Top1Accuracy, copied into hear_score.py) per held-out fold, mean of 5; top1_acc_std is the sample std (ddof 1). HEAR's mAP, d_prime, aucroc: not computed."
+    - "Folds re-derived with copied TFDS + hear-preprocess code (hear_split.py); equal to HEAR's own fold files (Zenodo 6332517): 7 438 of 7 438 clips in the same fold with the same label."
+    - "Chance is 1/6 (0.167). The floor (each fold's train-majority emotion on held-out rows) is 0.157 on the full set; under --sample, the run's top1_acc_floor. An interval reaching the floor is no result."
+    - "Wilson 95 % interval over the 7 438 pooled rows: about ±0.011 at 0.5, ±0.010 at 0.75; one fold of 1 488 rows: about ±0.025. Treat gaps below 0.01 at one seed as unresolved."
+    - "HEAR's folds are drawn over files: every actor is in every fold, so speaker identity helps. Speaker-independent CREMA-D numbers are lower and not comparable."
+    - "HEAR's leaderboard trains an MLP on 3 folds (the next fold validates, grid search); this probe trains on 4 and carves validation rows from them: close, not identical numbers."
+    - "HEAR's pre-2022 CREMA-D build (Zenodo 5802571) had an audio-amplitude bug and was retracted (fixed in hear-preprocess a5d6042): CREMA-D numbers computed on that build are not comparable."
+    - "HEAR feeds every model 5.0 s clips (trim or zero-pad) resampled with soxr; here that is the bridge template's default, declared per model, not part of the protocol."
+readout_params: {}
