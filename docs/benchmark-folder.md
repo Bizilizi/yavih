@@ -739,7 +739,7 @@ The full index with descriptions, media and sources is [benchmarks/README.md](..
 | llp_avvp | llp_avvp | multi | video, audio | `seg_type_av` | yes |
 | mimetics | clf | single | video | `acc` | yes |
 | nsynth | clf | single | audio | `pitch_acc` | yes |
-| nyuv2_depth | grid | none (targets) | image | `d1` | yes, `external` |
+| nyuv2_depth | grid | none (targets) | image | `d1` | yes |
 | perception_test_action_loc | perception_test_action_loc | multi | video, audio | `tmap` | yes |
 | perception_test_sound_loc | perception_test_sound_loc | multi | video, audio | `tmap` | yes |
 | speech_commands | clf | single | audio | `top1_acc` | yes |
