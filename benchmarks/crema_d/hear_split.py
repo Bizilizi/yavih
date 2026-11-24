@@ -1,7 +1,7 @@
 # ruff: noqa: UP004, UP031, UP032, UP035, B007, B905  -- the copied upstream code keeps its own style (typing aliases, format calls, zip)
 """HEAR's five CREMA-D folds, re-derived from the public CREMA-D files without TensorFlow.
 
-HEAR 2021 (``hearbenchmark/hear-preprocess`` task ``tfds_crema_d``, ``split_mode: new_split_kfold``, ``nfolds: 5``)
+HEAR 2021 (https://github.com/hearbenchmark/hear-preprocess, task ``tfds_crema_d``, ``split_mode: new_split_kfold``, ``nfolds: 5``)
 builds CREMA-D from the TensorFlow Datasets builder ``crema_d`` 1.0.0, names every clip after its ``tfds_id``
 (``tfds_id_<slugify(tfds_id)>``) and splits the sorted names into five folds with a seeded shuffle. A clip's fold
 therefore depends on where TFDS wrote it: its TFDS split (a speaker-grouped 70/10/20 draw), its position after the
@@ -13,7 +13,7 @@ standard library and numpy only.
 
 Copied code, every block marked below with its source:
 
-* TFDS (``tensorflow/datasets``, tag ``v4.4.0`` = commit ``76f8591def26afaca16340b06d057553582f6163``, Apache-2.0):
+* TFDS (https://github.com/tensorflow/datasets, tag ``v4.4.0`` = commit ``76f8591def26afaca16340b06d057553582f6163``, Apache-2.0):
   ``tensorflow_datasets/audio/crema_d.py`` (``LABELS``, the bad files of ``_split_generators``,
   ``_compute_split_boundaries``, ``_get_inter_splits_by_group`` and the example key of ``_generate_examples``),
   ``tensorflow_datasets/core/hashing.py`` (``Hasher``), ``tensorflow_datasets/core/shuffle.py`` (the sort by
@@ -22,12 +22,12 @@ Copied code, every block marked below with its source:
   (``_make_id``: ``<shard file name>__<index in shard>``). Changes: TensorFlow, ``tf.io.gfile`` and the download
   manager removed; the functions take the names and sizes as arguments; ``Hasher`` keeps only ``hash_key`` for
   ``str`` keys.
-* hear-preprocess (``hearbenchmark/hear-preprocess`` @ ``610d864b2c0f7064eaeced98ee8992d3914d58f1``, v2021.1.1,
+* hear-preprocess (https://github.com/hearbenchmark/hear-preprocess @ ``610d864b2c0f7064eaeced98ee8992d3914d58f1``, v2021.1.1,
   Apache-2.0): ``hearpreprocess/pipeline.py`` ``ExtractMetadata.split_k_folds`` and the file stem of
   ``hearpreprocess/tfds_pipeline.py`` ``ExtractTFDS.save_audio_labels`` (``f"tfds_id_{slugify(tfds_id)}"``).
   Changes: pandas replaced by lists and dicts (same sort, same ``random.Random`` shuffle, same
   ``np.array_split``, same label check per fold); the ``small`` mode branch removed.
-* python-slugify (``un33k/python-slugify`` v6.1.2 = ``3f1a0fe7c5775a72141163ccdd593272e512898c``, MIT):
+* python-slugify (https://github.com/un33k/python-slugify, tag v6.1.2 = ``3f1a0fe7c5775a72141163ccdd593272e512898c``, MIT):
   ``slugify/slugify.py`` ``slugify`` reduced to what it does to an ASCII ``tfds_id``
   (lower case, every run of characters outside ``[-a-z0-9]`` to one ``-``, ``-`` runs collapsed, ``-`` stripped).
 

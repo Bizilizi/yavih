@@ -28,7 +28,7 @@ What the reader hands you per sample (setup.md "Input contract"):
 
 The default input length here is HEAR 2021's: hear-preprocess trims or zero-pads every CREMA-D clip to exactly
 5.0 s (``hearpreprocess/util/audio.py`` ``trim_pad_wav``: ffmpeg ``apad=whole_dur=5`` then ``atrim=end=5``;
-hearbenchmark/hear-preprocess @ 610d864b2c0f7064eaeced98ee8992d3914d58f1, task ``tfds_crema_d``,
+https://github.com/hearbenchmark/hear-preprocess @ 610d864b2c0f7064eaeced98ee8992d3914d58f1, task ``tfds_crema_d``,
 ``sample_duration: 5``) before any model sees it, and resamples with SoX (ffmpeg ``aresample=resampler=soxr``) to
 the model's rate. ``TEMPORAL = {"rule": "full", "max_s": 5.0, "pad_to_s": 5.0}`` declares that; HEAR's choice for
 every model, not the protocol: change it (and declare it) when your model's own recipe differs.

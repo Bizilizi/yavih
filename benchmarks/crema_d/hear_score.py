@@ -1,8 +1,8 @@
 # ruff: noqa: UP006, UP007, UP035, UP045, B905  -- the copied upstream code keeps its own style (typing aliases, format calls, zip)
 """HEAR's score of a multiclass scene task: ``top1_acc`` per test fold, then the mean and the std over folds.
 
-Copied from hear-eval-kit (``hearbenchmark/hear-eval-kit`` @ ``855964977238e89dfc76394aa11c37010edb6f20``,
-v2021.1.1 era, Apache-2.0), the code that scores HEAR's ``tfds_crema_d`` task (``evaluation: [top1_acc, mAP,
+Copied from hear-eval-kit (https://github.com/hearbenchmark/hear-eval-kit @ ``855964977238e89dfc76394aa11c37010edb6f20``,
+tag ``v2021.1.3``, the ``heareval`` 2021.1.3 wheel on PyPI, Apache-2.0), the code that scores HEAR's ``tfds_crema_d`` task (``evaluation: [top1_acc, mAP,
 d_prime, aucroc]``, the first being the task's primary score):
 
 * ``heareval/score.py``: ``validate_score_return_type``, ``ScoreFunction``, ``Top1Accuracy`` (unchanged but for

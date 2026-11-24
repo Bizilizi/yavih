@@ -50,13 +50,13 @@ suite's official code, not usable as a wheel, since `heareval` pins `numpy==1.19
 `score.py` imports torch, `sed_eval` and `dcase_util`):
 
 * scorer: hear-eval-kit (https://github.com/hearbenchmark/hear-eval-kit @ `855964977238e89dfc76394aa11c37010edb6f20`,
-  Apache-2.0) `heareval/score.py` (`Top1Accuracy`) and `heareval/predictions/task_predictions.py`
+  tag v2021.1.3, Apache-2.0) `heareval/score.py` (`Top1Accuracy`) and `heareval/predictions/task_predictions.py`
   (`aggregate_test_results`, `data_splits_from_folds`) -> `hear_score.py`, called by `eval.py`;
 * folds: hear-preprocess (https://github.com/hearbenchmark/hear-preprocess @ `610d864b2c0f7064eaeced98ee8992d3914d58f1`,
   v2021.1.1, Apache-2.0) `hearpreprocess/pipeline.py` (`split_k_folds`) and `hearpreprocess/tfds_pipeline.py` (the
   file stem), with TensorFlow Datasets (https://github.com/tensorflow/datasets @ v4.4.0 =
   `76f8591def26afaca16340b06d057553582f6163`, Apache-2.0) `audio/crema_d.py`, `core/hashing.py`, `core/shuffle.py`,
-  `core/tfrecords_writer.py`, `core/tfrecords_reader.py`, and python-slugify v6.1.2 (MIT) -> `hear_split.py`, called by
+  `core/tfrecords_writer.py`, `core/tfrecords_reader.py`, and python-slugify (https://github.com/un33k/python-slugify @ v6.1.2, MIT) -> `hear_split.py`, called by
   `make_manifest.py` (prepare time only);
 * readout: yavih's core `clf` probe (no HEAR code: HEAR trains its own MLP with a grid search).
 
