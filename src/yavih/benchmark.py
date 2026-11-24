@@ -2936,6 +2936,8 @@ class Benchmark:
             self.manifest_hash = hashing.manifest_hash(manifest_bytes, classes_bytes)
         except (ValueError, UnicodeDecodeError) as e:
             raise ManifestError(f"{self.name}: {manifest_path}: {e}") from e
+        #: the hash yavih up to 1.1 gave this manifest (over its bytes): where an earlier site census is found
+        self._manifest_hash_of_bytes = hashing.manifest_hash_of_bytes(manifest_bytes, classes_bytes)
         self._classes = classes
         self._table = _Table(spec, manifest_bytes, classes, smoke=self.smoke)
         #: the manifest marks its own smoke rows; without them the smoke run takes the first rows of each split
@@ -3203,6 +3205,8 @@ class Benchmark:
         when absent. Loaded once per Benchmark; facts are site facts and never hashed."""
         if self._media_info is False:
             path = media_info_path(self.name, self.manifest_hash)
+            if not path.is_file():  # a census taken by yavih up to 1.1 is filed under the earlier hash: the same media
+                path = media_info_path(self.name, self._manifest_hash_of_bytes)
             self._media_info = MediaInfoTable.load(path) if path.is_file() else None
         return self._media_info  # type: ignore[return-value]
 

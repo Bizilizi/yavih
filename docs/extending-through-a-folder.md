@@ -19,7 +19,7 @@ folder that extends anything (`--all`: every folder).
 | scorer | `eval.py` `SCORER = Scorer(name="<folder>", ...)` | registers it under the folder's name; `benchmark.yaml` says `scorer: <folder>`. Any kind: `probe` (trains), `stateless`, `direct` ([adding a scorer](adding-a-scorer.md)) |
 | heads and losses | `Scorer.build_head`, `Scorer.loss_fn` with `head_families` / `losses` | the core trainer builds the folder's head (`build_head_for`) and its loss (`per_sample_loss`); torch is imported when called |
 | own driver | `Scorer.score(ctx)` | the scorer's driver (`bench info`: `own driver`); it may use the core trainer (`yavih.readouts._fit`) or train with its own loop |
-| metrics | `eval.py` `METRICS`, `PROTOCOL_KEYS` | metrics of the folder's own (an authors' scorer, a transcription), with `per_clip` / `interval` for intervals and `floor_of` for floors ([benchmark folder](benchmark-folder.md#evalpy-hooks)) |
+| metrics | `eval.py` `METRICS`, `PROTOCOL_KEYS` | metrics of the folder's own (an authors' scorer, a transcription), with `per_clip` / `interval` for intervals and `floor_of` for floors ([benchmark folder](benchmark-folder.md#evalpy-hooks)). A metric over a group of the rows raises `yavih.metrics.EmptyGroup` when the group holds none: a smoke run then reports it as not covered, a full run refuses the result as for any failure |
 | hooks | `eval.py` `targets`, `score`, `join` | target construction, the authors' scorer, a cross-reading join |
 | samples lines | `Scorer.sample_lines(part, seed=, protocol=)` | the samples file of `eval run --log-samples` for the scorer's parts |
 | conformance | `Scorer.conformance_population(ctx, tag)` | the generated population the folder's fixture is computed on ([conformance](conformance.md)) |

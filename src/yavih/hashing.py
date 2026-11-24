@@ -50,6 +50,7 @@ __all__ = [
     "rng_seed",
     "manifest_hash",
     "content_sha256",
+    "manifest_hash_of_bytes",
     "MANIFEST_ANNOTATIONS",
     "normalized_source",
     "source_sha256",
@@ -207,6 +208,13 @@ def content_sha256(csv_bytes: bytes, *, drop: Sequence[str] = ()) -> str:
             raise ValueError(f"csv: record {k} has {len(record)} fields, the header has {n}")
         writer.writerow([record[i] for i in order])
     return h.hexdigest()
+
+
+def manifest_hash_of_bytes(manifest_bytes: bytes, classes_bytes: bytes | None) -> str:
+    """The manifest hash of yavih up to 1.1, taken over the files' bytes. It names nothing any more; it is only how a
+    site file written under it (the media census) is found again (``Benchmark.media_info``)."""
+    classes_part = sha256_hex(classes_bytes) if classes_bytes is not None else "none"
+    return sha256_hex(b"manifest:" + sha256_hex(manifest_bytes).encode("ascii") + b"\nclasses:" + classes_part.encode("ascii"))
 
 
 def manifest_hash(manifest_bytes: bytes, classes_bytes: bytes | None) -> str:

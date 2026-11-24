@@ -1878,3 +1878,46 @@ def test_dense_targets_follow_the_smoke_view(tmp_path, monkeypatch):
         t_full, t_smoke = full.targets(split), smoke.targets(split)
         assert t_smoke.shape[0] == len(rows) and t_full.shape[0] == full.n_rows(split)
         np.testing.assert_array_equal(t_smoke.rows(np.arange(len(rows))), t_full.rows(np.asarray(rows)))
+
+
+def test_lint_asks_for_smoke_rows_and_checks_them(tmp_path, monkeypatch):
+    from yavih import testing as T
+    from yavih.lint import lint_folder
+
+    monkeypatch.setenv("YAVIH_HOME", str(tmp_path / "home"))
+    folder = T.make_synthetic_benchmark(tmp_path / "benchmarks", "clf", n_train=12, n_eval=6, media="tiny")
+    codes = lambda: [f.code for f in lint_folder(folder, checks=["smoke"]).findings]  # noqa: E731
+    assert codes() == ["W_SMOKE_MISSING"]
+    labels = Benchmark.load(str(folder)).manifest("train").label_ids
+    same = [i for i, c in enumerate(labels) if c == labels[0]][:2]
+    other = next(i for i, c in enumerate(labels) if c != labels[0])
+    _with_smoke_column(folder, {"train": same, "val": [0]})
+    assert codes() == ["W_SMOKE_ONE_CLASS"]
+    _with_smoke_column_again = {"train": [same[0], other], "val": [0]}
+    folder2 = T.make_synthetic_benchmark(tmp_path / "b2", "clf", n_train=12, n_eval=6, media="tiny")
+    _with_smoke_column(folder2, _with_smoke_column_again)
+    assert [f.code for f in lint_folder(folder2, checks=["smoke"]).findings] == []
+
+
+def test_a_census_filed_under_the_earlier_manifest_hash_is_still_found(tmp_path, yavih_home, monkeypatch):
+    """Up to yavih 1.1 the manifest hash was taken over the file's bytes, and a site's media census is filed under it.
+    The census describes media, which did not change: it is found under the earlier hash until a new one is taken."""
+    from yavih import hashing
+    from yavih.sample import MediaInfoTable, media_info_path
+
+    folder = make_folder(tmp_path, "synth")
+    media = tmp_path / "media"
+    touch_media(media, [r[3] for r in BASE_ROWS], b"not-an-mp4")
+    with_roots(monkeypatch, "synth", media_root=media)
+    b = Benchmark.from_dir(folder)
+    earlier = hashing.manifest_hash_of_bytes(_csv(BASE_HEADER, BASE_ROWS), None if b.spec.manifest.classes is None
+                                             else (folder / b.spec.manifest.classes).read_bytes())
+    assert earlier == _sha(b"manifest:" + _sha(_csv(BASE_HEADER, BASE_ROWS)).encode() + b"\nclasses:"
+                           + (_sha((folder / b.spec.manifest.classes).read_bytes()).encode() if b.spec.manifest.classes else b"none"))
+    assert earlier != b.manifest_hash and b.media_info() is None
+    info = {"duration_s": 10.0, "fps": 25.0, "n_frames": 250, "width": 320, "height": 240, "container": "mp4", "bytes": 10}
+    old = MediaInfoTable.write(media_info_path("synth", earlier), {("video", r[3]): info for r in BASE_ROWS})
+    found = Benchmark.from_dir(folder).media_info()
+    assert found is not None and found.sha256 == old.sha256
+    new = MediaInfoTable.write(media_info_path("synth", b.manifest_hash), {("video", BASE_ROWS[0][3]): info})
+    assert Benchmark.from_dir(folder).media_info().sha256 == new.sha256  # a census under the current hash comes first

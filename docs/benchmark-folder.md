@@ -451,6 +451,30 @@ byte-identical.
 - Multi-label cells join tokens with `manifest.label.sep` (CSV-quoted as needed).
 - Box cells are `x1|y1|x2|y2` in fractions of the full original frame.
 - Segment rows carry integer `event_start`, `event_end` seconds.
+- `smoke` is the one column a folder does not declare: an annotation for yavih's own tools, `1` on the rows of the
+  smoke run and empty elsewhere ([below](#smoke-rows)).
+
+#### Smoke rows
+
+`yavih plan smoke` runs the whole chain, from extraction to the report, on a few rows of the benchmark, to find out
+whether everything works before the full run is paid for ([execution](execution.md#the-smoke-run-plan-smoke)). Which
+rows those are is the folder's to say, because only its author knows what the benchmark's arithmetic needs:
+
+- a few rows of **every split that is read** (train, eval, floor, every fold): the loader refuses a manifest whose
+  `smoke` column leaves one out;
+- in a split a readout is trained on, rows of **two classes at least** (lint warns `W_SMOKE_ONE_CLASS` otherwise);
+- one row for each thing the scorer treats differently: a multi-label row, a row with no event, a row of each
+  stream combination, the special cases its code branches on;
+- **few**: a smoke run should take minutes. A metric per condition does not need a row per condition, since a group
+  the smoke rows miss is reported as not covered, not as a failure
+  ([results](results.md#partial-rows)); lint warns `W_SMOKE_LARGE` above 256 rows in a split.
+
+`make_manifest.py` writes the column, so that a re-freeze marks the same rows:
+`yavih.freeze.smoke_marks(splits, groups)` marks, within each split and in manifest order, rows until every group
+(a class, a condition, a fold) has one, up to 32 per split. The column is outside every hash
+([hashing](hashing.md#manifest_hash)): adding it to a shipped folder, or choosing other rows later, changes
+`manifest.sha256` and nothing else. A manifest without it still has a smoke run, on the first 32 rows of each split
+(`W_SMOKE_MISSING`).
 
 `Benchmark.manifest(split=None)` returns a `Manifest` in file order filtered to the split: `row` (0-based within the
 split), `clip_id`, `splits`, `label_ids` (`int | None` for single/segments, `list[int]` for multi and multi_sets
@@ -713,6 +737,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `template` | `E_TEMPLATE`, `W_READING_UNKNOWN` (warning) | `bridge_template.py` has a literal `describe()["model"]` and a `reading`; a reading outside `a`/`v`/`av`/`t` (`t`: the model is given text) that the folder's `eval.py` `READINGS` does not declare is a warning. |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |
 | `imports` | `E_IMPORT` | `reader.py` / `eval.py` / `preview.py` import in a fresh interpreter with torch and the `external` packages blocked. |
+| `smoke` | `W_SMOKE_MISSING`, `W_SMOKE_LARGE`, `W_SMOKE_ONE_CLASS` (warnings) | The manifest marks the rows of its smoke run (the `smoke` column, [smoke rows](#smoke-rows)): present, at most 256 per split, and of two classes at least in a split a readout is trained on. |
 | `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `eval.py`, `make_manifest.py`, `classes.csv`, and `TODO:` markers in `tests/*.py` and `prepare/*` (a folder test may name the bridge template's own `TODO` slots without the colon). |
 
 A path without `benchmark.yaml` yields `E_LAYOUT`; an unknown name or check is a usage error (exit 1).

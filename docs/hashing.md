@@ -150,7 +150,8 @@ with other formatting, or with a `smoke` column added, changes `manifest.sha256`
 
 Up to yavih 1.1 `manifest_hash` was taken over the files' bytes. Every folder shipped then records its earlier
 hashes under `supersedes` and `supersedes_input` ([below](#recorded-hashes-in-the-changelog)): its results and its feature sets carry
-over.
+over. A site's media census filed under the earlier hash (`$YAVIH_HOME/media_info/<name>-<hash12>.jsonl.gz`) is still
+found; the data status cache is scanned again on first use, and `yavih bench verify` restores its `verified` stamp.
 
 ## protocol_hash = H(input_hash, scoring_hash)
 

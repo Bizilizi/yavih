@@ -152,6 +152,10 @@ Follow the conventions of `benchmarks/esc50/make_manifest.py`:
 - **Bytes.** Rows in a fixed column and row order through `yavih.freeze`: `csv_bytes`, `gzip_bytes` (no file name,
   `mtime=0`), `write_if_changed`; a train cap is a seeded draw with `class_balanced_subsample(labels, max_clips,
   seed)`.
+- **Smoke rows.** The last column, `smoke`, marks the rows of the benchmark's smoke run (`yavih plan smoke`): a few
+  rows of every split that is read, of two classes at least where a readout is trained, and one for each case the
+  scorer treats differently ([benchmark folder](benchmark-folder.md#smoke-rows)). `yavih.freeze.smoke_marks(splits,
+  groups)` writes it from the rows' groups. It is not declared in `benchmark.yaml` and is outside every hash.
 - **Output.** The `manifest.upstream` block (`source`, `sha256`, `rows`, `upstream_files`, `curation`) and the
   manifest digests are printed as JSON on stdout; paste them into `benchmark.yaml` (`manifest.sha256` and
   `manifest.classes_sha256` are over the decompressed bytes).
