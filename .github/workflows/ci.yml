@@ -134,14 +134,31 @@ jobs:
           python -m yavih.catalog --write
       - name: Tests (core changed)
         if: needs.changes.outputs.core == 'true'
-        run: pytest tests benchmarks -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs
+        run: |
+          set -o pipefail
+          COLUMNS=300 pytest tests benchmarks -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs 2>&1 | tee pytest.log
       - name: Tests (benchmark folders only)
         if: needs.changes.outputs.core != 'true' && needs.changes.outputs.folders != ''
         run: |
           yavih bench lint ${{ needs.changes.outputs.folders }}
-          pytest $(for n in ${{ needs.changes.outputs.folders }}; do echo "benchmarks/$n"; done) \
+          set -o pipefail
+          COLUMNS=300 pytest $(for n in ${{ needs.changes.outputs.folders }}; do echo "benchmarks/$n"; done) \
             tests/test_packaged_folders.py tests/test_docs.py tests/test_catalog.py \
-            -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs
+            -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs 2>&1 | tee pytest.log
+      - name: Failed tests as an annotation (readable from the public API without a token)
+        if: failure()
+        run: |
+          python - <<'PY'
+          import pathlib
+          log = pathlib.Path("pytest.log")
+          lines = log.read_text(errors="replace").splitlines() if log.exists() else ["pytest.log missing"]
+          picked = [l for l in lines if l.startswith(("FAILED ", "ERROR "))] or lines[-15:]
+          tail = [l for l in lines[-3:] if l.strip() and l not in picked]
+          msg = "\n".join(picked[:60] + tail)
+          for a, b in (("%", "%25"), ("\r", "%0D"), ("\n", "%0A")):
+              msg = msg.replace(a, b)
+          print(f"::error title=pytest failures::{msg}")
+          PY
 
   test:
     name: pytest (Python ${{ matrix.python-version }})
@@ -191,7 +208,23 @@ jobs:
           python -m yavih.catalog --write
       - name: Tests
         # no site data here: tests that need staged benchmark data skip
-        run: pytest tests benchmarks -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs
+        run: |
+          set -o pipefail
+          COLUMNS=300 pytest tests benchmarks -p no:cacheprovider -o addopts="--import-mode=importlib" -q -rfEs 2>&1 | tee pytest.log
+      - name: Failed tests as an annotation (readable from the public API without a token)
+        if: failure()
+        run: |
+          python - <<'PY'
+          import pathlib
+          log = pathlib.Path("pytest.log")
+          lines = log.read_text(errors="replace").splitlines() if log.exists() else ["pytest.log missing"]
+          picked = [l for l in lines if l.startswith(("FAILED ", "ERROR "))] or lines[-15:]
+          tail = [l for l in lines[-3:] if l.strip() and l not in picked]
+          msg = "\n".join(picked[:60] + tail)
+          for a, b in (("%", "%25"), ("\r", "%0D"), ("\n", "%0A")):
+              msg = msg.replace(a, b)
+          print(f"::error title=pytest failures::{msg}")
+          PY
 
   package:
     name: build and smoke-test the wheel
