@@ -55,9 +55,10 @@ def test_yaml_schema2_and_changelog(spec):
     assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "vggss_box"
     assert spec["scorer"] == "box" and spec["aliases"] == []
     assert spec["protocol_version"] == 2
-    assert [c["version"] for c in spec["changelog"]] == [1]
-    entry = spec["changelog"][0]
-    assert entry["invalidates"] is False and entry["supersedes"] == []
+    assert [c["version"] for c in spec["changelog"]] == [1, 2]
+    first, second = spec["changelog"]
+    assert first["invalidates"] is False and first["supersedes"] == []
+    assert second["invalidates"] is True and second["supersedes"] == []  # box readout 3: probes are re-run
     assert "requires" not in spec  # lives in output_contract
     assert not REMOVED_PROTOCOL_KEYS & set(spec["protocol"])  # windows, crop, padding are bridge decisions
     assert all("bridge_decode_allowed" not in s for s in F.file_fields(spec).values())
