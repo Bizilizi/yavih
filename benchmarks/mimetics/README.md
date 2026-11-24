@@ -31,7 +31,9 @@ much of its accuracy on the mimed clips; one that recognises the guitar or the c
 Mimetics (Philippe Weinzaepfel and Grégory Rogez, NAVER LABS Europe; IJCV 2021) is 713 clips of mimed actions cut
 from 560 YouTube videos: mime artists, actors, people imitating sports or instruments, 8 to 27 clips per class. The
 release is a list of YouTube ids with start and end seconds in the Kinetics format; each clip lasts 1 to 10 s and is
-downloaded and trimmed by the user. The release also flags, per clip, whether a relevant object or scene is visible
+downloaded and trimmed by the user, here with a copy of the ActivityNet Kinetics crawler
+([activitynet/ActivityNet](https://github.com/activitynet/ActivityNet), MIT licence) as the release README
+recommends. The release also flags, per clip, whether a relevant object or scene is visible
 and whether the actor is a mime artist. It is a test set only: there is no Mimetics training data. YouTube videos
 disappear, so a copy made today holds fewer than 713 clips.
 
@@ -57,9 +59,12 @@ which gives much lower numbers than a 50-way classifier; accuracy on Kinetics-40
 
 With a classifier trained on the Kinetics-400 clips of the 50 Mimetics classes, the paper's pose-based SIP-Net
 reaches 25.1 % mean top-1, 51.4 % mean top-5 and 38.3 % mAP (its Table 9), and IntegralAction (RGB and pose)
-26.5 % top-1 and 50.5 % top-5 over 596 clips (its repository's README). Trained on all 400 classes, the paper's RGB
-3D-ResNeXt-101 reaches 8.6 % mean top-1 (Table 6). These models are trained end to end and average several views
-per clip, on whichever clips their authors could still download; a frozen-feature probe is not directly comparable.
+26.5 % top-1 and 50.5 % top-5 (its repository's README) over 596 clips (implied by its printed percentages, 158/596
+and 301/596): its loader skips the clips too short for its frame window, which accounts for some of the 117
+missing clips; it does not say what became of the others. Trained on all 400 classes, the paper's RGB 3D-ResNeXt-101 reaches 8.6 % mean top-1
+(Table 6). These models are trained end to end, on all Kinetics clips of their classes rather than this folder's
+200 per class, and average several views per clip, on whichever clips their authors could still download; a
+frozen-feature probe is not directly comparable.
 
 ## Citation
 
