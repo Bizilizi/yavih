@@ -66,7 +66,12 @@ budget:
   # clips/s at 4 decode workers, n = 32, a shared 24 GB GPU). A capped extract of 320 test rows on the same, heavily
   # loaded machine ran at 1.42 clips/s wall (read 22.5 s, prepare 10.5 s, encode 9.6 s of 226 s).
   extract_min_per_1k_clips_ref: 0.6
-  probe_minutes_ref: {clf: 30}   # TODO: measure
+  # probe_minutes_ref: derived, each stage of a measured capped probe scaled by its rows. The clf probe on the same
+  # budget bridge's features (N = 74, D = 2048, float16) of the first 320 rows of each split, on the idle 24 GB GPU:
+  # fit 61.0 s (288 train + 32 val rows, 15 epochs, stopped by patience) x 20 000 / 320 = 63.5 min, score 1.9 s x
+  # 224 736 / 320 = 21.8 min, validate 0.5 s x 244 736 / 640 = 3.3 min; 88.6 min, rounded up. The full run may stop
+  # at another epoch.
+  probe_minutes_ref: {clf: 90}
 
 manifest:
   file: manifest.csv.gz
