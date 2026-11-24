@@ -208,7 +208,7 @@ def floor_outputs(train_targets: Any, n_eval: int, *, protocol: Mapping[str, Any
                   num_classes: int | None = None) -> np.ndarray:
     """The label-only constant output ``[n_eval, OUT_ROWS, C]``: every row (each second of both modalities, the
     video level) the train prevalence of each class's weak label. No class is in at least half the train videos
-    (``Speech``: 4 991 of 10 000), so at the 0.5 threshold it predicts nothing: the floor is the score of an empty
+    (``Speech``: 4 988 of 10 000), so at the 0.5 threshold it predicts nothing: the floor is the score of an empty
     parse, which the authors' F-score counts as 1 on a video without ground truth in that modality and 0 elsewhere."""
     t = np.asarray(train_targets, dtype=np.float64)
     if t.ndim != 2 or t.shape[1] != C or t.shape[0] == 0:

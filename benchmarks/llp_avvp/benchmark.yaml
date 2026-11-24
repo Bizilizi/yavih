@@ -55,7 +55,7 @@ source:
     The authors publish the annotations and pre-extracted features (Google Drive), not the videos: their
     scripts/download_dataset.py fetches each clip from YouTube and cuts [start, start + 10 s] (libx264 + aac).
     CserDu123/LLP-dataset @ 31727951 holds all 11 849 clips cut that way (llp_video.zip; an audio_data.zip of mp3s is
-    not used). Spot checks against an AudioSet copy matched the segments within 30 ms.
+    not used). Spot checks (20 clips) against an AudioSet copy matched the segments within about 35 ms.
 
 obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
   tier: auto
@@ -209,5 +209,6 @@ metrics:
     - "Reference: the authors' HAN on VGGish + ResNet-152 + R(2+1)D features reports seg_type_av 54.0, evt_type_av 47.7, seg_event_av 55.4 on test (ECCV 2020, Table 1)."
     - "An a or v reading feeds its one stream to both HAN branches: the other modality's events are then guessed from it, so seg_v of an a reading measures that guess."
     - "Follow-ups that build on this code (MA, JoMoLD, VALOR) add refined modality labels or other features to the training: their numbers are not this readout's."
+    - "Kept as the authors' scorer reads them: 25 annotation rows with garbled names match no clip and are dropped, 5 audio rows have offset <= onset."
 
 readout_params: {}

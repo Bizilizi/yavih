@@ -22,7 +22,7 @@ The agent's first read for LLP (AVVP). `benchmark.yaml` is the machine truth; `R
 - Licence: annotations and code GPL-3.0 (the repository README); the clips are YouTube (AudioSet) content that
   stays its uploaders', redistributed by the HF dataset under a tag that cannot relicense them. Research use; cite
   Tian et al., ECCV 2020.
-- An existing AudioSet copy holds most of the clips too (the segments match the HF clips within 30 ms), but under
+- An existing AudioSet copy holds most of the clips too (spot checks matched the HF clips within about 35 ms), but under
   other names and cuts: it is not a supported source.
 
 ```bash
