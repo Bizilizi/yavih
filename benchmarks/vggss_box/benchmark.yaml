@@ -28,9 +28,10 @@ changelog:
     date: "2026-11-16"
     reason: "Box readout 3: the cells hold the video tokens of the time slot nearest the annotated 5.0 s only (readout 2 mean-pooled every frame's tokens into each cell). Features stay valid; probes are re-run."
     invalidates: true
-    protocol_hash: 807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60
-    input_hash: 835ce236d5d00af35486d9626a1776e2eb3b8ed787435185f9d55f57e5b4b611
-    supersedes: []
+    protocol_hash: 87155be74aaf4bd4343f05c99e344bbafadd52631a4196ea88d70c2998020555
+    input_hash: 940659ccae2f98791edc207812d1030417cb2ca4d4907752b05dd47b246ff4bc
+    supersedes: [807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+    supersedes_input: [835ce236d5d00af35486d9626a1776e2eb3b8ed787435185f9d55f57e5b4b611]
 
 source:
   kind: public_url

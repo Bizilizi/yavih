@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "65434dae826d0f787cb808ab374f6cd279e3aae1",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "3cdd935e8235d6398ee8266f071c55c75fb5f735997f0eb014f835e0d1a5f0d1",
    "reader": null
   },
-  "protocol_hash": "284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912",
+  "protocol_hash": "4520601b91deb928b6ca2eb6ffe8ee7cf88781f3d1c1591c6a994de881dee38f",
   "scorer": {
    "kind": "probe",
    "name": "stream",
@@ -34,21 +34,21 @@
   "*": {
    "ci95": {
     "frame_map_gru": [
-     0.270167287378401,
-     0.3400339856665932
+     0.2605799272713143,
+     0.318503157333981
     ],
     "frame_map_linear": [
-     0.270167287378401,
-     0.3400339856665932
+     0.2605799272713143,
+     0.318503157333981
     ]
    },
    "controls": {},
    "floors": {
-    "frame_map_floor": 0.019599994203864574
+    "frame_map_floor": 0.015445888216447134
    },
    "metrics": {
-    "frame_map_gru": 0.29163363749870486,
-    "frame_map_linear": 0.29163363749870486
+    "frame_map_gru": 0.28114740816544737,
+    "frame_map_linear": 0.28114740816544737
    }
   }
  }

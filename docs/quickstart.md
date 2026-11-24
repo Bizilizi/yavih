@@ -157,7 +157,7 @@ bridges:
 ```bash
 M=yavih-bench/matrices/mymodel.yaml
 P=$RUNS/_plans                            # plan files are run state: under the runs root, never in yavih-bench/
-yavih plan build $M --sample 32 --out $P/mymodel-trial.jsonl && yavih plan run $P/mymodel-trial.jsonl --local   # capped run first: 32 rows per split
+yavih plan smoke $M --out $P/mymodel-smoke.jsonl && yavih plan run $P/mymodel-smoke.jsonl --local   # the smoke run first: a few rows per split, the ones each benchmark names
 yavih plan build $M --out $P/mymodel.jsonl                 # extract shards (GPU) -> probe (CPU/GPU) -> report
 yavih exec $P/mymodel.jsonl --index $SLURM_ARRAY_TASK_ID --deadline slurm   # one unit; idempotent; exit 4 = resubmit
 yavih plan status $P/mymodel.jsonl

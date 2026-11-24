@@ -9,15 +9,20 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
-   "probe": null,
+   "eval": null,
    "reader": null
   },
-  "protocol_hash": "5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7",
+  "protocol_hash": "b14830ca35cf379c1ce525bb00bbb910775ee1f1b7baf726eca27b5b1776d871",
+  "scorer": {
+   "kind": "probe",
+   "name": "clf",
+   "version": 1
+  },
   "scoring_hash": "ca02cd1022d1e2109d51a9535903d1b7e805faacbdd6e82a4fa092c42ee7a19c",
-  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {
@@ -31,11 +36,11 @@
    "ci95": {},
    "controls": {},
    "floors": {
-    "map_floor": 0.004877253320683112
+    "map_floor": 0.00485501660341556
    },
    "metrics": {
-    "effective_pos_classes": 313,
-    "map": 0.01388800347791556,
+    "effective_pos_classes": 306,
+    "map": 0.014192204643418901,
     "n_eval": 256
    }
   }

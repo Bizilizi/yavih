@@ -23,9 +23,10 @@ changelog:
     date: "2026-11-05"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49   # recorded, outside the hashed payload; `yavih bench lint` checks it
-    input_hash: 20353f184a7bd2cd924d6a7ca22d931b2557b6b182eaba3b9b4e9afcb88c5e32
-    supersedes: []
+    protocol_hash: 15762a0eee1d3fa48834d38d21203addd985d58849992765182518214cf65652   # recorded, outside the hashed payload; `yavih bench lint` checks it
+    input_hash: bbc7d63bf2434c9b73b9814f736f6dc995763a42cc32ed8b02c817c4dc86469a
+    supersedes: [9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+    supersedes_input: [20353f184a7bd2cd924d6a7ca22d931b2557b6b182eaba3b9b4e9afcb88c5e32]
 
 source:
   kind: public_url

@@ -9,15 +9,20 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
-   "probe": null,
+   "eval": null,
    "reader": null
   },
-  "protocol_hash": "62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470",
+  "protocol_hash": "3fc91a92fed6a9dbbbc98b8cdeeb44798446a5686d36bc27df5ae4ca96fa7594",
+  "scorer": {
+   "kind": "probe",
+   "name": "clf",
+   "version": 1
+  },
   "scoring_hash": "4a2d685317840b0a3d4d94fec584661368df7e0a0245c39d68d2abf21524353c",
-  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {
@@ -29,8 +34,8 @@
   "*": {
    "ci95": {
     "acc": [
-     0.0006898821669617927,
-     0.021790975380582514
+     0.002145090367681419,
+     0.028032768301535768
     ]
    },
    "controls": {},
@@ -38,7 +43,7 @@
     "acc_floor": 0.0
    },
    "metrics": {
-    "acc": 0.00390625,
+    "acc": 0.0078125,
     "n_eval": 256
    }
   }

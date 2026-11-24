@@ -65,7 +65,8 @@ def test_yaml_shape(spec):
 def test_changelog(spec):
     log = spec["changelog"]
     assert [e["version"] for e in log] == [1] and spec["protocol_version"] == 1
-    assert log[0]["invalidates"] is False and log[0]["supersedes"] == []
+    assert log[0]["invalidates"] is False and log[0]["supersedes"] == ["5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7"]
+    assert log[0]["supersedes_input"] == ["101661559f6902732ab4885f401d2e721ab283badf8526b108af5c71332acb23"]  # the manifest is hashed by its content: the same features
 
 
 def test_source_pins_the_published_dataset(spec, mm):
@@ -650,7 +651,7 @@ def test_core_load_and_hash(bench, spec):
     assert bench.name == "audioset20k" and list(bench.spec.aliases) == []
     assert bench.spec.protocol_version == 1 and bench.unknown_labels == 0
     assert bench.spec.source.revision == REVISION
-    assert bench.manifest_hash == "8ada78f8fa94f980582500498d5011542bf7b45bfb0646ffb9d8b9187d8b8b2d"
+    assert bench.manifest_hash == "f16003b674ae092f7ab2d67041db3d8f6551574144d0c2c6e3d42bddf6632529"
     assert len(bench.protocol_hash) == 64
     assert Benchmark.load("audioset20k").protocol_hash == bench.protocol_hash == spec["changelog"][-1]["protocol_hash"]
     assert bench.input_hash == spec["changelog"][-1]["input_hash"]

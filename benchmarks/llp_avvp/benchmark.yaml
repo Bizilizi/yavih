@@ -15,9 +15,10 @@ changelog:
     date: "2026-11-15"
     reason: Initial release, frozen from the LLP annotation files of YapengTian/AVVP-ECCV20 @ fde5611.
     invalidates: false
-    protocol_hash: ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2
-    input_hash: c1d2cce863af6def3a501a0445be2f37c8ea4ccc0b5cba935c7c87fcf9dc4c99
-    supersedes: []
+    protocol_hash: a5b67ef7fcaf8db327290859e376baa115fb46a578fc6269aba239cbd3387ec7
+    input_hash: 71c448ac569cec83f5e39795011177da34d41cadf6d0e02b52015aaee04aa873
+    supersedes: [ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+    supersedes_input: [c1d2cce863af6def3a501a0445be2f37c8ea4ccc0b5cba935c7c87fcf9dc4c99]
 
 header:
   name: LLP (AVVP)

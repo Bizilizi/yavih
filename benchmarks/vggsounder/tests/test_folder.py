@@ -58,7 +58,8 @@ def test_yaml_identity(spec):
     assert spec["manifest"]["label"]["sets"] == {k: list(v) for k, v in SETS.items()}
     (entry,) = spec["changelog"]
     assert entry["version"] == spec["protocol_version"] and entry["invalidates"] is False
-    assert entry["supersedes"] == []
+    assert entry["supersedes"] == ["89c057ccce207b4627b6e5f43394a2cd7f34f892375b087510e22e6e63519530"]
+    assert entry["supersedes_input"] == ["3e5adb9eea1101192e60ed7abc4b840fdcf567cccf06a195784f93a53f330275"]  # the manifest is hashed by its content: the same features
 
 
 def test_protocol_keys(spec):
@@ -763,7 +764,7 @@ def test_bench_loads(synthetic_bench, spec):
     bench, _ = synthetic_bench
     assert bench.name == "vggsounder" and bench.spec.readout == "clf"
     assert len(bench.protocol_hash) == 64 and len(bench.manifest_hash) == 64
-    assert bench.manifest_hash.startswith("da53029e")
+    assert bench.manifest_hash.startswith("b42edc76")
     view = bench.view()
     assert view.streams == {"video": "video", "audio": "audio"} and view.facts == {}
     assert not hasattr(view, "manifest")

@@ -404,7 +404,9 @@ From the folder (`UnknownBenchmark` / `SchemaError`, exit 1; `ManifestError`, ex
   `yavih bench fetch --refresh` restores it, [catalog](catalog.md));
 - `manifest.csv.gz` exists, decompresses, and its decompressed sha256 equals `manifest.sha256`; `classes.csv`
   exists, matches `classes_sha256` and follows its rules;
-- the manifest header is exactly key, `split`, label columns and declared columns (no duplicate, nothing undeclared);
+- the manifest header is exactly key, `split`, label columns and declared columns, plus yavih's annotation columns
+  where the folder has them (`smoke`: `1` on the rows of the smoke run, else empty); no duplicate, nothing else
+  undeclared;
   every row has the header's width; keys are unique and match the charset; every split value has a role; every read
   split has rows; required media cells are non-empty, match the charset, are relative and contain no `..`; typed
   cells parse; every label cell parses against `classes.csv` (unknown tokens only with `allow_unknown`, empty cells
@@ -470,10 +472,12 @@ unique when present, at least one class. The `index` column is the only logit vo
 ### manifest_hash
 
 ```
-manifest_hash = sha256(b"manifest:" + sha256(manifest.csv).hex + b"\nclasses:" + (sha256(classes.csv).hex | "none"))
+manifest_hash = sha256(b"manifest-2:" + content(manifest.csv).hex + b"\nclasses:" + (content(classes.csv).hex | "none"))
 ```
 
-over the decompressed manifest bytes. It enters `input_hash` together with `manifest.key` and `manifest.columns`;
+over the content of the two files, not their bytes: each is read as csv and hashed in one canonical form, so its
+formatting never matters, and the manifest's annotation columns (`smoke`) are left out
+([hashing](hashing.md#manifest_hash)). It enters `input_hash` together with `manifest.key` and `manifest.columns`;
 `manifest.label` enters `scoring_hash` ([hashing](hashing.md)).
 
 ## Benchmark API

@@ -63,8 +63,8 @@ bridges:
 `plan build` exits 1 if `profile.bench != benchmark`, `profile.args` differ from the entry's `args`,
 `profile.describe` fails the schema, or the profile records no passed hard checks. A profile that
 already misses the output contract yields a plan-time `not_applicable` probe unit, no extracts.
-`yavih plan build yavih-bench/matrices/<model>.yaml --sample N --out $R/_plans/<model>-trial.jsonl` plans a capped run first (the first `N` rows per split, under
-`<out>-sample<N>`, results never stored, report rows marked partial).
+`yavih plan smoke yavih-bench/matrices/<model>.yaml --out $R/_plans/<model>-smoke.jsonl` plans the smoke run first (the few rows each benchmark names for it, under
+`<out>-smoke`, results never stored, report rows marked partial).
 
 ## Resources per unit → sbatch
 

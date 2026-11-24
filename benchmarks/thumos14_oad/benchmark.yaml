@@ -13,9 +13,10 @@ changelog:
     date: "2026-11-03"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912
-    input_hash: c26caf61c6473f9b842bcad6a97b9e76147a9c2d75a03926b9e6d05a99340b57
-    supersedes: []
+    protocol_hash: 4520601b91deb928b6ca2eb6ffe8ee7cf88781f3d1c1591c6a994de881dee38f
+    input_hash: ceb4bd75618b95acfcae860bc3f88f7d733e3547f8d396cc4f42b1cd527ac6c3
+    supersedes: [284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+    supersedes_input: [c26caf61c6473f9b842bcad6a97b9e76147a9c2d75a03926b9e6d05a99340b57]
 
 header:
   name: THUMOS'14 OAD

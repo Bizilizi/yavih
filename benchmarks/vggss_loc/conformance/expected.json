@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "e0f6a5ec3a84ebf9364a6949f2063dd7c3a0b2d6+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "d4c4b4644df06a00e312d3de49589aa0d87d2a5f771fc3e6b2c838b8bfd3fe74",
    "reader": null
   },
-  "protocol_hash": "3e58261a9a2ed7a8194c96349b5356f25fcf3d1cf747e5f239f933ea5f657c04",
+  "protocol_hash": "ab9a2ed36772021c3bdd98466fd5fecdd00787d1d6a0e7dc9a10ca4fc90d1def",
   "scorer": {
    "kind": "stateless",
    "name": "vggss_loc",
@@ -39,25 +39,25 @@
   "*": {
    "ci95": {
     "ciou@0.5": [
-     0.36205524949299805,
-     0.5317566050994169
+     0.4298624503761484,
+     0.6004770197403044
     ],
     "ciou_mean": [
-     0.3994683469190647,
-     0.4918594998014293
+     0.4487133163088542,
+     0.5367789078045753
     ]
    },
    "controls": {
     "audio_blind": false,
-    "ciou_shuffled": 0.109375
+    "ciou_shuffled": 0.078125
    },
    "floors": {
-    "ciou_floor": 0.2734375
+    "ciou_floor": 0.328125
    },
    "metrics": {
-    "auc": 0.44453125000000004,
-    "ciou@0.5": 0.4453125,
-    "ciou_mean": 0.44597371746319464,
+    "auc": 0.49414062500000006,
+    "ciou@0.5": 0.515625,
+    "ciou_mean": 0.49423430453566397,
     "n_empty_gt": 0,
     "n_eval": 128
    }

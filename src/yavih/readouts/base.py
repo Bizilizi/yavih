@@ -444,6 +444,8 @@ def check_result(result: Mapping[str, Any], *, expect: Mapping[str, Any] | None 
                         f"{block} keys {sorted(got)} must equal benchmark.yaml exactly {sorted(names)}"
                     )
         for name, ci in result["ci95"].items():
+            if ci is None and "sample" in result:
+                continue  # a partial run: the sample holds no row of this metric's group (W_SAMPLE_NOT_COVERED)
             if not (isinstance(ci, list) and len(ci) == 2):
                 raise ResultSchemaError(f"ci95[{name}] must be [lo, hi]")
     else:
@@ -497,8 +499,20 @@ def open_reader(split_dir: str | Path) -> Any:
     return _reader.FeatureReader(split_dir)
 
 
-def load_benchmark(ref: str) -> Any:
-    """``Benchmark.load(ref)``, resolved at call time."""
+def _smoke_run(run_dir: Path) -> bool:
+    """The run directory holds a smoke run: a split's frozen layout says its rows are the smoke view's."""
+    from yavih.io.layout import layout_smoke, read_layout
+
+    root = Path(run_dir) / "features"
+    return root.is_dir() and any(layout_smoke(read_layout(d)) for d in root.iterdir() if d.is_dir() and not d.name.startswith("_"))
+
+
+def load_benchmark(ref: str, *, smoke: bool = False) -> Any:
+    """``Benchmark.load(ref)``, resolved at call time; ``smoke``: its smoke view."""
+    if smoke:
+        from yavih import benchmark as _bm
+
+        return _bm.Benchmark.load(ref, smoke=True)
     from yavih import benchmark as _bm
 
     return _bm.Benchmark.load(ref)
@@ -689,6 +703,25 @@ def _coerce_value(name: str, spec: Any, value: Any) -> Any:
     return v
 
 
+#: Set while a partial run (a smoke run or a capped run: ``_meta.json`` ``sample``) is scored. ``on``: a metric or an
+#: interval whose group holds no row of the sample is reported as not covered instead of refusing the result;
+#: ``not_covered``: their names, drained into the result's ``W_SAMPLE_NOT_COVERED`` warning (:func:`_mark_sample`).
+_PARTIAL: dict[str, Any] = {"on": False, "not_covered": []}
+
+
+def _no_rows(e: BaseException) -> bool:
+    """The failure of a metric or an interval whose group holds no row (``EmptyGroup``, or the division by a count of
+    zero such a group gives): tolerated on a partial run, and only there."""
+    from yavih.metrics.intervals import EmptyGroup
+
+    return isinstance(e, (EmptyGroup, ZeroDivisionError))
+
+
+def _not_covered(name: str) -> None:
+    if name not in _PARTIAL["not_covered"]:
+        _PARTIAL["not_covered"].append(name)
+
+
 def evaluate_metrics(
     specs: Mapping[str, Mapping[str, Any]],
     *,
@@ -746,10 +779,18 @@ def evaluate_metrics(
                         continue
                 else:
                     value = spec.fn(inputs, targets, protocol, split_meta)
+                if _PARTIAL["on"] and spec.shape != "list" and isinstance(value, (float, np.floating)) and not np.isfinite(value):
+                    out[block][name] = None  # the mean of no row: the sample holds nothing of this metric's group
+                    _not_covered(name)
+                    continue
                 out[block][name] = _coerce_value(name, spec, value)
             except ProbeRefused as e:
                 failures.append(f"{name}: {e.message}")
             except Exception as e:  # noqa: BLE001 - every failure is reported, then refused
+                if _PARTIAL["on"] and _no_rows(e):
+                    out[block][name] = None
+                    _not_covered(name)
+                    continue
                 failures.append(f"{name}: {type(e).__name__}: {e}")
     if failures:
         raise ProbeRefused("E_METRICS_INCOMPLETE", "metric functions failed: " + "; ".join(failures))
@@ -757,9 +798,16 @@ def evaluate_metrics(
         if not kind:
             continue
         spec = next((specs[b][name] for b in ("metrics", "controls", "floors") if name in specs.get(b, {})), None)
+        if _PARTIAL["on"] and any(name in out[b] and out[b][name] is None for b in ("metrics", "controls", "floors")):
+            out["ci95"][name] = None  # no value, no interval
+            continue
         try:
             lo, hi = interval_fn()(kind, name, outputs, targets, protocol, split_meta, spec=spec)
         except Exception as e:  # noqa: BLE001
+            if _PARTIAL["on"] and _no_rows(e):
+                out["ci95"][name] = None
+                _not_covered(name)
+                continue
             raise ProbeRefused("E_METRICS_INCOMPLETE", f"interval {name!r} ({kind}) failed: {type(e).__name__}: {e}") from e
         out["ci95"][name] = [float(lo), float(hi)]
     return out
@@ -1699,8 +1747,11 @@ def _probe(
         raise ProbeRefused("E_USAGE", "at least one seed is required", exit_code=1)
     if isinstance(profile, (str, os.PathLike)):
         profile = _read_json(Path(profile))
+    smoke = _smoke_run(run_dir)  # a smoke run is scored on the benchmark's smoke view: the rows its features hold
     if bench is not None and not hasattr(bench, "protocol_hash"):
-        bench = load_benchmark(str(bench))
+        bench = load_benchmark(str(bench), smoke=True) if smoke else load_benchmark(str(bench))
+    elif bench is not None and smoke and not getattr(bench, "smoke", False) and hasattr(bench, "folder"):
+        bench = load_benchmark(str(bench.folder), smoke=True)
 
     # -- plan-time not_applicable: no features exist by construction
     if unit is not None and unit.get("expected_status") == "not_applicable":
@@ -1742,7 +1793,7 @@ def _probe(
         if len(names) != 1:
             raise ProbeRefused("E_HASH_MISMATCH", f"split directories do not name exactly one benchmark: {sorted(names)}")
         bench_name = names.pop()
-        bench = load_benchmark(bench_name)
+        bench = load_benchmark(bench_name, smoke=True) if smoke else load_benchmark(bench_name)
     state["bench"] = bench
     spec = bench.spec
     if readout is not None and readout != spec.readout:
@@ -1848,6 +1899,7 @@ def _probe(
     # reaches the results store; its result records `sample` and every report row from it is `partial`.
     sample = {s: [int(x) for x in m["sample"]] for s, m in metas.items() if isinstance(m.get("sample"), list)}
     state["sample"] = sample
+    _PARTIAL.update(on=bool(sample), not_covered=[])  # a group without a row is "not covered" on a partial run only
     # The results-store root is decided (or refused, exit 1) before anything is trained
     if state.get("resolve_results") is not None and not sample:
         state["results_root"] = state["resolve_results"](bench, model, reading)
@@ -2155,6 +2207,11 @@ def _mark_sample(rec: dict, sample: Mapping[str, Any]) -> dict:
     """Record a capped run's ``{split: [lo, hi]}`` on the result (``sample``); a full run's result has no such key."""
     if sample:
         rec["sample"] = {str(k): [int(v[0]), int(v[1])] for k, v in sample.items()}
+        missing = [n for n in _PARTIAL["not_covered"] if any(n in (rec.get(b) or {}) for b in _METRIC_BLOCKS)]
+        if missing and isinstance(rec.get("warnings"), list) and not any(w.get("code") == "W_SAMPLE_NOT_COVERED" for w in rec["warnings"]):
+            rec["warnings"].append({"code": "W_SAMPLE_NOT_COVERED", "where": ", ".join(missing), "message": (
+                f"{len(missing)} metric(s) have no value: the rows of this partial run hold nothing of their group "
+                f"({', '.join(missing)}). The run tests that the chain works, not what the numbers are")})
     return rec
 
 

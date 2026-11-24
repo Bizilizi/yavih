@@ -100,6 +100,7 @@ Rules:
 | code | when |
 |---|---|
 | `W_COVERAGE` | eval coverage below `min_eval_coverage`, accepted with `--allow-low-coverage` |
+| `W_SAMPLE_NOT_COVERED` | a partial run (a smoke or a capped run): the named metrics are `null`, because its rows hold nothing of their group |
 | `W_WEIGHTS_UNFINGERPRINTED` | `describe()["weights_sha256"]` is null |
 | `W_NONDETERMINISTIC` | ops without a deterministic CUDA kernel ran during training (named in the message) |
 | `W_SIZE` | the train bytes exceed the RAM budget and no scratch is configured: memmap in place |
@@ -224,7 +225,10 @@ waived <CODE> (<reason>; <source>, <n> finding(s))`; json rows carry `waived`, c
 ### Partial rows
 
 A result of a capped run (`plan build --sample N`, `result.json` `sample`) is scored on the first rows of each
-split, so its numbers are not the benchmark's. Within a row key it never competes with, or is averaged with, the
+split, so its numbers are not the benchmark's. A metric whose group holds none of those rows (a per-condition
+accuracy when the sample misses the condition) has no value there: it is `null`, its interval is `null`, and the
+result carries `W_SAMPLE_NOT_COVERED` naming it. On a full run the same situation refuses the result
+(`E_METRICS_INCOMPLETE`); a metric that fails for any other reason refuses it on every run. Within a row key it never competes with, or is averaged with, the
 full run's results: it is a row of its own, sorted after the full row, and marked in every format: md appends
 `(partial)` to its values (view 1 and view 2) and view 2 lists the flag `partial`; json rows carry
 `"partial": true` (view 2 rows also `sample`) and the flag; csv has a `partial` column (`true` / `false`) and the

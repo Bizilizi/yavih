@@ -41,6 +41,8 @@ __all__ = [
     "freeze_layout",
     "build_layout",
     "layout_sample",
+    "layout_smoke",
+    "smoke_view_of",
     "sample_conflict",
 ]
 
@@ -57,6 +59,7 @@ LAYOUT_IDENTITY_KEYS: tuple[str, ...] = (
     "reading",
     "bridge.describe_sha256",
     "sample",
+    "smoke",
 )
 
 
@@ -77,9 +80,11 @@ def _get(d: Any, dotted: str) -> Any:
 
 
 def layout_identity(*, manifest_hash: str | None, input_hash: str | None, model: str | None, reading: str | None,
-                    describe_sha256: str | None, sample: tuple[int, int] | list[int] | None = None) -> dict[str, Any]:
+                    describe_sha256: str | None, sample: tuple[int, int] | list[int] | None = None,
+                    smoke: bool = False) -> dict[str, Any]:
     """``{dotted key: value}`` over ``LAYOUT_IDENTITY_KEYS``; ``sample`` = ``[lo, hi]`` of a capped run, ``None`` for
-    the full split."""
+    the full split; ``smoke``: the rows are those of the benchmark's smoke view (``True``, else ``None``), so a smoke
+    layout is never taken for a capped one over the same range."""
     return {
         "benchmark.manifest_hash": manifest_hash,
         "benchmark.input_hash": input_hash,
@@ -87,6 +92,7 @@ def layout_identity(*, manifest_hash: str | None, input_hash: str | None, model:
         "reading": reading,
         "bridge.describe_sha256": describe_sha256,
         "sample": [int(sample[0]), int(sample[1])] if sample is not None else None,
+        "smoke": True if smoke else None,
     }
 
 
@@ -99,7 +105,25 @@ def layout_sample(layout: dict | None) -> tuple[int, int] | None:
     return None
 
 
-def _describe_sample(sample: Any) -> str:
+def layout_smoke(layout: dict | None) -> bool:
+    """The layout's rows are those of the benchmark's smoke view (``smoke: true``; ``yavih extract --smoke``): whoever
+    reads the split loads the benchmark with ``smoke=True``, in which a split holds exactly those rows."""
+    return bool(isinstance(layout, dict) and layout.get("smoke") is True)
+
+
+def smoke_view_of(bench: Any, layout: dict | None) -> Any:
+    """``bench`` as the split's rows need it: its smoke view when ``layout`` is a smoke layout and ``bench`` is the full
+    benchmark (reloaded from its folder), else ``bench`` itself. A stand-in without a folder is returned as it is."""
+    if bench is None or not layout_smoke(layout) or getattr(bench, "smoke", False) or not hasattr(bench, "folder"):
+        return bench
+    from yavih.benchmark import Benchmark
+
+    return Benchmark.from_dir(bench.folder, data=getattr(bench, "data_overrides", None) or None, smoke=True)
+
+
+def _describe_sample(sample: Any, smoke: Any = None) -> str:
+    if smoke:
+        return "the benchmark's smoke rows"
     return f"a --rows {sample[0]}:{sample[1]} sample" if isinstance(sample, (list, tuple)) and len(sample) == 2 else "the full split"
 
 
@@ -108,13 +132,13 @@ def sample_conflict(layout: dict | None, ident: dict[str, Any]) -> str | None:
     or two row ranges): a sentence naming both, else ``None``."""
     if layout is None:
         return None
-    rest = {k: v for k, v in ident.items() if k != "sample"}
+    rest = {k: v for k, v in ident.items() if k not in ("sample", "smoke")}
     if not layout_matches(layout, rest) or layout_matches(layout, ident):
         return None
-    return (f"its layout was frozen for {_describe_sample(layout.get('sample'))}, this unit extracts "
-            f"{_describe_sample(ident.get('sample'))}: a sampled run and a full run (or two samples) never share a split "
-            "directory; give the sampled run its own run directory (`plan build --sample N` does), or move the split "
-            "directory aside")
+    return (f"its layout was frozen for {_describe_sample(layout.get('sample'), layout.get('smoke'))}, this unit extracts "
+            f"{_describe_sample(ident.get('sample'), ident.get('smoke'))}: a partial run and a full run (or two partial runs) "
+            "never share a split directory; give the partial run its own run directory (`plan smoke` and "
+            "`plan build --sample N` do), or move the split directory aside")
 
 
 def read_layout(split_dir: str | os.PathLike) -> dict | None:
@@ -167,6 +191,8 @@ def build_layout(ident: dict[str, Any], *, n: int, batch_size: int, n_rows: int,
     }
     if ident.get("sample") is not None:  # a capped run; a full split's layout has no such key
         rec["sample"] = [int(ident["sample"][0]), int(ident["sample"][1])]
+    if ident.get("smoke"):  # the rows are the smoke view's: validate and the probe load the benchmark that way
+        rec["smoke"] = True
     return rec
 
 

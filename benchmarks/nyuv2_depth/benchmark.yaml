@@ -21,9 +21,10 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 348a01e00302ab27924e8d05f7fe664c493e1a5a3cc13ea7ed49f18747afd343
-    input_hash: a81f90c7e183b6ec98a9e1ca5801f1b8b45690f28eb2b45c3b3f34cfaef76bba
-    supersedes: [4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4]   # Probe3D imported from git; the copy gives the same numbers
+    protocol_hash: 050b00f4914824b687536c8f6af4f6cab735242140db667a664e6fd26ddeab29
+    input_hash: b562df563a661c254af1b7b6f762f17155653b87e228852feaa7a6b492c02f3a
+    supersedes: [4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4, 348a01e00302ab27924e8d05f7fe664c493e1a5a3cc13ea7ed49f18747afd343]   # Probe3D imported from git; the copy gives the same numbers
+    supersedes_input: [a81f90c7e183b6ec98a9e1ca5801f1b8b45690f28eb2b45c3b3f34cfaef76bba]
 
 source:
   kind: manual_portal

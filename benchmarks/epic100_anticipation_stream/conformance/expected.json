@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "21b37e6a8fe187416652e9836191b58262dbb4f6",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
-   "eval": "71e85c92bdfab773fc74be3c93d42467dbef74c3c32686f5f1055020514d669a",
+   "eval": "4c3345f4c9d6ac074df03fe4059196f3629f1ecb326cb3d02b3d9d45ac34b900",
    "reader": null
   },
-  "protocol_hash": "8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de",
+  "protocol_hash": "771ec61b244cc87b44dcf147f3da7d4efe939e695057b00fef1284a949b98eaa",
   "scorer": {
    "kind": "probe",
    "name": "stream",
@@ -52,55 +52,55 @@
   "*": {
    "ci95": {
     "mt5r_action_gru": [
-     0.10702821281305573,
-     0.1466555160348018
+     0.12751454800683462,
+     0.16375269204521778
     ],
     "mt5r_action_linear": [
-     0.10702821281305573,
-     0.1466555160348018
+     0.12751454800683462,
+     0.16375269204521778
     ],
     "mt5r_noun_gru": [
-     0.3296625370460413,
-     0.39177144749102755
+     0.3410644945923746,
+     0.3837095927237036
     ],
     "mt5r_noun_linear": [
-     0.3296625370460413,
-     0.39177144749102755
+     0.3410644945923746,
+     0.3837095927237036
     ],
     "mt5r_verb_gru": [
-     0.33549719398306166,
-     0.4528319445206058
+     0.33343010656358774,
+     0.4396646485483317
     ],
     "mt5r_verb_linear": [
-     0.33549719398306166,
-     0.4528319445206058
+     0.33343010656358774,
+     0.4396646485483317
     ]
    },
    "controls": {},
    "floors": {
-    "mt5r_action_floor": 0.001736111111111111,
-    "mt5r_noun_floor": 0.03731343283582089,
-    "mt5r_verb_floor": 0.08620689655172414
+    "mt5r_action_floor": 0.005479452054794521,
+    "mt5r_noun_floor": 0.02631578947368421,
+    "mt5r_verb_floor": 0.07462686567164178
    },
    "metrics": {
-    "mt5r_action_gru": 0.12654247017595535,
-    "mt5r_action_linear": 0.12654247017595535,
-    "mt5r_action_tail_gru": 0.13227946364336932,
-    "mt5r_action_tail_linear": 0.13227946364336932,
-    "mt5r_action_unseen_gru": 0.06898148148148148,
-    "mt5r_action_unseen_linear": 0.06898148148148148,
-    "mt5r_noun_gru": 0.35171970604173003,
-    "mt5r_noun_linear": 0.35171970604173003,
-    "mt5r_noun_tail_gru": 0.3507118543690551,
-    "mt5r_noun_tail_linear": 0.3507118543690551,
-    "mt5r_noun_unseen_gru": 0.2909970238095238,
-    "mt5r_noun_unseen_linear": 0.2909970238095238,
-    "mt5r_verb_gru": 0.38747784841265137,
-    "mt5r_verb_linear": 0.38747784841265137,
-    "mt5r_verb_tail_gru": 0.38686381152471017,
-    "mt5r_verb_tail_linear": 0.38686381152471017,
-    "mt5r_verb_unseen_gru": 0.2912286778510687,
-    "mt5r_verb_unseen_linear": 0.2912286778510687
+    "mt5r_action_gru": 0.14974001849345164,
+    "mt5r_action_linear": 0.14974001849345164,
+    "mt5r_action_tail_gru": 0.15217172674069226,
+    "mt5r_action_tail_linear": 0.15217172674069226,
+    "mt5r_action_unseen_gru": 0.07080551846906986,
+    "mt5r_action_unseen_linear": 0.07080551846906986,
+    "mt5r_noun_gru": 0.36145133754432107,
+    "mt5r_noun_linear": 0.36145133754432107,
+    "mt5r_noun_tail_gru": 0.375927374991576,
+    "mt5r_noun_tail_linear": 0.375927374991576,
+    "mt5r_noun_unseen_gru": 0.34782340675197815,
+    "mt5r_noun_unseen_linear": 0.34782340675197815,
+    "mt5r_verb_gru": 0.3773771209504974,
+    "mt5r_verb_linear": 0.3773771209504974,
+    "mt5r_verb_tail_gru": 0.374378056314736,
+    "mt5r_verb_tail_linear": 0.374378056314736,
+    "mt5r_verb_unseen_gru": 0.3296217671217671,
+    "mt5r_verb_unseen_linear": 0.3296217671217671
    }
   }
  }

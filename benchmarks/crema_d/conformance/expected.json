@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "8159ae1adb6c8852c760e132eef4bb87568ae6cc",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "7defc7c008dafb4ecfd3a43e972b4d5074663ce4255a53fcfa8d6f4efd43d089",
    "reader": null
   },
-  "protocol_hash": "f0f44915921495df45a507018ec2dd5010b83dc208ee8c46994aa775afceaa53",
+  "protocol_hash": "ea847aba46af54bf055ff5c1ccd9250a240f431e159a13b09fbbbb2327f51d2a",
   "scorer": {
    "kind": "probe",
    "name": "clf",
@@ -37,26 +37,26 @@
   "*": {
    "ci95": {
     "top1_acc_mean": [
-     0.1316990337552876,
-     0.21365964647045513
+     0.1344933311194168,
+     0.21704121061363024
     ]
    },
    "controls": {},
    "floors": {
-    "top1_acc_floor": 0.134375
+    "top1_acc_floor": 0.18125
    },
    "metrics": {
     "n_eval": 320,
     "n_folds": 5,
-    "top1_acc_mean": 0.16875,
+    "top1_acc_mean": 0.171875,
     "top1_acc_per_fold": [
+     0.078125,
+     0.234375,
+     0.1875,
      0.171875,
-     0.21875,
-     0.15625,
-     0.171875,
-     0.125
+     0.1875
     ],
-    "top1_acc_std": 0.033874192794810624
+    "top1_acc_std": 0.05740991584648074
    }
   }
  }

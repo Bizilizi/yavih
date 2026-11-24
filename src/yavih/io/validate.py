@@ -547,10 +547,16 @@ class _BenchView:
             return None
 
 
-def _load_bench_view(bench: Any, sidecars: list[dict]) -> tuple[_BenchView | None, str | None]:
-    """The given ``Benchmark`` or ``Benchmark.load(sidecar.benchmark.name)``; ``(None, why)`` when neither works."""
+def _load_bench_view(bench: Any, sidecars: list[dict], *, layout: dict | None = None) -> tuple[_BenchView | None, str | None]:
+    """The given ``Benchmark`` or ``Benchmark.load(sidecar.benchmark.name)``; ``(None, why)`` when neither works. For a
+    split whose ``layout`` is a smoke layout the benchmark is its smoke view, in which the split holds the smoke rows."""
+    from yavih.io.layout import layout_smoke, smoke_view_of
+
     if bench is not None:
-        return _BenchView(bench), None
+        try:
+            return _BenchView(smoke_view_of(bench, layout)), None
+        except Exception as e:  # noqa: BLE001
+            return None, f"the smoke view of {getattr(bench, 'name', bench)!r} is not loadable here: {type(e).__name__}: {e}"
     names = {str((s.get("benchmark") or {}).get("name")) for s in sidecars}
     if len(names) != 1:
         return None, f"sidecars name several benchmarks: {sorted(names)}"
@@ -558,7 +564,7 @@ def _load_bench_view(bench: Any, sidecars: list[dict]) -> tuple[_BenchView | Non
     try:
         from yavih.benchmark import Benchmark
 
-        return _BenchView(Benchmark.load(name)), None
+        return _BenchView(Benchmark.load(name, smoke=True) if layout_smoke(layout) else Benchmark.load(name)), None
     except Exception as e:  # noqa: BLE001 - eligibility is then undecided, recorded as such
         return None, f"benchmark {name!r} not loadable here: {type(e).__name__}: {e}"
 
@@ -2059,7 +2065,12 @@ def validate_features(
         split_name = splits_named.pop()
 
     # ---- benchmark view (needed by NA too for nominal rows)
-    view, why_no_bench = _load_bench_view(bench, sidecars) if (bench is not None or sidecars) else (None, "no sidecars")
+    from yavih.io.layout import layout_smoke as _layout_smoke
+    from yavih.io.layout import read_layout as _read_layout
+
+    split_layout = _read_layout(split_dir)
+    view, why_no_bench = (_load_bench_view(bench, sidecars, layout=split_layout) if (bench is not None or sidecars)
+                          else (None, "no sidecars"))
 
     # ---- E_NA_AND_SHARDS
     if na_path.exists():
@@ -2479,6 +2490,8 @@ def validate_features(
             )
             if sample_range is not None:  # the probe reads it: a sampled result is never stored, always `partial`
                 meta["sample"] = list(sample_range)
+            if _layout_smoke(split_layout):  # the rows are the smoke view's: the probe loads the benchmark that way
+                meta["smoke"] = True
             report.meta_path = str(finalize(split_dir, meta))
         elif meta_path.exists():
             try:

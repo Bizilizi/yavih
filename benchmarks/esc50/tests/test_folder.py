@@ -145,7 +145,8 @@ def test_schema_and_protocol(spec: dict):
     assert spec["schema_version"] == 3
     assert spec["protocol_version"] == 1 == spec["changelog"][-1]["version"]
     assert [c["version"] for c in spec["changelog"]] == [1]
-    assert spec["changelog"][0]["invalidates"] is False and spec["changelog"][0]["supersedes"] == []
+    assert spec["changelog"][0]["invalidates"] is False and spec["changelog"][0]["supersedes"] == ["0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e"]
+    assert spec["changelog"][0]["supersedes_input"] == ["d890623dc8af991ba3ab4290a83f3d7db07a3a8fcb825e5dabd7fae54791d092"]  # the manifest is hashed by its content: the same features
     assert not (F.walk_keys(spec) & REMOVED_READER_KEYS), F.walk_keys(spec) & REMOVED_READER_KEYS
     assert "requires" not in spec  # moved into output_contract.requires
     assert spec["protocol"] == {"clip_seconds": 5.0, "train_draw": None, "views": "none"}

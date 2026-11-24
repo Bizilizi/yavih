@@ -9,15 +9,20 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
-   "probe": null,
+   "eval": null,
    "reader": null
   },
-  "protocol_hash": "df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27",
+  "protocol_hash": "c3e1dfefa236effbae6b82f8059032bb40ce5cf7e970dfc7d98eadf4c37d19c5",
+  "scorer": {
+   "kind": "probe",
+   "name": "seq",
+   "version": 2
+  },
   "scoring_hash": "8dd9df21b16cf4169b70fae526c0a98d6ba37f9432c40d9895e6d1daf656d90a",
-  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {
@@ -34,24 +39,24 @@
    "ci95": {
     "seg_acc": [
      0.0265625,
-     0.053125
+     0.0578125
     ],
     "seg_acc_boundary": [
-     0.010526315789473684,
-     0.05263157894736842
+     0.00625,
+     0.0625
     ]
    },
    "controls": {},
    "floors": {
-    "seg_acc_boundary_floor": 0.5842105263157895,
-    "seg_acc_floor": 0.1734375
+    "seg_acc_boundary_floor": 0.54375,
+    "seg_acc_floor": 0.1359375
    },
    "metrics": {
-    "clip_acc": 0.03906250000000001,
-    "n_boundary": 19,
+    "clip_acc": 0.0421875,
+    "n_boundary": 16,
     "n_eval": 64,
-    "seg_acc": 0.0390625,
-    "seg_acc_boundary": 0.031578947368421054
+    "seg_acc": 0.0421875,
+    "seg_acc_boundary": 0.03125
    }
   }
  }

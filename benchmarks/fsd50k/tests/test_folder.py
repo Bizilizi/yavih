@@ -83,7 +83,8 @@ def test_schema2_top_level_and_no_removed_keys(spec: dict):
 def test_changelog(spec: dict):
     cl = spec["changelog"]
     assert [e["version"] for e in cl] == [1] and spec["protocol_version"] == 1
-    assert cl[0]["invalidates"] is False and cl[0]["supersedes"] == []
+    assert cl[0]["invalidates"] is False and cl[0]["supersedes"] == ["2e59e335f433b107e9f5f37436a21c89d177a0ee2e6bb5425c9740ef8bf2e6b7"]
+    assert cl[0]["supersedes_input"] == ["19663af8805a0c53d4310dbf5f898a3b2c2d91104c5abdc90d56702ad23da517"]  # the manifest is hashed by its content: the same features
 
 
 def test_input_contract(spec: dict):
@@ -319,7 +320,7 @@ def test_benchmark_loads_schema2(monkeypatch: pytest.MonkeyPatch):
     assert b.name == "fsd50k" and b.spec.readout == "clf" and b.spec.manifest.label.kind == "multi"
     assert b.n_rows("train") == 20000 and b.n_rows("eval") == 10231
     assert b.roles() == {"train": ["train"], "eval": ["eval"], "floor": [], "folds": []}
-    assert b.manifest_hash == "7ad288bbfb6b957ba83579f33feb44bce2fbad932bdd1fa5dc51c36776369c55"
+    assert b.manifest_hash == "6b9232ea09cdbf1dedc0e15c265ea631d55bce6c406bc8c38af0984f991dd2f8"
     assert len(b.protocol_hash) == 64
     m = b.manifest("eval")
     assert m.clip_id[0] == "37199" and m.label_ids[0] == [69, 90, 127, 121, 120]

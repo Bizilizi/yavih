@@ -9,15 +9,20 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
-   "probe": null,
+   "eval": null,
    "reader": null
   },
-  "protocol_hash": "0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e",
+  "protocol_hash": "1d0514493ee6a4b69f8f7d78644b7d1d59e48cfa8cda23a16f26525098e93659",
+  "scorer": {
+   "kind": "probe",
+   "name": "clf",
+   "version": 1
+  },
   "scoring_hash": "f9a35dc54bac0354dcf07a6a40e35f8866aa89c202dae096e16f15a41a0b9771",
-  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {
@@ -38,16 +43,16 @@
    },
    "controls": {},
    "floors": {
-    "acc_floor": 0.015625
+    "acc_floor": 0.0125
    },
    "metrics": {
     "acc_mean": 0.015625,
     "acc_per_fold": [
      0.015625,
-     0.0,
+     0.046875,
      0.0,
      0.015625,
-     0.046875
+     0.0
     ],
     "acc_pstd": 0.01711632992203644,
     "n_eval": 320,

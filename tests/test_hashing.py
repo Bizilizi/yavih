@@ -15,6 +15,18 @@ from yavih.versions import PLAN_SCHEMA_VERSION, PROBE_SCHEMA, PROTOCOL_SCHEMA, R
 # ----------------------------------------------------------------------------- canon
 
 
+def content_oracle(data: bytes, drop: tuple[str, ...] = ("smoke",)) -> str:
+    """A csv file's content digest (``yavih.hashing.content_sha256``), written out by hand as an independent oracle:
+    every field quoted, the columns by name, the ``drop`` columns left out, blank lines skipped, LF after each record."""
+    import csv
+    import io
+
+    rows = [r for r in csv.reader(io.StringIO(data.decode("utf-8"), newline="")) if r]
+    keep = sorted((i for i, name in enumerate(rows[0]) if name not in drop), key=lambda i: rows[0][i])
+    text = "".join(",".join('"' + r[i].replace('"', '""') + '"' for i in keep) + "\n" for r in rows)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def test_canon_is_sorted_compact_and_utf8():
     assert hashing.canon({"b": 1, "a": [1, 2]}) == '{"a":[1,2],"b":1}'
     assert hashing.canon({"é": "ü"}) == '{"é":"ü"}'  # ensure_ascii=False
@@ -60,16 +72,46 @@ def test_manifest_hash_formula(synthetic_benchmark):
     sb = synthetic_benchmark
     got = hashing.manifest_hash(sb.manifest_bytes, sb.classes_bytes)
     assert got == sb.manifest_hash  # conftest computes the manifest_hash formula independently
-    expected = hashlib.sha256(b"manifest:" + sb.manifest_sha256.encode() + b"\nclasses:" + sb.classes_sha256.encode()).hexdigest()
+    expected = hashlib.sha256(b"manifest-2:" + content_oracle(sb.manifest_bytes).encode() + b"\nclasses:"
+                              + content_oracle(sb.classes_bytes).encode()).hexdigest()
     assert got == expected
+    assert hashing.content_sha256(sb.manifest_bytes) == content_oracle(sb.manifest_bytes)
 
 
 def test_manifest_hash_without_classes():
     m = b"clip_id,split\na,train\n"
     got = hashing.manifest_hash(m, None)
-    expected = hashlib.sha256(b"manifest:" + hashlib.sha256(m).hexdigest().encode() + b"\nclasses:none").hexdigest()
+    canonical = b'"clip_id","split"\n"a","train"\n'  # every field quoted, the columns by name, LF
+    expected = hashlib.sha256(b"manifest-2:" + hashlib.sha256(canonical).hexdigest().encode() + b"\nclasses:none").hexdigest()
     assert got == expected
     assert got != hashing.manifest_hash(m, b"index,name\n0,x\n")
+
+
+def test_the_manifest_hash_names_the_content_not_the_bytes():
+    """Formatting never moves the digest (quoting, line endings, blank lines, a missing final newline, the order of
+    the columns); a value, a row or the order of the rows does. Annotation columns are outside it."""
+    base = b"clip_id,split,label\na,train,x\nb,val,\"y, z\"\n"
+    h = hashing.manifest_hash(base, None)
+    same = [
+        b'"clip_id","split","label"\r\n"a","train","x"\r\n"b","val","y, z"\r\n',  # every field quoted, CRLF
+        b"clip_id,split,label\na,train,x\n\nb,val,\"y, z\"",  # a blank line, no final newline
+        b"label,split,clip_id\nx,train,a\n\"y, z\",val,b\n",  # the columns in another order
+        b"clip_id,smoke,split,label\na,1,train,x\nb,,val,\"y, z\"\n",  # an annotation column, anywhere
+    ]
+    assert [hashing.manifest_hash(m, None) for m in same] == [h] * len(same)
+    different = [
+        base.replace(b",x\n", b",X\n"),  # a value
+        b"clip_id,split,label\nb,val,\"y, z\"\na,train,x\n",  # the order of the rows
+        base + b"c,val,x\n",  # a row
+        base.replace(b"label", b"labels"),  # a column's name
+        b"clip_id,split,label,extra\na,train,x,\nb,val,\"y, z\",\n",  # a column that is not an annotation
+        base.replace(b"a,train,x", b"a,train,1").replace(b",x", b",1.0"),  # values are strings: 1 is not 1.0
+    ]
+    assert h not in {hashing.manifest_hash(m, None) for m in different} and len({hashing.manifest_hash(m, None) for m in different}) == len(different)
+    assert hashing.MANIFEST_ANNOTATIONS == ("smoke",)
+    for bad in (b"", b"a,a\n1,2\n", b"a,b\n1\n"):
+        with pytest.raises(ValueError):
+            hashing.content_sha256(bad)
 
 
 # ----------------------------------------------------------------------------- protocol_hash

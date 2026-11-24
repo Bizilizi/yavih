@@ -80,7 +80,8 @@ def test_yaml_is_schema_2_without_retired_keys(spec):
 def test_changelog(spec):
     log = spec["changelog"]
     assert [e["version"] for e in log] == [1] and spec["protocol_version"] == 1
-    assert log[0]["invalidates"] is False and log[0]["supersedes"] == []
+    assert log[0]["invalidates"] is False and log[0]["supersedes"] == ["641928e796bd0eda4ac0df9bdac78e77b0b7b115bb91466bf72dec2d79c0d9c7"]
+    assert log[0]["supersedes_input"] == ["e15958addf12bf79316553fd2efde9ec15e5df8a63587125fa16275815b5a214"]  # the manifest is hashed by its content: the same features
 
 
 def test_train_draw_names_the_public_source(spec):
@@ -181,7 +182,7 @@ def test_metric_names_resolve(spec):
 def test_yaml_loads_through_core(spec, bench):
     assert bench.name == "ssv2" and bench.spec.readout == "clf"
     assert len(bench.protocol_hash) == 64 and len(bench.manifest_hash) == 64
-    assert bench.manifest_hash == "9bd6359dca83a92dd0739a3f112bbf04b7dcfd29d4de4a0bc21f14b47b64d051"
+    assert bench.manifest_hash == "d9bdd3b9b10370b2b9655cc3fcf9b2f6b7db170c5555a89ebc4aa33a7cf6b6c0"
     assert bench.n_rows("train") == 20000 and bench.n_rows("val") == 24777
     view = bench.view()
     assert view.streams == {"video": "video"} and view.facts == {} and view.output_contract == spec["output_contract"]

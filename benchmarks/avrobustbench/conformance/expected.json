@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "af69f15d857863cbbf2889b47ae2796d02efa515",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "720b9275b4b00a72851a2250cc6937b5727729ed11bb28af0fde46d228dffd43",
    "reader": null
   },
-  "protocol_hash": "251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11",
+  "protocol_hash": "adf7bf5a9796ad06f030f2e1e8c1b11cde4c64b37bc6706b4221b52efaac585e",
   "scorer": {
    "kind": "probe",
    "name": "clf",
@@ -57,11 +57,11 @@
    "ci95": {
     "acc_clean": [
      0.0,
-     0.22809537235419838
+     0.2153108027376358
     ],
     "macc": [
      0.0,
-     0.0
+     0.02074688796680498
     ]
    },
    "controls": {},
@@ -77,18 +77,18 @@
     "acc_gaussian": 0.0,
     "acc_impulse": 0.0,
     "acc_interference": 0.0,
-    "acc_rain": 0.0,
+    "acc_rain": 0.0625,
     "acc_shot": 0.0,
     "acc_smoke": 0.0,
     "acc_snow": 0.0,
     "acc_spatter": 0.0,
     "acc_speckle": 0.0,
-    "acc_underwater": 0.0,
+    "acc_underwater": 0.07142857142857142,
     "acc_wind": 0.0,
-    "alpha": 1.0,
-    "macc": 0.0,
+    "alpha": 1.0089285714285714,
+    "macc": 0.008928571428571428,
     "macc_digital": 0.0,
-    "macc_environmental": 0.0,
+    "macc_environmental": 0.022321428571428572,
     "macc_human": 0.0,
     "n_clips": 255,
     "n_eval": 256,

@@ -32,10 +32,20 @@ Z95 = 1.959963984540054
 DEFAULT_BOOTSTRAP: dict[str, int] = {"samples": 2000, "seed": 0}
 
 
+class EmptyGroup(ValueError):
+    """A metric or an interval was asked about a group that holds no row: nothing to average, nothing to resample.
+
+    On a full run this is an error like any other (a ``ValueError``: the result is refused). On a partial run, a smoke
+    run or a capped run, whose rows are a few rows of each split, a group with no row is expected: the scorer reports
+    that metric as not covered by the sample (a null value and ``W_SAMPLE_NOT_COVERED``) and scores the rest. A
+    folder's metric function raises it for its own empty groups (``from yavih.metrics import EmptyGroup``); any other
+    exception still refuses the result on every run, so a smoke run keeps finding real defects."""
+
+
 def wilson(k: int, n: int, z: float = Z95) -> tuple[float, float]:
     """Wilson score interval for ``k`` successes in ``n`` trials (``n ≥ 1``), clipped to ``[0, 1]``."""
     if n < 1:
-        raise ValueError("wilson: n must be ≥ 1")
+        raise EmptyGroup("wilson: n must be ≥ 1")
     if not 0 <= k <= n:
         raise ValueError(f"wilson: k must lie in [0, n], got k={k}, n={n}")
     p = k / n
@@ -66,7 +76,9 @@ def bootstrap_clip(per_clip_values, *, samples: int, seed: int, statistic=None) 
     v = as_array(per_clip_values, np.float64)
     if v.ndim == 1:
         v = v[:, None]
-    if v.ndim != 2 or v.shape[0] == 0:
+    if v.ndim == 2 and v.shape[0] == 0:
+        raise EmptyGroup("bootstrap_clip: per_clip_values holds no row")
+    if v.ndim != 2:
         raise ValueError("bootstrap_clip: per_clip_values must be a non-empty [n] or [n, k] array")
     if samples < 1:
         raise ValueError("bootstrap_clip: samples must be ≥ 1")
@@ -89,7 +101,7 @@ def bootstrap_draws(n: int, *, samples: int, seed: int) -> np.ndarray:
     """``int64 [samples, n]`` clip indices drawn with replacement, ``numpy.random.default_rng(seed)``:
     the one resampling scheme every ``bootstrap_clip`` interval shares."""
     if n < 1:
-        raise ValueError("bootstrap_clip: needs at least one clip")
+        raise EmptyGroup("bootstrap_clip: needs at least one clip")
     if samples < 1:
         raise ValueError("bootstrap_clip: samples must be ≥ 1")
     rng = np.random.default_rng(int(seed))

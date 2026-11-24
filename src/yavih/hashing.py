@@ -49,6 +49,8 @@ __all__ = [
     "hash12",
     "rng_seed",
     "manifest_hash",
+    "content_sha256",
+    "MANIFEST_ANNOTATIONS",
     "normalized_source",
     "source_sha256",
     "protocol_targets",
@@ -163,11 +165,58 @@ def rng_seed(text: str) -> int:
 # --------------------------------------------------------------------------- manifest hash
 
 
+#: Manifest columns that are annotations for yavih's own tools. They are not part of a benchmark's identity (dropped
+#: before the manifest is hashed) and are never handed to a bridge, a reader or a scorer. ``smoke``: the rows of the
+#: smoke run (``yavih plan smoke``).
+MANIFEST_ANNOTATIONS: tuple[str, ...] = ("smoke",)
+
+
+def content_sha256(csv_bytes: bytes, *, drop: Sequence[str] = ()) -> str:
+    """The sha256 of a CSV file's CONTENT, whatever its formatting. The digest is taken over the file rewritten in one
+    canonical form: UTF-8, every field quoted (``"`` doubled), ``\\n`` after every record, blank lines left out, the
+    columns in ascending order of their names (the header record included), the columns named in ``drop`` left out.
+    The order of the records is kept: it is part of the content (shards, canary draws and the smoke rows depend on
+    it). Values are the file's strings, untyped (``1`` and ``1.0`` differ). Quoting style, line endings, a trailing
+    newline and the order of the columns therefore never move the digest; a value, a row or its position does.
+    ``ValueError`` for a file without a header, a duplicate column or a record whose field count is not the header's."""
+    import csv
+    import io
+
+    reader = csv.reader(io.StringIO(csv_bytes.decode("utf-8"), newline=""))
+    header = next((r for r in reader if r), None)
+    if header is None:
+        raise ValueError("csv: empty file (a header is required)")
+    if len(set(header)) != len(header):
+        raise ValueError(f"csv: duplicate header columns in {header}")
+    dropped = set(drop)
+    order = sorted((i for i, name in enumerate(header) if name not in dropped), key=lambda i: header[i])
+    h = hashlib.sha256()
+
+    class _Sink:
+        def write(self, text: str) -> int:
+            h.update(text.encode("utf-8"))
+            return len(text)
+
+    writer = csv.writer(_Sink(), quoting=csv.QUOTE_ALL, lineterminator="\n", doublequote=True)
+    writer.writerow([header[i] for i in order])
+    n = len(header)
+    for k, record in enumerate(reader, start=1):
+        if not record:
+            continue
+        if len(record) != n:
+            raise ValueError(f"csv: record {k} has {len(record)} fields, the header has {n}")
+        writer.writerow([record[i] for i in order])
+    return h.hexdigest()
+
+
 def manifest_hash(manifest_bytes: bytes, classes_bytes: bytes | None) -> str:
-    """``sha256(b"manifest:" + sha256(manifest).hex + b"\\nclasses:" + (sha256(classes).hex | "none"))``
-    over the DECOMPRESSED csv bytes."""
-    classes_part = sha256_hex(classes_bytes) if classes_bytes is not None else "none"
-    payload = b"manifest:" + sha256_hex(manifest_bytes).encode("ascii") + b"\nclasses:" + classes_part.encode("ascii")
+    """``sha256(b"manifest-2:" + content(manifest).hex + b"\\nclasses:" + (content(classes).hex | "none"))``, where
+    ``content`` is :func:`content_sha256` of the decompressed csv and the manifest's annotation columns
+    (:data:`MANIFEST_ANNOTATIONS`) are left out. The digest names the manifest's content, not its bytes: the same rows
+    written by another csv writer hash alike, and an annotation column never moves it."""
+    classes_part = content_sha256(classes_bytes) if classes_bytes is not None else "none"
+    payload = (b"manifest-2:" + content_sha256(manifest_bytes, drop=MANIFEST_ANNOTATIONS).encode("ascii")
+               + b"\nclasses:" + classes_part.encode("ascii"))
     return sha256_hex(payload)
 
 

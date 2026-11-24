@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "7a19b14424fbd48e799ae344e98062eeb4ae763b",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "f181a199ed0c6825dcac389e4eba4a476d7e048e0e1e344ec5075cac8edb8dc0",
    "reader": null
   },
-  "protocol_hash": "d21516f36f46149178ba7f84bf088526770c2b9e4aef39ef49d787909a7f41a9",
+  "protocol_hash": "71120de04f058f8875c1711f9849fa33543dcad5fce4e384391962c69e1d1c1a",
   "scorer": {
    "kind": "probe",
    "name": "clf",
@@ -37,24 +37,24 @@
   "*": {
    "ci95": {
     "chroma_acc": [
-     0.03582660763317509,
-     0.09441226561778955
+     0.06702402222215342,
+     0.14018486224554
     ],
     "pitch_acc": [
-     0.002145090367681419,
-     0.028032768301535768
+     0.006092598203366294,
+     0.039479262709196654
     ]
    },
    "controls": {},
    "floors": {
-    "chroma_acc_floor": 0.0859375,
+    "chroma_acc_floor": 0.09765625,
     "pitch_acc_floor": 0.01171875
    },
    "metrics": {
-    "chroma_acc": 0.05859375,
+    "chroma_acc": 0.09765625,
     "n_eval": 256,
     "n_train": 256,
-    "pitch_acc": 0.0078125
+    "pitch_acc": 0.015625
    }
   }
  }

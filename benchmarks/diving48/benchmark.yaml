@@ -23,8 +23,10 @@ changelog:
     date: "2026-11-15"
     reason: Initial release.
     invalidates: false
-    protocol_hash: af5186f011d9b8ad4c25d111d5259bdc669925a5b0fe0a5fe3692116e7f6a711
-    input_hash: bce7d4dbf9f8ea7195fc9b75973893b2392936ae25e88ceadbff9e4b03bd0426
+    protocol_hash: c2ff5186381048b0192098535f14618f77ea1bbba275327f7c580b40b559e4ea
+    input_hash: e72e0671e7ca79a9da8afcdc9dca37644ed48bf765cc4b68b755d053f887c313
+    supersedes: [af5186f011d9b8ad4c25d111d5259bdc669925a5b0fe0a5fe3692116e7f6a711]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+    supersedes_input: [bce7d4dbf9f8ea7195fc9b75973893b2392936ae25e88ceadbff9e4b03bd0426]
 
 source:
   kind: public_url

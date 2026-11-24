@@ -11,8 +11,10 @@ changelog:
   date: '2026-10-29'
   invalidates: false
   reason: first protocol of EPIC-SOUNDS sound detection; train 495 / validation 137 recordings, official C10 mAP
-  protocol_hash: f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255
-  input_hash: 47f2644ee17fc88f2af05f000c640eed1cbdc219b57c0123152a11211cc3848f
+  protocol_hash: 99d787880d0b30cfbb50cf98fbf0875420ef8898a4d70969a2705ff2f67cd934
+  input_hash: 652ae9f0e32c7b0eebb72398908b95d573ce3ed890e8633c58ebffcb4dea35f7
+  supersedes: [f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+  supersedes_input: [47f2644ee17fc88f2af05f000c640eed1cbdc219b57c0123152a11211cc3848f]
 header:
   name: EPIC-SOUNDS detection
   title: 'EPIC-SOUNDS: A Large-Scale Dataset of Actions that Sound'

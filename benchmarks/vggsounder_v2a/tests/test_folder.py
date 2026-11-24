@@ -57,7 +57,8 @@ def test_yaml_identity(spec):
     assert spec["scorer"] == "vggsounder_v2a" and spec["protocol_version"] == 1
     assert "generation" in spec["capability"]
     (entry,) = spec["changelog"]
-    assert entry["version"] == 1 and entry["invalidates"] is False and entry["supersedes"] == []
+    assert entry["version"] == 1 and entry["invalidates"] is False and entry["supersedes"] == ["cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0"]
+    assert entry["supersedes_input"] == ["f9b97023716899aceea730227050888f584172a48aa6a8ed310c38013d2d807a"]  # the manifest is hashed by its content: the same features
 
 
 def test_splits_and_fields(spec):
@@ -166,8 +167,8 @@ def test_make_manifest_check():
 
 def test_bench_loads(bench):
     assert bench.name == "vggsounder_v2a" and bench.spec.readout == "vggsounder_v2a"
-    assert bench.protocol_hash == "cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0"
-    assert bench.input_hash == "f9b97023716899aceea730227050888f584172a48aa6a8ed310c38013d2d807a"
+    assert bench.protocol_hash == "7a2499f236427a8531b9d8531e573c9499ea85603d661ecc0c854713b284007f"
+    assert bench.input_hash == "d59e255c757aea405bf99b709f0226ef0d60b5725f04c11f91993d40d3f450a2"
     view = bench.view()
     assert view.fields == {"video": {"storage": "file", "kind": "video"}} and view.facts == {"audio_length": 8.0}
     assert not hasattr(view, "manifest")

@@ -22,9 +22,10 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470
-    input_hash: f1fe9cc653e11623db59b5f1b2975aa05b279f5725af4c10b2dfb74f00dcb1d1
-    supersedes: []
+    protocol_hash: 3fc91a92fed6a9dbbbc98b8cdeeb44798446a5686d36bc27df5ae4ca96fa7594
+    input_hash: 745c405506f629d877d03274b36a5c7ca1a04b7e2310f310a6159b120624e054
+    supersedes: [62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+    supersedes_input: [f1fe9cc653e11623db59b5f1b2975aa05b279f5725af4c10b2dfb74f00dcb1d1]
 
 source:
   kind: torrent

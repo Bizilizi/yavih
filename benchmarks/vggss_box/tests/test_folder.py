@@ -58,7 +58,8 @@ def test_yaml_schema2_and_changelog(spec):
     assert [c["version"] for c in spec["changelog"]] == [1, 2]
     first, second = spec["changelog"]
     assert first["invalidates"] is False and first["supersedes"] == []
-    assert second["invalidates"] is True and second["supersedes"] == []  # box readout 3: probes are re-run
+    assert second["invalidates"] is True and second["supersedes"] == ["807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60"]  # box readout 3: probes are re-run
+    assert second["supersedes_input"] == ["835ce236d5d00af35486d9626a1776e2eb3b8ed787435185f9d55f57e5b4b611"]  # the manifest is hashed by its content: the same features
     assert "requires" not in spec  # lives in output_contract
     assert not REMOVED_PROTOCOL_KEYS & set(spec["protocol"])  # windows, crop, padding are bridge decisions
     assert all("bridge_decode_allowed" not in s for s in F.file_fields(spec).values())
@@ -388,7 +389,7 @@ def test_bridge_template_describe(bench):
 def test_benchmark_loads(bench, spec):
     assert bench.name == "vggss_box" and bench.spec.readout == "box"
     assert len(bench.protocol_hash) == 64
-    assert bench.manifest_hash == "4739a39a14b9d222f58080e9aabe7c378d5ca12921e992faf97b44a310d64554"
+    assert bench.manifest_hash == "f2739619b10de12651e16461a1df971fbc062493fe1eb84322b317c43850b874"
     for split, n in (("train", 3700), ("eval", 914)):
         assert bench.n_rows(split) == n
     view = bench.view()

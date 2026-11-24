@@ -605,3 +605,116 @@ def test_one_model_two_readings_two_configurations(integration_env, yavih_home, 
     assert len(changed) == 1 and "2 bridge configurations" in changed[0]["message"], env["data"]["warnings"]
     older = env["data"]["detail"][col_id]["m1:a"]["older_configs"]
     assert [(o["describe_sha256"], o["moved_aside"]) for o in older] == [(profiles["a1"]["describe_sha256"], True)], older
+
+
+def _mark_smoke_rows(folder: Path, marked: dict[str, list[int]]) -> dict[str, list[str]]:
+    """Add a ``smoke`` column to ``folder``'s manifest with ``1`` on the given positions of each split (and the file's
+    new checksum to benchmark.yaml). Returns the marked clip ids per split, in manifest order."""
+    import csv
+    import gzip
+    import hashlib
+    import io
+
+    import yaml
+
+    spec = yaml.safe_load((folder / "benchmark.yaml").read_text())
+    path = folder / spec["manifest"]["file"]
+    rows = list(csv.reader(io.StringIO(gzip.decompress(path.read_bytes()).decode())))
+    header, body = rows[0], rows[1:]
+    key_i, split_i = header.index(spec["manifest"]["key"]), header.index("split")
+    seen: dict[str, int] = {}
+    ids: dict[str, list[str]] = {s: [] for s in marked}
+    out = [[*header, "smoke"]]
+    for r in body:
+        k = seen.get(r[split_i], 0)
+        seen[r[split_i]] = k + 1
+        on = k in marked.get(r[split_i], ())
+        if on:
+            ids[r[split_i]].append(r[key_i])
+        out.append([*r, "1" if on else ""])
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(out)
+    data = buf.getvalue().encode()
+    with gzip.GzipFile(path, "wb", mtime=0) as fh:
+        fh.write(data)
+    text = (folder / "benchmark.yaml").read_text().replace(spec["manifest"]["sha256"], hashlib.sha256(data).hexdigest())
+    (folder / "benchmark.yaml").write_text(text)
+    return ids
+
+
+def test_plan_smoke_chain(integration_env, yavih_home, runs_dir, tmp_path, monkeypatch):
+    """``plan smoke``: the whole chain on the rows the benchmark's manifest marks (``smoke`` = 1), wherever they lie in
+    a split. Marking them moves no hash. One ``--smoke`` extract unit per split under ``<out>-smoke``; the layouts and
+    ``_meta.json`` say ``smoke``; exactly the marked clips are extracted; the probe is scored on them, stores nothing,
+    and the report row is ``partial``; a capped or a full extract into the smoke run directory is refused."""
+    import yaml
+
+    from yavih.benchmark import Benchmark
+    from yavih.io.validate import iter_members
+
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    folder = T.make_synthetic_benchmark(yavih_home / "benchmarks", "clf", n_train=32, n_eval=16, media="tiny")
+    name = folder.name
+    before = Benchmark.load(name)
+    hashes = (before.manifest_hash, before.input_hash, before.protocol_hash)
+    assert before.smoke_declared is False and before.smoke_rows("train") == list(range(32))  # unmarked: the first rows
+    marked = {"train": [1, 9, 10, 17, 30], "val": [3, 12, 15]}  # scattered: not a prefix of either split
+    ids = _mark_smoke_rows(folder, marked)
+    full, smoke = Benchmark.load(name), Benchmark.load(name, smoke=True)
+    assert (full.manifest_hash, full.input_hash, full.protocol_hash) == hashes == (smoke.manifest_hash, smoke.input_hash, smoke.protocol_hash)
+    assert full.smoke_declared and {s: full.smoke_rows(s) for s in marked} == marked
+    assert full.n_rows("train") == 32 and smoke.n_rows("train") == 5 and smoke.n_rows("val") == 3
+    assert smoke.manifest("train").clip_id == ids["train"] and list(smoke.manifest("val").row) == [0, 1, 2]
+
+    work = tmp_path / "work"
+    (work / "bridges").mkdir(parents=True)
+    bfile = T.write_bridge_file(work / "bridges" / "oracle.py", "oracle", D=16)
+    profile = work / "bridges" / "oracle.profile.json"
+    _ok(_run(["-m", "yavih.cli", "bridge", "check", str(bfile), "--bench", name, "--n", "8", "--out", str(profile)], cwd=work), "bridge check")
+    prof = json.loads(profile.read_text())
+    model, reading = prof["model"], prof["reading"]
+    matrix = {
+        "schema_version": 1, "out": "runs", "seeds": [0], "canaries": 2, "shard_minutes": 30,
+        "defaults": {"launcher": sys.executable, "cpus": 2},
+        "bridges": {"ob": {"script": "bridges/oracle.py", "benchmark": name, "args": {}, "profile": "bridges/oracle.profile.json"}},
+    }
+    (work / "matrix.yaml").write_text(yaml.safe_dump(matrix, sort_keys=False), encoding="utf-8")
+    plan = work / "plan-smoke.jsonl"
+    units = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "smoke", str(work / "matrix.yaml"), "--out", str(plan)], cwd=work), "plan smoke"))["data"]
+    full_ids = {u["id"] for u in _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "build", str(work / "matrix.yaml")], cwd=work), "plan build"))["data"]}
+    again = _json(_ok(_run(["-m", "yavih.cli", "--json", "plan", "smoke", str(work / "matrix.yaml")], cwd=work), "again"))["data"]
+    assert [u["id"] for u in again] == [u["id"] for u in units] and not {u["id"] for u in units} & full_ids
+    run_rel = os.path.join("runs-smoke", name, model, reading)
+    extracts = [u for u in units if u["kind"] == "extract"]
+    assert sorted(u["split"] for u in extracts) == ["train", "val"] and all(u["shard"] == [0, 1] for u in extracts)
+    for u in extracts:
+        cmd = u["cmd"]
+        assert "--smoke" in cmd and "--rows" not in cmd and "--shard" not in cmd and cmd[cmd.index("--out") + 1] == run_rel, cmd
+    (probe_u,) = [u for u in units if u["kind"] == "probe"]
+    assert "--no-results" in probe_u["cmd"] and probe_u["out"] == run_rel
+    run_dir = work / run_rel
+    for i, u in enumerate(units):
+        if u["kind"] == "probe":  # the features are still there: exactly the marked clips, numbered from 0
+            for split in ("train", "val"):
+                got = sorted((m.row, m.meta["clip_id"]) for m in iter_members(run_dir / "features" / split, with_pos=False))
+                assert got == list(enumerate(ids[split])), (split, got)
+        env = _json(_ok(_run(["-m", "yavih.cli", "--json", "exec", str(plan), "--index", str(i)], cwd=work, timeout=1200), f"exec {i} {u['kind']}"))
+        assert env["status"] == "ok" and env["data"]["status"] == "done", (u["kind"], env["data"])
+    for split, k in (("train", 5), ("val", 3)):
+        sd = run_dir / "features" / split
+        layout = json.loads((sd / "_layout.json").read_text())
+        assert layout["sample"] == [0, k] and layout["smoke"] is True
+        meta = json.loads((sd / "_meta.json").read_text())
+        assert meta["sample"] == [0, k] and meta["smoke"] is True and meta["coverage"]["nominal"] == meta["coverage"]["present"] == k
+    result = json.loads((_unit_path(probe_u, probe_u["done"]).parent / "result.json").read_text())
+    assert result["status"] == "ok" and result["sample"] == {"train": [0, 5], "val": [0, 3]}
+    assert result["benchmark"]["protocol_hash"] == hashes[2]  # the benchmark it tests, not another one
+    assert not list(tmp_path.rglob("results_*.json")), "a smoke result must never reach the results store"
+    assert not (work / "runs").exists()
+    md = (work / "runs-smoke" / "_report" / "report.md").read_text()
+    assert "(partial)" in md and model in md
+    # the smoke run directory takes neither a capped range nor a full split
+    for how in (["--rows", "0:5"], ["--shard", "0/1"]):
+        proc = _run(["-m", "yavih.extract", "--bench", name, "--bridge", str(bfile), "--split", "train", *how, "--out", str(run_dir),
+                     "--canaries", "0"], cwd=work)
+        assert proc.returncode == 1 and "E_LAYOUT" in proc.stderr and "smoke rows" in proc.stderr, proc.stderr[-2000:]

@@ -555,3 +555,84 @@ def test_a_failing_folder_scorer_runs_once_per_population():
     with pytest.raises(ProbeRefused, match="CUDA out of memory") as e:
         evaluate_metrics(specs, outputs="OUT", targets=None, protocol={}, split_meta={}, floor_outputs="FLOOR", scorer=scorer)
     assert calls == ["OUT", "FLOOR"] and e.value.message.count("CUDA out of memory") == 4
+
+
+# ----------------------------------------------------------------------------- a partial run and a group without rows
+
+
+def _group_specs():
+    """Two accuracies over groups of the rows (targets ``[n, 2]``: correct, group), as a benchmark with a metric per
+    condition has them; ``broken`` fails for a reason that has nothing to do with the rows."""
+    from yavih.metrics import EmptyGroup, MetricSpec
+
+    def acc_of(group: int):
+        def fn(outputs, targets, protocol, split_meta):
+            rows = np.asarray(targets)[:, 1] == group
+            if not rows.any():
+                raise EmptyGroup(f"group {group} holds no row")
+            return float(np.asarray(targets)[rows, 0].mean())
+        return fn
+
+    def nan_mean(outputs, targets, protocol, split_meta):
+        return float(np.float64("nan"))
+
+    def broken(outputs, targets, protocol, split_meta):
+        raise KeyError("a defect in the metric, not a missing row")
+
+    mk = lambda name, fn: MetricSpec(name=name, fn=fn, readouts=frozenset({"clf"}))  # noqa: E731
+    return {"acc_a": mk("acc_a", acc_of(0)), "acc_b": mk("acc_b", acc_of(1)), "mean_c": mk("mean_c", nan_mean)}, mk("broken", broken)
+
+
+def test_a_partial_run_reports_a_group_without_rows_as_not_covered_and_a_full_run_refuses(monkeypatch):
+    """A smoke run or a capped run holds a few rows of each split, so a metric's group may be empty: that metric (and
+    its interval) is null and named in W_SAMPLE_NOT_COVERED, the others are scored. A full run refuses, as before."""
+    from yavih.readouts import base
+    from yavih.readouts.base import ProbeRefused, evaluate_metrics
+
+    metrics, broken = _group_specs()
+    targets = np.array([[1, 0], [0, 0], [1, 0]])  # three rows, all of group 0: group 1 is empty
+    kw = dict(outputs=None, targets=targets, protocol={}, split_meta={}, floor_outputs=None)
+    with pytest.raises(ProbeRefused, match="acc_b: EmptyGroup") as ei:
+        evaluate_metrics({"metrics": metrics}, **kw)
+    assert ei.value.code == "E_METRICS_INCOMPLETE"
+
+    monkeypatch.setitem(base._PARTIAL, "on", True)
+    monkeypatch.setitem(base._PARTIAL, "not_covered", [])
+    got = evaluate_metrics({"metrics": metrics}, **kw)
+    assert got["metrics"] == {"acc_a": pytest.approx(2 / 3), "acc_b": None, "mean_c": None}
+    assert base._PARTIAL["not_covered"] == ["acc_b", "mean_c"]
+    rec = base._mark_sample({"metrics": got["metrics"], "warnings": []}, {"test": [0, 3]})
+    (w,) = rec["warnings"]
+    assert w["code"] == "W_SAMPLE_NOT_COVERED" and w["where"] == "acc_b, mean_c" and rec["sample"] == {"test": [0, 3]}
+    # a defect is not a missing row: it refuses the result on a partial run too
+    with pytest.raises(ProbeRefused, match="broken: KeyError"):
+        evaluate_metrics({"metrics": {**metrics, "broken": broken}}, **kw)
+
+
+def test_the_interval_of_a_group_without_rows_is_null_on_a_partial_run(monkeypatch):
+    from yavih.metrics import EmptyGroup, intervals
+    from yavih.readouts import base
+    from yavih.readouts.base import ProbeRefused, evaluate_metrics
+
+    with pytest.raises(EmptyGroup):
+        intervals.wilson(0, 0)
+    with pytest.raises(EmptyGroup):
+        intervals.bootstrap_draws(0, samples=10, seed=0)
+    with pytest.raises(EmptyGroup):
+        intervals.bootstrap_clip(np.zeros((0,)), samples=10, seed=0)
+    assert issubclass(EmptyGroup, ValueError)  # a full run still sees the ValueError it always saw
+
+    metrics, _ = _group_specs()
+    one = {"acc_a": metrics["acc_a"]}
+
+    def no_rows(kind, name, outputs, targets, protocol, split_meta, *, spec=None):
+        return intervals.wilson(0, 0)
+
+    monkeypatch.setattr(base, "interval_fn", lambda: no_rows)
+    kw = dict(outputs=None, targets=np.array([[1, 0]]), protocol={}, split_meta={}, floor_outputs=None, ci={"acc_a": "binomial"})
+    with pytest.raises(ProbeRefused, match="interval 'acc_a'"):
+        evaluate_metrics({"metrics": one}, **kw)
+    monkeypatch.setitem(base._PARTIAL, "on", True)
+    monkeypatch.setitem(base._PARTIAL, "not_covered", [])
+    got = evaluate_metrics({"metrics": one}, **kw)
+    assert got["metrics"] == {"acc_a": 1.0} and got["ci95"] == {"acc_a": None} and base._PARTIAL["not_covered"] == ["acc_a"]

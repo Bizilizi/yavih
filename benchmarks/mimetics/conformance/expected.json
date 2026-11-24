@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "212509f3d6cf5fafb2713d8fe65460d8ec1c403a",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "508cccdb41176cf5ab2e6177521d226846db44488e0094ed4cb08b3fe6c1123c",
    "reader": null
   },
-  "protocol_hash": "c178b398efe3e92c3f5d6bbf3823722dd2d570651c09fb413488e6fdf5cc2156",
+  "protocol_hash": "9e61c00d50a0409eb7af0a91b84817f8956a57c8d22353c3b50eb4a3b18a5a69",
   "scorer": {
    "kind": "probe",
    "name": "clf",
@@ -38,25 +38,25 @@
   "*": {
    "ci95": {
     "acc": [
-     0.006092598203366294,
-     0.039479262709196654
+     0.008370729784579391,
+     0.04489813224965644
     ],
     "top5": [
-     0.04187072285916844,
-     0.10376215263514196
+     0.06702402222215342,
+     0.14018486224554
     ]
    },
    "controls": {},
    "floors": {
-    "acc_floor": 0.0078125
+    "acc_floor": 0.01171875
    },
    "metrics": {
-    "acc": 0.015625,
-    "mean_ap": 0.07289268150109379,
-    "mean_top1": 0.010555555555555554,
-    "mean_top5": 0.06293650793650794,
+    "acc": 0.01953125,
+    "mean_ap": 0.0905676864113183,
+    "mean_top1": 0.018601190476190476,
+    "mean_top5": 0.1019345238095238,
     "n_eval": 256,
-    "top5": 0.06640625
+    "top5": 0.09765625
    }
   }
  }

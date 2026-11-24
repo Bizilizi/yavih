@@ -22,8 +22,10 @@ changelog:
   date: '2026-10-29'
   invalidates: false
   reason: First version, frozen from the public challenge_sound_localisation train and valid annotation files.
-  protocol_hash: c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7
-  input_hash: 6a2fedbfa8b10ecce46b3ae295c6b4001610728a3ef1de8bfa702e9f11a4c63d
+  protocol_hash: 8f0a119797edb3fbb0ba96e2a4970b9fdc2838a635bef7be412c9615e2845e14
+  input_hash: 12af6f98a819e01cce1449b729a28b4c008b3f6926ffd5cc9c9d888049680bc7
+  supersedes: [c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+  supersedes_input: [6a2fedbfa8b10ecce46b3ae295c6b4001610728a3ef1de8bfa702e9f11a4c63d]
 source:
   kind: public_url
   urls:

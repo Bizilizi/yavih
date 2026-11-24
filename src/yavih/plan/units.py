@@ -73,6 +73,8 @@ __all__ = [
     "W_NO_CENSUS",
     "uncensused_frame_streams",
     "sample_root",
+    "SMOKE",
+    "resolve_smoke_benchmark",
 ]
 
 #: ``plan build`` warning: a video stream guarantees ``n_frames`` and the site has no media-info census.
@@ -357,6 +359,14 @@ def resolve_benchmark(ref: str) -> BenchmarkInfo:
     return benchmark_info(Benchmark.load(ref))
 
 
+def resolve_smoke_benchmark(ref: str) -> BenchmarkInfo:
+    """Hook: the ``BenchmarkInfo`` of the benchmark's smoke view (``Benchmark.load(ref, smoke=True)``): the same
+    benchmark, whose every split holds its smoke rows only. What ``plan smoke`` plans."""
+    from yavih.benchmark import Benchmark
+
+    return benchmark_info(Benchmark.load(ref, smoke=True))
+
+
 # ----------------------------------------------------------------------------- DONE / staleness
 
 
@@ -564,22 +574,29 @@ def _not_applicable(info: BenchmarkInfo, profile: dict) -> dict | None:
     return {"missing": list(dict.fromkeys(missing)), "reason": "; ".join(reasons), "decided_by": "plan"}
 
 
-def sample_root(out: str, n: int) -> str:
-    """The runs root of ``plan build --sample N``: ``<out>-sample<N>`` beside the matrix ``out`` (a separate tree:
-    its run directories, DONE markers, ``_index.jsonl`` and ``_report/`` never mix with the full run's)."""
+#: ``sample`` of the smoke run (``plan smoke``): the rows each benchmark's manifest marks, not a number of rows.
+SMOKE = "smoke"
+
+
+def sample_root(out: str, n: int | str) -> str:
+    """The runs root of a partial run: ``<out>-smoke`` (``plan smoke``) or ``<out>-sample<N>`` (``plan build --sample
+    N``) beside the matrix ``out`` (a separate tree: its run directories, DONE markers, ``_index.jsonl`` and
+    ``_report/`` never mix with the full run's)."""
+    name = SMOKE if n == SMOKE else f"sample{int(n)}"
     base = os.path.normpath(out)
     if os.path.basename(base) in ("", ".", ".."):
-        return os.path.join(base, f"sample{int(n)}")
-    return f"{base}-sample{int(n)}"
+        return os.path.join(base, name)
+    return f"{base}-{name}"
 
 
-def _sampled_id(uid: str, n: int | None) -> str:
-    """A capped run's unit id: derived from the full-run id and ``N`` (deterministic, never equal to a full-run id)."""
-    return uid if n is None else hashing.hash12(hashing.sha256_canon({"unit": uid, "sample": int(n)}))
+def _sampled_id(uid: str, n: int | str | None) -> str:
+    """A partial run's unit id: derived from the full-run id and ``N`` or ``smoke`` (deterministic, never equal to a
+    full-run id)."""
+    return uid if n is None else hashing.hash12(hashing.sha256_canon({"unit": uid, "sample": SMOKE if n == SMOKE else int(n)}))
 
 
 def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profile: dict, *,
-                 shard_minutes: int, calibration: dict, ram_budget_bytes: int, sample: int | None = None) -> list[Unit]:
+                 shard_minutes: int, calibration: dict, ram_budget_bytes: int, sample: int | str | None = None) -> list[Unit]:
     # model and reading come from the profile (checked against its describe by
     # check_profile); nothing bridge-side beyond these two names enters a path, an id or a key.
     model: str = profile["model"]
@@ -597,8 +614,9 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
     mult = calibration.get("multipliers") or {}
     out_root = sample_root(matrix.out, sample) if sample is not None else matrix.out
     run_dir = os.path.join(out_root, info.name, model, reading)
-    # the rows each split contributes: all of them, or the first N of a capped run (manifest order)
-    split_rows = {s: (min(int(sample), int(r)) if sample is not None else int(r)) for s, r in info.n_rows.items()}
+    # the rows each split contributes: all of them (of the smoke view, for a smoke run), or the first N of a capped run
+    capped = sample is not None and sample != SMOKE
+    split_rows = {s: (min(int(sample), int(r)) if capped else int(r)) for s, r in info.n_rows.items()}  # type: ignore[arg-type]
     ih = info.input_hash or info.protocol_hash  # extract units follow the input side only
     na = None if generic else _not_applicable(info, profile)  # a generic set's eligibility is the scorer's (validate)
     units: list[Unit] = []
@@ -624,7 +642,8 @@ def _entry_units(matrix: Matrix, entry: MatrixEntry, info: BenchmarkInfo, profil
                     # `--out` is the RUN directory (features land in `<run_dir>/features/<split>`):
                     # `run_extract` lands shards in `<out>/features/<split>/`, so the unit's `done` path
                     # below is reachable only when the run dir, not the runs root, is passed.
-                    *(["--rows", f"{lo}:{hi}"] if sample is not None else ["--shard", f"{i}/{n}"]), "--out", run_dir,
+                    *(["--smoke"] if sample == SMOKE else ["--rows", f"{lo}:{hi}"] if sample is not None else ["--shard", f"{i}/{n}"]),
+                    "--out", run_dir,
                     *_arg_tokens(entry.args),
                     "--canaries", str(matrix.canaries),
                     "--decode-workers", str(max(1, entry.cpus - 1)),
@@ -752,14 +771,14 @@ def _no_census_warning(info: BenchmarkInfo) -> dict:
 
 
 def build_units(matrix: Matrix, *, shard_minutes: int | None = None, ram_budget_bytes: int | None = None,
-                warnings: list[dict] | None = None, sample: int | None = None) -> list[Unit]:
+                warnings: list[dict] | None = None, sample: int | str | None = None) -> list[Unit]:
     """Every unit of the matrix (no filtering): matrix refusals, unit records, topological order. ``warnings`` (when
     given) collects ``W_NO_CENSUS`` findings, one per benchmark; they never change a unit. ``sample=N``: the capped
     run of ``plan build --sample N`` (module docstring)."""
     shard_minutes = int(shard_minutes or matrix.shard_minutes)
     if shard_minutes < 1:
         raise PlanError("--shard-minutes must be >= 1")
-    if sample is not None and (isinstance(sample, bool) or int(sample) < 1):
+    if sample is not None and sample != SMOKE and (isinstance(sample, (bool, str)) or int(sample) < 1):
         raise PlanError(f"--sample must be >= 1, got {sample!r}")
     if ram_budget_bytes is None:
         ram_budget_bytes = _ram_budget_bytes()
@@ -771,7 +790,7 @@ def build_units(matrix: Matrix, *, shard_minutes: int | None = None, ram_budget_
     infos: dict[str, BenchmarkInfo] = {}
     for entry in matrix.entries:
         if entry.benchmark not in infos:
-            infos[entry.benchmark] = resolve_benchmark(entry.benchmark)
+            infos[entry.benchmark] = resolve_smoke_benchmark(entry.benchmark) if sample == SMOKE else resolve_benchmark(entry.benchmark)
             if infos[entry.benchmark].uncensused_frame_streams and warnings is not None:
                 warnings.append(_no_census_warning(infos[entry.benchmark]))
         info = infos[entry.benchmark]
@@ -823,10 +842,11 @@ def plan(
     kind: str | None = None,
     shard_minutes: int | None = None,
     warnings: list[dict] | None = None,
-    sample: int | None = None,
+    sample: int | str | None = None,
 ) -> list[Unit]:
     """``yavih plan build``. ``pending`` emits only units whose ``done`` is missing or stale. ``warnings`` collects the
-    plan's warnings (``W_NO_CENSUS``). ``sample=N`` (``--sample N``) plans the capped run under ``<out>-sample<N>``."""
+    plan's warnings (``W_NO_CENSUS``). ``sample=N`` (``--sample N``) plans the capped run under ``<out>-sample<N>``; ``sample=SMOKE``
+    (``plan smoke``) the smoke run under ``<out>-smoke``."""
     if kind is not None and kind not in UNIT_KINDS:
         raise PlanError(f"--kind must be one of {sorted(UNIT_KINDS)}, got {kind!r}")
     matrix = load_matrix(matrix_path)

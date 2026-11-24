@@ -57,7 +57,7 @@ obtaining the data costs (point the worker at data that is already staged to ski
 Placeholders: `<BENCH>` the benchmark's name; `<WHEEL>` the absolute path of the wheel; `<CATALOG>` the exported
 catalog (`$TRIAL/catalog`); `<WORK>` the workspace;
 `<PYTHON>` a Python 3.10+ interpreter to build the venv from; `<DATA>` either `the data is staged at <path>: use
-it as the <root> data root` or `no data is staged: obtain it as setup.md says`; `<N>` the sample size (32 to 64).
+it as the <root> data root` or `no data is staged: obtain it as setup.md says`.
 
 ```text
 You are checking whether a new benchmark of yavih (a benchmark harness of frozen evaluation protocols) can be set up by an agent
@@ -93,12 +93,12 @@ edit anything yavih ships; when something does not work, work around it if you c
    bridge stub(s) it wrote with the toy model: the preprocessing source pasted into the docstring, every TODO,
    decoding in prepare() and the forward pass in encode(). Then `yavih bridge check ... --synthetic` and the
    `yavih bridge check ... --out <profile>` lines plan init printed, one per entry.
-7. A capped run, with `P=$(yavih config get runs.root)/_plans` (plan files never go into `yavih-bench/`):
-   `yavih plan build yavih-bench/matrices/toy.yaml --sample <N> --out $P/toy-trial.jsonl`,
+7. The smoke run, with `P=$(yavih config get runs.root)/_plans` (plan files never go into `yavih-bench/`):
+   `yavih plan smoke yavih-bench/matrices/toy.yaml --out $P/toy-trial.jsonl`,
    `yavih plan run $P/toy-trial.jsonl --local`, `yavih plan status $P/toy-trial.jsonl`.
-8. Read the outputs by hand, under the capped runs root (`<runs root>-sample<N>`): `yavih features validate` on each
+8. Read the outputs by hand, under the smoke runs root (`<runs root>-smoke`): `yavih features validate` on each
    run's features directory, `yavih eval run <run dir> --no-results` (a probe the plan already finished is
-   skipped, which is fine), and `yavih report build '<runs root>-sample<N>/*' --suite trial`.
+   skipped, which is fine), and `yavih report build '<runs root>-smoke/*' --suite trial`.
 9. Write <WORK>/TRIAL_REPORT.md from the template below. Time every stage (wall clock). Report what happened: a
    stage that failed is reported as failed, never as a number you did not see.
 ```
@@ -111,7 +111,7 @@ edit anything yavih ships; when something does not work, work around it if you c
 ## Environment
 
 yavih <version> (wheel <file name>), Python <x.y>, torch <x.y> (CPU), OS / CPU <...>, decode workers <n>.
-Data: <staged at ... | obtained with ... in <minutes>>. Sample: `--sample <N>`.
+Data: <staged at ... | obtained with ... in <minutes>>. Sample: the benchmark's smoke rows (`plan smoke`).
 
 ## Stages
 
@@ -123,7 +123,7 @@ Data: <staged at ... | obtained with ... in <minutes>>. Sample: `--sample <N>`.
 | plan init + bridge filled | | | |
 | bridge check --synthetic | | | |
 | bridge check --out | | | |
-| plan build --sample | | | |
+| plan smoke | | | |
 | plan run --local | | | |
 | features validate | | | |
 | probe run | | | |
