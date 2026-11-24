@@ -184,11 +184,11 @@ metrics:
   aggregation: null
   notes:
     - "acc and top5 are IntegralAction's Mimetics top-1/top-5 (github.com/mks0601/IntegralAction_RELEASE@50bc02a, Mimetics.evaluate), over all scored clips; no official evaluation code exists."
-    - "mean_top1, mean_top5, mean_ap are the paper's Table 6/9 metrics, written from its text: per-class means; AP = mean 1/rank of the label (ties in its favour). Compare them with the paper."
-    - "The probe is 50-way, trained on K400 clips of the 50 classes (paper Table 9; IntegralAction's Kinetics50). The paper's main 400-way numbers (Table 6) are far lower and not comparable."
-    - "IntegralAction scores 596 clips: it drops clips shorter than its 57-frame window and averages 10 windows per clip. yavih scores every staged clip with one view."
-    - "YouTube removals: 422/713 clips (312 of 560 videos) were staged on 2026-11-15 before YouTube's bot check refused the site; some of the rest are removed or private."
-    - "n_eval and coverage are part of every result: numbers on different subsets of the 713 clips can differ by a few points."
+    - "mean_top1, mean_top5, mean_ap are the paper's Table 6/9 metrics, from its text: per-class means; AP = mean 1/rank of the label. Ties count for the label: yavih's choice, not the paper's."
+    - "The probe is 50-way (paper Table 9; IntegralAction's Kinetics50), trained on the 200-per-class draw (protocol.train_draw); Table 9 trains on all K400 videos of the 50 classes."
+    - "IntegralAction's numbers are over 596 clips (implied by its printed percentages, 158/596 and 301/596); its loader skips clips of <= 56 frames, part of the 117 missing."
+    - "IntegralAction averages 10 windows per clip; yavih scores every staged clip with one view. The paper's main 400-way numbers (Table 6) are far lower and not comparable."
+    - "YouTube removals: 422/713 clips (312 of 560 videos) staged on 2026-11-15, before YouTube's bot check; n_eval and coverage are in every result, subsets can differ by a few points."
     - "Near 25 % on ~420 clips the binomial 95 % CI of acc is about +-4 points (+-3.2 on all 713): gaps below that at one seed are unresolved."
     - "Floor acc_floor: the train draw is balanced (200 per class), so the floor answers class 0 (archery): 19/713 = 2.7 % on all clips, 17/422 = 4.0 % here; chance is 2 %."
 readout_params: {}
