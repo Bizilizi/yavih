@@ -58,7 +58,7 @@ Probe3D's two positional deletes (both files unreadable in full) leave a 30 067-
 `yavih.freeze.class_balanced_subsample` draws 12 000 frames with the capture session as the class (seed 0).
 
 Headline metric `d1` = fraction of valid pixels with `max(gt/pred, pred/gt) < 1.25`, per image then averaged
-over the 654 images, computed by **Probe3D's `evals.utils.metrics.evaluate_depth`** (`external: evals`, commit
+over the 654 images, computed by **Probe3D's `evaluate_depth`** (copied into the folder from `evals/utils/metrics.py` at commit
 `a1f14640`), 95 % CI by clip-level bootstrap; also `d2`, `d3`, `rmse` (metres; Probe3D), `absrel` (yavih's, not
 in Probe3D's file), disclosure `n_eval`. No chance level; floor `d1_floor` = Probe3D `d1` of the per-pixel mean
 TRAIN log-depth map = **0.4403** on the frozen targets (d2 0.7469, d3 0.9053, absrel 0.344, rmse 1.039 m).

@@ -1,13 +1,12 @@
 """``nyuv2_depth`` probe hooks (the folder's setup.md): Probe3D's own depth metrics.
 
 ``d1``, ``d2``, ``d3``, ``rmse`` and the floor ``d1_floor`` are computed by the benchmark authors' code,
-``evals.utils.metrics.evaluate_depth`` of Probe3D (El Banani et al., "Probing the 3D Awareness of Visual
-Foundation Models", CVPR 2024; https://github.com/mbanani/probe3d at commit
-``a1f14640076e38b8bc07b66d0fe2d01d15691e9d``), reached through ``yavih.external.require`` (the assert-import:
-an absent package exits 3 with the install line, a different version exits 3) plus a sha256 check of the
-imported ``metrics.py`` (the distribution version is ``1.0`` at every commit, so the file digest is what pins
-the code). Probe3D is NEVER a yavih dependency; install it in the probe env as setup.md "## Dependencies" says.
-Nothing is re-implemented here when it is missing: scoring stops.
+``evaluate_depth`` of Probe3D (El Banani et al., "Probing the 3D Awareness of Visual Foundation Models",
+CVPR 2024; https://github.com/mbanani/probe3d at commit ``a1f14640076e38b8bc07b66d0fe2d01d15691e9d``,
+``evals/utils/metrics.py``), COPIED into this folder as ``probe3d_metrics.py``: Probe3D is not on PyPI, and the
+only install route (an editable install from a git URL) is one many agents refuse, so the folder carries the code.
+The copy keeps ``evaluate_depth`` and ``match_scale_and_shift`` byte for byte (its header lists what was dropped);
+``load_probe3d`` imports it by path and refuses a copy whose functions differ from ``PROBE3D_BLOCK_SHA256``.
 
 What Probe3D computes (``evaluate_depth(pred, gt, image_average=False)``): per image, ``valid = gt > 0``,
 ``pred = pred * valid`` first, ``thresh = max(gt / pred.clamp(1e-9), pred / gt.clamp(1e-9))``, ``dk`` = valid
@@ -21,7 +20,7 @@ The floor map (per-pixel mean TRAIN log-depth, ``yavih.metrics.depth.mean_log_de
 construction; it is SCORED by Probe3D's function like any prediction (floors go through the same
 metric function).
 
-Module scope imports stdlib, numpy and yavih core only; torch and Probe3D load at call time.
+Module scope imports stdlib, numpy and yavih core only; torch and the copied Probe3D file load at call time.
 Its normalized AST (comments and docstrings excluded) enters the scoring hash and so ``protocol_hash`` =
 H(input_hash, scoring_hash); an edit here is scoring-side and never invalidates features.
 """
@@ -29,18 +28,21 @@ H(input_hash, scoring_hash); an edit here is scoring-side and never invalidates 
 from __future__ import annotations
 
 import hashlib
-import importlib
+import importlib.util
+import sys
+from pathlib import Path
 
 import numpy as np
 
 from yavih.metrics.registry import MetricSpec
 
-#: Mirrors benchmark.yaml ``external[0]`` (the folder test asserts equality).
-EXTERNAL_NAME = "evals"
-EXTERNAL_PIP = "pip install loguru -e git+https://github.com/mbanani/probe3d.git@a1f14640076e38b8bc07b66d0fe2d01d15691e9d#egg=evals"
-EXTERNAL_VERSION_PIN = "1.0"
-#: sha256 of ``evals/utils/metrics.py`` at commit a1f14640.
+#: Where probe3d_metrics.py was copied from: the commit and the sha256 of the upstream ``evals/utils/metrics.py``.
+PROBE3D_COMMIT = "a1f14640076e38b8bc07b66d0fe2d01d15691e9d"
 PROBE3D_METRICS_SHA256 = "39c0c919f0474b1a7b6d09eedba9dccda19abff921381343250c5058a44a34a8"
+#: sha256 of the copied functions (probe3d_metrics.py after its ``import torch`` line), equal to the same two
+#: functions of the upstream file at that commit.
+PROBE3D_BLOCK_SHA256 = "d5085d79d0d6fa36cee057a002ce3e7f849357a7d0c99d7ea3548262070e5c1b"
+PROBE3D_FILE = "probe3d_metrics.py"
 PROBE3D_KEYS = ("d1", "d2", "d3", "rmse")
 CHUNK = 64  # images per evaluate_depth call (memory only; per-image results are independent of it)
 
@@ -48,25 +50,36 @@ PROTOCOL_KEYS = frozenset({"max_depth", "target_size", "depth_param", "source_si
 
 
 class Probe3DMismatch(RuntimeError):
-    """The importable ``evals.utils.metrics`` is not the pinned Probe3D file."""
+    """The copied ``probe3d_metrics.py`` no longer holds Probe3D's functions as copied."""
+
+
+def copied_block(text: str) -> str:
+    """The copied functions of ``probe3d_metrics.py``: everything after its ``import torch`` line."""
+    head, sep, block = text.partition("import torch\n\n\n")
+    if not sep:
+        raise Probe3DMismatch(f"{PROBE3D_FILE}: no 'import torch' line before the copied functions")
+    return block
 
 
 def load_probe3d():
-    """``evals.utils.metrics`` after the assert-import and the file-digest check."""
-    from yavih.external import record_version, require
-
-    require(EXTERNAL_NAME, EXTERNAL_PIP, EXTERNAL_VERSION_PIN)
-    mod = importlib.import_module("evals.utils.metrics")
-    with open(mod.__file__, "rb") as fh:
-        got = hashlib.sha256(fh.read()).hexdigest()
-    if got != PROBE3D_METRICS_SHA256:
-        raise Probe3DMismatch(
-            f"{mod.__file__} sha256 {got} != pinned {PROBE3D_METRICS_SHA256} (Probe3D commit a1f14640); "
-            f"reinstall with: {EXTERNAL_PIP}"
-        )
-    # Probe3D reports 1.0 at every commit: the result names the pinned code (commit + file digest)
-    record_version(EXTERNAL_NAME, f"{EXTERNAL_VERSION_PIN}+a1f14640 (metrics.py sha256 {PROBE3D_METRICS_SHA256[:12]})")
-    return mod
+    """The copied Probe3D module (``evaluate_depth``), imported by path after the block-digest check."""
+    path = Path(__file__).resolve().with_name(PROBE3D_FILE)
+    data = path.read_bytes()
+    got = hashlib.sha256(copied_block(data.decode("utf-8")).encode("utf-8")).hexdigest()
+    if got != PROBE3D_BLOCK_SHA256:
+        raise Probe3DMismatch(f"{path}: copied functions sha256 {got} != {PROBE3D_BLOCK_SHA256} "
+                              f"(Probe3D commit {PROBE3D_COMMIT[:8]}, evals/utils/metrics.py)")
+    name = f"yavih_folder_{path.parent.name}_probe3d_{hashlib.sha256(data).hexdigest()[:12]}"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        try:
+            spec.loader.exec_module(mod)
+        except Exception:
+            sys.modules.pop(name, None)
+            raise
+    return sys.modules[name]
 
 
 def _check_protocol(protocol, targets: np.ndarray) -> None:
@@ -127,13 +140,13 @@ def _d1_floor(outputs, targets, protocol, split_meta) -> float:
 _KEYS = PROTOCOL_KEYS
 METRICS: dict[str, MetricSpec] = {
     **{k: MetricSpec(name=k, fn=_metric(k), readouts=frozenset({"grid"}), protocol_keys=_KEYS, shape="scalar",
-                     kind="metric", higher_is_better=(k != "rmse"), external=EXTERNAL_NAME) for k in PROBE3D_KEYS},
+                     kind="metric", higher_is_better=(k != "rmse")) for k in PROBE3D_KEYS},
     "d1_floor": MetricSpec(name="d1_floor", fn=_d1_floor, readouts=frozenset({"grid"}), protocol_keys=_KEYS,
-                           shape="scalar", kind="floor", higher_is_better=True, floor_of=("d1",), external=EXTERNAL_NAME),
+                           shape="scalar", kind="floor", higher_is_better=True, floor_of=("d1",)),
 }
 
 
 def score(bench, split, rows, outputs, targets) -> dict[str, float]:
-    """The external scorer for ``METRICS`` minus the floor: Probe3D's per-image values, averaged."""
+    """The scorer for ``METRICS`` minus the floor: Probe3D's per-image values (the copied code), averaged."""
     per = per_image(outputs, targets, bench.spec.protocol)
     return {k: float(np.mean(v)) for k, v in per.items()}

@@ -70,7 +70,7 @@ What the scaffold holds, and what has to be replaced:
 | `README.md`, `setup.md` | written from the folder contract, `TODO` in every section | your docs (step 5) |
 | `make_manifest.py`, `prepare/01_obtain.sh` | stubs that exit 2 | your freeze and prepare steps (steps 3 and 4) |
 | `tests/test_folder.py` | generated: the shared checks of `yavih.testing.folder`, `--like`'s values pinned, two tests that skip with a `TODO:` reason | your folder tests (step 9) |
-| `conformance/expected.json` | recorded for the copied protocol (`conformance: recorded`); when the package that protocol needs is not installed here (Probe3D's `evals` for `--like nyuv2_depth`), `--like`'s fixture copied with the new folder's identity and `recorded_with.copied_from` (`conformance: copied from <like>`) | your fixture (step 8) |
+| `conformance/expected.json` | recorded for the copied protocol (`conformance: recorded`); when the package that protocol needs is not installed here (the authors' `vggsounder` package for `--like vggsounder`), `--like`'s fixture copied with the new folder's identity and `recorded_with.copied_from` (`conformance: copied from <like>`) | your fixture (step 8) |
 
 Never copied: `--like`'s `curation.json`, `notes/`, `tests/`, `prepare/` and `assets/`. Until step 3, every number
 in the folder is `--like`'s. The command's last lines say how the fixture was made; a copied one is correct for the
@@ -103,9 +103,13 @@ Every key is described in the [schema](benchmark-folder.md#benchmarkyaml). Decid
 6. **Metrics.** Headline, list, floors, controls, chance, intervals. Every name resolves in the metric registry or
    the folder's `eval.py` `METRICS`; every `protocol` key is consumed by a metric, the readout, `eval.py`
    (`PROTOCOL_KEYS`) or `input_contract.facts`.
-7. **Authors' code.** A scorer the authors ship is listed under `external` (import name, the exact
-   `pip install …` line, version pin, what it is used for) and called from `eval.py` (step 7). It is never added
-   to `pyproject.toml`.
+7. **Authors' code.** Copy it into the folder: the authors' scorer, or where they have none a well-recognised
+   implementation, as much as the benchmark needs, each copied file starting with a comment naming the repository,
+   commit, upstream path and changes ([fleet/grounding.md](../fleet/grounding.md)). Only when the authors' code is a
+   released wheel on PyPI is it imported instead: listed under `external` (import name, `pip install <name>==<version>`,
+   version pin, what it is used for) and called from `eval.py` (step 7). An install from a git URL is never used
+   (`W_EXTERNAL_NOT_RELEASED`): agents refuse it, and copied code can be read and audited. Neither is ever added to
+   `pyproject.toml`.
 8. **The header.** `header: {name, title, venue, abstract}`: the display name, the paper title,
    `"<authors> · <venue> <year>"` and a neutral abstract of at most 60 words. The README header image is rendered
    from it (step 11).
@@ -238,7 +242,8 @@ consumes (`PROTOCOL_KEYS`), target construction (`targets`), the authors' scorer
 bridge-check gates (`BRIDGE_CHECKS`), an eligibility rule (`eligible`) or readings of its own (`READINGS`)
 ([eval.py hooks](benchmark-folder.md#evalpy-hooks); every point: [extending through a folder](extending-through-a-folder.md)).
 A folder scorer that no core fixture covers ships its own stand-in in `testing.py` for step 12.
-Module scope imports only the standard library, numpy and yavih core; the authors' package is imported at call time
+Module scope imports only the standard library, numpy and yavih core. Copied authors' code lives in a module next to
+`eval.py`, loaded at call time (`nyuv2_depth/probe3d_metrics.py`); a released PyPI package is imported at call time
 through `yavih.external.require(name, pip, version_pin)` with the matching `external` entry. A `eval.py` copied by
 the scaffold is deleted when the folder needs none.
 

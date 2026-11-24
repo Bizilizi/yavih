@@ -21,9 +21,9 @@ changelog:
     date: "2026-10-12"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4
+    protocol_hash: 348a01e00302ab27924e8d05f7fe664c493e1a5a3cc13ea7ed49f18747afd343
     input_hash: a81f90c7e183b6ec98a9e1ca5801f1b8b45690f28eb2b45c3b3f34cfaef76bba
-    supersedes: []
+    supersedes: [4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4]   # Probe3D imported from git; the copy gives the same numbers
 
 source:
   kind: manual_portal
@@ -178,15 +178,7 @@ output_contract:
     grid: {h: 14, w: 14, min_cell_coverage: 0.5}
     t_bins: null
 
-external:
-  - name: evals
-    pip: "pip install loguru -e git+https://github.com/mbanani/probe3d.git@a1f14640076e38b8bc07b66d0fe2d01d15691e9d#egg=evals"
-    version_pin: "1.0"
-    used_for: >-
-      d1, d2, d3, rmse and the floor d1_floor: Probe3D's evals.utils.metrics.evaluate_depth (El Banani et al.,
-      CVPR 2024; file sha256 39c0c919f0474b1a7b6d09eedba9dccda19abff921381343250c5058a44a34a8 at commit
-      a1f14640), per image, then the mean over images. Editable install only: the package declares
-      packages=["evals"] without an evals/__init__.py, so a non-editable install ships no module
+external: []                       # Probe3D is copied into the folder (probe3d_metrics.py): it is not on PyPI
 
 protocol:
   clip_seconds: null

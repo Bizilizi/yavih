@@ -9,17 +9,20 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
-  "externals": {
-   "evals": "1.0"
-  },
+  "commit": "b12736805d32ce78803c8671c5e5ebbd3b0a1d80+dirty",
+  "externals": {},
   "folder_source": {
-   "probe": "648b8b2b0dfb6a48ff7d6ab2fc19f7d22d40313fa70f1a64da64e27ca95c7d07",
+   "eval": "19b8f78c7241644c433747445fcc2f4c9bb2d77d40d4063a863e859ffef35667",
    "reader": null
   },
-  "protocol_hash": "4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4",
-  "scoring_hash": "49a9d234925ba7ecc01468b4eae3a29df8500a4fcb70badc06c9b88cec30b674",
-  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+  "protocol_hash": "348a01e00302ab27924e8d05f7fe664c493e1a5a3cc13ea7ed49f18747afd343",
+  "scorer": {
+   "kind": "probe",
+   "name": "grid",
+   "version": 2
+  },
+  "scoring_hash": "a5e48e201ceb673df2b712f3b32715b4c397439006127daf86545bf884d6d177",
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {

@@ -84,39 +84,14 @@ geonet_root = "/path/to/probe3d_nyuv2"
 
 ## Dependencies
 
-Probe3D's depth-metric code, in the **probe env** only (the model env needs nothing beyond yavih core and the
-bridge's own decoder). Install it independently — never into yavih's requirements — with exactly:
-
-```bash
-pip install loguru -e git+https://github.com/mbanani/probe3d.git@a1f14640076e38b8bc07b66d0fe2d01d15691e9d#egg=evals
-```
-
-That is `external[0].pip` (`name: evals`, `version_pin: "1.0"`). The assert-import is
-`yavih.external.require("evals", <pip>, "1.0")` followed by `import evals.utils.metrics` and a sha256 check of that
-file (`39c0c919f0474b1a7b6d09eedba9dccda19abff921381343250c5058a44a34a8`, commit `a1f14640`; the distribution
-version is `1.0` at every commit, so the digest is what pins the code); `yavih doctor --bench nyuv2_depth` shows
-it. It needs torch (the probe env has it) and `loguru`. The install MUST be editable (`-e`): Probe3D's `setup.py`
-declares `packages=["evals"]` while `evals/` has no `__init__.py`, so a regular `pip install git+…` installs an
-empty distribution and `import evals` fails. A missing package or digest makes `probe` exit 3 before training;
-nothing is silently re-implemented. Every depth metric is Probe3D's except `absrel`, which its file lacks: that one
-is yavih's own (`yavih.metrics.depth`), as is the disclosure `n_eval`.
-
-Where that pip line cannot run (a uv venv has no pip; an env you may not install into), clone the commit and
-either install the clone editable or put it on `PYTHONPATH` without installing anything:
-
-```bash
-git clone https://github.com/mbanani/probe3d.git /path/probe3d
-git -C /path/probe3d checkout a1f14640076e38b8bc07b66d0fe2d01d15691e9d
-uv pip install loguru -e /path/probe3d            # uv venv: editable from the local clone (dist metadata 1.0)
-# or, installing nothing into the env:
-export PYTHONPATH=/path/probe3d:$PYTHONPATH        # plus loguru importable (e.g. pip install --target DIR loguru on PYTHONPATH)
-```
-
-Without distribution metadata, `yavih.external.require` accepts `evals` only when the directory it imports from
-lies in a git checkout whose `HEAD` is the commit of the pip line, `setup.py` says `version="1.0"` and (when
-`git` runs) no tracked file under `evals/` is modified; the `metrics.py` sha256 check above still runs. `yavih
-doctor --bench nyuv2_depth` then shows `evals 1.0+a1f14640 (git checkout)`. A copy without `.git` is refused (its
-commit cannot be checked).
+None. Probe3D's depth metrics (El Banani et al., CVPR 2024) are copied into this folder as `probe3d_metrics.py`:
+`evaluate_depth` and the `match_scale_and_shift` it can call, byte for byte from
+<https://github.com/mbanani/probe3d> at commit `a1f14640076e38b8bc07b66d0fe2d01d15691e9d`, file
+`evals/utils/metrics.py` (sha256 `39c0c919f0474b1a7b6d09eedba9dccda19abff921381343250c5058a44a34a8`; MIT licence,
+notice kept in the copy). Probe3D is not on PyPI and installs only editable from a git URL, so the folder carries the
+code instead of installing it. Nothing to install: the probe env's torch runs it. `eval.py` refuses a copy whose
+functions differ from `PROBE3D_BLOCK_SHA256`. Every depth metric is Probe3D's except `absrel`, which its file lacks:
+that one is yavih's own (`yavih.metrics.depth`), as is the disclosure `n_eval`.
 
 Prepare-time tools: numpy, scipy (GeoNet `.mat`, steps 4–6), h5py (step 2), torch (optional: step 4's
 `--check-torch` cross-check). PNGs are written by `prepare/recontainer_png.py` with stdlib `zlib` (no pillow);
@@ -226,8 +201,7 @@ nyuv2_depth: manifest sha ok; labels ok; curation ok; targets_sha_ok=True; deriv
   media_info present rows=12654
 ```
 
-and `recontainer_png.py --verify` reports `checked 12654`, `bad 0`, `missing 0`. A `W_EXTERNAL` warning about
-`evals` is expected in the model env (Probe3D belongs to the probe env only).
+and `recontainer_png.py --verify` reports `checked 12654`, `bad 0`, `missing 0`.
 
 Then `yavih bridge check <bridge.py> --bench nyuv2_depth --out nyuv2_depth.profile.json` must pass its hard
 checks (rerun bit-identical, batch and order invariance); a pooled `N = 1` profile is planned `not_applicable`.

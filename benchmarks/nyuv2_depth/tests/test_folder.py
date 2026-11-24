@@ -80,7 +80,9 @@ def test_folder_specific_files():
 def test_yaml_schema_and_changelog(spec):
     assert spec["schema_version"] == 3 and spec["name"] == "nyuv2_depth" == HERE.name and spec["scorer"] == "grid"
     assert spec["protocol_version"] == spec["changelog"][-1]["version"] == 1
-    assert [c["version"] for c in spec["changelog"]] == [1] and spec["changelog"][0]["supersedes"] == []
+    assert [c["version"] for c in spec["changelog"]] == [1]
+    # the protocol hash of the git-installed Probe3D era: the copied code gives the same numbers
+    assert spec["changelog"][0]["supersedes"] == ["4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4"]
 
 
 def test_sha256_and_listing(spec, rows):
@@ -177,21 +179,23 @@ def test_contracts_and_protocol(spec, derive):
     assert spec["source"]["kind"] == "manual_portal" and set(spec["data"]["roots"]) == {"derived_root", "geonet_root"}
 
 
-def test_external_entry_matches_probe_py(spec):
-    """benchmark.yaml external[0] == eval.py's constants (read with ast: importing eval.py needs the core)."""
+def test_probe3d_is_copied_not_installed(spec):
+    """No external entry: Probe3D's functions are copied into probe3d_metrics.py, pinned by commit and block digest
+    (read with ast: importing eval.py needs the core); eval.py stays torch-free at module scope."""
+    assert spec["external"] == []
     tree = ast.parse((HERE / "eval.py").read_text(encoding="utf-8"))
     consts = {t.id: n.value.value for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
               for t in n.targets if isinstance(t, ast.Name)}
-    (ext,) = spec["external"]
-    assert set(ext) == {"name", "pip", "version_pin", "used_for"}
-    assert (ext["name"], ext["pip"], ext["version_pin"]) == (consts["EXTERNAL_NAME"], consts["EXTERNAL_PIP"], consts["EXTERNAL_VERSION_PIN"])
-    # a runnable command (the assert-import prints it as is): pip install loguru -e git+…@<commit>#egg=evals
-    assert "a1f14640076e38b8bc07b66d0fe2d01d15691e9d" in ext["pip"] and ext["pip"].split()[:4] == ["pip", "install", "loguru", "-e"]
-    assert consts["PROBE3D_METRICS_SHA256"] in ext["used_for"].replace("\n", "")
-    # module scope imports: stdlib, numpy, yavih core only
+    assert consts["PROBE3D_COMMIT"] == "a1f14640076e38b8bc07b66d0fe2d01d15691e9d"
+    text = (HERE / consts["PROBE3D_FILE"]).read_text(encoding="utf-8")
+    block = text.partition("import torch\n\n\n")[2]
+    assert hashlib.sha256(block.encode("utf-8")).hexdigest() == consts["PROBE3D_BLOCK_SHA256"]
+    assert block.startswith("def evaluate_depth(") and "\ndef match_scale_and_shift(" in block
+    # the provenance header names the source; the MIT notice stays with the copy
+    assert consts["PROBE3D_COMMIT"] in text and consts["PROBE3D_METRICS_SHA256"] in text and "MIT License" in text
     top = {(n.module or "").split(".")[0] for n in tree.body if isinstance(n, ast.ImportFrom)} | {
         a.name.split(".")[0] for n in tree.body if isinstance(n, ast.Import) for a in n.names}
-    assert top <= {"__future__", "hashlib", "importlib", "numpy", "yavih"}, top
+    assert top <= {"__future__", "hashlib", "importlib", "sys", "pathlib", "numpy", "yavih"}, top
 
 
 # ----------------------------------------------------------------------------- README.md / setup.md
@@ -411,60 +415,38 @@ def _eval_module():
 PROTO = {"max_depth": 10.0, "target_size": 224, "depth_param": "log", "source_size": [480, 640], "target_region": REGION}
 
 
-class _FakeProbe3D:
-    """Stand-in for ``evals.utils.metrics`` with Probe3D's evaluate_depth semantics (plumbing test only)."""
-
-    @staticmethod
-    def evaluate_depth(depth_pr, depth_gt, image_average=False):
-        import torch
-
-        valid = (depth_gt > 0).float()
-        depth_pr = depth_pr * valid
-        n = valid.sum(dim=(1, 2)).clamp(min=1)
-        th = torch.maximum(depth_gt / depth_pr.clamp(min=1e-9), depth_pr / depth_gt.clamp(min=1e-9))
-        out = {f"d{k}": ((th < 1.25**k).float() * valid).sum(dim=(1, 2)) / n for k in (1, 2, 3)}
-        out["rmse"] = (((depth_gt - depth_pr) ** 2 * valid).sum(dim=(1, 2)) / n).sqrt()
-        return out
-
-
-def test_probe_py_metrics_and_missing_package():
-    """eval.py: METRICS name Probe3D as external; without the package the assert-import fails with the pip line;
-    with a Probe3D-semantics module the per-image numbers equal yavih's transcription."""
+def test_copied_probe3d_metrics_match_the_transcription():
+    """eval.py scores with the copied Probe3D evaluate_depth; its per-image numbers equal yavih's own transcription."""
     pytest.importorskip("torch")
     mod = _eval_module()
     assert set(mod.METRICS) == {"d1", "d2", "d3", "rmse", "d1_floor"}
-    assert all(m.external == "evals" and m.readouts == frozenset({"grid"}) for m in mod.METRICS.values())
+    assert all(m.external is None and m.readouts == frozenset({"grid"}) for m in mod.METRICS.values())
     assert mod.METRICS["rmse"].higher_is_better is False and mod.METRICS["d1_floor"].kind == "floor"
-    if not _has("evals"):
-        with pytest.raises(Exception) as ei:  # ExternalMissing → exit 3, message = the pip line
-            mod.load_probe3d()
-        assert "probe3d" in str(ei.value).lower() or "evals" in str(ei.value)
+    m = mod.load_probe3d()
+    assert callable(m.evaluate_depth) and callable(m.match_scale_and_shift)
     from yavih.metrics import depth as D
 
     rng = np.random.default_rng(0)
     gt = rng.uniform(0.5, 9.5, size=(5, 224, 224)).astype(np.float32)
     gt[rng.random(gt.shape) < 0.2] = 0.0
     pred = (gt + rng.normal(0, 0.5, gt.shape)).clip(0.1, 12).astype(np.float32)
-    per = mod.per_image(pred, gt, PROTO, _FakeProbe3D)
-    ref = D.depth_per_image(pred, gt, PROTO)
-    for k in ("d1", "d2", "d3", "rmse"):
-        assert np.allclose(per[k], ref[k], atol=1e-4), k
-
-
-def test_probe3d_real_package_matches_transcription():
-    """When Probe3D (``evals``) is installed as setup.md says, its numbers equal yavih's transcription."""
-    if not _has("evals"):
-        pytest.skip("Probe3D not installed (" + F.load_yaml(HERE)["external"][0]["pip"] + ")")
-    mod = _eval_module()
-    from yavih.metrics import depth as D
-
-    rng = np.random.default_rng(1)
-    gt = rng.uniform(0.5, 9.5, size=(4, 224, 224)).astype(np.float32)
-    pred = (gt * rng.uniform(0.7, 1.3, gt.shape)).astype(np.float32)
     per = mod.per_image(pred, gt, PROTO)
     ref = D.depth_per_image(pred, gt, PROTO)
     for k in ("d1", "d2", "d3", "rmse"):
         assert np.allclose(per[k], ref[k], atol=1e-4), k
+
+
+def test_an_edited_copy_is_refused(tmp_path):
+    """A probe3d_metrics.py whose functions differ from the pinned block is refused before scoring."""
+    import shutil
+
+    for f in ("eval.py", "probe3d_metrics.py"):
+        shutil.copy(HERE / f, tmp_path / f)
+    p = tmp_path / "probe3d_metrics.py"
+    p.write_text(p.read_text(encoding="utf-8").replace("1.25 ** 1", "1.30 ** 1"), encoding="utf-8")
+    mod = F.load_module(tmp_path / "eval.py", "nyuv2_probe_edited")
+    with pytest.raises(mod.Probe3DMismatch):
+        mod.load_probe3d()
 
 
 def test_bridge_template_encodes_synthetic_sample(tmp_path, rows, png):
