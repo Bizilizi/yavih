@@ -32,16 +32,23 @@ the sizes of the upstream release and the layout rules are in that folder's `set
 | av_syncbench | av_syncbench | `public_url`; 68.2 GB = `source.bytes` | 69.94 GB = `budget.media_gb` | 37 743 test | video + audio | auto | `yavih bench info av_syncbench --setup` |
 | ave | seq (segments) | `public_url`; 13.4 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 2 624 train / 316 test | video + audio | auto | `yavih bench info ave --setup` |
 | ave_causal | stream | `public_url`; 13.4 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 2 592 train / 316 test | video + audio | auto | `yavih bench info ave_causal --setup` |
+| avrobustbench (alias `vggsound_2c`) | clf | `derived`; 407.0 GB = `source.bytes` | 120.6 GB = `budget.media_gb` | 20 000 train / 224 736 test | video + audio (materialized at prepare time) | needs-data-owner | `yavih bench info avrobustbench --setup` |
 | avsync | clf (floor role) | `derived`; 407.0 GB = `source.bytes` | 74.4 GB = `budget.media_gb` | 24 000 train / 3 000 test / 5 997 stationary | video + audio (materialized at prepare time) | needs-data-owner | `yavih bench info avsync --setup` |
+| crema_d | clf (folds) | `public_url`; 0.6 GB = `source.bytes` | 0.606 GB = `budget.media_gb` | 1 488 fold fold00 / 1 488 fold fold01 / 1 488 fold fold02 / 1 487 fold fold03 / 1 487 fold fold04 | audio | auto | `yavih bench info crema_d --setup` |
+| diving48 | clf | `public_url`; 10.3 GB = `source.bytes` | 9.64 GB = `budget.media_gb` | 15 027 train / 1 970 test | video | auto | `yavih bench info diving48 --setup` |
 | epic100_anticipation_stream | stream | `public_url`; 740.0 GB = `source.bytes` | 740 GB = `budget.media_gb` | 495 train / 138 validation | video + audio | auto | `yavih bench info epic100_anticipation_stream --setup` |
 | epic_sounds_det (alias `epic_sounds_detection`) | epic_sounds_det (multi) | `public_url`; 1114.7 GB = `source.bytes` | 6.3 GB = `budget.media_gb` | 495 train / 137 validation | audio | auto | `yavih bench info epic_sounds_det --setup` |
 | esc50 | clf (folds) | `public_url`; 0.6 GB = `source.bytes` | 0.88 GB = `budget.media_gb` | 2 000 in folds 1–5 (400 each) | audio | auto | `yavih bench info esc50 --setup` |
 | fsd50k | clf (multi) | `public_url`; 24.7 GB = `source.bytes` | 22.9 GB = `budget.media_gb` | 20 000 train / 10 231 eval | audio | auto | `yavih bench info fsd50k --setup` |
 | in1k (aliases `imagenet1k`, `imagenet`) | clf | `manual_portal`; 154.6 GB = `source.bytes` | 12.43 GB = `budget.media_gb` | 50 000 train / 50 000 val | image | needs-licence | `yavih bench info in1k --setup` |
 | k400 | clf | `torrent`; 157.3 GB = `source.bytes` | 20.2 GB = `budget.media_gb` | 20 000 train / 13 492 val | video | auto | `yavih bench info k400 --setup` |
+| llp_avvp | llp_avvp (multi) | `public_url`; 13.4 GB = `source.bytes` | 13.5 GB = `budget.media_gb` | 10 000 train / 649 val / 1 200 test | video + audio | auto | `yavih bench info llp_avvp --setup` |
+| mimetics | clf | `public_url`; 0.0 GB = `source.bytes` | 5.6 GB = `budget.media_gb` | 10 000 train / 713 test | video | auto | `yavih bench info mimetics --setup` |
+| nsynth | clf | `public_url`; 25.2 GB = `source.bytes` | 0.64 GB = `budget.media_gb` | 4 000 train / 500 test | audio | auto | `yavih bench info nsynth --setup` |
 | nyuv2_depth | grid | `manual_portal`; 145.8 GB = `source.bytes` | 8.2 GB = `budget.media_gb` | 12 000 train / 654 eval | image | manual-download | `yavih bench info nyuv2_depth --setup` |
 | perception_test_action_loc | perception_test_action_loc (multi) | `public_url`; 152.5 GB = `source.bytes` | 149.01 GB = `budget.media_gb` | 2 009 train / 5 359 valid | video + audio | auto | `yavih bench info perception_test_action_loc --setup` |
 | perception_test_sound_loc | perception_test_sound_loc (multi) | `public_url`; 152.5 GB = `source.bytes` | 149.01 GB = `budget.media_gb` | 2 009 train / 5 359 valid | video + audio | auto | `yavih bench info perception_test_sound_loc --setup` |
+| speech_commands | clf | `public_url`; 2.5 GB = `source.bytes` | 0.72 GB = `budget.media_gb` | 16 000 train / 2 000 valid / 4 890 test | audio | auto | `yavih bench info speech_commands --setup` |
 | ssv2 | clf | `manual_portal`; 19.5 GB = `source.bytes` | 4.02 GB = `budget.media_gb` | 20 000 train / 24 777 val | video | needs-licence | `yavih bench info ssv2 --setup` |
 | thumos14_oad | stream | `public_url`; 34.8 GB = `source.bytes` | 34.8 GB = `budget.media_gb` | 200 validation / 213 test | video + audio | auto | `yavih bench info thumos14_oad --setup` |
 | unav100 | unav100 (multi) | `public_url`; 65.8 GB = `source.bytes` | 52.8 GB = `budget.media_gb` | 6 489 train / 2 167 test | video + audio | auto | `yavih bench info unav100 --setup` |
@@ -79,7 +86,7 @@ also in setup.md. Roots marked `prepare_only` are read only by `prepare/` and `m
 `doctor` reports them missing as a note.
 
 <!-- yavih:bench-table prepare_roots begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-Roots marked `prepare_only`: audiocaps_t2a `source_root`; avsync `media_root` and `curation_root`; nyuv2_depth `geonet_root`; vggss_box `annotations_root`; vggss_loc `annotations_root`.
+Roots marked `prepare_only`: audiocaps_t2a `source_root`; avrobustbench `media_root`; avsync `media_root` and `curation_root`; llp_avvp `annotations_root`; nyuv2_depth `geonet_root`; vggss_box `annotations_root`; vggss_loc `annotations_root`.
 <!-- yavih:bench-table prepare_roots end -->
 
 Every folder script resolves its defaults through the same
@@ -159,7 +166,7 @@ lines; "None." for most), "## Input contract", "## Output contract", "## Prepare
 expected `yavih bench verify <b>` output), "## Gotchas" (bridge mistakes that pass validation on
 this benchmark). One per folder:
 <!-- yavih:bench-table names begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-`audiocaps_t2a`, `audioset20k`, `av_syncbench`, `ave`, `ave_causal`, `avsync`, `epic100_anticipation_stream`, `epic_sounds_det`, `esc50`, `fsd50k`, `in1k`, `k400`, `nyuv2_depth`, `perception_test_action_loc`, `perception_test_sound_loc`, `ssv2`, `thumos14_oad`, `unav100`, `unav100_causal`, `vggsound_retrieval`, `vggsounder`, `vggsounder_retrieval`, `vggsounder_v2a`, `vggss_box`, `vggss_loc`.
+`audiocaps_t2a`, `audioset20k`, `av_syncbench`, `ave`, `ave_causal`, `avrobustbench`, `avsync`, `crema_d`, `diving48`, `epic100_anticipation_stream`, `epic_sounds_det`, `esc50`, `fsd50k`, `in1k`, `k400`, `llp_avvp`, `mimetics`, `nsynth`, `nyuv2_depth`, `perception_test_action_loc`, `perception_test_sound_loc`, `speech_commands`, `ssv2`, `thumos14_oad`, `unav100`, `unav100_causal`, `vggsound_retrieval`, `vggsounder`, `vggsounder_retrieval`, `vggsounder_v2a`, `vggss_box`, `vggss_loc`.
 <!-- yavih:bench-table names end -->
 
 ## 6. Failure modes yavih guards against

@@ -11,28 +11,33 @@ Grouped by each folder's `benchmark.yaml` `capability` tags (the vocabulary suit
 capabilities is listed under each.
 
 <!-- yavih:bench-table index begin (generated from each folder's benchmark.yaml: python -m yavih.doctables --write) -->
-### audio (5)
+### audio (8)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
 | [audiocaps_t2a](audiocaps_t2a/README.md) | AudioCaps text-to-audio generation (776 surviving full-length test clips; FD, KL, IS, CLAP score via av-benchmark) | audiocaps_t2a | text (cell) | public (obtain: auto) |
+| [crema_d](crema_d/README.md) | CREMA-D speech emotion recognition (6 emotions, HEAR 2021 5-fold CV, mean top-1 accuracy) | clf | audio | public (obtain: auto) |
 | [epic_sounds_det](epic_sounds_det/README.md) | EPIC-SOUNDS audio-based interaction detection (untrimmed kitchen recordings, 44 classes); alias `epic_sounds_detection` | epic_sounds_det | audio | public (obtain: auto) |
 | [esc50](esc50/README.md) | ESC-50 environmental sound classification (50 classes, official 5-fold CV, mean accuracy) | clf | audio | public (obtain: auto) |
 | [fsd50k](fsd50k/README.md) | FSD50K 200-class multi-label audio tagging (Freesound clips, macro mAP) | clf | audio | public (obtain: auto) |
+| [nsynth](nsynth/README.md) | NSynth Pitch (HEAR nsynth_pitch 5h) — 88-way pitch classification of 4 s synthesized notes, pitch and chroma accuracy | clf | audio | public (obtain: auto) |
 | [perception_test_sound_loc](perception_test_sound_loc/README.md) | Perception Test temporal sound localisation (challenge train / valid) | perception_test_sound_loc | video + audio | public (obtain: auto) |
+| [speech_commands](speech_commands/README.md) | Speech Commands v0.02 keyword spotting (HEAR 2021 speech_commands-v0.0.2-5h, 12 classes, top-1 accuracy) | clf | audio | public (obtain: auto) |
 
-### visual (6)
+### visual (8)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
+| [diving48](diving48/README.md) | Diving48 fine-grained dive classification (official V2 splits, 15 027 train / 1 970 test, 48 classes) | clf | video | public (obtain: auto) |
 | [in1k](in1k/README.md) | ImageNet-1K image classification (frozen 50/class train draw, full 50k val); aliases `imagenet1k`, `imagenet` | clf | image | manual portal (obtain: needs-licence) |
 | [k400](k400/README.md) | Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe) | clf | video | torrent (obtain: auto) |
+| [mimetics](mimetics/README.md) | Mimetics out-of-context action recognition (713 mimed YouTube clips of 50 Kinetics-400 classes; probe trained on Kinetics-400, video only) | clf | video | public (obtain: auto) |
 | [nyuv2_depth](nyuv2_depth/README.md) | NYUv2 dense depth (12 000 GeoNet train frames, 654 labelled test images, 14x14 grid) | grid | image | manual portal (obtain: manual-download) |
 | [perception_test_action_loc](perception_test_action_loc/README.md) | Perception Test temporal action localisation (challenge train / valid) | perception_test_action_loc | video + audio | public (obtain: auto) |
 | [ssv2](ssv2/README.md) | Something-Something-v2 temporal action classification (frozen 20k class-balanced train draw, full 24 777 val) | clf | video | manual portal (obtain: needs-licence) |
 | [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
 
-### audio-visual (16)
+### audio-visual (18)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -40,8 +45,10 @@ capabilities is listed under each.
 | [av_syncbench](av_syncbench/README.md) | AV-SyncBench zero-shot audio-visual synchronisation (original vs offset, speed, jitter or timbre-edited audio; pairwise accuracy) | av_syncbench | video + audio | public (obtain: auto) |
 | [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
+| [avrobustbench](avrobustbench/README.md) | AVROBUSTBENCH VGGSOUND-2C, VGGSound under 15 co-occurring audio-visual corruptions (clean-train probe, 309 classes); alias `vggsound_2c` | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
 | [epic100_anticipation_stream](epic100_anticipation_stream/README.md) | EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall) | stream | video + audio | public (obtain: auto) |
+| [llp_avvp](llp_avvp/README.md) | LLP audio-visual video parsing (25 classes, per-second audio and visual events, weakly supervised) | llp_avvp | video + audio | public (obtain: auto) |
 | [perception_test_action_loc](perception_test_action_loc/README.md) | Perception Test temporal action localisation (challenge train / valid) | perception_test_action_loc | video + audio | public (obtain: auto) |
 | [perception_test_sound_loc](perception_test_sound_loc/README.md) | Perception Test temporal sound localisation (challenge train / valid) | perception_test_sound_loc | video + audio | public (obtain: auto) |
 | [unav100](unav100/README.md) | UnAV-100 dense audio-visual event localization in untrimmed videos | unav100 | video + audio | public (obtain: auto) |
@@ -53,7 +60,7 @@ capabilities is listed under each.
 | [vggss_box](vggss_box/README.md) | VGG-SS audio-conditioned single-box regression | box | video + audio | public (obtain: needs-data-owner) |
 | [vggss_loc](vggss_loc/README.md) | VGG-SS training-free sound-source localization (cIoU@0.5, AUC on heatmaps) | vggss_loc | video + audio | public (obtain: needs-data-owner) |
 
-### temporal (11)
+### temporal (13)
 
 | Benchmark | Description | Readout | Media | Source |
 |---|---|---|---|---|
@@ -61,8 +68,10 @@ capabilities is listed under each.
 | [ave](ave/README.md) | AVE audio-visual event localization (28 events + background, per-second labels) | seq | video + audio | public (obtain: auto) |
 | [ave_causal](ave_causal/README.md) | AVE causal per-second event recognition (streaming; 28 events + background) | stream | video + audio | public (obtain: auto) |
 | [avsync](avsync/README.md) | AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor) | clf | video + audio (materialized at prepare time) | derived (obtain: needs-data-owner) |
+| [diving48](diving48/README.md) | Diving48 fine-grained dive classification (official V2 splits, 15 027 train / 1 970 test, 48 classes) | clf | video | public (obtain: auto) |
 | [epic100_anticipation_stream](epic100_anticipation_stream/README.md) | EPIC-KITCHENS-100 streaming action anticipation (tau_a = 1 s; verb, noun, action class-mean top-5 recall) | stream | video + audio | public (obtain: auto) |
 | [epic_sounds_det](epic_sounds_det/README.md) | EPIC-SOUNDS audio-based interaction detection (untrimmed kitchen recordings, 44 classes); alias `epic_sounds_detection` | epic_sounds_det | audio | public (obtain: auto) |
+| [llp_avvp](llp_avvp/README.md) | LLP audio-visual video parsing (25 classes, per-second audio and visual events, weakly supervised) | llp_avvp | video + audio | public (obtain: auto) |
 | [perception_test_action_loc](perception_test_action_loc/README.md) | Perception Test temporal action localisation (challenge train / valid) | perception_test_action_loc | video + audio | public (obtain: auto) |
 | [perception_test_sound_loc](perception_test_sound_loc/README.md) | Perception Test temporal sound localisation (challenge train / valid) | perception_test_sound_loc | video + audio | public (obtain: auto) |
 | [thumos14_oad](thumos14_oad/README.md) | THUMOS'14 online action detection (streaming; 20 actions + background, per-frame mAP at 4 fps) | stream | video + audio | public (obtain: auto) |
@@ -133,16 +142,23 @@ Read the folder's `setup.md` first, before downloading anything or writing a bri
 [av_syncbench](av_syncbench/setup.md) ·
 [ave](ave/setup.md) ·
 [ave_causal](ave_causal/setup.md) ·
+[avrobustbench](avrobustbench/setup.md) ·
 [avsync](avsync/setup.md) ·
+[crema_d](crema_d/setup.md) ·
+[diving48](diving48/setup.md) ·
 [epic100_anticipation_stream](epic100_anticipation_stream/setup.md) ·
 [epic_sounds_det](epic_sounds_det/setup.md) ·
 [esc50](esc50/setup.md) ·
 [fsd50k](fsd50k/setup.md) ·
 [in1k](in1k/setup.md) ·
 [k400](k400/setup.md) ·
+[llp_avvp](llp_avvp/setup.md) ·
+[mimetics](mimetics/setup.md) ·
+[nsynth](nsynth/setup.md) ·
 [nyuv2_depth](nyuv2_depth/setup.md) ·
 [perception_test_action_loc](perception_test_action_loc/setup.md) ·
 [perception_test_sound_loc](perception_test_sound_loc/setup.md) ·
+[speech_commands](speech_commands/setup.md) ·
 [ssv2](ssv2/setup.md) ·
 [thumos14_oad](thumos14_oad/setup.md) ·
 [unav100](unav100/setup.md) ·

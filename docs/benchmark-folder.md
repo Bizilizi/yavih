@@ -723,16 +723,23 @@ The full index with descriptions, media and sources is [benchmarks/README.md](..
 | av_syncbench | av_syncbench | none | video, audio, edited_audio | `acc_task_mean` | yes |
 | ave | seq | segments | video, audio | `seg_acc` |  |
 | ave_causal | stream | none | video, audio | `sec_acc_gru` | yes |
+| avrobustbench (alias `vggsound_2c`) | clf | single | video, audio (materialized) | `macc` | yes |
 | avsync | clf | single | video, audio (materialized) | `acc` | yes |
+| crema_d | clf (5 folds) | single | audio | `top1_acc_mean` | yes |
+| diving48 | clf | single | video | `acc` |  |
 | epic100_anticipation_stream | stream | none | video, audio | `mt5r_action_gru` | yes |
 | epic_sounds_det (alias `epic_sounds_detection`) | epic_sounds_det | multi | audio | `map_avg` | yes |
 | esc50 | clf (5 folds) | single | audio | `acc_mean` |  |
 | fsd50k | clf | multi | audio | `map` |  |
 | in1k (aliases `imagenet1k`, `imagenet`) | clf | single | image | `acc` |  |
 | k400 | clf | single | video | `acc` |  |
+| llp_avvp | llp_avvp | multi | video, audio | `seg_type_av` | yes |
+| mimetics | clf | single | video | `acc` | yes |
+| nsynth | clf | single | audio | `pitch_acc` | yes |
 | nyuv2_depth | grid | none (targets) | image | `d1` | yes, `external` |
 | perception_test_action_loc | perception_test_action_loc | multi | video, audio | `tmap` | yes |
 | perception_test_sound_loc | perception_test_sound_loc | multi | video, audio | `tmap` | yes |
+| speech_commands | clf | single | audio | `top1_acc` | yes |
 | ssv2 | clf | single | video | `acc` |  |
 | thumos14_oad | stream | none | video, audio | `frame_map_gru` | yes |
 | unav100 | unav100 | multi | video, audio | `map_avg` | yes |
