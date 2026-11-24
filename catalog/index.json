@@ -153,6 +153,38 @@
    "scorer": "stream",
    "title": "AVE causal per-second event recognition (streaming; 28 events + background)"
   },
+  "avrobustbench": {
+   "aliases": [
+    "vggsound_2c"
+   ],
+   "capability": [
+    "audio-visual"
+   ],
+   "clips": {
+    "test": 224736,
+    "train": 20000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "AVROBUSTBENCH: Benchmarking the Robustness of Audio-Visual Recognition Models at Test-Time",
+   "media_gb": 120.6,
+   "name": "avrobustbench",
+   "obtain": "needs-data-owner",
+   "path": "benchmarks/avrobustbench",
+   "protocol_hash": "251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "8c596f772cd27674ee9ffd088029775021a4278e",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/avrobustbench",
+     "protocol_hash": "251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11",
+     "protocol_version": 1,
+     "tree": "d55105b8fb807f1c4ccba690325037f412640731"
+    }
+   ],
+   "scorer": "clf",
+   "title": "AVROBUSTBENCH VGGSOUND-2C, VGGSound under 15 co-occurring audio-visual corruptions (clean-train probe, 309 classes)"
+  },
   "avsync": {
    "aliases": [],
    "capability": [
@@ -184,6 +216,70 @@
    ],
    "scorer": "clf",
    "title": "AV synchronization-offset classification (9 offsets, transient VGGSound clips, stationary floor)"
+  },
+  "crema_d": {
+   "aliases": [],
+   "capability": [
+    "audio"
+   ],
+   "clips": {
+    "fold00": 1488,
+    "fold01": 1488,
+    "fold02": 1488,
+    "fold03": 1487,
+    "fold04": 1487
+   },
+   "core": ">=1.1,<2",
+   "header_title": "CREMA-D: Crowd-sourced Emotional Multimodal Actors Dataset",
+   "media_gb": 0.606,
+   "name": "crema_d",
+   "obtain": "auto",
+   "path": "benchmarks/crema_d",
+   "protocol_hash": "f0f44915921495df45a507018ec2dd5010b83dc208ee8c46994aa775afceaa53",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "244d4019f7f4e509d2d1e1363e7183522c2de884",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/crema_d",
+     "protocol_hash": "f0f44915921495df45a507018ec2dd5010b83dc208ee8c46994aa775afceaa53",
+     "protocol_version": 1,
+     "tree": "37beef3f88483a2c5d4a3a5f34e9ac76725ca2d7"
+    }
+   ],
+   "scorer": "clf",
+   "title": "CREMA-D speech emotion recognition (6 emotions, HEAR 2021 5-fold CV, mean top-1 accuracy)"
+  },
+  "diving48": {
+   "aliases": [],
+   "capability": [
+    "visual",
+    "temporal"
+   ],
+   "clips": {
+    "test": 1970,
+    "train": 15027
+   },
+   "core": ">=1.1,<2",
+   "header_title": "RESOUND: Towards Action Recognition without Representation Bias",
+   "media_gb": 9.64,
+   "name": "diving48",
+   "obtain": "auto",
+   "path": "benchmarks/diving48",
+   "protocol_hash": "af5186f011d9b8ad4c25d111d5259bdc669925a5b0fe0a5fe3692116e7f6a711",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "da7561a44575836b270e555c7ad6bb5a052742dc",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/diving48",
+     "protocol_hash": "af5186f011d9b8ad4c25d111d5259bdc669925a5b0fe0a5fe3692116e7f6a711",
+     "protocol_version": 1,
+     "tree": "4cd11669d365833cca57ad2078bf14febf1d71d0"
+    }
+   ],
+   "scorer": "clf",
+   "title": "Diving48 fine-grained dive classification (official V2 splits, 15 027 train / 1 970 test, 48 classes)"
   },
   "epic100_anticipation_stream": {
    "aliases": [],
@@ -376,6 +472,98 @@
    "scorer": "clf",
    "title": "Kinetics-400 action recognition (Academic-Torrents _256 release, 400 classes, video-only probe)"
   },
+  "llp_avvp": {
+   "aliases": [],
+   "capability": [
+    "audio-visual",
+    "temporal"
+   ],
+   "clips": {
+    "test": 1200,
+    "train": 10000,
+    "val": 649
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Unified Multisensory Perception: Weakly-Supervised Audio-Visual Video Parsing",
+   "media_gb": 13.5,
+   "name": "llp_avvp",
+   "obtain": "auto",
+   "path": "benchmarks/llp_avvp",
+   "protocol_hash": "ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "d0e99e6538070b448ba9f76ddf1849e26d271c60",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/llp_avvp",
+     "protocol_hash": "ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2",
+     "protocol_version": 1,
+     "tree": "37d955767226f87b6ec1c238633965e7280c5d38"
+    }
+   ],
+   "scorer": "llp_avvp",
+   "title": "LLP audio-visual video parsing (25 classes, per-second audio and visual events, weakly supervised)"
+  },
+  "mimetics": {
+   "aliases": [],
+   "capability": [
+    "visual"
+   ],
+   "clips": {
+    "test": 713,
+    "train": 10000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Mimetics: Towards Understanding Human Actions Out of Context",
+   "media_gb": 5.6,
+   "name": "mimetics",
+   "obtain": "auto",
+   "path": "benchmarks/mimetics",
+   "protocol_hash": "c178b398efe3e92c3f5d6bbf3823722dd2d570651c09fb413488e6fdf5cc2156",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "765615f402fa60598c023d095200ac95e398d183",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/mimetics",
+     "protocol_hash": "c178b398efe3e92c3f5d6bbf3823722dd2d570651c09fb413488e6fdf5cc2156",
+     "protocol_version": 1,
+     "tree": "f02f41253ca61550d2aeb1ff3c50f9b813dcf848"
+    }
+   ],
+   "scorer": "clf",
+   "title": "Mimetics out-of-context action recognition (713 mimed YouTube clips of 50 Kinetics-400 classes; probe trained on Kinetics-400, video only)"
+  },
+  "nsynth": {
+   "aliases": [],
+   "capability": [
+    "audio"
+   ],
+   "clips": {
+    "test": 500,
+    "train": 4000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders",
+   "media_gb": 0.64,
+   "name": "nsynth",
+   "obtain": "auto",
+   "path": "benchmarks/nsynth",
+   "protocol_hash": "d21516f36f46149178ba7f84bf088526770c2b9e4aef39ef49d787909a7f41a9",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "7b5d3cd1afdb9fe97f8337d7fc320db73a8c2aad",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/nsynth",
+     "protocol_hash": "d21516f36f46149178ba7f84bf088526770c2b9e4aef39ef49d787909a7f41a9",
+     "protocol_version": 1,
+     "tree": "6b41bb8de8bb0f72d717cca66cb76285f3c6302a"
+    }
+   ],
+   "scorer": "clf",
+   "title": "NSynth Pitch (HEAR nsynth_pitch 5h) — 88-way pitch classification of 4 s synthesized notes, pitch and chroma accuracy"
+  },
   "nyuv2_depth": {
    "aliases": [],
    "capability": [
@@ -470,6 +658,37 @@
    ],
    "scorer": "perception_test_sound_loc",
    "title": "Perception Test temporal sound localisation (challenge train / valid)"
+  },
+  "speech_commands": {
+   "aliases": [],
+   "capability": [
+    "audio"
+   ],
+   "clips": {
+    "test": 4890,
+    "train": 16000,
+    "valid": 2000
+   },
+   "core": ">=1.1,<2",
+   "header_title": "Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition",
+   "media_gb": 0.72,
+   "name": "speech_commands",
+   "obtain": "auto",
+   "path": "benchmarks/speech_commands",
+   "protocol_hash": "36bc64df609d131ebb21c8dd1d0754801bd09110e0f5c87bf086106f92863593",
+   "protocol_version": 1,
+   "revisions": [
+    {
+     "commit": "37e35b930189e92bbd87778feef1ed96a14901e4",
+     "core": ">=1.1,<2",
+     "path": "benchmarks/speech_commands",
+     "protocol_hash": "36bc64df609d131ebb21c8dd1d0754801bd09110e0f5c87bf086106f92863593",
+     "protocol_version": 1,
+     "tree": "4f8a03f8ec436e47a84bc8040f5e975df95ad06e"
+    }
+   ],
+   "scorer": "clf",
+   "title": "Speech Commands v0.02 keyword spotting (HEAR 2021 speech_commands-v0.0.2-5h, 12 classes, top-1 accuracy)"
   },
   "ssv2": {
    "aliases": [],
@@ -787,6 +1006,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "e47df3d6966d65a17485740aaddc16ff3b33334a",
+ "commit": "34a848580b6bf5c83b3142f3f570b1e64ed9c69d",
  "repo": "Bizilizi/yavih"
 }
