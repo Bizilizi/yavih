@@ -1,0 +1,188 @@
+# yavih benchmark folder — NSynth Pitch, the HEAR 2021 task nsynth_pitch-v2.2.3-5h (schema 3).
+schema_version: 3
+name: nsynth
+aliases: []
+title: NSynth Pitch (HEAR nsynth_pitch 5h) — 88-way pitch classification of 4 s synthesized notes, pitch and chroma accuracy
+capability: [audio]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+header:
+  name: NSynth Pitch
+  title: "Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders"
+  venue: "Engel et al. · ICML 2017"
+  abstract: >-
+    Four-second musical notes from the NSynth dataset, each played by one of about a thousand acoustic,
+    electronic or synthetic instruments. Following the HEAR benchmark's NSynth Pitch 5h task, a model hears
+    one note and names its MIDI pitch among the 88 piano keys; scored by pitch accuracy and by chroma
+    accuracy, which forgives octave errors.
+scorer: clf
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release.
+    invalidates: false
+    protocol_hash: d21516f36f46149178ba7f84bf088526770c2b9e4aef39ef49d787909a7f41a9
+    input_hash: adab5b4d1ed09d4eaf462f5b19218f81e5def1983f1867ed143f879689272b42
+    supersedes: []
+
+source:
+  kind: public_url
+  urls:
+    - "https://magenta.tensorflow.org/datasets/nsynth"
+    - "http://download.magenta.tensorflow.org/datasets/nsynth/nsynth-train.jsonwav.tar.gz"
+    - "http://download.magenta.tensorflow.org/datasets/nsynth/nsynth-valid.jsonwav.tar.gz"
+    - "http://download.magenta.tensorflow.org/datasets/nsynth/nsynth-test.jsonwav.tar.gz"
+    - "https://github.com/hearbenchmark/hear-preprocess/blob/610d864b2c0f7064eaeced98ee8992d3914d58f1/hearpreprocess/nsynth_pitch.py"
+  licence: "CC BY 4.0 (NSynth, Google Magenta)"
+  revision: "NSynth json/wav release of 2017-04 (archive md5 fde6665a / 87e94a00 / 5e6f8719); task hear-preprocess v2021.1.1 nsynth_pitch v2.2.3 mode 5h"
+  bytes: 25233566634          # the three archives: 23 815 298 079 + 1 068 767 009 + 349 501 546
+  sha256:
+    nsynth-train.jsonwav.tar.gz: 15c5100fc40c3a262f9b42707c15ffed30b8fec58c0d9b88d4136f6cb1fddefe
+    nsynth-valid.jsonwav.tar.gz: 00dea2645fbe0069258567da30807a90825e0bab54c077d6481f253096c4e2a0
+    nsynth-test.jsonwav.tar.gz: 0f9ba5d62beba9ec4612f918d19f5e87a681822f1c566124f05fe8b27a51934c
+    nsynth-train/examples.json: a8182e084aa338d764f64f6a283bd1778d358e913a7074294110e9ec601e0087
+    nsynth-valid/examples.json: 050e0bf55d1a87eee2abbc3d273c7f525404c0a51ac378561b905f2da31a7286
+    nsynth-test/examples.json: 74df2dd960c156cd5e8757d8afb1fe30e6a233aa99043a29037e7b54cde6908f
+    audio.sha256sum: d4e890c1dc76f7dbecc13ebfe7f7274cabcde8578c4c15b892d6a60a0794703a      # sha256 of `cd <media_root> && export LC_ALL=C && sha256sum nsynth-*/audio/*.wav` (5 000 lines); prepare/03_verify.sh recomputes it
+  notes: >-
+    Public Google Cloud Storage downloads, no account or agreement; the md5s are the ones HEAR's
+    hearpreprocess pins. 305 979 notes in three instrument-disjoint splits (train 289 205, valid 12 678,
+    test 4 096), every note a 4.000 s 16 kHz mono PCM_16 wav. The frozen manifest lists HEAR's 5h subset
+    (5 000 notes); prepare/02_extract.sh extracts only those wavs and the examples.json files.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "three public archives from download.magenta.tensorflow.org (25.2 GB, no account); prepare extracts the 5 000 frozen notes"
+budget:
+  clips: {train: 4000, test: 500}   # read splits only; valid (500, unused) is staged by prepare 02 too
+  media_gb: 0.64              # PCM bytes of the 5 000 staged wavs (5 000 x 128 044 B); the valid 500 included; the archives are 25.2 GB
+  extract_min_per_1k_clips_ref: 0.7   # AST AudioSet (ViT-B, 4 s, 480 tokens) bridge check: 24.5 clips/s, 4 decode workers, RTX 4500 Ada;
+                                      # the full train shard on the same shared GPU under CPU load took 692 s / 4 000 = 2.9
+  probe_minutes_ref: {clf: 0.8}       # full clf probe (seed 0) on the AST tokens: 19.1 min wall for N x D = 480 x 768,
+                                      # divided by the planner's clamp(N*D / (16*768), 1, 24) = 24; RTX 4500 Ada
+
+manifest:
+  file: manifest.csv.gz
+  sha256: 949e49b1030370a188f538c71b3150d38017263fc1314cb5f81a47f806f0b7c0
+  classes: classes.csv
+  classes_sha256: 1cd9e961bb471b9a7da1adf8dc9b8c952f84eba99d77a476bb356857c3eb1470
+  key: clip_id
+  label:
+    column: labels
+    kind: single
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_path: {type: str, role: media, stream: audio}
+    instrument_str: {type: str, role: extra}          # NSynth instrument id, e.g. bass_synthetic_068 (splits are instrument-disjoint)
+    instrument_family_str: {type: str, role: extra}   # one of 11 families (bass, brass, flute, guitar, keyboard, mallet, organ, reed, string, synth_lead, vocal)
+    instrument_source_str: {type: str, role: extra}   # acoustic, electronic or synthetic
+    velocity: {type: int, role: extra}                # MIDI velocity of the note (25, 50, 75, 100, 127)
+  upstream:
+    draw: >-
+      HEAR hearpreprocess v2021.1.1 SubsampleSplit, 5h mode, per split: the in-range notes' names sorted, shuffled by
+      numpy RandomState(str2int("SubsampleSplit(<split>)")) (train 3488948419, valid 3511819133, test 2920447107)
+      and cut to int(max_task_duration_by_split / 4.0): train 4000 of 287 073, valid 500 of 12 566, test 500 of 4 060;
+      not class-balanced; every split holds all 88 pitches
+    source: "NSynth json/wav release (magenta, 2017-04) nsynth-{train,valid,test}/examples.json; selection hearbenchmark/hear-preprocess @ 610d864 (v2021.1.1) nsynth_pitch 5h"
+    sha256: 74df2dd960c156cd5e8757d8afb1fe30e6a233aa99043a29037e7b54cde6908f
+    rows: 305979
+    note: "rows split by split (train, valid, test), note name order within a split; labels = MIDI pitch; classes = pitches 21..108 (HEAR labelvocabulary, index = pitch - 21); sha256 above is the test examples.json"
+    upstream_files:
+      nsynth-train/examples.json: a8182e084aa338d764f64f6a283bd1778d358e913a7074294110e9ec601e0087
+      nsynth-valid/examples.json: 050e0bf55d1a87eee2abbc3d273c7f525404c0a51ac378561b905f2da31a7286
+      nsynth-test/examples.json: 74df2dd960c156cd5e8757d8afb1fe30e6a233aa99043a29037e7b54cde6908f
+    curation:
+      total_upstream: 305979
+      per_split:
+        train: {listed: 4000, staged: 4000, missing: 0}
+        valid: {listed: 500, staged: 500, missing: 0}
+        test: {listed: 500, staged: 500, missing: 0}
+      excluded:
+        "pitch outside 21-108 (HEAR nsynth_pitch pitch_range_min/max)": 2280
+        "not drawn by the HEAR 5h subsample (SubsampleSplit: train 4000, valid 500, test 500)": 298699
+      short_clips: 0              # every staged wav is 64 000 frames at 16 kHz
+      leakage_audit:
+        against: "instrument_str across the NSynth splits (examples.json): train (953 instruments) shares none with valid or test; valid and test are the same 53 instruments, so valid is unused (never trains the probe)"
+        excluded: 0
+      # invariant: 4000 + 500 + 500 + 2280 + 298699 == 305979
+
+splits:
+  train: [train]              # HEAR's train split (4 000); the clf probe carves its own 10 % validation from it
+  eval: [test]                # HEAR's 5h test split (500)
+  floor: []
+  folds: null
+  unused: [valid]             # HEAR's valid (500) selects HEAR's MLP; it shares all 53 instruments with test, so it never trains the probe
+  min_eval_coverage: 0.95
+
+fields:
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_path
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/nsynth"
+      description: "archives/nsynth-{train,valid,test}.jsonwav.tar.gz (prepare 01); nsynth-<split>/examples.json and nsynth-<split>/audio/<note_str>.wav, the 5 000 frozen notes (prepare 02; 16 kHz mono PCM_16, 4.000 s)"
+  tar_index: null
+  derived: {}
+
+input_contract:
+  handed_over:
+    audio: "the NSynth wav exactly as stored (RIFF PCM_16, 16 kHz, mono, 64 000 samples = 4.000 s); nothing decoded, resampled, trimmed or padded"
+  info:
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: []
+  materialize: null
+
+output_contract:
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: []
+    streams: []
+    grid: null
+    t_bins: null
+
+external: []                    # heareval's score functions are copied into eval.py (its PyPI wheel pins numpy==1.19.2); setup.md "Dependencies"
+
+protocol:
+  clip_seconds: 4.0             # a fact (HEAR sample_duration 4.0; every NSynth note is 64 000 samples at 16 kHz); never used to cut or pad
+  train_draw:                   # HEAR SubsampleSplit(train) of the 5h mode; valid and test are drawn alike (manifest.upstream.draw)
+    cap: 4000
+    seed: 3488948419            # str2int("SubsampleSplit(train)"), the RandomState seed HEAR uses
+    balance: null
+  views: none
+
+metrics:
+  headline: pitch_acc
+  list: [pitch_acc, chroma_acc, n_eval, n_train]
+  floors: [pitch_acc_floor, chroma_acc_floor]
+  controls: []
+  chance: {pitch_acc: 0.0114, chroma_acc: 0.0833}
+  ci: {pitch_acc: binomial, chroma_acc: binomial}
+  aggregation: null
+  notes:
+    - "pitch_acc and chroma_acc are HEAR's, computed by heareval 2021.1.3 score.py (copied into eval.py); chroma_acc = class index mod 12, index = pitch - 21."
+    - "Floors (always the train-majority pitch 56): pitch_acc_floor 0.008 and chroma_acc_floor 0.092 on the 500 test notes; chance 1/88 = 0.011 and about 1/12 = 0.083."
+    - "500 test rows: the Wilson 95 % interval is about ±0.044 at 0.5 and ±0.026 at 0.9; treat gaps below about 0.03 at one seed as unresolved and run --seeds 0,1,2."
+    - "The readout is yavih's attentive clf probe (val carved from train), not HEAR's MLP grid (1-2 x 1024 hidden, 4 lrs, 2 inits, picked on valid): not comparable with HEAR's leaderboard."
+    - "valid (500) is unused: it holds the same 53 instruments as test (train shares none), so training on it would leak test instruments; HEAR only selects on it."
+    - "Not HEAR's 50h variant (40 000 train notes, all 4 060 in-range test notes) nor NSynth's 4 096-note test set: their numbers are other benchmarks."
+    - "Six test notes (brass_acoustic_046, pitches 85 98 99 100 104 108; rows 130-135) are byte-identical audio in NSynth, kept as HEAR draws them: at most one is right, so both metrics top out at 0.99."
+    - "Those six rows make validate report E_DUPLICATE_CLIPS (6/500 > 1 %); bridge_template.py waives it in describe(). A duplicate on any other row is a bridge bug."
+
+readout_params: {}
