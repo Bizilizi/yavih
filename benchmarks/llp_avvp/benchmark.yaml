@@ -1,0 +1,214 @@
+# yavih benchmark folder: LLP audio-visual video parsing (AVVP). Rows: make_manifest.py from the authors' public
+# annotation files (YapengTian/AVVP-ECCV20); media: the 11 849 ten-second clips of the public HF dataset
+# CserDu123/LLP-dataset. The scorer is the folder's own (eval.py -> avvp.py): the authors' evaluation and their HAN
+# readout. People: README.md; the agent: setup.md.
+schema_version: 3
+name: llp_avvp
+aliases: []
+title: LLP audio-visual video parsing (25 classes, per-second audio and visual events, weakly supervised)
+capability: [audio-visual, temporal]   # yavih.suites.CAPABILITIES; groups the README and the index; not hashed
+core: ">=1.1,<2"   # the yavih core releases that can load and score this folder; not hashed
+scorer: llp_avvp
+protocol_version: 1
+changelog:
+  - version: 1
+    date: "2026-11-15"
+    reason: Initial release, frozen from the LLP annotation files of YapengTian/AVVP-ECCV20 @ fde5611.
+    invalidates: false
+    protocol_hash: ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2
+    input_hash: c1d2cce863af6def3a501a0445be2f37c8ea4ccc0b5cba935c7c87fcf9dc4c99
+    supersedes: []
+
+header:
+  name: LLP (AVVP)
+  title: "Unified Multisensory Perception: Weakly-Supervised Audio-Visual Video Parsing"
+  venue: "Tian, Li & Xu · ECCV 2020"
+  abstract: >-
+    The Look, Listen and Parse dataset holds 11 849 ten-second YouTube clips of 25 event classes. Training clips
+    carry only video-level labels; the validation and test clips are annotated second by second, separately for
+    what is heard and what is seen. A model parses each clip into audio, visual and audio-visual events, scored by
+    segment- and event-level F-scores.
+  chips: ["video + audio", "audio-visual video parsing", "11 849 clips", "25 classes", "weak labels for training", "Type@AV F-score"]
+
+source:
+  kind: public_url
+  urls:
+    - "https://github.com/YapengTian/AVVP-ECCV20"
+    - "https://huggingface.co/datasets/CserDu123/LLP-dataset"
+    - "https://arxiv.org/abs/2007.10558"
+  revision: "fde56118f2c2e7c19188dfefa2569a37b70054fe"   # the annotation repository; the HF media zip is pinned in prepare/02_media.sh
+  licence: >-
+    LLP annotations and code (YapengTian/AVVP-ECCV20): GNU GPL v3.0, as the repository README states (no LICENSE
+    file in the repository). Media: YouTube videos (AudioSet segments) that stay their uploaders'; the authors
+    distribute none. The HF dataset CserDu123/LLP-dataset that redistributes the cut clips carries an apache-2.0
+    tag, which cannot relicense them: research use only; cite Tian et al., ECCV 2020.
+  bytes: 13439154355          # llp_video.zip (13 438 121 116 B) + the six annotation files (1 033 239 B)
+  sha256:
+    AVVP_train.csv: bbeb83e8af46a85075216b213d3464f92dd4ab71468c852ae454b82cc745c0a4
+    AVVP_val_pd.csv: 1811813b54c5f43c3be0a97bd0971cfb8a93818ca7b3ab96cdc7f4ac37ef37a6
+    AVVP_test_pd.csv: 3f7a2b040e3b67c15d08efef25002bf8c5b2320f11049eb99ae0eb2d62f8eb9b
+    AVVP_eval_audio.csv: d5435664668bec6e7eafb39059d2f424ed2682f6b55395262fc3cb691b7d0778
+    AVVP_eval_visual.csv: e2274af694f3f27e38b840e0cd91a9d8d9ac85280f193e90828d26b22db69abe
+    AVVP_dataset_full.csv: 89f112ffc602279c87cc2b2040c4cd42eaf163a9d7e61cf4e74250a343d21e56
+    llp_video.zip: 36093363b2d6cc540d1da665fd78af73d339cc6e3eeeb0993778b967e75211d3
+  notes: >-
+    The authors publish the annotations and pre-extracted features (Google Drive), not the videos: their
+    scripts/download_dataset.py fetches each clip from YouTube and cuts [start, start + 10 s] (libx264 + aac).
+    CserDu123/LLP-dataset @ 31727951 holds all 11 849 clips cut that way (llp_video.zip; an audio_data.zip of mp3s is
+    not used). Spot checks (20 clips) against an AudioSet copy matched the segments within about 35 ms.
+
+obtain:   # who must act before the data can be staged here (yavih bench list); not hashed
+  tier: auto
+  how: "Nobody acts by hand: prepare/01 fetches the six annotation files from GitHub, 02 downloads and unzips the public HF zip of the 11 849 clips (13.4 GB, no account)"
+
+budget:
+  clips: {train: 10000, val: 649, test: 1200}
+  media_gb: 13.5              # 13 536 718 753 B: the 11 849 extracted mp4 (every row reads one)
+  extract_min_per_1k_clips_ref: 6.3   # measured: bridge check clips_per_s 2.64 (n 48 test clips, 4 decode workers, decode included) of the
+                                      # template's defaults (80 frames at 224 + 10 s of audio) with a ResNet-152 frame encoder, fp32, on one
+                                      # 24 GB GPU shared with other jobs
+  probe_minutes_ref: {llp_avvp: 25}   # derived: the HAN fit measured at 24 min (40 epochs x 35 s incl. val scoring, D = 768, random per-second
+                                      # inputs, 10 000 + 649 rows, one shared 24 GB GPU); reading and pooling real features not included
+
+manifest:
+  file: manifest.csv.gz
+  sha256: de4e0c77e724ab5abc433db99d810a1b2d827c9bdbee693cb1c720452217b3c6
+  classes: classes.csv
+  classes_sha256: 321326aa194c853244079ba4362d052fa3a840df389ea44edcf2816e28a650eb
+  key: clip_id
+  label:
+    column: labels            # the weak video-level labels (the only labels of train)
+    kind: multi
+    sep: ";"
+    class_key: name
+    sets: null
+    train_set: null
+    allow_unknown: false
+    empty_ok: false
+  columns:
+    rel_media: {type: str, role: media, stream: [video, audio]}   # llp_videos/<ytid>.mp4: the media cell of both streams
+    ytid: {type: str, role: extra}             # YouTube id (provenance; never handed over)
+    start_s: {type: float, role: extra}        # segment start in the YouTube video, seconds (as in the filename)
+    audio_events: {type: str, role: label_aux}   # val/test: onset:offset:class_index;... (dense audio labels)
+    visual_events: {type: str, role: label_aux}  # val/test: the same for what is seen
+  upstream:
+    source: "YapengTian/AVVP-ECCV20 @ fde5611 data/AVVP_{train,val_pd,test_pd,eval_audio,eval_visual,dataset_full}.csv"
+    sha256: 3f7a2b040e3b67c15d08efef25002bf8c5b2320f11049eb99ae0eb2d62f8eb9b
+    rows: 11849
+    note: >-
+      One row per video in the official splits (train 10 000 with weak labels only; val 649 and test 1 200 with dense
+      audio and visual events), no curation and no draw. Dense rows are matched to videos by exact filename, as the
+      authors' evaluation does: 14 audio and 11 visual rows name no val/test video and are ignored (the val video
+      19jWnmYnlD8_30_40 loses its Clapping rows, filed under _30_400); 5 scored audio rows have offset <= onset and
+      mark nothing. Test videos without audio / visual events: 5 / 121. Every clip is an AudioSet segment: a
+      model pretrained on AudioSet may have seen them.
+    upstream_files:
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_train.csv: bbeb83e8af46a85075216b213d3464f92dd4ab71468c852ae454b82cc745c0a4
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_val_pd.csv: 1811813b54c5f43c3be0a97bd0971cfb8a93818ca7b3ab96cdc7f4ac37ef37a6
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_test_pd.csv: 3f7a2b040e3b67c15d08efef25002bf8c5b2320f11049eb99ae0eb2d62f8eb9b
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_eval_audio.csv: d5435664668bec6e7eafb39059d2f424ed2682f6b55395262fc3cb691b7d0778
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_eval_visual.csv: e2274af694f3f27e38b840e0cd91a9d8d9ac85280f193e90828d26b22db69abe
+      YapengTian/AVVP-ECCV20@fde5611/data/AVVP_dataset_full.csv: 89f112ffc602279c87cc2b2040c4cd42eaf163a9d7e61cf4e74250a343d21e56
+    curation:
+      total_upstream: 11849
+      per_split:
+        train: {listed: 10000, staged: 10000, missing: 0}
+        val: {listed: 649, staged: 649, missing: 0}
+        test: {listed: 1200, staged: 1200, missing: 0}
+      excluded: {}
+      short_clips: 683          # clips whose container is shorter than 9.9 s (6.77 s at the least); a fact, nothing is cut or padded
+      leakage_audit: {against: "YouTube-id overlap between the train, val and test files (asserted empty)", excluded: 0}
+      # invariant: 10000 + 649 + 1200 == 11849
+
+splits:
+  train: [train, val]         # train: fitted (weak labels); val: epoch selection on its dense labels, never fitted (avvp.py)
+  eval: [test]
+  floor: []
+  folds: null
+  unused: []
+  min_eval_coverage: 0.95
+
+fields:                       # hashed: what is handed over; both streams read the same mp4
+  video:
+    storage: file
+    kind: video
+    media_column: rel_media
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+  audio:
+    storage: file
+    kind: audio
+    media_column: rel_media   # the same mp4 as video (read once)
+    root: media_root
+    layout: dir
+    layout_params: {}
+    required: true
+
+targets: null
+
+data:
+  roots:
+    media_root:
+      default: "${data.root}/llp_avvp"
+      description: "llp_videos/<ytid>.mp4: the 11 849 clips of CserDu123/LLP-dataset llp_video.zip, extracted (prepare/02); download/ holds the zip while it runs"
+    annotations_root:
+      default: "${data.root}/llp_avvp/annotations"
+      prepare_only: true
+      description: >-
+        PREPARE-TIME SOURCE ONLY: the six AVVP_*.csv annotation files (prepare/01) read by make_manifest.py; the
+        frozen manifest already carries every label
+  tar_index: null
+  derived: {}
+
+input_contract:               # hashed; setup.md "## Input contract" ends with a copy
+  handed_over:
+    video: "the LLP clip mp4 (llp_videos/<ytid>.mp4 of the extracted CserDu123/LLP-dataset zip) exactly as stored; its H.264 track (6-32 fps, 128x88 to 1280x720, 6.8-10.2 s) is described by info; nothing decoded, cut, resized or padded"
+    audio: "the same mp4 bytes as video (read once); its AAC track (44.1 kHz, mono or stereo, 6.2-10.0 s) is described by info; nothing decoded, resampled, cut or padded"
+  info:
+    video: [duration_s, fps, width, height, container, bytes]
+    audio: [duration_s, sample_rate, n_samples, channels, container, bytes]
+  facts: [num_segments, segment_seconds]
+  materialize: null
+
+output_contract:              # hashed; machine-checked by validate; setup.md "## Output contract" ends with a copy
+  shape: fixed
+  coordinates: media
+  target_frame: null
+  requires:
+    pos: [t]
+    streams: []
+    grid: null
+    t_bins: 8
+
+external: []                  # the authors ship no package: their evaluation and HAN are copied into the folder
+
+protocol:                     # label facts only (hashed)
+  clip_seconds: 10.0
+  train_draw: null
+  views: none
+  num_segments: 10            # labels per media second 0-9 (the authors' evaluation is fixed to 10 x 1 s)
+  segment_seconds: 1.0
+
+metrics:
+  headline: seg_type_av
+  list: [seg_type_av, seg_event_av, seg_a, seg_v, seg_av, evt_type_av, evt_event_av, evt_a, evt_v, evt_av, n_eval]
+  table: [seg_type_av, seg_event_av, evt_type_av, evt_event_av]
+  floors: [seg_type_av_floor, seg_event_av_floor, evt_type_av_floor, evt_event_av_floor]
+  controls: []
+  chance: {}
+  ci: {seg_type_av: bootstrap_clip, evt_type_av: bootstrap_clip}
+  bootstrap: {samples: 2000, seed: 0}
+  aggregation: null
+  notes:
+    - "Percent, as the authors print them. Floor (predict nothing; an empty modality scores 1 on clips without events in it): seg_type_av 8.4, evt_type_av 8.4, seg/evt_event_av 0.0 on test."
+    - "Clip labels painted over all 10 s of both tracks (no timing, no modality) score seg_type_av 63.0, evt_type_av 54.5 on test: read seg_a, seg_v, seg_av and evt_* for the parsing itself."
+    - "1 200 test clips: the per-clip SD of seg_type_av is about 27 pp (measured on the clip-label reference), a 95 % CI of about +-1.5 pp; gaps below 2 pp at one seed are unresolved."
+    - "Scored by the authors' utils/eval_metrics.py and main_avvp.py loop (YapengTian/AVVP-ECCV20 @ fde5611); readout: their HAN, trained with their recipe, epoch chosen on val seg_type_av."
+    - "Reference: the authors' HAN on VGGish + ResNet-152 + R(2+1)D features reports seg_type_av 54.0, evt_type_av 47.7, seg_event_av 55.4 on test (ECCV 2020, Table 1)."
+    - "An a or v reading feeds its one stream to both HAN branches: the other modality's events are then guessed from it, so seg_v of an a reading measures that guess."
+    - "Follow-ups that build on this code (MA, JoMoLD, VALOR) add refined modality labels or other features to the training: their numbers are not this readout's."
+    - "Kept as the authors' scorer reads them: 25 annotation rows with garbled names match no clip and are dropped, 5 audio rows have offset <= onset."
+
+readout_params: {}
