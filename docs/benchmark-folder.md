@@ -705,7 +705,8 @@ They are not hashed: retagging a folder changes no hash and needs no changelog e
   never runs `bench lint` (the test above does, once per folder, on a conformance verdict cached under the core's
   sources and the folder's content) and never pins README.md / setup.md wording: the lint checks their structure.
 - `tests/test_extensibility.py` checks that a `yavih bench new` scaffold of every readout loads and passes the lint
-  with only `W_TODO` warnings (plus `W_CONFORMANCE_SKIPPED` where the copied protocol's external package is absent),
+  with only the warnings of what its author still has to fill in (`W_TODO`, the header and figure warnings,
+  `W_SMOKE_MISSING`; plus `W_CONFORMANCE_SKIPPED` where the copied protocol's external package is absent),
   that its generated `tests/test_folder.py` passes (the tests that need the benchmark's
   own data skip with a `TODO:` reason), and covers out-of-tree folders (`$YAVIH_BENCH_PATH`, entry-point packs).
 
