@@ -703,7 +703,8 @@ def _c_smoke(c: _Ctx) -> Iterator[Finding]:
 
         yield _warn("smoke", "W_SMOKE_MISSING", f"the manifest marks no smoke rows (no `smoke` column): `yavih plan smoke` takes the first "
                     f"{SMOKE_DEFAULT_ROWS} rows of each split, whatever they hold. Let make_manifest.py mark a few rows per split that "
-                    "exercise all of the benchmark's arithmetic (`yavih.freeze.smoke_marks`; docs/benchmark-folder.md, \"Smoke rows\"); "
+                    "exercise all of the benchmark's arithmetic (`yavih.freeze.smoke_marks`; "
+                    "https://github.com/Bizilizi/yavih/blob/main/docs/benchmark-folder.md#smoke-rows); "
                     "the column is outside every hash", mf)
         return
     kind = b.spec.manifest.label.kind

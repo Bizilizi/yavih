@@ -595,7 +595,7 @@ def _load_bench(bench: str | Any, data: dict | None, *, smoke: bool = False) -> 
     callers and tests can hand one in directly. ``smoke``: the benchmark's smoke view (``Benchmark.load(smoke=True)``;
     an object handed in must already be one)."""
     if isinstance(bench, str | os.PathLike):
-        return Benchmark.load(os.fspath(bench), data=data, smoke=smoke)
+        return Benchmark.load(os.fspath(bench), data=data, smoke=True) if smoke else Benchmark.load(os.fspath(bench), data=data)
     if not hasattr(bench, "reader"):
         raise TypeError(f"bench must be a benchmark name/path or a Benchmark, got {type(bench).__name__}")
     if smoke and not getattr(bench, "smoke", False):

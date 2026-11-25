@@ -90,7 +90,7 @@ current configuration carry (ties: the larger `n`), frozen on first use. Only an
 and its `_layout.json` are moved to `_stale/<utc>/` together before the new configuration writes.
 A capped run (`extract --rows lo:hi`) freezes one shard over `[lo, hi)` with `sample: [lo, hi]`; the sample is
 part of the layout's identity, so a full-split unit in a sampled split directory, a sample in a full one, or a
-sample of another range is refused with `E_LAYOUT` before anything moves ([capped runs](#capped-runs-plan-build---sample-n)).
+sample of another range is refused with `E_LAYOUT` before anything moves ([smoke and capped runs](#the-smoke-run-plan-smoke)).
 The shard files themselves are described in [features](features.md).
 
 ### One writer per shard: claims
@@ -311,7 +311,8 @@ yavih plan build matrix.yaml --pending --kind extract --format count   # prints 
 needs again. `--kind` filters after that. With `--out`, `--format count
 --json` adds the file's `sha256` for `exec --plan-sha`.
 
-`--sample N` plans a capped run ([below](#capped-runs-plan-build---sample-n)).
+`yavih plan smoke` plans the smoke run of the same matrix ([below](#the-smoke-run-plan-smoke)); `--sample N` is its
+deprecated predecessor.
 
 `W_NO_CENSUS` (stderr and the `--json` envelope's `warnings`, once per benchmark) means a video stream
 guarantees `n_frames` and this site has no media-info census: every extract unit then probes each

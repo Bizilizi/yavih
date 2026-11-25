@@ -87,7 +87,7 @@ def test_cli_help_lists_the_full_command_tree(capsys):
     assert subs("eval") == {"run"}
     assert subs("report") == {"build", "paired"}
     assert subs("config") == {"show", "get"}
-    assert subs("plan") == {"init", "build", "status", "calibrate", "run", "clean"}  # run --local
+    assert subs("plan") == {"init", "build", "smoke", "status", "calibrate", "run", "clean"}  # run --local
     assert subs("suite") == {"list", "show", "new", "missing"}
     assert cli.main(["--help"]) == 0
     out = capsys.readouterr().out
