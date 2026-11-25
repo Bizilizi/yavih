@@ -419,7 +419,7 @@ def test_lint_todo_is_a_warning(esc50_copy):
     (esc50_copy / "setup.md").write_text((esc50_copy / "setup.md").read_text(encoding="utf-8") + "\nTODO: say more\n", encoding="utf-8")
     rep = lint.lint_folder(esc50_copy)
     # the folder's figures and human page arrive with its README migration (docs/writing-a-readme.md)
-    assert rep.ok and [f.code for f in rep.warnings if f.code not in ("W_PREVIEW_MISSING", "W_README_LEGACY")] == ["W_TODO"]
+    assert rep.ok and [f.code for f in rep.warnings if f.code not in ("W_PREVIEW_MISSING", "W_README_LEGACY", "W_SMOKE_MISSING")] == ["W_TODO"]
 
 
 def _notes_findings(folder, rel: str) -> list[lint.Finding]:

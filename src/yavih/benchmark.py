@@ -2251,13 +2251,19 @@ class _Classes:
         return idx if 0 <= idx < len(self.rows) else None
 
 
+#: The rows of each split a smoke run takes when the manifest marks none (no ``smoke`` column): the first ones.
+SMOKE_DEFAULT_ROWS = 32
+
+
 class _Table:
     """The whole manifest file, normalized once; ``Manifest`` views filter by split."""
 
-    def __init__(self, spec: BenchmarkSpec, manifest_bytes: bytes, classes: _Classes | None) -> None:
+    def __init__(self, spec: BenchmarkSpec, manifest_bytes: bytes, classes: _Classes | None, *, smoke: bool = False) -> None:
         self.spec = spec
         self.classes = classes
         self.unknown_labels = 0
+        #: the smoke view (``Benchmark.load(..., smoke=True)``): every split holds its smoke rows only
+        self.smoke_view = bool(smoke)
         text = manifest_bytes.decode("utf-8")
         reader = csv.reader(io.StringIO(text, newline=""))
         try:
@@ -2273,10 +2279,17 @@ class _Table:
         missing = sorted(declared - set(header))
         if missing:
             raise ManifestError(f"manifest: declared column(s) {missing} are missing from the header {header}")
-        undeclared = sorted(set(header) - declared)
+        # an annotation column (hashing.MANIFEST_ANNOTATIONS) is read by yavih's own tools only: it is outside the
+        # manifest's hash and never reaches `extra`, a Sample, a reader or a scorer
+        clash = sorted(declared & set(hashing.MANIFEST_ANNOTATIONS))
+        if clash:
+            raise ManifestError(f"manifest: {clash} are annotation columns of yavih (outside every hash, never handed to a "
+                                "bridge or a scorer): a benchmark does not declare them as its key, label or columns")
+        undeclared = sorted(set(header) - declared - set(hashing.MANIFEST_ANNOTATIONS))
         if undeclared:
             raise ManifestError(f"manifest: column(s) {undeclared} are not declared in manifest.columns (nothing is silently dropped)")
         col = {h: i for i, h in enumerate(header)}
+        smoke_i = col.get("smoke")
         key_i, split_i = col[m.key], col["split"]
         media_cols = {name: col[c] for name, c in ((n, c) for n, cs in ((n, s.media_columns()) for n, s in spec.streams.items()) for c in cs)}
         _ = media_cols  # media cells are looked up per split below
@@ -2291,6 +2304,8 @@ class _Table:
         self.media: list[dict[str, str]] = []
         self.media_key: list[str | None] = []
         self.extra: list[dict[str, Any]] = []
+        #: the `smoke` annotation per row (``None`` when the manifest has no such column): the rows of the smoke run
+        self.smoke: list[bool] | None = [] if smoke_i is not None else None
         boxes: list[list[float]] = []
         segments: list[list[int]] = []
         seen: set[str] = set()
@@ -2356,6 +2371,13 @@ class _Table:
             self.media.append(media)
             self.media_key.append(media_key)
             self.extra.append(extra)
+            if self.smoke is not None:
+                mark = r[smoke_i]  # type: ignore[index]
+                if mark not in ("", "1"):
+                    raise ManifestError(f"{where}: smoke {mark!r} must be 1 (a row of the smoke run) or empty")
+                if mark and role == "unused":
+                    raise ManifestError(f"{where}: a smoke row belongs to a split that is read, not to {split!r} (unused)")
+                self.smoke.append(bool(mark))
         if not self.clip_id:
             raise ManifestError("manifest: no rows")
         self.boxes = np.asarray(boxes, dtype=np.float32).reshape(-1, 4) if label.kind == "box" else None
@@ -2366,6 +2388,22 @@ class _Table:
         for s in spec.splits.read_values():
             if not np.any(self.split_arr == s):
                 raise ManifestError(f"manifest: declared split {s!r} has no rows")
+        self.smoke_arr = np.asarray(self.smoke, dtype=bool) if self.smoke is not None else None
+        #: the manifest marks its smoke rows (a ``smoke`` column with at least one marked row)
+        self.smoke_declared = bool(self.smoke_arr is not None and self.smoke_arr.any())
+        if self.smoke_declared:
+            empty = [s for s in spec.splits.read_values() if not np.any(self.smoke_arr & (self.split_arr == s))]
+            if empty:
+                raise ManifestError(f"manifest: split(s) {empty} have no smoke row: the smoke run reads every split, so each one "
+                                    "that is read marks at least one row with smoke = 1")
+
+    def smoke_index(self, split: str) -> np.ndarray:
+        """The positions, within ``split`` (manifest order), of the rows of the smoke run: the rows the manifest marks
+        (``smoke`` = 1), or, for a manifest that marks none, the first :data:`SMOKE_DEFAULT_ROWS` rows of the split."""
+        idx = np.nonzero(self.split_arr == split)[0]
+        if self.smoke_declared:
+            return np.nonzero(self.smoke_arr[idx])[0].astype(np.int64)  # type: ignore[index]
+        return np.arange(min(len(idx), SMOKE_DEFAULT_ROWS), dtype=np.int64)
 
     def _tokens(self, cell: str, where: str) -> list[int]:
         label = self.spec.manifest.label
@@ -2458,8 +2496,15 @@ class _Table:
     def view(self, split: str | None) -> Manifest:
         if split is None:
             idx = np.arange(len(self.clip_id), dtype=np.int64)
+            if self.smoke_view:  # the smoke rows of every split, in manifest order
+                keep = np.zeros(len(self.clip_id), dtype=bool)
+                for s in dict.fromkeys(self.split):
+                    keep[np.nonzero(self.split_arr == s)[0][self.smoke_index(s)]] = True
+                idx = idx[keep]
         else:
             idx = np.nonzero(self.split_arr == split)[0].astype(np.int64)
+            if self.smoke_view:
+                idx = idx[self.smoke_index(split)]
         sel = idx.tolist()
         return Manifest(
             split=split,
@@ -2525,6 +2570,9 @@ class TargetReader:
             if any(i is None for i in idx):
                 raise ManifestError(f"targets {bench.name}/{split}: index_column {tspec.index_column!r} has empty cells")
             self._index = np.asarray([int(i) for i in idx], dtype=np.int64)
+        elif getattr(bench, "smoke", False):
+            # the file holds one row per row of the FULL split, in manifest order: the smoke view reads its own
+            self._index = np.asarray(bench.smoke_rows(split), dtype=np.int64)
         else:
             self._index = np.arange(len(manifest), dtype=np.int64)
         n = int(self._arr.shape[0])
@@ -2847,9 +2895,12 @@ class Benchmark:
     protocol_hash: str
     input_hash: str
 
-    def __init__(self, spec: BenchmarkSpec, folder: Path, *, data: dict | None = None) -> None:
+    def __init__(self, spec: BenchmarkSpec, folder: Path, *, data: dict | None = None, smoke: bool = False) -> None:
         self.spec = spec
         self.name = spec.name
+        #: the smoke view: the same benchmark (same hashes, same protocol) whose every split holds only its smoke rows,
+        #: renumbered from 0. What ``yavih plan smoke`` runs; its results are partial and never stored.
+        self.smoke = bool(smoke)
         self.folder = Path(folder)
         self._data_overrides = dict(data or {})
         self.data_overrides: dict[str, Any] = self._data_overrides  # read by yavih.sample._resolve_roots
@@ -2881,9 +2932,16 @@ class Benchmark:
             if csha != m.classes_sha256:
                 raise ManifestError(f"{self.name}: classes sha256 {csha} != benchmark.yaml manifest.classes_sha256 {m.classes_sha256}")
             classes = _Classes(classes_bytes, str(classes_path))
-        self.manifest_hash = hashing.manifest_hash(manifest_bytes, classes_bytes)
+        try:
+            self.manifest_hash = hashing.manifest_hash(manifest_bytes, classes_bytes)
+        except (ValueError, UnicodeDecodeError) as e:
+            raise ManifestError(f"{self.name}: {manifest_path}: {e}") from e
+        #: the hash yavih up to 1.1 gave this manifest (over its bytes): where an earlier site census is found
+        self._manifest_hash_of_bytes = hashing.manifest_hash_of_bytes(manifest_bytes, classes_bytes)
         self._classes = classes
-        self._table = _Table(spec, manifest_bytes, classes)
+        self._table = _Table(spec, manifest_bytes, classes, smoke=self.smoke)
+        #: the manifest marks its own smoke rows; without them the smoke run takes the first rows of each split
+        self.smoke_declared: bool = self._table.smoke_declared
         self.unknown_labels = self._table.unknown_labels
         if spec.protocol.get("background_index") is not None and classes is not None:
             bi = int(spec.protocol["background_index"])
@@ -2939,11 +2997,11 @@ class Benchmark:
 
     # -- construction ------------------------------------------------------------------
     @classmethod
-    def load(cls, ref: str, *, data: dict | None = None, fetch: bool = False) -> Benchmark:
+    def load(cls, ref: str, *, data: dict | None = None, fetch: bool = False, smoke: bool = False) -> Benchmark:
         """Resolution order (``resolve_folder``): existing directory → the project's benchmarks directory →
         ``$YAVIH_HOME/benchmarks/<ref>`` → the repository's ``benchmarks/<ref>`` (a source checkout) →
         ``$YAVIH_BENCH_PATH`` → ``yavih.benchmarks`` entry-point packs → alias. ``fetch``: a name that resolves nowhere
-        is fetched from the catalog first (``yavih bench fetch``)."""
+        is fetched from the catalog first (``yavih bench fetch``). ``smoke``: the smoke view (``Benchmark.smoke``)."""
         folder = resolve_folder(ref)
         if folder is None and fetch:
             folder = Path(bench_fetch(ref)["folder"])
@@ -2952,10 +3010,10 @@ class Benchmark:
             raise UnknownBenchmark(f"no benchmark {ref!r}: not a directory, not under {home_benchmarks_dir()} or the project's "
                                    f"benchmarks directory, not a repository folder, not on $YAVIH_BENCH_PATH or in an installed "
                                    f"benchmark pack, not an alias; known here: {known}. Fetch it from the catalog: yavih bench fetch {ref}")
-        return cls.from_dir(folder, data=data)
+        return cls.from_dir(folder, data=data, smoke=smoke)
 
     @classmethod
-    def from_dir(cls, path: str | os.PathLike, *, data: dict | None = None) -> Benchmark:
+    def from_dir(cls, path: str | os.PathLike, *, data: dict | None = None, smoke: bool = False) -> Benchmark:
         folder = Path(path)
         yaml_path = folder / "benchmark.yaml"
         if not folder.is_dir() or not yaml_path.is_file():
@@ -2964,7 +3022,14 @@ class Benchmark:
         if spec.name != folder.resolve().name:
             raise SchemaError(f"name: {spec.name!r} != folder name {folder.resolve().name!r}")
         check_core(spec, folder)
-        return cls(spec, folder.resolve(), data=data)
+        return cls(spec, folder.resolve(), data=data, smoke=smoke)
+
+    def smoke_rows(self, split: str) -> list[int]:
+        """The rows of the smoke run in ``split``, as positions within the split of the FULL benchmark (manifest
+        order): the rows the manifest marks, else the first :data:`SMOKE_DEFAULT_ROWS`."""
+        if self.spec.splits.role_of(split) is None:
+            raise KeyError(f"{self.name}: unknown split {split!r}; declared: {sorted(self.spec.splits.all_values())}")
+        return self._table.smoke_index(split).tolist()
 
     # -- manifest / classes ------------------------------------------------------------
     def manifest(self, split: str | None = None) -> Manifest:
@@ -3010,6 +3075,16 @@ class Benchmark:
             return self._status
         roots = self.resolved_roots()
         path = data_status_path(self.name, roots)
+        if self.smoke:
+            # The smoke view's presence is that of its few rows: scanned each time and never cached. The status file is
+            # the full benchmark's, under the same name and manifest hash, and must not learn the smoke view's counts.
+            per_split, _ = _Presence(self, roots).scan()
+            self._status = DataStatus(
+                name=self.name, manifest_hash=self.manifest_hash, roots=dict(roots), per_split=per_split, media_fingerprint=None,
+                targets_sha_ok=None, verified=None, path=str(path), targets={}, scanned=_utc_now(),
+                media_info_sha256=self.media_info().sha256 if self.media_info() is not None else None,
+            )
+            return self._status
         cached = _read_status_file(path)
         if cached is not None and not refresh:
             try:
@@ -3130,6 +3205,8 @@ class Benchmark:
         when absent. Loaded once per Benchmark; facts are site facts and never hashed."""
         if self._media_info is False:
             path = media_info_path(self.name, self.manifest_hash)
+            if not path.is_file():  # a census taken by yavih up to 1.1 is filed under the earlier hash: the same media
+                path = media_info_path(self.name, self._manifest_hash_of_bytes)
             self._media_info = MediaInfoTable.load(path) if path.is_file() else None
         return self._media_info  # type: ignore[return-value]
 

@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "846c74d8bfe9d4539d7b4915600224f4286234b2+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "95fbc985ae304a247a1115d7e275b808eed1a1b2aafb674e32c11d06e4dfb9ec",
    "reader": null
   },
-  "protocol_hash": "ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2",
+  "protocol_hash": "a5b67ef7fcaf8db327290859e376baa115fb46a578fc6269aba239cbd3387ec7",
   "scorer": {
    "kind": "probe",
    "name": "llp_avvp",
@@ -46,33 +46,33 @@
   "*": {
    "ci95": {
     "evt_type_av": [
-     0.34611951994764495,
-     0.8050509723686805
+     0.4291264388681285,
+     0.9077211019593829
     ],
     "seg_type_av": [
-     2.0515998195517815,
-     3.332667656723128
+     2.0192458016119255,
+     3.318449056134353
     ]
    },
    "controls": {},
    "floors": {
-    "evt_event_av_floor": 5.868055555555555,
-    "evt_type_av_floor": 5.034722222222222,
-    "seg_event_av_floor": 9.565832762462772,
-    "seg_type_av_floor": 8.453798915736158
+    "evt_event_av_floor": 9.175347222222221,
+    "evt_type_av_floor": 8.883101851851853,
+    "seg_event_av_floor": 13.065857260029706,
+    "seg_type_av_floor": 11.440652803365651
    },
    "metrics": {
-    "evt_a": 0.9479554010804012,
-    "evt_av": 0.11589972527472528,
-    "evt_event_av": 0.7550626663349878,
-    "evt_type_av": 0.5671199942033276,
-    "evt_v": 0.6375048562548563,
+    "evt_a": 1.1664041976541977,
+    "evt_av": 0.2472408234126984,
+    "evt_event_av": 0.9108499528788533,
+    "evt_type_av": 0.6605016814499045,
+    "evt_v": 0.5678600232828174,
     "n_eval": 64,
-    "seg_a": 3.617066900098424,
-    "seg_av": 1.5620699059981131,
-    "seg_event_av": 3.4762954558718735,
-    "seg_type_av": 2.684781434537887,
-    "seg_v": 2.8752074975171245
+    "seg_a": 3.644502092438305,
+    "seg_av": 1.6083355894431766,
+    "seg_event_av": 3.477398906750938,
+    "seg_type_av": 2.647820615531504,
+    "seg_v": 2.690624164713029
    }
   }
  }

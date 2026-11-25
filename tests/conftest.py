@@ -66,6 +66,18 @@ def runs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # ----------------------------------------------------------------------------- synthetic benchmark
 
 
+def content_oracle(data: bytes, drop: tuple[str, ...] = ("smoke",)) -> str:
+    """A csv file's content digest (``yavih.hashing.content_sha256``), written out by hand as an independent oracle:
+    every field quoted, the columns by name, the ``drop`` columns left out, blank lines skipped, LF after each record."""
+    import csv
+    import io
+
+    rows = [r for r in csv.reader(io.StringIO(data.decode("utf-8"), newline="")) if r]
+    keep = sorted((i for i, name in enumerate(rows[0]) if name not in drop), key=lambda i: rows[0][i])
+    text = "".join(",".join('"' + r[i].replace('"', '""') + '"' for i in keep) + "\n" for r in rows)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -94,8 +106,10 @@ class SyntheticBenchmark:
 
     @property
     def manifest_hash(self) -> str:
-        # The manifest hash, computed here on purpose (not via yavih.hashing) as an independent oracle.
-        payload = b"manifest:" + self.manifest_sha256.encode() + b"\nclasses:" + self.classes_sha256.encode()
+        # The manifest hash, computed here on purpose (not via yavih.hashing) as an independent oracle: the digest of
+        # each file's content in canonical form (every field quoted, columns by name, LF), not of its bytes.
+        payload = (b"manifest-2:" + content_oracle(self.manifest_bytes).encode() + b"\nclasses:"
+                   + (content_oracle(self.classes_bytes).encode() if self.classes_bytes is not None else b"none"))
         return _sha256(payload)
 
     def split_rows(self, split: str) -> list[dict[str, str]]:

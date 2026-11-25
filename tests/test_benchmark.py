@@ -45,6 +45,18 @@ from yavih.versions import BENCHMARK_SCHEMA_VERSION, READOUT_VERSION
 # ----------------------------------------------------------------------------- helpers
 
 
+def content_oracle(data: bytes, drop: tuple[str, ...] = ("smoke",)) -> str:
+    """A csv file's content digest (``yavih.hashing.content_sha256``), written out by hand as an independent oracle:
+    every field quoted, the columns by name, the ``drop`` columns left out, blank lines skipped, LF after each record."""
+    import csv
+    import io
+
+    rows = [r for r in csv.reader(io.StringIO(data.decode("utf-8"), newline="")) if r]
+    keep = sorted((i for i, name in enumerate(rows[0]) if name not in drop), key=lambda i: rows[0][i])
+    text = "".join(",".join('"' + r[i].replace('"', '""') + '"' for i in keep) + "\n" for r in rows)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def _sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
@@ -207,7 +219,7 @@ def test_load_hashes_match_oracle(tmp_path):
     assert b.name == "synth_clf" and b.folder == folder.resolve()
     mb, cb = _csv(BASE_HEADER, rows), _csv(["index", "name"], classes)
     # manifest-hash oracle computed without yavih.hashing
-    oracle = _sha(b"manifest:" + _sha(mb).encode() + b"\nclasses:" + _sha(cb).encode())
+    oracle = _sha(b"manifest-2:" + content_oracle(mb).encode() + b"\nclasses:" + content_oracle(cb).encode())
     assert b.manifest_hash == oracle
     # protocol payload (yavih-protocol-5), recomputed independently of yavih.hashing: input side, scoring side, combined,
     # from the declaration only (typed views; no source digest)
@@ -1766,3 +1778,146 @@ def test_npy_rows_layout_hands_over_one_row(tmp_path, yavih_home, monkeypatch):
     np.save(media / "clouds.npy", arr)
     npyrows._CACHE.clear()
     assert bench_verify(str(folder), decode_sample=0, data={"media_root": str(media)})["media_fingerprint"] != rep["media_fingerprint"]
+
+
+# ----------------------------------------------------------------------------- the smoke view
+
+
+def _with_smoke_column(folder: Path, marked: dict[str, list[int]]) -> None:
+    """Rewrite ``folder``'s manifest with a ``smoke`` column (``1`` on the given positions of each split)."""
+    import csv
+    import gzip
+    import io
+
+    import yaml
+
+    spec = yaml.safe_load((folder / "benchmark.yaml").read_text())
+    path = folder / spec["manifest"]["file"]
+    rows = list(csv.reader(io.StringIO(gzip.decompress(path.read_bytes()).decode())))
+    split_i, seen, out = rows[0].index("split"), {}, [[*rows[0], "smoke"]]
+    for r in rows[1:]:
+        k = seen.get(r[split_i], 0)
+        seen[r[split_i]] = k + 1
+        out.append([*r, "1" if k in marked.get(r[split_i], ()) else ""])
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(out)
+    data = buf.getvalue().encode()
+    with gzip.GzipFile(path, "wb", mtime=0) as fh:
+        fh.write(data)
+    (folder / "benchmark.yaml").write_text((folder / "benchmark.yaml").read_text().replace(spec["manifest"]["sha256"], _sha(data)))
+
+
+def test_the_smoke_view_is_the_same_benchmark_on_its_marked_rows(tmp_path, monkeypatch):
+    """``Benchmark.load(ref, smoke=True)``: every split holds its smoke rows only, numbered from 0, under the hashes
+    of the full benchmark. Marking rows moves no hash; a manifest that marks none gives the first rows of each split."""
+    from yavih import testing as T
+    from yavih.benchmark import SMOKE_DEFAULT_ROWS
+
+    monkeypatch.setenv("YAVIH_HOME", str(tmp_path / "home"))
+    folder = T.make_synthetic_benchmark(tmp_path / "benchmarks", "clf", n_train=40, n_eval=36, media="tiny")
+    plain, plain_smoke = Benchmark.load(str(folder)), Benchmark.load(str(folder), smoke=True)
+    assert plain.smoke is False and plain_smoke.smoke is True and plain.smoke_declared is False
+    assert plain_smoke.n_rows("train") == SMOKE_DEFAULT_ROWS == 32 and plain.n_rows("train") == 40
+    assert plain_smoke.manifest("val").clip_id == plain.manifest("val").clip_id[:32]
+    hashes = (plain.manifest_hash, plain.input_hash, plain.scoring_hash, plain.protocol_hash)
+
+    marked = {"train": [0, 7, 39], "val": [5, 6]}
+    _with_smoke_column(folder, marked)
+    full, smoke = Benchmark.load(str(folder)), Benchmark.load(str(folder), smoke=True)
+    for b in (full, smoke):
+        assert (b.manifest_hash, b.input_hash, b.scoring_hash, b.protocol_hash) == hashes and b.smoke_declared
+        assert {s: b.smoke_rows(s) for s in marked} == marked  # positions within the split of the full benchmark
+    assert full.n_rows("train") == 40 and len(full.manifest()) == 76
+    view = smoke.manifest("train")
+    assert smoke.n_rows("train") == 3 and list(view.row) == [0, 1, 2]
+    assert view.clip_id == [full.manifest("train").clip_id[i] for i in marked["train"]]
+    assert view.label_ids == [full.manifest("train").label_ids[i] for i in marked["train"]]
+    assert len(smoke.manifest()) == 5 and "smoke" not in view.extra[0]  # an annotation never reaches a row's cells
+    # the smoke view scans the presence of its own rows and leaves the full benchmark's status cache alone
+    assert sum(v["nominal"] for v in full.data_status().per_split.values()) == 76
+    assert sum(v["nominal"] for v in smoke.data_status().per_split.values()) == 5
+    assert sum(v["nominal"] for v in Benchmark.load(str(folder)).data_status().per_split.values()) == 76
+
+
+@pytest.mark.parametrize("cells, needle", [
+    ({"train": [1]}, "have no smoke row"),  # a read split without one
+    ("yes", "must be 1"),
+])
+def test_a_malformed_smoke_column_is_refused(tmp_path, monkeypatch, cells, needle):
+    from yavih import testing as T
+
+    monkeypatch.setenv("YAVIH_HOME", str(tmp_path / "home"))
+    folder = T.make_synthetic_benchmark(tmp_path / "benchmarks", "clf", n_train=8, n_eval=4, media="tiny")
+    if isinstance(cells, dict):
+        _with_smoke_column(folder, cells)
+    else:
+        _with_smoke_column(folder, {"train": [0], "val": [0]})
+        import gzip
+
+        import yaml
+
+        spec = yaml.safe_load((folder / "benchmark.yaml").read_text())
+        path = folder / spec["manifest"]["file"]
+        data = gzip.decompress(path.read_bytes()).replace(b",1\n", f",{cells}\n".encode(), 1)
+        with gzip.GzipFile(path, "wb", mtime=0) as fh:
+            fh.write(data)
+        (folder / "benchmark.yaml").write_text((folder / "benchmark.yaml").read_text().replace(spec["manifest"]["sha256"], _sha(data)))
+    with pytest.raises(ManifestError, match=needle):
+        Benchmark.load(str(folder))
+
+
+def test_dense_targets_follow_the_smoke_view(tmp_path, monkeypatch):
+    """A targets file holds one row per row of the full split: the smoke view reads the rows it holds, not the first."""
+    from yavih import testing as T
+
+    monkeypatch.setenv("YAVIH_HOME", str(tmp_path / "home"))
+    folder = T.make_synthetic_benchmark(tmp_path / "benchmarks", "grid", n_train=12, n_eval=8, media="tiny")
+    _with_smoke_column(folder, {"train": [3, 10], "val": [6]})
+    full, smoke = Benchmark.load(str(folder)), Benchmark.load(str(folder), smoke=True)
+    for split, rows in (("train", [3, 10]), ("val", [6])):
+        t_full, t_smoke = full.targets(split), smoke.targets(split)
+        assert t_smoke.shape[0] == len(rows) and t_full.shape[0] == full.n_rows(split)
+        np.testing.assert_array_equal(t_smoke.rows(np.arange(len(rows))), t_full.rows(np.asarray(rows)))
+
+
+def test_lint_asks_for_smoke_rows_and_checks_them(tmp_path, monkeypatch):
+    from yavih import testing as T
+    from yavih.lint import lint_folder
+
+    monkeypatch.setenv("YAVIH_HOME", str(tmp_path / "home"))
+    folder = T.make_synthetic_benchmark(tmp_path / "benchmarks", "clf", n_train=12, n_eval=6, media="tiny")
+    codes = lambda: [f.code for f in lint_folder(folder, checks=["smoke"]).findings]  # noqa: E731
+    assert codes() == ["W_SMOKE_MISSING"]
+    labels = Benchmark.load(str(folder)).manifest("train").label_ids
+    same = [i for i, c in enumerate(labels) if c == labels[0]][:2]
+    other = next(i for i, c in enumerate(labels) if c != labels[0])
+    _with_smoke_column(folder, {"train": same, "val": [0]})
+    assert codes() == ["W_SMOKE_ONE_CLASS"]
+    _with_smoke_column_again = {"train": [same[0], other], "val": [0]}
+    folder2 = T.make_synthetic_benchmark(tmp_path / "b2", "clf", n_train=12, n_eval=6, media="tiny")
+    _with_smoke_column(folder2, _with_smoke_column_again)
+    assert [f.code for f in lint_folder(folder2, checks=["smoke"]).findings] == []
+
+
+def test_a_census_filed_under_the_earlier_manifest_hash_is_still_found(tmp_path, yavih_home, monkeypatch):
+    """Up to yavih 1.1 the manifest hash was taken over the file's bytes, and a site's media census is filed under it.
+    The census describes media, which did not change: it is found under the earlier hash until a new one is taken."""
+    from yavih import hashing
+    from yavih.sample import MediaInfoTable, media_info_path
+
+    folder = make_folder(tmp_path, "synth")
+    media = tmp_path / "media"
+    touch_media(media, [r[3] for r in BASE_ROWS], b"not-an-mp4")
+    with_roots(monkeypatch, "synth", media_root=media)
+    b = Benchmark.from_dir(folder)
+    earlier = hashing.manifest_hash_of_bytes(_csv(BASE_HEADER, BASE_ROWS), None if b.spec.manifest.classes is None
+                                             else (folder / b.spec.manifest.classes).read_bytes())
+    assert earlier == _sha(b"manifest:" + _sha(_csv(BASE_HEADER, BASE_ROWS)).encode() + b"\nclasses:"
+                           + (_sha((folder / b.spec.manifest.classes).read_bytes()).encode() if b.spec.manifest.classes else b"none"))
+    assert earlier != b.manifest_hash and b.media_info() is None
+    info = {"duration_s": 10.0, "fps": 25.0, "n_frames": 250, "width": 320, "height": 240, "container": "mp4", "bytes": 10}
+    old = MediaInfoTable.write(media_info_path("synth", earlier), {("video", r[3]): info for r in BASE_ROWS})
+    found = Benchmark.from_dir(folder).media_info()
+    assert found is not None and found.sha256 == old.sha256
+    new = MediaInfoTable.write(media_info_path("synth", b.manifest_hash), {("video", BASE_ROWS[0][3]): info})
+    assert Benchmark.from_dir(folder).media_info().sha256 == new.sha256  # a census under the current hash comes first

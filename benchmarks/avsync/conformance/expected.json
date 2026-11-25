@@ -9,15 +9,20 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "2821e3678484f951a26cd8463b1015db32998715+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
-   "probe": "0de9921546857c976dbbda2b7ef7de9a6a8d389fe8e8ee23e720fa4b7decdc33",
+   "eval": "0de9921546857c976dbbda2b7ef7de9a6a8d389fe8e8ee23e720fa4b7decdc33",
    "reader": null
   },
-  "protocol_hash": "90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1",
+  "protocol_hash": "481817e41a751544c971a075e413ed9e653112d226a7b2292627d85751af3d24",
+  "scorer": {
+   "kind": "probe",
+   "name": "clf",
+   "version": 1
+  },
   "scoring_hash": "64ce376bb210333291d83099d28b27297cca5cb1972b77176d49f82d6332e9a8",
-  "yavih_version": "0.0.1.dev62+g3e66da108.d20261012"
+  "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
  "schema": "yavih-conformance-1",
  "tolerance": {
@@ -35,23 +40,23 @@
   "*": {
    "ci95": {
     "acc": [
-     0.06702402222215342,
-     0.14018486224554
+     0.07350191137657121,
+     0.14910097533446798
     ]
    },
    "controls": {
-    "acc_floor_arm": 0.09375,
+    "acc_floor_arm": 0.140625,
     "floor_violated": false
    },
    "floors": {
-    "acc_floor": 0.09765625
+    "acc_floor": 0.09375
    },
    "metrics": {
-    "acc": 0.09765625,
-    "acc_coarse5": 0.1554054054054054,
-    "acc_tol1": 0.27734375,
-    "mae_seconds": 1.380859375,
-    "n_coarse5": 148,
+    "acc": 0.10546875,
+    "acc_coarse5": 0.19230769230769232,
+    "acc_tol1": 0.30078125,
+    "mae_seconds": 1.51171875,
+    "n_coarse5": 130,
     "n_eval": 256
    }
   }

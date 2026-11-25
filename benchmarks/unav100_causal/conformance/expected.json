@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "a6997e6f591a5e4f7aae4e2b2812dbbcfc60934e+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "25e1ef752f5c7338beb4458252c35ba5bce30961888b63a6c934b227af988b76",
    "reader": null
   },
-  "protocol_hash": "ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438",
+  "protocol_hash": "5bb5301ddba59a8479bed105a000ebcee66af970f437a44663c11f52c713010d",
   "scorer": {
    "kind": "probe",
    "name": "stream",
@@ -46,33 +46,33 @@
   "*": {
    "ci95": {
     "map_gru": [
-     0.4949170359370483,
-     0.5670914668453128
+     0.5044135738525442,
+     0.5714044498233247
     ],
     "map_linear": [
-     0.4949170359370483,
-     0.5670914668453128
+     0.5044135738525442,
+     0.5714044498233247
     ]
    },
    "controls": {},
    "floors": {
-    "bin_map_floor": 0.018429994141769185
+    "bin_map_floor": 0.023766638843737645
    },
    "metrics": {
     "false_alerts_per_h_gru": 0.0,
     "false_alerts_per_h_linear": 0.0,
-    "map_gru": 0.5183874210545831,
-    "map_linear": 0.5183874210545831,
-    "map_long_gru": 0.5569115393589232,
-    "map_long_linear": 0.5569115393589232,
-    "map_medium_gru": 0.44344674941435464,
-    "map_medium_linear": 0.44344674941435464,
-    "map_short_gru": 0.46063933860579936,
-    "map_short_linear": 0.46063933860579936,
-    "onset_delay_s_gru": 2.0,
-    "onset_delay_s_linear": 2.0,
-    "onset_recall_gru": 0.6982758620689655,
-    "onset_recall_linear": 0.6982758620689655
+    "map_gru": 0.5176459414681671,
+    "map_linear": 0.5176459414681671,
+    "map_long_gru": 0.5586712081901353,
+    "map_long_linear": 0.5586712081901353,
+    "map_medium_gru": 0.5293066953110988,
+    "map_medium_linear": 0.5293066953110988,
+    "map_short_gru": 0.27634476202375036,
+    "map_short_linear": 0.27634476202375036,
+    "onset_delay_s_gru": 1.568000316619873,
+    "onset_delay_s_linear": 1.568000316619873,
+    "onset_recall_gru": 0.7906976744186046,
+    "onset_recall_linear": 0.7906976744186046
    }
   }
  }

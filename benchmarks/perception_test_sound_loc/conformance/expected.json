@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "16b772aedc4612ff1ebc5486c72a3dcd809f1a11+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "4bd130db86691e44cb5679ecefc953bc86f5bc9be91be36d89595e5153a0c007",
    "reader": null
   },
-  "protocol_hash": "c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7",
+  "protocol_hash": "8f0a119797edb3fbb0ba96e2a4970b9fdc2838a635bef7be412c9615e2845e14",
   "scorer": {
    "kind": "probe",
    "name": "perception_test_sound_loc",
@@ -36,24 +36,24 @@
   "*": {
    "ci95": {
     "tmap": [
-     0.004847634683076249,
-     0.024926929310123795
+     0.004091972135805412,
+     0.008649234775750718
     ]
    },
    "controls": {},
    "floors": {
-    "tmap_floor": 0.022324513104105208
+    "tmap_floor": 0.04637072150615727
    },
    "metrics": {
     "n_eval": 64,
-    "n_events": 453,
-    "tmap": 0.007192093954941742,
+    "n_events": 406,
+    "tmap": 0.004925309307089294,
     "tmap_per_tiou": [
-     0.01732741911367692,
-     0.011576619752405074,
-     0.003908547169528711,
-     0.0023093967940302318,
-     0.0008384869450677806
+     0.014228960767825222,
+     0.006059086289656877,
+     0.002482349526771891,
+     0.0013424110849841334,
+     0.0005137388662083468
     ]
    }
   }

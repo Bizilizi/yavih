@@ -9,13 +9,13 @@
  },
  "protocol_version": 2,
  "recorded_with": {
-  "commit": "5280ff17eea59f3dc67832ba424d6320f243e0e9+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": null,
    "reader": null
   },
-  "protocol_hash": "807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60",
+  "protocol_hash": "87155be74aaf4bd4343f05c99e344bbafadd52631a4196ea88d70c2998020555",
   "scorer": {
    "kind": "probe",
    "name": "box",
@@ -24,6 +24,7 @@
   "scoring_hash": "0e592dbdd31a09115493a1f98d4a5c17144149735893f439ff23428b4ab7aad9",
   "yavih_version": "1.0.1.dev20+g451fa120a.d20261102"
  },
+ "same_version_reason": "the fixture's draws are seeded by the manifest hash, which is now taken over the manifest's content, no longer over its bytes; the scorer is unchanged (it reproduces the previous record under the previous seed)",
  "schema": "yavih-conformance-1",
  "tolerance": {
   "acc@0.3": 0.001,
@@ -44,30 +45,30 @@
      0.09849752245094322
     ],
     "acc@0.5": [
-     0.0,
-     0.029136956273508416
+     0.0013804318928742412,
+     0.04292625943886061
     ],
     "center_in_gt": [
-     0.41465224626050723,
-     0.5853477537394928
+     0.4993185914156349,
+     0.6675484942248558
     ],
     "iou_mean": [
-     0.06488150789156151,
-     0.09715404889564112
+     0.08519561535854453,
+     0.12207076302463585
     ]
    },
    "controls": {
     "audio_blind": true,
-    "iou_shuffled": 0.08219093781512293
+    "iou_shuffled": 0.07500017338854538
    },
    "floors": {
-    "iou_floor": 0.3441447893219538
+    "iou_floor": 0.3527761549848747
    },
    "metrics": {
     "acc@0.3": 0.046875,
-    "acc@0.5": 0.0,
-    "center_in_gt": 0.5,
-    "iou_mean": 0.08034102693251385,
+    "acc@0.5": 0.0078125,
+    "center_in_gt": 0.5859375,
+    "iou_mean": 0.10314899062611756,
     "n_eval": 128,
     "n_excluded_degenerate": 0
    }

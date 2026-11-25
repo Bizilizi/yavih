@@ -1764,6 +1764,7 @@ def cmd_extract(ns: argparse.Namespace) -> Envelope:
         split=ns.split,
         shard=_shard(ns.shard) if ns.shard is not None else None,
         rows=parse_rows(ns.rows) if ns.rows is not None else None,
+        smoke=bool(getattr(ns, "smoke", False)),
         out=ns.out,
         args=_kv_pairs(ns.arg),
         canaries=ns.canaries,
@@ -2034,7 +2035,10 @@ def cmd_plan_build(ns: argparse.Namespace) -> Envelope:
     from yavih.plan.units import plan, write_plan
 
     warnings: list[dict] = []  # W_NO_CENSUS: advice only, the units are the same
-    sample = getattr(ns, "sample", None)  # --sample N: the capped run under <out>-sample<N>
+    sample = getattr(ns, "sample", None)  # --sample N: the capped run under <out>-sample<N>; plan smoke: "smoke"
+    if sample is not None and sample != "smoke":
+        sys.stderr.write("[yavih] W_SAMPLE_DEPRECATED: `plan build --sample N` takes the first N rows of every split, whatever they "
+                         "hold; `yavih plan smoke` runs the rows the benchmark itself names for a smoke run. --sample will be removed\n")
     units = plan(ns.matrix, pending=ns.pending, kind=ns.kind, shard_minutes=ns.shard_minutes, warnings=warnings,
                  **({"sample": sample} if sample is not None else {}))
     for w in warnings:
@@ -2543,6 +2547,7 @@ def build_parser() -> argparse.ArgumentParser:
     g = sp.add_mutually_exclusive_group(required=True)
     g.add_argument("--shard", metavar="i/n")
     g.add_argument("--rows", metavar="lo:hi", help="a capped run over manifest rows [lo, hi) as one shard (plan build --sample)")
+    g.add_argument("--smoke", action="store_true", help="the split's smoke rows, as the benchmark's manifest marks them (plan smoke)")
     sp.add_argument("--out", required=True, metavar="DIR")
     sp.add_argument("--arg", action="append", default=[], metavar="k=v")
     sp.add_argument("--canaries", type=int, default=8)
@@ -2680,9 +2685,18 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--shard-minutes", type=int, default=None)
     s.add_argument("--format", choices=["jsonl", "count"], default="jsonl")
     s.add_argument("--sample", type=int, default=None, metavar="N",
-                   help="a capped trial run: the first N rows of every split (manifest order), one shard each, under <out>-sample<N>; "
-                        "never stored, report rows marked partial")
+                   help="deprecated, use `plan smoke`: a capped run on the first N rows of every split (manifest order), one shard "
+                        "each, under <out>-sample<N>; never stored, report rows marked partial")
     s.set_defaults(func=cmd_plan_build)
+    s = plsub.add_parser("smoke", parents=[common_r],
+                         help="plan the smoke run: the whole matrix on the few rows each benchmark names for it")
+    s.add_argument("matrix", metavar="<matrix.yaml>")
+    s.add_argument("--out", default=None, metavar="plan.jsonl")
+    s.add_argument("--pending", action="store_true")
+    s.add_argument("--kind", choices=["extract", "probe", "report"], default=None)
+    s.add_argument("--shard-minutes", type=int, default=None)
+    s.add_argument("--format", choices=["jsonl", "count"], default="jsonl")
+    s.set_defaults(func=cmd_plan_build, sample="smoke")
     s = plsub.add_parser("status", parents=[common_r])
     s.add_argument("plan", metavar="<plan.jsonl>")
     s.add_argument("--root", default=None, metavar="DIR", help="the directory the plan's relative paths mean here (as exec --root)")

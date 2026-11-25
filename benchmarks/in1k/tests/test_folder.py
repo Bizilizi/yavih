@@ -62,7 +62,8 @@ def test_yaml_schema2_top_level(spec):
 def test_changelog_entry(spec):
     log = spec["changelog"]
     assert [e["version"] for e in log] == [1] and spec["protocol_version"] == 1
-    assert log[0]["invalidates"] is False and log[0]["supersedes"] == []
+    assert log[0]["invalidates"] is False and log[0]["supersedes"] == ["c8814a905192a566ac3b70814cc70fa237c34a39028b8037e39e0ab9404d6dc4"]
+    assert log[0]["supersedes_input"] == ["945e3f7836a0835103dc853d7ddbf56717aa075ca6da1368857d8eb7c516280f"]  # the manifest is hashed by its content: the same features
 
 
 def test_protocol_holds_label_facts_only(spec):

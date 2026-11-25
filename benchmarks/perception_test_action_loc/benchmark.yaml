@@ -22,8 +22,10 @@ changelog:
   date: '2026-10-29'
   invalidates: false
   reason: First version, frozen from the public challenge_action_localisation train and valid annotation files.
-  protocol_hash: 19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3
-  input_hash: 4d011a60364f9fe5eff946993a4f0215b8007e0c110790f74b4cfd0f23ea57c6
+  protocol_hash: c50c6f6beb1ed736b956615ac72cb077ba46c2e062121e78a5f0eb9e8f48031c
+  input_hash: 84fa6c0b011d09319240c8cb991a887b8609c50d7d0b9b518b9ea4ed2d177ad7
+  supersedes: [19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+  supersedes_input: [4d011a60364f9fe5eff946993a4f0215b8007e0c110790f74b4cfd0f23ea57c6]
 source:
   kind: public_url
   urls:

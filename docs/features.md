@@ -214,6 +214,9 @@ finished shards.
   before the model is loaded. The plan is older than the layout: run `yavih plan build` again, or move the split
   directory aside to re-shard it.
 - A `_layout.json` of another configuration is moved to `_stale/` with that configuration's shards.
+- A smoke run (`yavih extract --smoke`, planned by `plan smoke`) freezes `"n": 1`, `"ranges": [[0, k]]`,
+  `"n_rows": k` and the extra keys `"sample": [0, k]` and `"smoke": true`: the `k` rows are those of the benchmark's
+  smoke view, which `validate` and the probe then load. `smoke` is part of the identity, like `sample`.
 - A capped run (`yavih extract --rows lo:hi`, planned by `plan build --sample N`) freezes `"n": 1`,
   `"ranges": [[lo, hi]]`, `"n_rows": hi - lo` and the extra key `"sample": [lo, hi]`; a full split's layout has
   no `sample` key. `sample` is part of the identity: a full-split unit in a sampled split, a sample in a full split

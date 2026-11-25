@@ -4,7 +4,7 @@ callables and the metric modules are pure numpy. ``interval`` is the driver's en
 
 from __future__ import annotations
 
-from yavih.metrics.intervals import bootstrap_clip, interval, pooled_binomial, wilson
+from yavih.metrics.intervals import EmptyGroup, bootstrap_clip, interval, pooled_binomial, wilson
 from yavih.metrics.registry import (
     CI_KINDS,
     PATTERNS,
@@ -23,6 +23,7 @@ from yavih.metrics.registry import (
 
 __all__ = [
     "REGISTRY",
+    "EmptyGroup",
     "PATTERNS",
     "CI_KINDS",
     "MetricSpec",

@@ -22,7 +22,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
-__all__ = ["gzip_bytes", "csv_bytes", "write_if_changed", "class_balanced_subsample"]
+__all__ = ["gzip_bytes", "csv_bytes", "write_if_changed", "class_balanced_subsample", "smoke_marks"]
 
 
 def gzip_bytes(data: bytes) -> bytes:
@@ -109,3 +109,47 @@ def class_balanced_subsample(labels: list[str], max_clips: int, seed: int) -> li
 
     selected.sort()
     return selected
+
+
+def smoke_marks(splits: Sequence[str], groups: Sequence[Iterable[object]], *, per_group: int = 1, at_least: int = 4,
+                at_most: int = 32) -> list[str]:
+    """The ``smoke`` column of a manifest: ``"1"`` on the rows of the benchmark's smoke run, ``""`` on the others.
+
+    ``splits[i]`` is row ``i``'s split and ``groups[i]`` the groups it belongs to: what the benchmark computes a number
+    per (its class, or each of its classes for a multi-label row; a condition, a task, a fold) and whatever else a
+    smoke run should meet once (a row without events, the longest clip). Within every split, in manifest order, a row
+    is marked while one of its groups has fewer than ``per_group`` marked rows, until ``at_most`` rows of the split are
+    marked; then the first unmarked rows are added until ``at_least`` are (or the split is exhausted). The choice
+    depends on the rows and their order alone: a re-freeze marks the same rows.
+
+    A smoke run is a test of the chain, so few rows are better than complete ones: a group the cap leaves out is
+    reported as not covered by the run, not as a failure. Give ``groups`` the classes of a train split and two classes
+    are marked at least, which is what a trained readout needs to have something to learn. The column is an
+    annotation: it is outside every hash and never reaches a bridge or a scorer."""
+    if len(splits) != len(groups):
+        raise ValueError(f"smoke_marks: {len(splits)} splits for {len(groups)} rows of groups")
+    if not (per_group >= 1 and 1 <= at_least <= at_most):
+        raise ValueError("smoke_marks: per_group >= 1 and 1 <= at_least <= at_most")
+    marks = [""] * len(splits)
+    by_split: dict[str, list[int]] = {}
+    for i, s in enumerate(splits):
+        by_split.setdefault(s, []).append(i)
+    for rows in by_split.values():
+        seen: dict[object, int] = {}
+        n = 0
+        for i in rows:
+            if n >= at_most:
+                break
+            mine = list(dict.fromkeys(groups[i]))
+            if any(seen.get(g, 0) < per_group for g in mine):
+                for g in mine:
+                    seen[g] = seen.get(g, 0) + 1
+                marks[i] = "1"
+                n += 1
+        for i in rows:
+            if n >= min(at_least, len(rows)):
+                break
+            if not marks[i]:
+                marks[i] = "1"
+                n += 1
+    return marks

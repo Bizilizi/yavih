@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "7ec4ef3c44ab1d8c1d2e3ef4a9fe9e5664e047af",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": null,
    "reader": null
   },
-  "protocol_hash": "af5186f011d9b8ad4c25d111d5259bdc669925a5b0fe0a5fe3692116e7f6a711",
+  "protocol_hash": "c2ff5186381048b0192098535f14618f77ea1bbba275327f7c580b40b559e4ea",
   "scorer": {
    "kind": "probe",
    "name": "clf",
@@ -34,16 +34,16 @@
   "*": {
    "ci95": {
     "acc": [
-     0.008370729784579391,
-     0.04489813224965644
+     0.010784867555857603,
+     0.0501809956000511
     ]
    },
    "controls": {},
    "floors": {
-    "acc_floor": 0.078125
+    "acc_floor": 0.0234375
    },
    "metrics": {
-    "acc": 0.01953125,
+    "acc": 0.0234375,
     "n_eval": 256
    }
   }

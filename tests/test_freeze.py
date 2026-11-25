@@ -221,3 +221,33 @@ def test_freeze_imports_stdlib_only():
             "mod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nprint('ok')\n")
     proc = subprocess.run([sys.executable, "-I", "-c", code, freeze.__file__], capture_output=True, text=True, timeout=60)
     assert proc.stdout.strip() == "ok", proc.stderr
+
+
+# ----------------------------------------------------------------------------- smoke_marks
+
+
+def _marked(marks: list[str]) -> list[int]:
+    assert set(marks) <= {"", "1"}
+    return [i for i, m in enumerate(marks) if m]
+
+
+def test_smoke_marks_cover_every_group_of_every_split_in_manifest_order():
+    splits = ["train"] * 10 + ["val"] * 6
+    groups = [["a"], ["a"], ["a"], ["b"], ["a", "c"], ["b"], [], ["d"], ["a"], ["a"],
+              ["x"], ["x"], ["y"], ["x"], [], ["z"]]
+    # train: the first row of a, b, c (a multi-label row) and d; val: x, y, z, then filled up to four from the start
+    assert _marked(freeze.smoke_marks(splits, groups)) == [0, 3, 4, 7, 10, 11, 12, 15]
+    assert freeze.smoke_marks(splits, groups) == freeze.smoke_marks(splits, groups)  # the rows and their order alone decide
+    # a cap leaves groups out (the smoke run reports them as not covered); two rows of two classes remain
+    assert _marked(freeze.smoke_marks(splits, groups, at_most=2, at_least=1)) == [0, 3, 10, 12]
+    assert _marked(freeze.smoke_marks(splits, groups, per_group=2, at_most=5)) == [0, 1, 3, 4, 5, 10, 11, 12, 15]
+
+
+def test_smoke_marks_without_groups_take_the_first_rows_and_never_more_than_the_split():
+    assert _marked(freeze.smoke_marks(["t"] * 5, [[]] * 5)) == [0, 1, 2, 3]
+    assert _marked(freeze.smoke_marks(["t"] * 2 + ["v"], [[], [], []])) == [0, 1, 2]
+    for bad in (dict(per_group=0), dict(at_least=0), dict(at_least=9, at_most=8)):
+        with pytest.raises(ValueError):
+            freeze.smoke_marks(["t"], [[]], **bad)
+    with pytest.raises(ValueError):
+        freeze.smoke_marks(["t", "t"], [[]])

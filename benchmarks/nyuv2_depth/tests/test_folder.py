@@ -82,7 +82,8 @@ def test_yaml_schema_and_changelog(spec):
     assert spec["protocol_version"] == spec["changelog"][-1]["version"] == 1
     assert [c["version"] for c in spec["changelog"]] == [1]
     # the protocol hash of the git-installed Probe3D era: the copied code gives the same numbers
-    assert spec["changelog"][0]["supersedes"] == ["4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4"]
+    assert spec["changelog"][0]["supersedes"] == ["4f6706caa290406a314d75805fa8ec58590f4450f476460e18e9c6faf09b5ae4", "348a01e00302ab27924e8d05f7fe664c493e1a5a3cc13ea7ed49f18747afd343"]
+    assert spec["changelog"][0]["supersedes_input"] == ["a81f90c7e183b6ec98a9e1ca5801f1b8b45690f28eb2b45c3b3f34cfaef76bba"]  # the manifest is hashed by its content: the same features
 
 
 def test_sha256_and_listing(spec, rows):

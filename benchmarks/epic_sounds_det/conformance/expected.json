@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "e6d65e808f3f49753dd45011ee5cac6656d4330a+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "387b0c4a205849103e73f899bc13b58a4731b0a074ba95e192ffc3c92c1f8a08",
    "reader": null
   },
-  "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
+  "protocol_hash": "99d787880d0b30cfbb50cf98fbf0875420ef8898a4d70969a2705ff2f67cd934",
   "scorer": {
    "kind": "probe",
    "name": "epic_sounds_det",
@@ -41,16 +41,16 @@
    "ci95": {},
    "controls": {},
    "floors": {
-    "map_avg_floor": 0.030553513712876554
+    "map_avg_floor": 0.03082762766043705
    },
    "metrics": {
-    "map@0.1": 0.17277049230936467,
-    "map@0.2": 0.012024986196460046,
-    "map@0.3": 0.007843393063699645,
-    "map@0.4": 0.004130911479498569,
-    "map@0.5": 0.0010809487650270087,
-    "map_avg": 0.039570146362809984,
-    "map_avg_paper": 0.03864991040088418,
+    "map@0.1": 0.01966709221779246,
+    "map@0.2": 0.008349479117683967,
+    "map@0.3": 0.005953323244112861,
+    "map@0.4": 0.002761814295930755,
+    "map@0.5": 0.0017037846385867422,
+    "map_avg": 0.007687098702821357,
+    "map_avg_paper": 0.007512391914120872,
     "n_eval": 64
    }
   }

@@ -13,9 +13,10 @@ changelog:
     date: "2026-11-03"
     reason: Initial release.
     invalidates: false
-    protocol_hash: ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438
-    input_hash: 4b78f464f5ee6da552bb4e32891bd1d6d937e2142286c3667e0b9ca2e9a6307f
-    supersedes: []
+    protocol_hash: 5bb5301ddba59a8479bed105a000ebcee66af970f437a44663c11f52c713010d
+    input_hash: 1c3884e7bfab751b86f0a242d57ddf7556d955b18697c4c3b3d527e97e9488a2
+    supersedes: [ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+    supersedes_input: [4b78f464f5ee6da552bb4e32891bd1d6d937e2142286c3667e0b9ca2e9a6307f]
 
 header:
   name: UnAV-100 (causal)

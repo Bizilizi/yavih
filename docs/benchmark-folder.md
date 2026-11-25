@@ -404,7 +404,9 @@ From the folder (`UnknownBenchmark` / `SchemaError`, exit 1; `ManifestError`, ex
   `yavih bench fetch --refresh` restores it, [catalog](catalog.md));
 - `manifest.csv.gz` exists, decompresses, and its decompressed sha256 equals `manifest.sha256`; `classes.csv`
   exists, matches `classes_sha256` and follows its rules;
-- the manifest header is exactly key, `split`, label columns and declared columns (no duplicate, nothing undeclared);
+- the manifest header is exactly key, `split`, label columns and declared columns, plus yavih's annotation columns
+  where the folder has them (`smoke`: `1` on the rows of the smoke run, else empty); no duplicate, nothing else
+  undeclared;
   every row has the header's width; keys are unique and match the charset; every split value has a role; every read
   split has rows; required media cells are non-empty, match the charset, are relative and contain no `..`; typed
   cells parse; every label cell parses against `classes.csv` (unknown tokens only with `allow_unknown`, empty cells
@@ -449,6 +451,30 @@ byte-identical.
 - Multi-label cells join tokens with `manifest.label.sep` (CSV-quoted as needed).
 - Box cells are `x1|y1|x2|y2` in fractions of the full original frame.
 - Segment rows carry integer `event_start`, `event_end` seconds.
+- `smoke` is the one column a folder does not declare: an annotation for yavih's own tools, `1` on the rows of the
+  smoke run and empty elsewhere ([below](#smoke-rows)).
+
+#### Smoke rows
+
+`yavih plan smoke` runs the whole chain, from extraction to the report, on a few rows of the benchmark, to find out
+whether everything works before the full run is paid for ([execution](execution.md#the-smoke-run-plan-smoke)). Which
+rows those are is the folder's to say, because only its author knows what the benchmark's arithmetic needs:
+
+- a few rows of **every split that is read** (train, eval, floor, every fold): the loader refuses a manifest whose
+  `smoke` column leaves one out;
+- in a split a readout is trained on, rows of **two classes at least** (lint warns `W_SMOKE_ONE_CLASS` otherwise);
+- one row for each thing the scorer treats differently: a multi-label row, a row with no event, a row of each
+  stream combination, the special cases its code branches on;
+- **few**: a smoke run should take minutes. A metric per condition does not need a row per condition, since a group
+  the smoke rows miss is reported as not covered, not as a failure
+  ([results](results.md#partial-rows)); lint warns `W_SMOKE_LARGE` above 256 rows in a split.
+
+`make_manifest.py` writes the column, so that a re-freeze marks the same rows:
+`yavih.freeze.smoke_marks(splits, groups)` marks, within each split and in manifest order, rows until every group
+(a class, a condition, a fold) has one, up to 32 per split. The column is outside every hash
+([hashing](hashing.md#manifest_hash)): adding it to a shipped folder, or choosing other rows later, changes
+`manifest.sha256` and nothing else. A manifest without it still has a smoke run, on the first 32 rows of each split
+(`W_SMOKE_MISSING`).
 
 `Benchmark.manifest(split=None)` returns a `Manifest` in file order filtered to the split: `row` (0-based within the
 split), `clip_id`, `splits`, `label_ids` (`int | None` for single/segments, `list[int]` for multi and multi_sets
@@ -470,10 +496,12 @@ unique when present, at least one class. The `index` column is the only logit vo
 ### manifest_hash
 
 ```
-manifest_hash = sha256(b"manifest:" + sha256(manifest.csv).hex + b"\nclasses:" + (sha256(classes.csv).hex | "none"))
+manifest_hash = sha256(b"manifest-2:" + content(manifest.csv).hex + b"\nclasses:" + (content(classes.csv).hex | "none"))
 ```
 
-over the decompressed manifest bytes. It enters `input_hash` together with `manifest.key` and `manifest.columns`;
+over the content of the two files, not their bytes: each is read as csv and hashed in one canonical form, so its
+formatting never matters, and the manifest's annotation columns (`smoke`) are left out
+([hashing](hashing.md#manifest_hash)). It enters `input_hash` together with `manifest.key` and `manifest.columns`;
 `manifest.label` enters `scoring_hash` ([hashing](hashing.md)).
 
 ## Benchmark API
@@ -677,7 +705,8 @@ They are not hashed: retagging a folder changes no hash and needs no changelog e
   never runs `bench lint` (the test above does, once per folder, on a conformance verdict cached under the core's
   sources and the folder's content) and never pins README.md / setup.md wording: the lint checks their structure.
 - `tests/test_extensibility.py` checks that a `yavih bench new` scaffold of every readout loads and passes the lint
-  with only `W_TODO` warnings (plus `W_CONFORMANCE_SKIPPED` where the copied protocol's external package is absent),
+  with only the warnings of what its author still has to fill in (`W_TODO`, the header and figure warnings,
+  `W_SMOKE_MISSING`; plus `W_CONFORMANCE_SKIPPED` where the copied protocol's external package is absent),
   that its generated `tests/test_folder.py` passes (the tests that need the benchmark's
   own data skip with a `TODO:` reason), and covers out-of-tree folders (`$YAVIH_BENCH_PATH`, entry-point packs).
 
@@ -709,6 +738,7 @@ or out-of-tree folders. Errors exit 2 (a contract violation); warnings do not fa
 | `template` | `E_TEMPLATE`, `W_READING_UNKNOWN` (warning) | `bridge_template.py` has a literal `describe()["model"]` and a `reading`; a reading outside `a`/`v`/`av`/`t` (`t`: the model is given text) that the folder's `eval.py` `READINGS` does not declare is a warning. |
 | `citations` | `E_NOTES_LINK`, `E_CITATION` | No shipped text file names a `notes/` path; setup.md, README.md and `bridge_template.py` cite nothing a pip-installed user cannot open. |
 | `imports` | `E_IMPORT` | `reader.py` / `eval.py` / `preview.py` import in a fresh interpreter with torch and the `external` packages blocked. |
+| `smoke` | `W_SMOKE_MISSING`, `W_SMOKE_LARGE`, `W_SMOKE_ONE_CLASS` (warnings) | The manifest marks the rows of its smoke run (the `smoke` column, [smoke rows](#smoke-rows)): present, at most 256 per split, and of two classes at least in a split a readout is trained on. |
 | `todo` | `W_TODO` (warning) | Unfilled `TODO` markers in `benchmark.yaml`, README.md, setup.md, `reader.py`, `eval.py`, `make_manifest.py`, `classes.csv`, and `TODO:` markers in `tests/*.py` and `prepare/*` (a folder test may name the bridge template's own `TODO` slots without the colon). |
 
 A path without `benchmark.yaml` yields `E_LAYOUT`; an unknown name or check is a usage error (exit 1).

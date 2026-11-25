@@ -11,8 +11,10 @@ changelog:
   date: '2026-10-29'
   invalidates: false
   reason: First version, frozen from the official UnAV-100 annotations (HF ttgeng233/UnAV-100 @ daeb88bc).
-  protocol_hash: 59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e
-  input_hash: 8e272c58aa350d1e04f0982bd85717b19239eb0ed4a108276a6819606578e089
+  protocol_hash: 0e94b6bb1ad82822c839bb19e417d10da1b70dcba243f2038e5bd6c16eba5e25
+  input_hash: e4f484b02bfbacaf26a8308dcf1239071729b9b6e66f4ab52cb344bf13415855
+  supersedes: [59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+  supersedes_input: [8e272c58aa350d1e04f0982bd85717b19239eb0ed4a108276a6819606578e089]
 header:
   name: UnAV-100
   title: 'Dense-Localizing Audio-Visual Events in Untrimmed Videos: A Large-Scale Benchmark and Baseline'

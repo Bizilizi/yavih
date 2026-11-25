@@ -71,7 +71,8 @@ def test_yaml_schema2_and_versions(spec):
     assert spec["source"]["kind"] == "torrent"
     log = spec["changelog"]
     assert [e["version"] for e in log] == [1] and spec["protocol_version"] == log[-1]["version"] == 1
-    assert log[0]["invalidates"] is False and log[0]["supersedes"] == []
+    assert log[0]["invalidates"] is False and log[0]["supersedes"] == ["62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470"]
+    assert log[0]["supersedes_input"] == ["f1fe9cc653e11623db59b5f1b2975aa05b279f5725af4c10b2dfb74f00dcb1d1"]  # the manifest is hashed by its content: the same features
     h = spec["header"]
     assert h["name"] == "Kinetics-400" and h["title"] == "The Kinetics Human Action Video Dataset"
     assert len(h["abstract"].split()) <= 60
@@ -340,7 +341,7 @@ def test_benchmark_loads_and_view():
     assert b.name == "k400" and b.spec.readout == "clf"
     assert b.n_rows("train") == 20000 and b.n_rows("val") == 13492 and b.unknown_labels == 0
     assert len(b.protocol_hash) == 64 and len(b.manifest_hash) == 64
-    assert b.manifest_hash == "015401933025818bcbf4da39f9f3bdb973c0c9891b8d8cbb3365bdaf7a39d5ab"
+    assert b.manifest_hash == "761c4b2868f54180e92b285fa8335b943becc46e30b33a67da757eb69e16d504"
     v = b.view()
     assert v.streams == {"video": "video"} and v.facts == {} and not hasattr(v, "manifest")
     assert Benchmark.load("k400").protocol_hash == b.protocol_hash

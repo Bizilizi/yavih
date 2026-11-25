@@ -9,13 +9,13 @@
  },
  "protocol_version": 1,
  "recorded_with": {
-  "commit": "76f764816073601a4622e33b06c7a1c5333045a0+dirty",
+  "commit": "fdb1ab522c31cc1a348e95a8205683dfb80c0cbd+dirty",
   "externals": {},
   "folder_source": {
    "eval": "42e2299fa5f3349cf7d87cc1a63ebf48de7add4826e609b4ed479b879db944c9",
    "reader": null
   },
-  "protocol_hash": "73c3a319ef75ae381f2cf1482a38c4b96168345a25f196aabae0b4b95bf7c89a",
+  "protocol_hash": "c17d5e73ee741c067ee0c3aa6fe9a8f76fa8df09d6976f90c63c3250fa885506",
   "scorer": {
    "kind": "probe",
    "name": "stream",
@@ -37,32 +37,32 @@
   "*": {
    "ci95": {
     "event_map_gru": [
-     0.37111526432770037,
-     0.5075745250326953
+     0.37674592907821713,
+     0.4744119647442579
     ],
     "event_map_linear": [
-     0.37111526432770037,
-     0.5075745250326953
+     0.37674592907821713,
+     0.4744119647442579
     ],
     "sec_acc_gru": [
-     0.3475,
-     0.455
+     0.3275,
+     0.4325
     ],
     "sec_acc_linear": [
-     0.3475,
-     0.455
+     0.3275,
+     0.4325
     ]
    },
    "controls": {},
    "floors": {
-    "event_map_floor": 0.04819444444444444,
+    "event_map_floor": 0.036145833333333335,
     "sec_acc_floor": 0.1325
    },
    "metrics": {
-    "event_map_gru": 0.39368943164359504,
-    "event_map_linear": 0.39368943164359504,
-    "sec_acc_gru": 0.4,
-    "sec_acc_linear": 0.4
+    "event_map_gru": 0.40582916780013073,
+    "event_map_linear": 0.40582916780013073,
+    "sec_acc_gru": 0.3775,
+    "sec_acc_linear": 0.3775
    }
   }
  }

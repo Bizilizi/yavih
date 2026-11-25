@@ -687,6 +687,39 @@ def _c_external(c: _Ctx) -> Iterator[Finding]:
                         "into the folder with a comment naming its repository and commit (fleet/grounding.md)", "benchmark.yaml")
 
 
+#: The most smoke rows a split marks: a smoke run tests the chain in minutes.
+SMOKE_MAX_ROWS = 256
+
+
+@_check("smoke")
+def _c_smoke(c: _Ctx) -> Iterator[Finding]:
+    """The rows of the smoke run (the manifest's ``smoke`` column): present, few, and not a single class to train on."""
+    b = c.bench
+    if b is None:
+        return
+    mf = str(b.spec.manifest.file)
+    if not b.smoke_declared:
+        from yavih.benchmark import SMOKE_DEFAULT_ROWS
+
+        yield _warn("smoke", "W_SMOKE_MISSING", f"the manifest marks no smoke rows (no `smoke` column): `yavih plan smoke` takes the first "
+                    f"{SMOKE_DEFAULT_ROWS} rows of each split, whatever they hold. Let make_manifest.py mark a few rows per split that "
+                    "exercise all of the benchmark's arithmetic (`yavih.freeze.smoke_marks`; "
+                    "https://github.com/Bizilizi/yavih/blob/main/docs/benchmark-folder.md#smoke-rows); "
+                    "the column is outside every hash", mf)
+        return
+    kind = b.spec.manifest.label.kind
+    for split in b.spec.splits.read_values():
+        rows = b.smoke_rows(split)
+        if len(rows) > SMOKE_MAX_ROWS:
+            yield _warn("smoke", "W_SMOKE_LARGE", f"split {split!r} marks {len(rows)} smoke rows (more than {SMOKE_MAX_ROWS}): a smoke run "
+                        "tests the chain in minutes; mark fewer", mf)
+        if kind == "single" and b.spec.splits.role_of(split) in ("train", "folds") and len(rows) > 1:
+            ids = b.manifest(split).label_ids
+            if len({ids[i] for i in rows}) == 1 and len(set(ids)) > 1:
+                yield _warn("smoke", "W_SMOKE_ONE_CLASS", f"the smoke rows of {split!r} are all of one class: a readout trained on them "
+                            "learns nothing, so the run tests less than it could; mark rows of two classes at least", mf)
+
+
 @_check("core")
 def _c_core(c: _Ctx) -> Iterator[Finding]:
     """``core:`` names the core releases that can load the folder (``yavih bench fetch`` and the catalog index pick a

@@ -185,11 +185,12 @@ root, else `E_RESULTS_ROOT` (exit 1). See [readouts](readouts.md) and [results](
 | `yavih exec` | run one plan unit (or a range, or K units at once) with its dependency, DONE and deadline checks | `<plan.jsonl>`; exactly one of `--index N`, `--id X`, `--range a:b`; `--deps plan.jsonl`; `--deadline …`; `--deadline-margin 900`; `--slots K`; `--root DIR`; `--cpus N`; `--plan-sha HEX` |
 
 `plan build --format count` prints the number of units; with `--out` and `--json`, `data` also holds
-the file's `sha256` (what `exec --plan-sha` checks). `plan build --sample N` plans a capped run of the
-matrix: the first `N` rows of every split in manifest order (not class-balanced), one `extract --rows 0:k` unit
-per split, probe units with `--no-results`, all under the separate runs root `<out>-sample<N>`; its results are
-never stored and every report row from them is marked `partial`
-([execution](execution.md#capped-runs-plan-build---sample-n)). `plan run` without `--local` is a usage error:
+the file's `sha256` (what `exec --plan-sha` checks). `yavih plan smoke <matrix.yaml>` (the options of `plan build`,
+without `--sample`) plans the smoke run of the matrix: the rows each benchmark's manifest marks for it, one
+`extract --smoke` unit per split, probe units with `--no-results`, all under the separate runs root `<out>-smoke`;
+its results are never stored and every report row from them is marked `partial`
+([execution](execution.md#the-smoke-run-plan-smoke)). `plan build --sample N` (deprecated) does the same on the first
+`N` rows of every split, under `<out>-sample<N>`. `plan run` without `--local` is a usage error:
 yavih never writes or submits scheduler scripts. Everything about plans, units, deadlines, slots and
 SLURM wrapping is in [execution](execution.md).
 

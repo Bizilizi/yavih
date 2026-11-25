@@ -66,7 +66,8 @@ def test_yaml_schema2_and_changelog(spec):
     assert spec["schema_version"] == 3 and spec["name"] == HERE.name == "avsync" and spec["scorer"] == "clf"
     assert spec["protocol_version"] == 1 == spec["changelog"][-1]["version"]
     assert [c["version"] for c in spec["changelog"]] == [1]
-    assert spec["changelog"][-1]["supersedes"] == []
+    assert spec["changelog"][-1]["supersedes"] == ["90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1"]
+    assert spec["changelog"][-1]["supersedes_input"] == ["5d57c2bc211f62189630578d378d442f38ac2ddc08e5a1239fb38a55e44388bd"]  # the manifest is hashed by its content: the same features
     # the reader does not cut windows: no window / frame-rule key in the protocol
     assert "requires" not in spec and not (REMOVED_PROTOCOL_KEYS & set(spec["protocol"]))
     for s in F.file_fields(spec).values():

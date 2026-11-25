@@ -60,7 +60,8 @@ def test_yaml_identity(spec):
     assert "generation" in spec["capability"]
     assert spec["source"]["revision"] == "b29b3243d6ce49c2cd0d48d4b5f0701ae7969ded"
     (entry,) = spec["changelog"]
-    assert entry["version"] == 1 and entry["invalidates"] is False and entry["supersedes"] == []
+    assert entry["version"] == 1 and entry["invalidates"] is False and entry["supersedes"] == ["22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552"]
+    assert entry["supersedes_input"] == ["6f4dd3c852142ebb113ca7eab8bd982a7c2d909b564619cddd817ccd5ea48ab2"]  # the manifest is hashed by its content: the same features
 
 
 def test_the_only_input_is_the_caption_cell(spec):
@@ -151,8 +152,8 @@ def test_staged_recordings_match_the_frozen_sha256(rows):
 def test_bench_loads(bench, rows, monkeypatch, tmp_path):
     monkeypatch.setenv("YAVIH_DATA__ROOT", str(tmp_path))  # reading a caption needs no data; the roots must still resolve
     assert bench.name == "audiocaps_t2a" and bench.spec.readout == "audiocaps_t2a"
-    assert bench.protocol_hash == "22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552"
-    assert bench.input_hash == "6f4dd3c852142ebb113ca7eab8bd982a7c2d909b564619cddd817ccd5ea48ab2"
+    assert bench.protocol_hash == "f32d1528c2ef071df8c07adb1c4fedac2055e3f22aa4be16e8db3980e5187eae"
+    assert bench.input_hash == "118001d84fc5cc843446e66005f58778540ddbeab8e4fe447321d5d05e32d35a"
     assert bench.spec.streams == {}
     view = bench.view()
     assert view.fields == {"caption": {"storage": "cell", "kind": "text"}} and view.streams == {} and view.facts == {"audio_length": 10.0}

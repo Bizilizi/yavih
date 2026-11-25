@@ -13,9 +13,10 @@ changelog:
     date: "2026-11-03"
     reason: Initial release.
     invalidates: false
-    protocol_hash: 8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de
-    input_hash: 13b1212f287456792178699c462021824bfe6fa0666969d533ee4621521ce8ed
-    supersedes: []
+    protocol_hash: 771ec61b244cc87b44dcf147f3da7d4efe939e695057b00fef1284a949b98eaa
+    input_hash: 7c20ecfdb00c7dfe5c61b9ba279cb2650e3145411c812b6d2429d8bf4890da44
+    supersedes: [8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de]   # the manifest is hashed by its content, no longer by its bytes: same benchmark, same numbers, same features
+    supersedes_input: [13b1212f287456792178699c462021824bfe6fa0666969d533ee4621521ce8ed]
 
 header:
   name: EPIC-KITCHENS-100 (stream)

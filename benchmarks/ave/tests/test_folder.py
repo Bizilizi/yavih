@@ -63,7 +63,8 @@ def test_yaml_schema2_and_changelog(spec):
     assert spec["protocol_version"] == 1 == spec["changelog"][-1]["version"]
     assert [c["version"] for c in spec["changelog"]] == [1]
     v1 = spec["changelog"][0]
-    assert v1["invalidates"] is False and v1["supersedes"] == []
+    assert v1["invalidates"] is False and v1["supersedes"] == ["df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27"]
+    assert v1["supersedes_input"] == ["158d6197fee94074525d1b21babaf95ff4c006a92e4bb15de2ed12ee44f27479"]  # the manifest is hashed by its content: the same features
     assert spec["header"]["name"] == "AVE" and spec["header"]["title"] == "Audio-Visual Event Localization in Unconstrained Videos"
 
 

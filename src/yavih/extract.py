@@ -590,13 +590,16 @@ def _peak_gpu_gb(torch: Any | None, bridge: Bridge) -> float | None:
 # ----------------------------------------------------------------------------- benchmark helpers
 
 
-def _load_bench(bench: str | Any, data: dict | None) -> Any:
+def _load_bench(bench: str | Any, data: dict | None, *, smoke: bool = False) -> Any:
     """``Benchmark.load(name)`` for a string; a ``Benchmark``(-like) object is used as-is so library
-    callers and tests can hand one in directly."""
+    callers and tests can hand one in directly. ``smoke``: the benchmark's smoke view (``Benchmark.load(smoke=True)``;
+    an object handed in must already be one)."""
     if isinstance(bench, str | os.PathLike):
-        return Benchmark.load(os.fspath(bench), data=data)
+        return Benchmark.load(os.fspath(bench), data=data, smoke=True) if smoke else Benchmark.load(os.fspath(bench), data=data)
     if not hasattr(bench, "reader"):
         raise TypeError(f"bench must be a benchmark name/path or a Benchmark, got {type(bench).__name__}")
+    if smoke and not getattr(bench, "smoke", False):
+        raise TypeError("a smoke extraction needs the benchmark's smoke view: Benchmark.load(name, smoke=True)")
     return bench
 
 
@@ -1579,6 +1582,7 @@ def run_extract(
     data: dict | None = None,
     allow_loopback: bool = False,
     rows: tuple[int, int] | None = None,
+    smoke: bool = False,
 ) -> dict:
     """Extract one shard (``yavih extract``); returns the sidecar summary with a ``status`` key
     (``ok`` | ``skipped`` | ``not_applicable``). Idempotent: a matching sidecar → skipped; a
@@ -1602,9 +1606,18 @@ def run_extract(
     written as the one shard ``0/1`` of a layout frozen with ``sample: [lo, hi]`` (``yavih.io.layout``). The sample
     belongs to the layout's identity: a split directory holding a full layout, or a sample of another range, is
     refused with ``E_LAYOUT`` (exit 1), and so is a full-split unit in a sampled directory.
+
+    ``smoke`` (``--smoke``, instead of ``shard`` and ``rows``): the split's smoke rows, the ones the benchmark's manifest
+    marks (``yavih plan smoke``). The benchmark is loaded in its smoke view, in which the split holds those rows only,
+    and all of them are written as the one shard ``0/1`` of a layout frozen with ``sample: [0, k]`` and ``smoke: true``:
+    a partial run like a capped one, in a directory of its own.
     """
-    if (shard is None) == (rows is None):
-        raise _ArgError("pass exactly one of --shard i/n and --rows lo:hi")
+    if smoke:
+        if shard is not None or rows is not None:
+            raise _ArgError("--smoke takes neither --shard nor --rows: the benchmark's manifest names the rows")
+        shard = (0, 1)
+    elif (shard is None) == (rows is None):
+        raise _ArgError("pass exactly one of --shard i/n, --rows lo:hi and --smoke")
     sample: tuple[int, int] | None = None
     if rows is not None:
         sample = (int(rows[0]), int(rows[1]))
@@ -1627,7 +1640,9 @@ def run_extract(
     # Fast path: with the planned model, reading and describe_sha256 in hand the DONE check needs no model load.
     # READ-ONLY (peek_shard): the live configuration is not known yet, so nothing may be moved on the profile's word —
     # a shard the live bridge wrote must survive an E_CONFIG_DRIFT refusal. The moving resume runs after _prepare.
-    bench_obj = _load_bench(bench, data)
+    bench_obj = _load_bench(bench, data, smoke=smoke)
+    if smoke:  # every row of the smoke view's split
+        sample = (0, _n_rows(bench_obj, split))
     if sample is not None and sample[1] > _n_rows(bench_obj, split):
         raise _ArgError(f"--rows {sample[0]}:{sample[1]}: split {split!r} of {bench_obj.name} has {_n_rows(bench_obj, split)} rows")
     if planned is not None:
@@ -1637,7 +1652,7 @@ def run_extract(
         # which reads the layout)
         frozen = frozen_layout(split_dir, layout_identity(
             manifest_hash=bench_obj.manifest_hash, input_hash=bench_obj.input_hash, model=planned.model,
-            reading=planned.reading, describe_sha256=planned.describe_sha256, sample=sample), n_rows=_n_rows(bench_obj, split))
+            reading=planned.reading, describe_sha256=planned.describe_sha256, sample=sample, smoke=smoke), n_rows=_n_rows(bench_obj, split))
         _check_layout(frozen, split_dir, i, n)
         if sample is not None and frozen is None:
             frozen = {"ranges": [list(sample)]}  # not frozen yet: the sample's one range is the shard's
@@ -1682,7 +1697,7 @@ def run_extract(
     if swept is not None:
         _log(f"extract {bench_obj.name} {split}: shards of another configuration moved to {swept}")
     ident = layout_identity(manifest_hash=bench_obj.manifest_hash, input_hash=bench_obj.input_hash, model=prep.model,
-                            reading=prep.reading, describe_sha256=prep.describe_sha256, sample=sample)
+                            reading=prep.reading, describe_sha256=prep.describe_sha256, sample=sample, smoke=smoke)
     layout = freeze_layout(split_dir, ident, n=n, batch_size=int(bridge_cls.batch_size), n_rows=_n_rows(bench_obj, split))
     _check_layout(layout, split_dir, i, n)
     swept = retire_foreign(split_dir, want, layout=layout)
@@ -2551,6 +2566,7 @@ def _build_parser() -> argparse.ArgumentParser:
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--shard", metavar="i/n")
     g.add_argument("--rows", metavar="lo:hi", help="a capped run over manifest rows [lo, hi) (one shard; plan build --sample)")
+    g.add_argument("--smoke", action="store_true", help="the split's smoke rows, as the benchmark's manifest marks them (one shard; plan smoke)")
     p.add_argument("--out", required=True, metavar="DIR", help="run directory (shards go to DIR/features/<split>/)")
     p.add_argument("--arg", action="append", default=[], metavar="k=v", help="bridge argument (Bridge.ARGS)")
     p.add_argument("--data", action="append", default=[], metavar="root=PATH", help="data root override")
@@ -2621,6 +2637,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             split=ns.split,
             shard=_parse_shard(ns.shard) if ns.shard is not None else None,
             rows=parse_rows(ns.rows) if ns.rows is not None else None,
+            smoke=bool(ns.smoke),
             out=ns.out,
             args=ns.arg,
             canaries=ns.canaries,

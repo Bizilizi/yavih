@@ -90,7 +90,7 @@ current configuration carry (ties: the larger `n`), frozen on first use. Only an
 and its `_layout.json` are moved to `_stale/<utc>/` together before the new configuration writes.
 A capped run (`extract --rows lo:hi`) freezes one shard over `[lo, hi)` with `sample: [lo, hi]`; the sample is
 part of the layout's identity, so a full-split unit in a sampled split directory, a sample in a full one, or a
-sample of another range is refused with `E_LAYOUT` before anything moves ([capped runs](#capped-runs-plan-build---sample-n)).
+sample of another range is refused with `E_LAYOUT` before anything moves ([smoke and capped runs](#the-smoke-run-plan-smoke)).
 The shard files themselves are described in [features](features.md).
 
 ### One writer per shard: claims
@@ -311,17 +311,44 @@ yavih plan build matrix.yaml --pending --kind extract --format count   # prints 
 needs again. `--kind` filters after that. With `--out`, `--format count
 --json` adds the file's `sha256` for `exec --plan-sha`.
 
-`--sample N` plans a capped run ([below](#capped-runs-plan-build---sample-n)).
+`yavih plan smoke` plans the smoke run of the same matrix ([below](#the-smoke-run-plan-smoke)); `--sample N` is its
+deprecated predecessor.
 
 `W_NO_CENSUS` (stderr and the `--json` envelope's `warnings`, once per benchmark) means a video stream
 guarantees `n_frames` and this site has no media-info census: every extract unit then probes each
 clip's header before decoding it, a full demuxing pass for webm / mkv. Run `yavih bench verify <b>
 --census` once; the warning never changes a unit.
 
-### Capped runs: `plan build --sample N`
+### The smoke run: `plan smoke`
+
+`yavih plan smoke matrix.yaml --out plan.jsonl` plans the whole matrix on a few rows of every benchmark, to try the
+chain (a new model, a new benchmark folder, a cluster) end to end before the full run. It takes no number: which
+rows make a smoke run is the benchmark's knowledge, not the caller's.
+
+- **The rows.** Each benchmark's manifest marks its smoke rows (the `smoke` column,
+  [benchmark folder](benchmark-folder.md)): a handful per split, chosen by whoever wrote the benchmark so that the
+  run exercises all of its arithmetic (two classes at least in the train rows, every fold, every stream, the
+  scorer's special cases). They can lie anywhere in a split. A manifest that marks none gives the first 32 rows of
+  each split, and `bench lint` warns `W_SMOKE_MISSING`;
+- **The smoke view.** The run reads the benchmark through its smoke view (`Benchmark.load(name, smoke=True)`): the
+  same benchmark, with the same `protocol_hash` and `input_hash`, in which every split holds its smoke rows only,
+  numbered from 0. Marking or changing smoke rows moves no hash ([hashing](hashing.md#manifest_hash));
+- one extract unit per split, `yavih extract … --smoke`, written as shard `0/1` of a layout frozen with
+  `sample: [0, k]` and `smoke: true`; `validate` and the probe read that key and load the same view;
+- **A test of the chain, not a measurement.** The result is partial, as a capped run's is (below): never stored,
+  marked `partial` in every report. A metric whose group holds none of the smoke rows is `null` there and named
+  in `W_SAMPLE_NOT_COVERED` ([results](results.md#partial-rows)), so a benchmark with twenty conditions needs no
+  twenty rows; a metric that fails for any other reason refuses the result, on a smoke run too;
+- everything lives under the separate runs root `<out>-smoke`, with its own `_report/`, and the unit ids are
+  derived from the full run's ids: a smoke run shares nothing with the full run, and the full plan of the same
+  matrix later starts from nothing.
+
+### Capped runs: `plan build --sample N` (deprecated)
 
 `yavih plan build matrix.yaml --sample N --out plan.jsonl` plans the whole matrix on the first `N` rows of every
-role split, to try the chain (a new model, a new benchmark folder, a cluster) end to end before the full run:
+role split. It is what `plan smoke` replaces, kept for one release: the caller cannot know which `N` a benchmark
+needs, and on a manifest in class order the first rows are one class. Its mechanics are those of a smoke run
+with another choice of rows:
 
 - the rows are the first `min(N, rows)` of each split in manifest order. The sample is not class-balanced or
   shuffled: on a manifest sorted by class it may hold one class, so its numbers say that the chain runs, not how

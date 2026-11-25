@@ -29,7 +29,7 @@ Every digest by role:
 
 | digest | inputs | controlled by | role |
 |---|---|---|---|
-| `manifest_hash` | `manifest.csv` (decompressed) + `classes.csv` bytes | benchmark | part of `input_hash`; seeds canary, duplicate-sample and verify-sample draws; keys the site census file |
+| `manifest_hash` | the content of `manifest.csv` (its annotation columns left out) and of `classes.csv` | benchmark | part of `input_hash`; seeds canary, duplicate-sample and verify-sample draws; keys the site census file |
 | `input_hash` | the [input components](#input-side) | benchmark | feature-set identity: resume, `_layout.json`, validate (`E_HASH_INPUT`), the probe, extract unit ids, DONE checks; never comparability on its own |
 | `scoring_hash` | the [scoring components](#scoring-side) | benchmark (+ `READOUT_VERSION`) | part of `protocol_hash`; recorded in sidecars as provenance |
 | `protocol_hash` | `{input_hash, scoring_hash}` | benchmark (+ `READOUT_VERSION`) | comparability (via `eval_hash`); probe and report unit ids |
@@ -123,12 +123,35 @@ within tolerance) and the warning exists for diagnosis. A file that does not par
 ## manifest_hash
 
 ```
-manifest_hash = sha256(b"manifest:" + sha256(manifest).hex + b"\nclasses:" + (sha256(classes).hex | b"none"))
+manifest_hash = sha256(b"manifest-2:" + content(manifest).hex + b"\nclasses:" + (content(classes).hex | b"none"))
 ```
 
-over the decompressed `manifest.csv` bytes and the `classes.csv` bytes (`none` when the folder has no classes file).
-`Benchmark.load` first checks both files against `manifest.sha256` / `manifest.classes_sha256` in `benchmark.yaml`
-(`ManifestError` on a mismatch). See [benchmark folder](benchmark-folder.md) for the manifest itself.
+`content` (`hashing.content_sha256`) is the sha256 of a csv file's content, not of its bytes. The file is read as
+csv and rewritten in one canonical form before it is hashed: UTF-8, every field quoted (`"` doubled), `\n` after
+every record, blank lines left out, the columns in ascending order of their names (the header record included).
+For the manifest, its annotation columns are left out first.
+
+| moves the hash | does not |
+|---|---|
+| a value (values are the file's strings: `1` is not `1.0`) | quoting style, line endings, a final newline, blank lines |
+| a row added or removed, the order of the rows (shards, canary draws and the smoke rows depend on it) | the order of the columns |
+| a column added, removed or renamed | an annotation column (`smoke`), present or not, whatever it holds |
+
+**Annotation columns** (`hashing.MANIFEST_ANNOTATIONS`, today `smoke`: the rows of the smoke run) are columns of the
+manifest that yavih's own tools read. They are not part of the benchmark: they are outside this hash, the folder does
+not declare them, and they never reach a `Sample`, a reader, a bridge or a scorer. So what is hashed and what can
+change a number are the same columns: the key, `split`, the label columns and `manifest.columns`. Any other column
+is refused at load, as before.
+
+`Benchmark.load` first checks both files against `manifest.sha256` / `manifest.classes_sha256` in `benchmark.yaml`,
+which are plain checksums of the files' bytes (`ManifestError` on a mismatch) and enter no hash: a manifest rewritten
+with other formatting, or with a `smoke` column added, changes `manifest.sha256` and nothing else. See
+[benchmark folder](benchmark-folder.md) for the manifest itself.
+
+Up to yavih 1.1 `manifest_hash` was taken over the files' bytes. Every folder shipped then records its earlier
+hashes under `supersedes` and `supersedes_input` ([below](#recorded-hashes-in-the-changelog)): its results and its feature sets carry
+over. A site's media census filed under the earlier hash (`$YAVIH_HOME/media_info/<name>-<hash12>.jsonl.gz`) is still
+found; the data status cache is scanned again on first use, and `yavih bench verify` restores its `verified` stamp.
 
 ## protocol_hash = H(input_hash, scoring_hash)
 
@@ -156,7 +179,7 @@ benchmark (`hashing.input_components`):
 | component | value |
 |---|---|
 | `name` | `benchmark.yaml[name]` |
-| `manifest_hash` | as above: rows, media keys and labels (whole file, conservatively) |
+| `manifest_hash` | as above: rows, media keys and labels (every declared column, conservatively; annotation columns left out) |
 | `manifest` | `{"key": manifest.key, "columns": manifest.columns}`: which rows and media a Sample carries |
 | `splits` | `benchmark.yaml[splits]`: split values and roles |
 | `streams` | `hashing.fields_view(benchmark.yaml[fields])`: every field as written minus `storage: file` and `role: input` (so a schema-2 `streams` block and its schema-3 migration hash alike): file fields with their layouts and layout params (root names, never resolved paths), cell fields with their column |
@@ -200,7 +223,8 @@ How features become numbers; none of it reaches the bridge (`hashing.scoring_com
   fails the conformance fixture until `protocol_version` is bumped.
 - A `protocol` / `readout_params` key that is also in `readout_inputs` moves both sides.
 - `protocol_version` is scoring-side: a version bump that keeps the inputs keeps the features.
-- `manifest_hash` is whole and input-side: labels share the file, and a manifest change is always a protocol event.
+- `manifest_hash` is whole and input-side: labels share the file, and a change to a declared column of the manifest is
+  always a protocol event. Its formatting and its annotation columns are not.
 - Over-inclusion is allowed (a stream's layout is hashed although a tar copy of the same bytes would score the
   same); omitting a number-changing benchmark input is not.
 
