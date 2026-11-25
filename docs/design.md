@@ -232,8 +232,8 @@ What a number means is decided by the benchmark and by the probe. The hashes cov
 - `eval_hash = H(protocol_hash, scorer_hash)`: **the** comparability key, printed in every report the way
   lm-evaluation-harness prints a task version.
 
-Two numbers of one benchmark compare iff their `eval_hash` agrees and both come from the pinned (standard)
-probe configuration. Features are checked against the input
+Two numbers of one benchmark whose `eval_hash` agrees, both from the pinned (standard) probe configuration, compare
+without anyone reading either protocol. Features are checked against the input
 side only, so a metric edit re-probes and never re-extracts. No source file is hashed: identity is the
 declaration (manifest content, typed yaml views, declared versions), and the code behind a declared
 `protocol_version`, the folder's or yavih's, is held to it by a per-folder conformance fixture. A refactor, a
@@ -248,6 +248,33 @@ When a hash moves without a change in meaning (a payload-schema change, a refact
 changelog records the new hash and lists the old one under `supersedes`, so old results land in the same
 column and old feature sets stay usable. There is no central table: each folder carries its own history.
 See [hashing](hashing.md).
+
+### What a hash promises, and what it cannot
+
+A hash covers the protocol as far as yavih can reasonably pin it. That is most of it, and it is not always all of
+it. Some of what decides a number is outside anyone's control here:
+
+- **a judge model behind an API.** A metric that asks a language model whether an answer is right depends on a
+  model its provider changes and retires. yavih can pin the prompt and the way verdicts are combined; it cannot pin
+  the model;
+- **media that has left its public source.** Clips fetched from a video platform disappear, so two sites score
+  different subsets of one manifest. The coverage is recorded with every number;
+- **the model's side**, by design: frames, crops, precision.
+
+These limits are stated, not hidden: what a hash does not cover is recorded next to the number (which judges, which
+rows were present, which bridge configuration) so that a reader can see it.
+
+An equal hash is therefore a convenience, not a verdict. It says "these two numbers were produced by the same
+protocol, compare them", and saves the work of comparing two protocols by hand. An unequal hash says only that
+this shortcut is not available. Two evaluations whose hashes differ can still be comparable: a person who reads
+both protocols can find that the difference does not matter for the question at hand. A folder records exactly
+that judgement about its own earlier versions under `supersedes`; between two folders, or between yavih and
+another harness, it is the reader's to make. The report keeps unequal hashes in separate columns and never
+averages across them, and that is all it claims.
+
+What yavih can always do, hash or no hash, is help build the best evaluation that can be had for a benchmark: the
+official rows and metric, the authors' scoring code, a floor next to every number, checks that catch a broken
+pipeline, and a record of everything that ran.
 
 ## Validation is help, not a gate
 
@@ -309,6 +336,43 @@ and an optional `eval.py`. Every table that lists benchmarks is generated from t
 `yavih bench lint` checks any folder against the contract, so nothing outside the folder repeats its facts.
 Out-of-tree folders load the same way from `$YAVIH_BENCH_PATH` or a pip-installed pack.
 
+## Setup is finished with the user
+
+Setting a benchmark up cannot always be done by an agent alone. Some steps belong to a person:
+
+- **gated data**: a licence to accept, a form to send, a portal to log in to, a key to request. The data comes from
+  its official source in its official way; an agent does not look for another copy;
+- **credentials**: an API key for a hosted model, a token for a store;
+- **choices that are the user's**: which judge models score a judged metric, how much money or compute a run may
+  spend.
+
+A folder's `setup.md` names these steps, and the agent that follows it does not skip them or guess: it collects
+them, asks the user, and finishes the setup with the answers. Setup is the one stage where asking is the right
+thing to do. The run that follows needs no one: every decision it depends on was taken during setup and is
+recorded in the project's configuration and with every result.
+
+When nobody is there to answer, the benchmark is recorded as not ready with the exact action that unblocks it, and
+the others go on.
+
+## A judge model is chosen at setup, and there are several
+
+Some benchmarks score a free-text answer by asking a language model to judge it. yavih does not fix that model in
+the benchmark: judge models are outdated within months, and a benchmark that pins one is unusable when its
+provider retires it. The rule for a judged metric is instead:
+
+- **the folder fixes what it can**: the judging prompt, how a verdict is read from the judge's reply, how verdicts
+  become a score. These are part of the protocol and of its hash;
+- **the user chooses the judges at setup**, and the default is several judges of different families, their scores
+  averaged: one judge's taste is not a measurement. Where compute or money does not allow several, the user says so
+  at setup and runs with fewer;
+- **every result names its judges** (the model identifiers as the provider reports them, and when they were
+  called) and reports each judge's score beside the average, so that two results can be compared knowingly;
+- **the judges are outside the hash.** Two results of one judged metric with different judges have the same
+  `eval_hash` and are not the same measurement; the report marks them, and comparing them is the reader's
+  judgement, as [above](#what-a-hash-promises-and-what-it-cannot).
+
+No shipped benchmark has a judged metric yet; this is the rule the first one will follow.
+
 ## Agent-native
 
 yavih is built so that a coding agent, not a human, connects a model to it. The package ships one skill
@@ -316,8 +380,9 @@ yavih is built so that a coding agent, not a human, connects a model to it. The 
 condition per step, plus the guardrail table and what to do when blocked; `references/` hold the bridge
 contract, data notes, readouts, cluster templates and the CLI. Each folder's `setup.md` is written for the
 same reader: an agent that has to obtain a dataset it has never seen and connect a model to it. What it
-cannot obtain on its own (files a person must download by hand, a licence a human must accept, data only its owner has) it records as not ready
-and skips, ending with a to-do list for the user.
+cannot do on its own (files a person must download by hand, a licence a human must accept, data only its owner
+has, a key or a choice that is the user's) it [settles with the user during setup](#setup-is-finished-with-the-user);
+with nobody to ask, it records the benchmark as not ready and ends with a to-do list for the user.
 
 Every shipped file (setup.md, README.md, `benchmark.yaml`, bridge templates, prepare steps, the skill
 references) is reached only through the CLI (`yavih bench files|show|prepare`, `yavih bridge new`,

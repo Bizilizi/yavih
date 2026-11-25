@@ -14,6 +14,12 @@ consistency, but they are never folded into a comparability key, a path or a res
 The model side enters keys only as two names the user chooses, `model` and `reading` (see
 [model and reading](#model-and-reading)).
 
+**A hash covers what can reasonably be pinned, and an equal hash is a shortcut, not a verdict.** Not everything
+that decides a number can be hashed: a judge model behind an API, media that has left its public source. What a
+hash does not cover is recorded beside the number. Two numbers with one `eval_hash` compare without reading either
+protocol; two numbers with different hashes may still be comparable, which is then for a person to establish by
+comparing the protocols ([design](design.md#what-a-hash-promises-and-what-it-cannot)).
+
 **Identity is the declaration, not the code** (`yavih-protocol-5`). `protocol_hash` is computed from what the
 benchmark folder declares: the frozen manifest and classes by content, typed views of the `benchmark.yaml` blocks,
 and declared versions (`protocol_version`, `READOUT_VERSION`). No source file enters it. The folder's `eval.py`
@@ -351,8 +357,9 @@ eval_hash = sha256(canon({"protocol_hash": protocol_hash, "probe_hash": scorer_h
 ```
 
 `hashing.eval_hash` has no schema tag of its own (each component carries one) and refuses an empty component. It
-is the comparability key: everything that decides what a number means, the benchmark and the probe, and nothing
-else. Reports show it (12 hex) next to `protocol_version`; it names the probe directory
+is the comparability key: everything yavih can pin of what decides a number, the benchmark and the probe, and
+nothing else. Equal keys are sufficient for comparing two numbers, not necessary
+([the principle](#the-principle)). Reports show it (12 hex) next to `protocol_version`; it names the probe directory
 `<runs root>/<benchmark>/<model>/<reading>/probe/<eval_hash12>/` and is recorded in `result.json`, DONE markers, probe
 unit records and results files ([results](results.md)).
 

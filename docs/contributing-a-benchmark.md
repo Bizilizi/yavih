@@ -201,7 +201,10 @@ the glance block with `python -m yavih.doctables --glance <name> --write` (and a
 reports a stale one as `E_README_GLANCE`); never by hand. Nothing an agent needs goes into README.md: how to read
 the numbers (floor values, noise, the smallest gap that means something) goes into `metrics.notes` in
 `benchmark.yaml`, the re-freeze recipe into the `make_manifest.py` docstring (step 3), transcription and dependency
-facts into setup.md. Both are shipped in the wheel: link only what a pip install can open (a public dataset page, a
+facts into setup.md. A step only a person can take (a licence, a portal, a key, an API credential, the judge
+models of a judged metric) is written in setup.md as a `**Needs you:**` line saying who does what, where, and where
+the result goes: the agent that sets the benchmark up asks the user for it
+([setup.md contract](benchmark-folder.md#setupmd-contract)). Both are shipped in the wheel: link only what a pip install can open (a public dataset page, a
 `https://github.com/Bizilizi/yavih/blob/main/docs/<page>.md` URL, a `yavih …` command). Local maintainer notes may
 live in the folder's `notes/`, which git ignores: it is never committed, shipped or linked.
 
