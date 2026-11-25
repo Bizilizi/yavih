@@ -15,16 +15,16 @@
    "name": "audiocaps_t2a",
    "obtain": "auto",
    "path": "benchmarks/audiocaps_t2a",
-   "protocol_hash": "22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552",
+   "protocol_hash": "f32d1528c2ef071df8c07adb1c4fedac2055e3f22aa4be16e8db3980e5187eae",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/audiocaps_t2a",
-     "protocol_hash": "22b53a9988f61ba8284c26a729ee580ac2a2884bea65bf2d8840c983faab2552",
+     "protocol_hash": "f32d1528c2ef071df8c07adb1c4fedac2055e3f22aa4be16e8db3980e5187eae",
      "protocol_version": 1,
-     "tree": "c62fc8445568f49ac406d337d042abb038b01365"
+     "tree": "9489a80056554f75f3485f7bdf065d074cfaeb2e"
     }
    ],
    "scorer": "audiocaps_t2a",
@@ -45,16 +45,16 @@
    "name": "audioset20k",
    "obtain": "auto",
    "path": "benchmarks/audioset20k",
-   "protocol_hash": "5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7",
+   "protocol_hash": "b14830ca35cf379c1ce525bb00bbb910775ee1f1b7baf726eca27b5b1776d871",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/audioset20k",
-     "protocol_hash": "5d158923303b259243b21f1409e5f412095e312e81d3825d6d3314f64ad513d7",
+     "protocol_hash": "b14830ca35cf379c1ce525bb00bbb910775ee1f1b7baf726eca27b5b1776d871",
      "protocol_version": 1,
-     "tree": "aa1bc91823d4daab74369675bd08df93603078e8"
+     "tree": "f780d8856c052ca04bcf88cf26829eb4c5b1b72f"
     }
    ],
    "scorer": "clf",
@@ -75,16 +75,16 @@
    "name": "av_syncbench",
    "obtain": "auto",
    "path": "benchmarks/av_syncbench",
-   "protocol_hash": "2d53da812f830a7c35d385eb6d03fb52c87804a97500fab01ab22186b53b2904",
+   "protocol_hash": "00c04d59158f537d0099886843bb72cb1d47c6ac33bf9d380c6457c4aa7e6741",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "a66f118fd80eb48bb2c733306e863627bdd702e2",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/av_syncbench",
-     "protocol_hash": "2d53da812f830a7c35d385eb6d03fb52c87804a97500fab01ab22186b53b2904",
+     "protocol_hash": "00c04d59158f537d0099886843bb72cb1d47c6ac33bf9d380c6457c4aa7e6741",
      "protocol_version": 1,
-     "tree": "bccbcf050e92865152bb0f24536ce2f8a0a3f576"
+     "tree": "e92cbcf638efd25dcbf474eb5d66a28edcb24985"
     }
    ],
    "scorer": "av_syncbench",
@@ -106,16 +106,16 @@
    "name": "ave",
    "obtain": "auto",
    "path": "benchmarks/ave",
-   "protocol_hash": "df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27",
+   "protocol_hash": "c3e1dfefa236effbae6b82f8059032bb40ce5cf7e970dfc7d98eadf4c37d19c5",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "feb9af68ca6be4af65857a913acb8596e478bd45",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/ave",
-     "protocol_hash": "df053e049b6f16eb5138261aa332a273159e8a3eae7513ba65cef3356e986b27",
+     "protocol_hash": "c3e1dfefa236effbae6b82f8059032bb40ce5cf7e970dfc7d98eadf4c37d19c5",
      "protocol_version": 1,
-     "tree": "426492863dbf5d4e917b13d07730e171a0bd6670"
+     "tree": "39a17b2cd9ef9948450402287b4c648d3cf786a1"
     }
    ],
    "scorer": "seq",
@@ -138,16 +138,16 @@
    "name": "ave_causal",
    "obtain": "auto",
    "path": "benchmarks/ave_causal",
-   "protocol_hash": "73c3a319ef75ae381f2cf1482a38c4b96168345a25f196aabae0b4b95bf7c89a",
+   "protocol_hash": "c17d5e73ee741c067ee0c3aa6fe9a8f76fa8df09d6976f90c63c3250fa885506",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/ave_causal",
-     "protocol_hash": "73c3a319ef75ae381f2cf1482a38c4b96168345a25f196aabae0b4b95bf7c89a",
+     "protocol_hash": "c17d5e73ee741c067ee0c3aa6fe9a8f76fa8df09d6976f90c63c3250fa885506",
      "protocol_version": 1,
-     "tree": "832751a4b51965fdc3d4e13233a34ae3bcc5220b"
+     "tree": "ac336e1ab91c41148d6f7f71497aa6b007f2dd12"
     }
    ],
    "scorer": "stream",
@@ -170,16 +170,16 @@
    "name": "avrobustbench",
    "obtain": "needs-data-owner",
    "path": "benchmarks/avrobustbench",
-   "protocol_hash": "251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11",
+   "protocol_hash": "adf7bf5a9796ad06f030f2e1e8c1b11cde4c64b37bc6706b4221b52efaac585e",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "8c596f772cd27674ee9ffd088029775021a4278e",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/avrobustbench",
-     "protocol_hash": "251d7887add8ecc6b59522dbf63725f6df9a8dd4fd524119a570c39cde8e9d11",
+     "protocol_hash": "adf7bf5a9796ad06f030f2e1e8c1b11cde4c64b37bc6706b4221b52efaac585e",
      "protocol_version": 1,
-     "tree": "d55105b8fb807f1c4ccba690325037f412640731"
+     "tree": "e06b2c8edeb0451f13c8f286a6f008aa51834f92"
     }
    ],
    "scorer": "clf",
@@ -202,16 +202,16 @@
    "name": "avsync",
    "obtain": "needs-data-owner",
    "path": "benchmarks/avsync",
-   "protocol_hash": "90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1",
+   "protocol_hash": "481817e41a751544c971a075e413ed9e653112d226a7b2292627d85751af3d24",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/avsync",
-     "protocol_hash": "90e8959b69b149d70b106e7ba90057e1fb9fc227249767422b1b5a8bd9c579c1",
+     "protocol_hash": "481817e41a751544c971a075e413ed9e653112d226a7b2292627d85751af3d24",
      "protocol_version": 1,
-     "tree": "55d112f5c6ea628f113a093e1d9a2d84fec803d3"
+     "tree": "e925d881268572734feb18a477d2ac2f44913c61"
     }
    ],
    "scorer": "clf",
@@ -235,16 +235,16 @@
    "name": "crema_d",
    "obtain": "auto",
    "path": "benchmarks/crema_d",
-   "protocol_hash": "f0f44915921495df45a507018ec2dd5010b83dc208ee8c46994aa775afceaa53",
+   "protocol_hash": "ea847aba46af54bf055ff5c1ccd9250a240f431e159a13b09fbbbb2327f51d2a",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "244d4019f7f4e509d2d1e1363e7183522c2de884",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/crema_d",
-     "protocol_hash": "f0f44915921495df45a507018ec2dd5010b83dc208ee8c46994aa775afceaa53",
+     "protocol_hash": "ea847aba46af54bf055ff5c1ccd9250a240f431e159a13b09fbbbb2327f51d2a",
      "protocol_version": 1,
-     "tree": "37beef3f88483a2c5d4a3a5f34e9ac76725ca2d7"
+     "tree": "656dacd5bec305ed047078b80a5087c4443cd3d2"
     }
    ],
    "scorer": "clf",
@@ -266,16 +266,16 @@
    "name": "diving48",
    "obtain": "auto",
    "path": "benchmarks/diving48",
-   "protocol_hash": "af5186f011d9b8ad4c25d111d5259bdc669925a5b0fe0a5fe3692116e7f6a711",
+   "protocol_hash": "c2ff5186381048b0192098535f14618f77ea1bbba275327f7c580b40b559e4ea",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "da7561a44575836b270e555c7ad6bb5a052742dc",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/diving48",
-     "protocol_hash": "af5186f011d9b8ad4c25d111d5259bdc669925a5b0fe0a5fe3692116e7f6a711",
+     "protocol_hash": "c2ff5186381048b0192098535f14618f77ea1bbba275327f7c580b40b559e4ea",
      "protocol_version": 1,
-     "tree": "4cd11669d365833cca57ad2078bf14febf1d71d0"
+     "tree": "c393ae0a4c2e5cd41762cdbe536f0b1846da4fc9"
     }
    ],
    "scorer": "clf",
@@ -298,16 +298,16 @@
    "name": "epic100_anticipation_stream",
    "obtain": "auto",
    "path": "benchmarks/epic100_anticipation_stream",
-   "protocol_hash": "8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de",
+   "protocol_hash": "771ec61b244cc87b44dcf147f3da7d4efe939e695057b00fef1284a949b98eaa",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/epic100_anticipation_stream",
-     "protocol_hash": "8eecef18a792d85b34e5358d5b36a588a9db0bbff4f048a382d07c1202fcb7de",
+     "protocol_hash": "771ec61b244cc87b44dcf147f3da7d4efe939e695057b00fef1284a949b98eaa",
      "protocol_version": 1,
-     "tree": "077e44f335f24004f57f214c286b54f7b75ffe56"
+     "tree": "2aeb1324107290dd8874ce352233d8cf040e8510"
     }
    ],
    "scorer": "stream",
@@ -331,16 +331,16 @@
    "name": "epic_sounds_det",
    "obtain": "auto",
    "path": "benchmarks/epic_sounds_det",
-   "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
+   "protocol_hash": "99d787880d0b30cfbb50cf98fbf0875420ef8898a4d70969a2705ff2f67cd934",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/epic_sounds_det",
-     "protocol_hash": "f8e9f5ae4818769ebda47464a89e1b73275ee40eb1378e455867af2a02665255",
+     "protocol_hash": "99d787880d0b30cfbb50cf98fbf0875420ef8898a4d70969a2705ff2f67cd934",
      "protocol_version": 1,
-     "tree": "ff0afdad42685dfea19003d365d8b8adc1009c16"
+     "tree": "e71b0c69e2f894ebaf8d8ff0637b231c9c34b899"
     }
    ],
    "scorer": "epic_sounds_det",
@@ -364,16 +364,16 @@
    "name": "esc50",
    "obtain": "auto",
    "path": "benchmarks/esc50",
-   "protocol_hash": "0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e",
+   "protocol_hash": "1d0514493ee6a4b69f8f7d78644b7d1d59e48cfa8cda23a16f26525098e93659",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "feb9af68ca6be4af65857a913acb8596e478bd45",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/esc50",
-     "protocol_hash": "0bc8599e8cb43caad8faf575712699aa2ee2c1d546474cc86123ab2024503c8e",
+     "protocol_hash": "1d0514493ee6a4b69f8f7d78644b7d1d59e48cfa8cda23a16f26525098e93659",
      "protocol_version": 1,
-     "tree": "914557e0f93dde32d599220183958a37490c566e"
+     "tree": "e9b6eea653d55ad40371dfeb7445d04f52daafde"
     }
    ],
    "scorer": "clf",
@@ -394,16 +394,16 @@
    "name": "fsd50k",
    "obtain": "auto",
    "path": "benchmarks/fsd50k",
-   "protocol_hash": "2e59e335f433b107e9f5f37436a21c89d177a0ee2e6bb5425c9740ef8bf2e6b7",
+   "protocol_hash": "c7e82de6f1573f71473e6e88d31056c9f10d9528a86e642775156627deb60ed5",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/fsd50k",
-     "protocol_hash": "2e59e335f433b107e9f5f37436a21c89d177a0ee2e6bb5425c9740ef8bf2e6b7",
+     "protocol_hash": "c7e82de6f1573f71473e6e88d31056c9f10d9528a86e642775156627deb60ed5",
      "protocol_version": 1,
-     "tree": "02e58d861fdabd314f5452d9efdf26733435a8c2"
+     "tree": "1aefef4886754fe3bbf51681c8f6ee7f2dc4bf36"
     }
    ],
    "scorer": "clf",
@@ -427,16 +427,16 @@
    "name": "in1k",
    "obtain": "needs-licence",
    "path": "benchmarks/in1k",
-   "protocol_hash": "c8814a905192a566ac3b70814cc70fa237c34a39028b8037e39e0ab9404d6dc4",
+   "protocol_hash": "759243b3b54b37053db1cba8915a65675346a06af8d1016d891e7e8c16b44138",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/in1k",
-     "protocol_hash": "c8814a905192a566ac3b70814cc70fa237c34a39028b8037e39e0ab9404d6dc4",
+     "protocol_hash": "759243b3b54b37053db1cba8915a65675346a06af8d1016d891e7e8c16b44138",
      "protocol_version": 1,
-     "tree": "72d03b32bbf101ef9f34c45f2fb050d09e674d62"
+     "tree": "f92f376574500e90887639792b6cdc596ee3029d"
     }
    ],
    "scorer": "clf",
@@ -457,16 +457,16 @@
    "name": "k400",
    "obtain": "auto",
    "path": "benchmarks/k400",
-   "protocol_hash": "62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470",
+   "protocol_hash": "3fc91a92fed6a9dbbbc98b8cdeeb44798446a5686d36bc27df5ae4ca96fa7594",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/k400",
-     "protocol_hash": "62eab412dcef6d8e89023de37cedfe8362914a897b773001391eb12d70451470",
+     "protocol_hash": "3fc91a92fed6a9dbbbc98b8cdeeb44798446a5686d36bc27df5ae4ca96fa7594",
      "protocol_version": 1,
-     "tree": "3e61ef1808200927196504af333d9313ca70ee0a"
+     "tree": "cd74555718a97503c4841f97e108a98387d4acaf"
     }
    ],
    "scorer": "clf",
@@ -489,16 +489,16 @@
    "name": "llp_avvp",
    "obtain": "auto",
    "path": "benchmarks/llp_avvp",
-   "protocol_hash": "ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2",
+   "protocol_hash": "a5b67ef7fcaf8db327290859e376baa115fb46a578fc6269aba239cbd3387ec7",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "d0e99e6538070b448ba9f76ddf1849e26d271c60",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/llp_avvp",
-     "protocol_hash": "ecfbd7ed262daff53c9a34b876fc9939863e35421e7e16d035c6b9a02a1c64c2",
+     "protocol_hash": "a5b67ef7fcaf8db327290859e376baa115fb46a578fc6269aba239cbd3387ec7",
      "protocol_version": 1,
-     "tree": "37d955767226f87b6ec1c238633965e7280c5d38"
+     "tree": "c57f5ca132061501499f46e8ff85a473f0315938"
     }
    ],
    "scorer": "llp_avvp",
@@ -519,16 +519,16 @@
    "name": "mimetics",
    "obtain": "auto",
    "path": "benchmarks/mimetics",
-   "protocol_hash": "c178b398efe3e92c3f5d6bbf3823722dd2d570651c09fb413488e6fdf5cc2156",
+   "protocol_hash": "9e61c00d50a0409eb7af0a91b84817f8956a57c8d22353c3b50eb4a3b18a5a69",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "765615f402fa60598c023d095200ac95e398d183",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/mimetics",
-     "protocol_hash": "c178b398efe3e92c3f5d6bbf3823722dd2d570651c09fb413488e6fdf5cc2156",
+     "protocol_hash": "9e61c00d50a0409eb7af0a91b84817f8956a57c8d22353c3b50eb4a3b18a5a69",
      "protocol_version": 1,
-     "tree": "f02f41253ca61550d2aeb1ff3c50f9b813dcf848"
+     "tree": "9eb48f2a1100f2c0617724a67cb4bc264259c658"
     }
    ],
    "scorer": "clf",
@@ -549,16 +549,16 @@
    "name": "nsynth",
    "obtain": "auto",
    "path": "benchmarks/nsynth",
-   "protocol_hash": "d21516f36f46149178ba7f84bf088526770c2b9e4aef39ef49d787909a7f41a9",
+   "protocol_hash": "71120de04f058f8875c1711f9849fa33543dcad5fce4e384391962c69e1d1c1a",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "7b5d3cd1afdb9fe97f8337d7fc320db73a8c2aad",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/nsynth",
-     "protocol_hash": "d21516f36f46149178ba7f84bf088526770c2b9e4aef39ef49d787909a7f41a9",
+     "protocol_hash": "71120de04f058f8875c1711f9849fa33543dcad5fce4e384391962c69e1d1c1a",
      "protocol_version": 1,
-     "tree": "6b41bb8de8bb0f72d717cca66cb76285f3c6302a"
+     "tree": "e24336be41107ceae6f8b4d7dccd08f45e9a9d81"
     }
    ],
    "scorer": "clf",
@@ -580,16 +580,16 @@
    "name": "nyuv2_depth",
    "obtain": "manual-download",
    "path": "benchmarks/nyuv2_depth",
-   "protocol_hash": "348a01e00302ab27924e8d05f7fe664c493e1a5a3cc13ea7ed49f18747afd343",
+   "protocol_hash": "050b00f4914824b687536c8f6af4f6cab735242140db667a664e6fd26ddeab29",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "e2321151200d4b8d815340f85b0514e774d969d9",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/nyuv2_depth",
-     "protocol_hash": "348a01e00302ab27924e8d05f7fe664c493e1a5a3cc13ea7ed49f18747afd343",
+     "protocol_hash": "050b00f4914824b687536c8f6af4f6cab735242140db667a664e6fd26ddeab29",
      "protocol_version": 1,
-     "tree": "457f3e8af42a58ea03167ec8a9c8ffe5bb0d2975"
+     "tree": "037485da0387729c7224f3fe0da298b5a6356ef4"
     }
    ],
    "scorer": "grid",
@@ -612,16 +612,16 @@
    "name": "perception_test_action_loc",
    "obtain": "auto",
    "path": "benchmarks/perception_test_action_loc",
-   "protocol_hash": "19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3",
+   "protocol_hash": "c50c6f6beb1ed736b956615ac72cb077ba46c2e062121e78a5f0eb9e8f48031c",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/perception_test_action_loc",
-     "protocol_hash": "19f2cf65a51a353a1e7650181af50090a0d6ba62d1d1614395f6afd77d5fdfa3",
+     "protocol_hash": "c50c6f6beb1ed736b956615ac72cb077ba46c2e062121e78a5f0eb9e8f48031c",
      "protocol_version": 1,
-     "tree": "35a638114e6c6f33c7970371cac9b88ce7121a2b"
+     "tree": "9d4dce3c1d4afe92f5275532ffff2e0767a22c49"
     }
    ],
    "scorer": "perception_test_action_loc",
@@ -644,16 +644,16 @@
    "name": "perception_test_sound_loc",
    "obtain": "auto",
    "path": "benchmarks/perception_test_sound_loc",
-   "protocol_hash": "c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7",
+   "protocol_hash": "8f0a119797edb3fbb0ba96e2a4970b9fdc2838a635bef7be412c9615e2845e14",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/perception_test_sound_loc",
-     "protocol_hash": "c671cc86636998e9ca2839a333de23864c8417e5e4e67e4dd67a00fafdccb4b7",
+     "protocol_hash": "8f0a119797edb3fbb0ba96e2a4970b9fdc2838a635bef7be412c9615e2845e14",
      "protocol_version": 1,
-     "tree": "ae3aa78427ff16e6218e0d739b6245d475a1a1ed"
+     "tree": "6dbed75bfa0d6044ded45f116d4a5c0360eb1a3a"
     }
    ],
    "scorer": "perception_test_sound_loc",
@@ -675,16 +675,16 @@
    "name": "speech_commands",
    "obtain": "auto",
    "path": "benchmarks/speech_commands",
-   "protocol_hash": "36bc64df609d131ebb21c8dd1d0754801bd09110e0f5c87bf086106f92863593",
+   "protocol_hash": "086539c3bcce6a4a1d527c81ccff7a853479c3e821fbc139030809dcd18d76ac",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "37e35b930189e92bbd87778feef1ed96a14901e4",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/speech_commands",
-     "protocol_hash": "36bc64df609d131ebb21c8dd1d0754801bd09110e0f5c87bf086106f92863593",
+     "protocol_hash": "086539c3bcce6a4a1d527c81ccff7a853479c3e821fbc139030809dcd18d76ac",
      "protocol_version": 1,
-     "tree": "4f8a03f8ec436e47a84bc8040f5e975df95ad06e"
+     "tree": "a4a898203ba788cf67cd07fa4a8a3c37ba6cfc1e"
     }
    ],
    "scorer": "clf",
@@ -705,16 +705,16 @@
    "name": "ssv2",
    "obtain": "needs-licence",
    "path": "benchmarks/ssv2",
-   "protocol_hash": "641928e796bd0eda4ac0df9bdac78e77b0b7b115bb91466bf72dec2d79c0d9c7",
+   "protocol_hash": "b458d758334f1df58715d77cae1095e5d90478d4301a05ca0d3453611803c412",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/ssv2",
-     "protocol_hash": "641928e796bd0eda4ac0df9bdac78e77b0b7b115bb91466bf72dec2d79c0d9c7",
+     "protocol_hash": "b458d758334f1df58715d77cae1095e5d90478d4301a05ca0d3453611803c412",
      "protocol_version": 1,
-     "tree": "ddf792d3a4c05809e677ccee947940206f559bdd"
+     "tree": "ce4728635f20f717c0300332bf99cedb2389f796"
     }
    ],
    "scorer": "clf",
@@ -737,16 +737,16 @@
    "name": "thumos14_oad",
    "obtain": "auto",
    "path": "benchmarks/thumos14_oad",
-   "protocol_hash": "284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912",
+   "protocol_hash": "4520601b91deb928b6ca2eb6ffe8ee7cf88781f3d1c1591c6a994de881dee38f",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/thumos14_oad",
-     "protocol_hash": "284eee59f7a9d00aa5de8ff71f6d7478c1598ce0819f05a9eedd1df5680bd912",
+     "protocol_hash": "4520601b91deb928b6ca2eb6ffe8ee7cf88781f3d1c1591c6a994de881dee38f",
      "protocol_version": 1,
-     "tree": "39600fa553b09194c336487f358c94c049c5c159"
+     "tree": "0fd9ff3a7540fd11e6d179918602c5120876125f"
     }
    ],
    "scorer": "stream",
@@ -768,16 +768,16 @@
    "name": "unav100",
    "obtain": "auto",
    "path": "benchmarks/unav100",
-   "protocol_hash": "59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e",
+   "protocol_hash": "0e94b6bb1ad82822c839bb19e417d10da1b70dcba243f2038e5bd6c16eba5e25",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "bbcb674578ac6720fc8461fd8e0aa78e1caa9725",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/unav100",
-     "protocol_hash": "59ad2eb562a7effd9f916a012b9208d5dea052e4094153ea06b9080a8fe0890e",
+     "protocol_hash": "0e94b6bb1ad82822c839bb19e417d10da1b70dcba243f2038e5bd6c16eba5e25",
      "protocol_version": 1,
-     "tree": "8f5edcbca333e46332463cdec5d0e997c5876554"
+     "tree": "a7190a8117b69167fec928c1e060b1bba8b8ef95"
     }
    ],
    "scorer": "unav100",
@@ -800,16 +800,16 @@
    "name": "unav100_causal",
    "obtain": "auto",
    "path": "benchmarks/unav100_causal",
-   "protocol_hash": "ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438",
+   "protocol_hash": "5bb5301ddba59a8479bed105a000ebcee66af970f437a44663c11f52c713010d",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/unav100_causal",
-     "protocol_hash": "ac8d74d445e9cb85636edc6f35bcce4ceed0d0d7c686faa5cbe6391dbbfe3438",
+     "protocol_hash": "5bb5301ddba59a8479bed105a000ebcee66af970f437a44663c11f52c713010d",
      "protocol_version": 1,
-     "tree": "69062e7b1656f7a8fa95b8fea594ea60a7448da6"
+     "tree": "8d1fc45b75bccd304b9a6a8b6996569e33364861"
     }
    ],
    "scorer": "stream",
@@ -830,16 +830,16 @@
    "name": "vggsound_retrieval",
    "obtain": "needs-data-owner",
    "path": "benchmarks/vggsound_retrieval",
-   "protocol_hash": "9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49",
+   "protocol_hash": "15762a0eee1d3fa48834d38d21203addd985d58849992765182518214cf65652",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggsound_retrieval",
-     "protocol_hash": "9b626581e61db4a7998d2ddffe91f12720b8a3a1b57b4f636ce7e9f982283a49",
+     "protocol_hash": "15762a0eee1d3fa48834d38d21203addd985d58849992765182518214cf65652",
      "protocol_version": 1,
-     "tree": "707fe3914244a5dd384dcfe05769caf4bb7cbf58"
+     "tree": "45eab95bd58c16d5367e6b35343c17d9d13d49db"
     }
    ],
    "scorer": "vggsound_retrieval",
@@ -860,16 +860,16 @@
    "name": "vggsounder",
    "obtain": "needs-data-owner",
    "path": "benchmarks/vggsounder",
-   "protocol_hash": "89c057ccce207b4627b6e5f43394a2cd7f34f892375b087510e22e6e63519530",
+   "protocol_hash": "46b7ec2f25e7529a717c42a3d52519303988e62e77487b7b3b671c3a7f8080a9",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggsounder",
-     "protocol_hash": "89c057ccce207b4627b6e5f43394a2cd7f34f892375b087510e22e6e63519530",
+     "protocol_hash": "46b7ec2f25e7529a717c42a3d52519303988e62e77487b7b3b671c3a7f8080a9",
      "protocol_version": 1,
-     "tree": "cc198b60f9837ffcaa85fb5d74cc19167298c901"
+     "tree": "c232300a8e1bdc5ac48f6e526c91a381d8829b29"
     }
    ],
    "scorer": "clf",
@@ -890,16 +890,16 @@
    "name": "vggsounder_retrieval",
    "obtain": "needs-data-owner",
    "path": "benchmarks/vggsounder_retrieval",
-   "protocol_hash": "360f7114ca6bcba9748323213fb408775257e1f376baac18a02052633df6a8b7",
+   "protocol_hash": "63352bbcfdb0fcbd0e0ee662fb7876b6485d0f48d6b127902880c06cc8585342",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "f2de3334a3576e35c5bdb1732ac4a834de150ea5",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggsounder_retrieval",
-     "protocol_hash": "360f7114ca6bcba9748323213fb408775257e1f376baac18a02052633df6a8b7",
+     "protocol_hash": "63352bbcfdb0fcbd0e0ee662fb7876b6485d0f48d6b127902880c06cc8585342",
      "protocol_version": 1,
-     "tree": "c2fdc8c15d30fb5dc8cfa18d3629b45d00de3029"
+     "tree": "d1707abf02d7270afcc180fe7228ccdb69c76b0e"
     }
    ],
    "scorer": "vggsounder_retrieval",
@@ -920,16 +920,16 @@
    "name": "vggsounder_v2a",
    "obtain": "needs-data-owner",
    "path": "benchmarks/vggsounder_v2a",
-   "protocol_hash": "cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0",
+   "protocol_hash": "7a2499f236427a8531b9d8531e573c9499ea85603d661ecc0c854713b284007f",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggsounder_v2a",
-     "protocol_hash": "cd82b94880351c03de1a1032d3d2cc12c29ca2a69ae8e9ba6e86d398d44347a0",
+     "protocol_hash": "7a2499f236427a8531b9d8531e573c9499ea85603d661ecc0c854713b284007f",
      "protocol_version": 1,
-     "tree": "2fcfcaf1730c567a0d045a1e01d9c06a22b79678"
+     "tree": "4bb5adc1afff54778f90beb63ace1f671fcbbcf1"
     }
    ],
    "scorer": "vggsounder_v2a",
@@ -951,16 +951,16 @@
    "name": "vggss_box",
    "obtain": "needs-data-owner",
    "path": "benchmarks/vggss_box",
-   "protocol_hash": "807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60",
+   "protocol_hash": "87155be74aaf4bd4343f05c99e344bbafadd52631a4196ea88d70c2998020555",
    "protocol_version": 2,
    "revisions": [
     {
-     "commit": "3aee69b98fd815fd4f22d2002466e504591c82f2",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggss_box",
-     "protocol_hash": "807e445dc84a77b75b6af481e2e14f96ffe27297c5c835ce5ab2c90c3bf76f60",
+     "protocol_hash": "87155be74aaf4bd4343f05c99e344bbafadd52631a4196ea88d70c2998020555",
      "protocol_version": 2,
-     "tree": "a4108289f96b1b29b6ed519156606d8e4363d5ff"
+     "tree": "6ff82bae0f6dae1da39b189035726a28018c07e8"
     },
     {
      "commit": "feb9af68ca6be4af65857a913acb8596e478bd45",
@@ -989,16 +989,16 @@
    "name": "vggss_loc",
    "obtain": "needs-data-owner",
    "path": "benchmarks/vggss_loc",
-   "protocol_hash": "3e58261a9a2ed7a8194c96349b5356f25fcf3d1cf747e5f239f933ea5f657c04",
+   "protocol_hash": "ab9a2ed36772021c3bdd98466fd5fecdd00787d1d6a0e7dc9a10ca4fc90d1def",
    "protocol_version": 1,
    "revisions": [
     {
-     "commit": "addcad6d2a3195f5d0d1ff28a31fbb6f942d1540",
+     "commit": "d532f8a8510e0a02a6fa9daf1a87067bf0a9cbb8",
      "core": ">=1.1,<2",
      "path": "benchmarks/vggss_loc",
-     "protocol_hash": "3e58261a9a2ed7a8194c96349b5356f25fcf3d1cf747e5f239f933ea5f657c04",
+     "protocol_hash": "ab9a2ed36772021c3bdd98466fd5fecdd00787d1d6a0e7dc9a10ca4fc90d1def",
      "protocol_version": 1,
-     "tree": "c757060020eb2600d87d8dd7c053eb4179318c8f"
+     "tree": "b575ee7615390765c6bd252d533ab32f454b991c"
     }
    ],
    "scorer": "vggss_loc",
@@ -1006,6 +1006,6 @@
   }
  },
  "catalog_version": 1,
- "commit": "627ed8fabbec4f25fd2af1792c0e64839c8ead29",
+ "commit": "16771ed1d06150c68ffb0d1e33ea5b1ee81f6d5d",
  "repo": "Bizilizi/yavih"
 }
