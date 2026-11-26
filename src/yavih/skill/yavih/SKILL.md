@@ -212,9 +212,26 @@ user's disk from filling up with features read once.
   (`N_RULE_CUSTOM`) and nothing is greyed.
 - Evaluate a comparison on one cluster; cross-hardware probe noise is ~1 pt.
 
-## When blocked
+## Setup is finished with the user; the run needs no one
 
-A benchmark you cannot finish here is a recorded outcome, not a reason to stop or to ask mid-run.
+Some of a benchmark's setup only a person can do, and setup is the stage where you ask for it:
+
+- **gated data**: a licence to accept, a portal to download from, a form or a key to request. Data comes from its
+  official source in its official way. Never work around a licence, and never fetch another copy from somewhere
+  else, however open it is;
+- **credentials**: an API key or a token a step needs;
+- **choices that are the user's**: for a metric scored by a judge model, which judge models to use. Propose several
+  judges of different families, whose scores are averaged, and let the user reduce that when money or compute does
+  not allow it; never choose a judge silently and never use only the one you happen to have a key for.
+
+While you read the setup.md files (step 2), collect every such step for all benchmarks, ask the user once with the
+exact actions (the URL, the files, the directory, the choice and its default), and finish the setup with their
+answers. Do not start the run with a setup you guessed.
+
+After setup, a benchmark you cannot finish here is a recorded outcome, not a reason to stop or to ask mid-run. The
+same holds from the start when nobody is there to answer.
+
+## When blocked
 
 1. `yavih bench list` shows `obtain` per benchmark: `auto`, `manual-download` (a person downloads it from an
    official portal), `needs-licence` (a human signs a licence), `needs-data-owner` (only its holder has it),

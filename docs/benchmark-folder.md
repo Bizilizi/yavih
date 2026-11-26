@@ -647,6 +647,16 @@ The agent's first read, and only about setting the benchmark up. H1 `# <name> â€
 | `## Prepare & verify` | The prepare and verify commands and what success looks like (the expected `yavih bench verify <name>` result). |
 | `## Gotchas` | Only what affects the setup or writing the bridge: mistakes that pass validation on this benchmark. |
 
+**Steps that need a person.** A setup cannot always be finished by an agent alone
+([design](design.md#setup-is-finished-with-the-user)). Where a step is a person's (accepting a licence, downloading
+from a portal, requesting a key, providing an API credential, choosing the judge models of a judged metric),
+setup.md says so in the section it belongs to, in a line that starts with `**Needs you:**` and gives who acts,
+where (the URL), what exactly (the files, the form, the choice and its default) and where the result goes (the
+directory, the configuration key). The agent that follows setup.md asks the user for exactly that and continues
+with the answer; it does not look for another source or pick a default the user was to choose. A benchmark never
+fixes a judge model: it fixes the judging prompt and how verdicts become a score, and setup.md asks the user for
+the judges, several by default.
+
 The yaml copies may keep the top-level key (`input_contract: ...`) or not; they are compared parsed. Neither
 README.md nor setup.md has a `Changelog`, `History`, `Checklist` or `Maintainers` heading. Shipped documents
 (setup.md, README.md, `bridge_template.py`) cite nothing a pip-installed user cannot open: no repository

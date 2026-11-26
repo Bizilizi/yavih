@@ -56,9 +56,10 @@ from, what the model receives, what it must return, and how to check each step.
 <tr>
 <td width="50%" valign="top">
 
-### 🔒 Same protocol, same data — provably
-Every benchmark is frozen: the clips, the labels, the probe or scorer and the metric. A short hash names that exact
-protocol, and two numbers are compared only when their hashes match. No silent drift, no "our split".
+### 🔒 Same protocol, same data
+Every benchmark is frozen as far as it can be: the clips, the labels, the probe or scorer and the metric. A short
+hash names that protocol, and two numbers with the same hash compare without anyone reading the fine print. No
+silent drift, no "our split".
 
 </td>
 <td width="50%" valign="top">
@@ -112,9 +113,14 @@ that decides what a number means and leaves everything else to you:
 - **Yours to choose:** the model, how it reads the media (frames, crops, audio front end), its precision and batch
   size. All of it is recorded with every number, none of it changes what the number is compared against.
 
-That frozen protocol is summarised in one short hash, the `eval_hash`. Same hash ⇔ same data, same protocol, same
+That frozen protocol is summarised in one short hash, the `eval_hash`. Same hash ⇒ same data, same protocol, same
 scorer. The report only ever puts numbers with the same hash in one column; change a clip or a metric and you get a
 new hash, never a quietly different number.
+
+The hash is a shortcut, not a verdict. It covers what can reasonably be pinned, which is not always everything: a
+judge model behind an API or clips that have left YouTube are recorded next to the number, not hashed. And two
+evaluations with different hashes can still be comparable; that is then for a person to establish by reading both
+protocols ([design](https://github.com/Bizilizi/yavih/blob/main/docs/design.md#what-a-hash-promises-and-what-it-cannot)).
 
 <p align="center"><img src="https://raw.githubusercontent.com/Bizilizi/yavih/main/assets/readme/hash.gif" alt="Matching hashes make results comparable; a changed protocol gets its own hash" width="100%"></p>
 
